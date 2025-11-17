@@ -1,0 +1,97 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<title>Help Center</title>
+	<link rel="stylesheet" type="text/css" href="css/help.css" />
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+</head>
+<body class="help_body1">
+	<div class="help_position"><span class="help_positionIcon">Help Center</span> -> Elevator control systems management -&gt; Floor Settings</div>
+<div class="help_mainContant">
+  <h2>Floor Settings </h2><br />
+
+  <p>The Elevator control system is primarily for the  management of personnel forbidden and admission. For security, a company will  set personnel admission time zones, forbidden time zones and combinations of  time zones. </p>
+  <br />
+
+  <h3>Permission management</h3>
+  <br />
+
+  <p>Click [Elevator control] - [Floor configuration], and by  default it will elevator [Floor management] interface, showing the list of all  control panels. When unfolded, it can show all floors under the control of the  control panel. if currently the system has elevator control panels or the query result is not  null, by default it will unfold the floors of the first elevator control panel.  Click corresponding button for relevant parameter setting. </p>
+  <br />
+   <p>Floor management operations include: control panel  management and floor management. </p>
+   <br />
+  <p><b>1．Control panel operation </b><br />
+  <p>For communication between the system and the device,  data uploading, configuration downloading, device and system parameters shall  be set. The user can see elevator control panels within his levels in the current  system, and can edit the devices here. If the user needs to add or delete  devices, operate in device management. </p>
+  <br />
+  <p>Control panel management includes: Modify IP address, disable, Enable, Modify communication password, Synchronize time, Upload event record, Upgrade firmware, and Get event entries.<br /><br />
+  <br />
+  <p><b> (1)Device profile: </b></p><br />
+  <p>Select device, click [Edit] under “Related operation”.  For Related details, see <u><a href="device.html">Device  Maintenance</a></u>.<br /></p>
+  <div class="alignC"></div>
+  <br />
+  <p><b> (2) Modify IP address： </b></p>
+  <br />
+  <p>Select device, and click [Modify IP address] to show  the modification interface. Enter new IP address, gateway, and subnet mask.  Click [OK] to save settings and quit. This function is same as [Modify IP address  function] in <u> <a href="device.html">Elevator Control Device</a></u>. The  difference is when searching control panels, the devices have not been added  into the system, while the current [Modify device IP address] is regarding  added devices.<br />
+<br />
+<p><b> (3)Disable/Enable : </b></p>
+  <br />
+  <p>Select device, click [Disable/ Enable] to stop/ start  using the device. When the device’s communication with the system is  interrupted or the device fails, the device may automatically appear in disabled  status. At this time, after adjusting Internet or device, click [Enable device]  to reconnect the device and restore device communication.<br />
+  </p>
+  <br /><b>Note: </b>If the current device is in  enabled status and the connection is not successful, and the user conducts enable  operation, the system will immediately reconnect the device.<br /><br />
+  <br />
+  <p><b> (4) Modify communication  password: </b></p>
+  <br />
+  <p>Enter the same new password for twice, and click [OK]  to modify the communication password.</p><br />
+  <div class="alignC">  </div>
+  <br />
+  
+  
+  <p><b>(5) Synchronize time:</b></p><br /><br />
+  <p>Synchronize device time with current server time.</p><br /><br />
+   <p><b>(6) Get event entries:</b><br />
+   <br />
+     <p>Get  event records in the device into the  system.<br />
+     <br />
+ 	<p>Two options is provided for this operation, Get New Entries and Get All Entries.<br />
+ 	<br />
+ 	<p><b>Get New Entries:</b> The system only get the new event entries after the last time event entries getting, and record them into the database, the repeated entries will not rewrite again.<br />
+ 	<br />
+     <p><b>Get All Entries: </b>The system will get all of the event entries again, the repeated entries will not rewrite again. <br />
+ 	<br />
+ 	<p>When the network status is normal and the communication  status between the system and the device is normal, the system will acquire  event records in the device in real-time and save them into system database.  However, when the network is interrupted or communication is interrupted for some  reasons, and the event records in the device have not been uploaded into the  system in real-time, this operation can be used to manually acquire event  records in the device. In addition, the system, by default, will automatically  acquire event records in the device at 00:00 each day.<br /><br />
+   <p><b>Note: </b> The elevator controller can restore up to 100 thansands of event entries, after the entries exceed this number, the device will automatically delete the oldest restored entries (the default delete number is 10 thansands).<br /><br />
+   <p><b>(7) Upgrade firmware</b><br /><br />
+      <p>To upgrade firmware in the device, tick the device for  which you want to upgrade firmware, click [Upgrade firmware], enter edit interface,  click [Browse] to select the firmware upgrade file (named emfw.cfg) provided by  us, and click [OK] to start upgrading.<br />
+    <br /><p><b>Note: </b>The user shall not upgrade  firmware without authorization. Contact the distributor before upgrading  firmware, or upgrade it when instructed by the distributor. Unauthorized  upgrading may bring problems that affect your normal use.<br /><br />
+    <p><b>(8) Change the fingerprint identification threshold</b><br /><br />
+      <p>The user can change the fingerprint identification threshold in the device, the scale is 35-70, it is 55 by default. In device adding, the system will get the threshold from device. If the operation succeeds, user can view the threshold in all of the devices. The batch operation is permitted; user can change multi devices meanwhile.<br />
+    <br />
+  <p><b>(9) Get information of personnel</b><br /><br />
+   <p>Renew the current number of personnel and fingerprints in the device. And the final value will be displayed on the device list.<br />
+  <br />
+
+  <p><b>2. Floor management</b></p>
+  <br />
+  <p>The device list will show all elevator control devices.  Click the “+” button before the device name to show the floor list under a  device. When adding device, it will automatically add floors (corresponding  device name and floor numbers can not be edited) according to the number of  floors. Before using the device (including floors), the user must edit floor  information one by one (or apply current settings to other floors). After  editing, they will be sent to the device, which can be used after successful setting.</p><br /><br />
+  <br />
+  <p><b> (1)Floor parameter  modification: </b></p><br />
+  <p>Select the floor to be modified, and click [Edit] under  “Related operation” to show the Edit interface;</p><br />
+  <p><b>The fields are as follows: </b></p><br />
+  <p><b>Device name: </b>It is not editable (need to be edited in 6.2.1   elevator control device);<br /><br />
+  <br />
+  <p><b>Floor number: </b>The system automatically name the numbers of  floors according to how many floors of the device . The number will be  consistent with the floor number on the device.<br />
+  <p><b>Floor name:</b> The default floor name is “device name_floor  number”. The field allows the user to modify as required. Up to 30 characters  can be entered;<br /><br />
+  <p><b>Floor valid time zone</b>, <b>floor  normal open time zone</b>: By default either is null. Initialized and added  elevator control time zones will be shown for the user to select. Upon floor  editing, floor valid time zone is need to input. Only after setting floor valid time  zone, the floor can be opened and closely normally. We recommend to set floor  normal open time period within the floor valid time zone, only in this situation,  the floor normal open time zone is valid;<br />
+  <p><b>Lock open duration:</b> Used to control the delay for unlocking  after card punching. The unit is second, and the default is 5 seconds. The user  can enter a number between 0-254;<br /><br />
+  <p><b>Punch interval: </b>The unit is second (range: 0-10 seconds),  and the default is 2 seconds;<br /><br />
+  <p><b>Floor sensor type: </b>NO (floor sensor not detected), Normal Open,  Normal Close. The default is NO. When editing floors, the user can select the  floor sensor type to be Normal Open or Normal Close. If Normal Open or Normal  Close is selected, it is required to select <b>floor status delay</b> and whether<b> close and reverse-lock </b>is required. By default, once floor sensor type is  set as Normal Open or Normal Close, the default floor status delay will be 15s,  and by default it will enable close and reverse-lock.<br />
+  <p><p><b>Apply the setting to all floors  of the current control panel:</b> Click to apply to all floors of the current control panel;</p><br />
+  <p><b>Apply the setting to all floors  of all control panels:</b> Click to apply to all floors of all control panels within the current user’s  level;</p><br />
+  <br />
+
+  <p>After parameter editing, click [OK] to save and quit.</p><br />
+<br />
+
+</div>
+</body>
+</html>

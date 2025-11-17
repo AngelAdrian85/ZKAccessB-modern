@@ -1,0 +1,1 @@
+%CD%\bin\mysqld-nt.exe --default-character-set=utf8 --default-storage-engine=INNODB --port=3306 --basedir="%CD%" --datadir="%CD%/data"

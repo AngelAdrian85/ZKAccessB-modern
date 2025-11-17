@@ -1,0 +1,219 @@
+{% extends "special_menu.html" %}
+{% load i18n %}
+
+{% block headjs %}
+    <script src="{{ MEDIA_URL }}/jslib/jquery.windows-engine.js"></script>
+    <link rel="stylesheet" type="text/css" href="{{ MEDIA_URL }}/css/jquery.windows-engine.css" media="screen" />
+    <script src="{{ MEDIA_URL }}/jslib/video_linkage_window.js"></script>
+    {% block add_headjs %}
+    {% endblock %}
+{% endblock %}
+
+{% block id_main_div %}
+    <!-- video linkage -->
+    <div id="id_show_video" class="displayN">
+        <div id="id_show_video_1" class="displayN"></div>
+    </div>
+    <div id="id_tip" style="display:none" class="div_tip ui-corner-all"></div>
+    <div id="ocx_obj" style="display:none"></div>
+    {% block id_main_div_report %}{% endblock %}
+{% endblock %}
+
+{% block getdatalist %}
+    {% if request.user|HasPerm:"contenttypes.can_ReportFormPage" %}
+        
+        {% block acc_reportform %}{% endblock %}
+
+    {% else %}
+        alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
+        window.location.href = "/{{ request.surl }}accounts/login/";
+    {% endif %}<!--contenttypes.can_ReportFormPage-->
+{% endblock %}
+
+{% block addjs %}
+var video_info = null;
+var video_brand_for_report = null;
+var vid_hkocx_obj = null;
+var creat_new_window = 0;//是否创建新的视频回放窗口。
+function getMoreInfo()
+{
+      return  '<iframe class="maskIframe"></iframe>'
+              +'<div>'
+                  +'<table>'
+                      +'<tr><td><a id="opendoor_img" class="" href="javascript:void(0)" onclick="download_video()">{% trans "从视频服务器导出" %}</a></td></tr>'
+                  +'</table>'
+              +'</div>';
+}
+function index_tip_info(obj)
+{
+    video_info = $(obj).parent().attr("data");
+    $("#id_tip").html(getMoreInfo());
+    var offset = $(obj).offset();
+    if($("#id_tip").css("display") == "none")
+    {
+        $("#id_tip").css({"z-index": 16, "display": "block", "position": "absolute", "top": (offset.top+20), "left": (offset.left-105)})
+        $("#id_tip").mouseover(function()
+        {
+            $(this).css({"z-index": 16, "display": "block", "position": "absolute", "top": (offset.top+20), "left": (offset.left-105)})
+        }).mouseout(function()
+        {
+          $("#id_tip").css("display", "none");
+        });
+    }
+    else
+    {
+      $("#id_tip").css("display", "none");
+    }
+    $(".maskIframe").css("width", $(".div_tip").width());
+    $(".maskIframe").css("height", $(".div_tip").height());
+}
+function tip_info_exit(obj)
+{
+    $("#id_tip").css("display", "none")
+}
+
+function process_video(vid_data)
+{
+    //视频监控部分-darcy20120305
+    var last_vid_ip = "";//端口是否需要判断？
+    var last_vid_user = "";
+    var last_user_id = -1;
+    var user_id = null;
+    
+    if(!$.browser.msie)
+    {
+        alert(gettext("目前该功能仅支持IE系列及IE内核的浏览器，请更换！"));
+        return;              
+    }
+    else
+    {
+    	var vid_data = vid_data.data.split(",");
+        var vid_ip = vid_data[0];
+        var vid_port = vid_data[1];
+        var vid_user = vid_data[2];
+        var vid_pwd = vid_data[3];
+        var vid_brand = vid_data[10];
+        var vid_channel = vid_data[4]-1;//通道编号从0开始
+        var start_time = vid_data[5];
+        var end_time = vid_data[6];
+        var play_ret = null;
+        var init_ret = true;
+        //初始化窗口
+        var win_content = '<div id="id_vid_hkocx_1"></div>';
+        var window_width = {{ popup_window_width }};//400
+        var window_height = {{ popup_window_height }};//300
+        //初始化视频控件ocx
+        var ocx_obj = null;
+        if(vid_brand == 200)
+        {
+        	ocx_obj = '<object classid="clsid:8E4BEB46-C00F-4719-AD49-E75E839C6889" codebase="/media/ActiveX/NetVideoActiveX_V23.cab#version=2,3,15,1"standby="Waiting..." id="Netocx1" width="100%" height="100%" name="playocx" ></object>'
+        }
+        else if(vid_brand == 300)
+        {
+        	ocx_obj = '<object classid="clsid:108D3206-846A-4A93-BACB-F0572D043ED7" codebase="/media/ActiveX/DaHua_webrec.cab#version=2,1,7,25"standby="Waiting..." id="Netocx1" width="100%" height="100%" name="playocx" ><param name="lVideoWindNum" value=1></object>'
+        }
+        //if(video_brand_for_report != vid_brand)
+        //{
+        	//窗口显示位置，滚动条到顶部的垂直高度+150-darcy20120508
+        	init_video_window($("#id_show_video_1"), gettext("视频查询"), win_content, window_width, window_height, 500, 150+$(document).scrollTop(),creat_new_window);
+        	init_ret = check_init_vid_ocx($("#id_vid_hkocx_1"), ocx_obj, "Netocx1");
+        	creat_new_window = 1;
+        //}
+        if(init_ret)
+        {
+            vid_hkocx_obj = document.getElementById("Netocx1");
+            //登录视频服务器
+            var user_id = vid_login(vid_hkocx_obj, last_vid_ip, vid_ip, vid_port,last_user_id, vid_user, vid_pwd, vid_brand);
+            last_vid_ip = vid_ip;
+            last_vid_user = vid_user;
+            last_user_id = user_id;
+            video_brand_for_report = vid_brand;
+            if(user_id >= 0)
+            {
+            	//进行回放
+                play_ret = vid_playback_bytime(vid_hkocx_obj, vid_brand, vid_channel, start_time, end_time);
+                if(!play_ret)
+                {
+                   last_user_id = -1; 
+                }
+            }
+        }   
+    }
+
+}
+
+//从DVR导出视频文件到客户端
+function download_video()
+{
+	if(!$.browser.msie)
+    {
+        alert(gettext("目前该功能仅支持IE系列及IE内核的浏览器，请更换！"));
+        return;              
+    }
+	$("#ocx_obj").append('<object classid="clsid:CAFCF48D-8E34-4490-8154-026191D73924" codebase="/media/ActiveX/NetVideoActiveX_V23.cab#version=2,3,15,1" standby="Waiting..." id="Download" width="770px" height="360px" name="ocx1" align="center" ></object>');
+	var download = document.getElementById("Download");
+	if(download.object == null)
+    {
+		alert(gettext("控件初始化失败，请确定视频设备类型是否选择正确或重装控件！"));
+        return;               
+    }
+    var vid_data = video_info.split(",");
+    var vid_ip = vid_data[0];
+    var vid_port = vid_data[1];
+    var vid_user = vid_data[2];
+    var vid_pwd = vid_data[3];
+    var vid_channel = vid_data[4]-1;
+    var start_time = vid_data[5];
+    var end_time = vid_data[7];
+	var user_login = download.Login(vid_ip, vid_port, vid_user, vid_pwd);
+	if(user_login > -1)
+	{
+       var info = download.SearchRemoteRecordFile(vid_channel,0,start_time,end_time,false,false,"");
+       if(info == "null" || info == "")
+       {
+            alert(gettext("没有录像文件！"));
+       }
+       else
+       {
+            var down_state = download.DownLoadByTime(vid_channel,start_time,end_time,'');
+            if(down_state == true)
+            {
+                var down_pos = download.GetDownloadPos();
+                while(down_pos<100)//状态只有0和100
+                {
+                    down_pos = download.GetDownloadPos();
+                }
+                if(down_pos == 100)
+                {
+                    download.StopDownLoadFile();
+                    alert(gettext('从视频服务器导出成功！'));
+                }
+                else
+                {
+                    alert(gettext('从视频服务器导出失败！'));
+                }
+            }
+            else
+            {
+                alert(gettext('从视频服务器导出失败！'));
+            }
+       }
+       download.Logout();
+       download.ClearOCX();
+       download.logout();
+       return;	
+    }
+    else
+    {
+    	download.logout();
+        alert(gettext('从视频服务器导出失败！'));
+        return;
+    }
+}
+
+function show_picture(picture)
+{
+	var display_picture = "<div><img src='"+picture.data+"'/></div>";
+	$(display_picture).dialog();
+}
+{% endblock %}

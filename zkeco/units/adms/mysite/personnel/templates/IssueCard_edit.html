@@ -1,0 +1,71 @@
+{% extends "data_edit.html" %}
+{% load i18n %}
+
+{% block form %}
+{% autoescape off %}
+	<tr>
+		<td width="150px"></td>
+	</tr>
+	<tr>
+		{{ form.UserID|field_as_td_h }}
+	</tr>
+	<tr>
+		{{ form.card_number_type|field_as_td_h }}
+	</tr>
+	<tr id="id_tr_cardno">
+		{{ form.cardno|field_as_td_h }}
+	</tr>
+	<tr id="id_tr_card_number">
+		{{ form.card_number|field_as_td_h }}
+	</tr>
+	<tr id="id_tr_site_code">
+		{{ form.site_code|field_as_td_h }}
+	</tr>
+	<tr id="id_tr_temp">
+		<th>&nbsp;</th>
+		<td>&nbsp;</td>
+	</tr>
+	
+    {% if form.non_field_errors %}
+        <tr><td>{{ form.non_field_errors }}</td></tr>
+    {% endif %}
+{% endautoescape %}
+{% endblock %}
+{% block addjs %}
+	//初始化时加载卡号输入框
+    function after_init()
+    {
+        $("input[id^='id_card_number_type_']").each(function(){
+            if($(this).attr("checked"))
+            {
+                process_card_number_input($(this).val());    
+            }
+        });
+    }
+    
+    //切换方式
+    $("input[id^='id_card_number_type_']").each(function(){
+        $(this).click(function(){
+            process_card_number_input($(this).val());
+        });
+    });
+    
+	function process_card_number_input(value)
+	{
+		if(value == 1)//site_code
+		{
+			$("#id_tr_cardno").hide();
+			$("#id_tr_temp").hide();//加一个空行，限制确定、取消行在切换时的上下移动
+			$("#id_tr_card_number").show();
+			$("#id_tr_site_code").show();
+		}
+		else
+		{
+			$("#id_tr_cardno").show();
+			$("#id_tr_temp").show();
+			$("#id_tr_card_number").hide();
+			$("#id_tr_site_code").hide();
+		}
+	}
+{% endblock %}
+

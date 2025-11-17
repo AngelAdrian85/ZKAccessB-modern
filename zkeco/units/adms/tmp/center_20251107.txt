@@ -1,0 +1,4 @@
+19:23:54-13356-PID die**********
+19:24:00-15612-1.--rundatacenter--sevice pid=15612
+19:24:00-15612-self.net_dev_set=[[], [], [], []]
+19:24:00-15612-CommCenter main pid=15612

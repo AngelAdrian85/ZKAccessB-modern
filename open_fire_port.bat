@@ -1,0 +1,1 @@
+netsh firewall add portopening protocol = TCP port = 21563 name = ECOPort

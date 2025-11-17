@@ -1,0 +1,36 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+	<title>系统帮助</title>
+	<link rel="stylesheet" type="text/css" href="css/help.css" />
+	<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+</head>
+<body class="help_body1">
+	<div class="help_position"><span class="help_positionIcon">系统帮助</span> -> 疑难解答</div>
+    <div class="help_mainContant">
+      <h2>疑难解答</h2>
+      <br />
+	  <p><b>1.客户端浏览器中无法回放视频，预览和实时监控页面无视频弹出:</b></p>
+	  <br>
+	  <p>首先确保使用IE8及以上版本的浏览器，客户机与视频服务器在同一个网段，视频控件安装成功。
+	  如果控件安装失败，首先卸载原来安装的视频控件，运行“regsvr32 –u NetVideoActiveX23.ocx”命令。
+	  然后在浏览器中，“工具->Internet选项->安全->自定义级别”中的有关Active控件的所有选项全设为“启用或提示”，
+	  在重新打开浏览器，重新登录界面，到达视频预览界面，运行“网站所有加载项”即可。</p>
+	  <br>
+	  <p><b>2.电子地图中点击摄像头小图标，无视频弹出:</b></p>
+	  <br>
+	  <p>请确保使用IE8及以上版本的浏览器，客户机与视频服务器在同一个网段，视频控件安装成功的情况下，
+	  看看浏览器是否阻止临时窗口弹出，如果浏览器阻止临时窗口弹出，改为允许该网站的窗口弹出即可。</p>
+	  <br>
+	  <p><b>3.视频联动触发，视频服务器没有录像或者客户端从软件服务器下载的视频文件大小为0kb：</b></p>
+	  <br>
+	  <p>首先确保软件服务器中已设置好Timeserver功能（Windows time服务开启，视频服务器的NTP功能已设好），
+	  建议将视频服务器的校时间隔设置小一点，确保软件服务器与视频服务器时间精确同步，确保门禁控制器的时间
+	  与软件服务器的时间保持同步。联动录像时间最好设置超过5秒，避免因视频服务器执行联动录像命令延时，
+	  而造成下载的文件大小为0kb。</p>
+<br />
+<br />
+
+</div>
+</body>
+</html>

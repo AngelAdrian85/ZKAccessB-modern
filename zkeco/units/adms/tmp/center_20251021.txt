@@ -1,0 +1,8 @@
+02:28:29-15720-PID die**********
+02:39:45-10396-1.--rundatacenter--sevice pid=10396
+02:39:46-10396-self.net_dev_set=[[], [], [], []]
+02:39:46-10396-CommCenter main pid=10396
+15:31:29-10396-PID die**********
+15:31:32-1108-1.--rundatacenter--sevice pid=1108
+15:31:33-1108-self.net_dev_set=[[], [], [], []]
+15:31:33-1108-CommCenter main pid=1108

@@ -1,0 +1,190 @@
+2025-10-06 15:13:10,742 INFO started
+2025-10-06 15:13:10,742 INFO Running
+2025-10-06 15:13:10,742 INFO python: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe
+2025-10-06 15:13:10,742 INFO pid=4608: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe svr8000.pyc
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+Installing json fixture 'initial_data_en' from 'C:\Program Files (x86)\ZKTeco\ZKAccessB\zkeco\python-support\base\fixtures'.
+Installed 12 object(s) from 1 fixture(s)
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+-15:13:11-5492-Starting  check mysql...
+
+-15:13:11-5492-Start to check the mysql(myisam) tables...
+
+-15:13:12-5492-Check the mysql(myisam) table acc_monitor_log OK...
+
+-15:13:12-5492-Check the mysql(myisam) table action_log OK...
+
+-15:13:12-5492-Check the mysql(myisam) table iclock OK...
+
+-15:13:12-5492-Check the mysql(myisam) table devcmds OK...
+
+-15:13:12-5492-Check the mysql(myisam) table auth_group_permissions OK...
+
+-15:13:12-5492-Check and Repair mysql tables for 1 s or 35000 microseconds...
+
+2025-10-06 15:15:55,427 INFO started
+2025-10-06 15:15:55,427 INFO Running
+2025-10-06 15:15:55,427 INFO python: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe
+2025-10-06 15:15:55,444 INFO pid=4568: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe svr8000.pyc
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+Installing json fixture 'initial_data_en' from 'C:\Program Files (x86)\ZKTeco\ZKAccessB\zkeco\python-support\base\fixtures'.
+Installed 12 object(s) from 1 fixture(s)
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+-15:15:57-7644-Starting  check mysql...
+
+-15:15:57-7644-Start to check the mysql(myisam) tables...
+
+-15:15:57-7644-Check the mysql(myisam) table acc_monitor_log OK...
+
+-15:15:57-7644-Check the mysql(myisam) table action_log OK...
+
+-15:15:57-7644-Check the mysql(myisam) table iclock OK...
+
+-15:15:57-7644-Check the mysql(myisam) table devcmds OK...
+
+-15:15:57-7644-Check the mysql(myisam) table auth_group_permissions OK...
+
+-15:15:57-7644-Check and Repair mysql tables for 0 s or 547000 microseconds...
+
+2025-10-07 07:50:33,750 INFO started
+2025-10-07 07:50:33,766 INFO Running
+2025-10-07 07:50:33,766 INFO python: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe
+2025-10-07 07:50:33,766 INFO pid=4608: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe svr8000.pyc
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+Installing json fixture 'initial_data_en' from 'C:\Program Files (x86)\ZKTeco\ZKAccessB\zkeco\python-support\base\fixtures'.
+Installed 12 object(s) from 1 fixture(s)
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+-07:50:35-7968-Starting  check mysql...
+
+-07:50:35-7968-Start to check the mysql(myisam) tables...
+
+-07:50:35-7968-Check the mysql(myisam) table acc_monitor_log OK...
+
+-07:50:35-7968-Check the mysql(myisam) table action_log OK...
+
+-07:50:35-7968-Check the mysql(myisam) table iclock OK...
+
+-07:50:35-7968-Check the mysql(myisam) table devcmds OK...
+
+-07:50:35-7968-Check the mysql(myisam) table auth_group_permissions OK...
+
+-07:50:35-7968-Check and Repair mysql tables for 0 s or 16000 microseconds...
+
+2025-10-13 07:42:29,822 INFO started
+2025-10-13 07:42:29,822 INFO Running
+2025-10-13 07:42:29,822 INFO python: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe
+2025-10-13 07:42:29,822 INFO pid=4836: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe svr8000.pyc
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+Installing json fixture 'initial_data_en' from 'C:\Program Files (x86)\ZKTeco\ZKAccessB\zkeco\python-support\base\fixtures'.
+Installed 12 object(s) from 1 fixture(s)
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+-07:42:30-6012-Starting  check mysql...
+
+-07:42:30-6012-Start to check the mysql(myisam) tables...
+
+-07:42:31-6012-Check the mysql(myisam) table acc_monitor_log OK...
+
+-07:42:31-6012-Check the mysql(myisam) table action_log OK...
+
+-07:42:31-6012-Check the mysql(myisam) table iclock OK...
+
+-07:42:31-6012-Check the mysql(myisam) table devcmds OK...
+
+-07:42:31-6012-Check the mysql(myisam) table auth_group_permissions OK...
+
+-07:42:31-6012-Check and Repair mysql tables for 0 s or 542000 microseconds...
+
+2025-10-16 07:57:14,555 INFO started
+2025-10-16 07:57:14,555 INFO Running
+2025-10-16 07:57:14,555 INFO python: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe
+2025-10-16 07:57:14,555 INFO pid=4348: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe svr8000.pyc
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+Installing json fixture 'initial_data_en' from 'C:\Program Files (x86)\ZKTeco\ZKAccessB\zkeco\python-support\base\fixtures'.
+Installed 12 object(s) from 1 fixture(s)
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+check_and_create_app_options------
+-07:57:16-4420-Starting  check mysql...
+
+-07:57:16-4420-Start to check the mysql(myisam) tables...
+
+-07:57:16-4420-Check the mysql(myisam) table acc_monitor_log OK...
+
+-07:57:16-4420-Check the mysql(myisam) table action_log OK...
+
+-07:57:16-4420-Check the mysql(myisam) table iclock OK...
+
+-07:57:16-4420-Check the mysql(myisam) table devcmds OK...
+
+-07:57:16-4420-Check the mysql(myisam) table auth_group_permissions OK...
+
+-07:57:16-4420-Check and Repair mysql tables for 0 s or 13000 microseconds...
+

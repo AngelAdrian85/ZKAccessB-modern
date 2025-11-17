@@ -1,0 +1,142 @@
+<!DOCTYPE html><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=gb2312">
+<meta name="Generator" content="Word2Chm Addin (v1.4.7.5)">
+<link rel="stylesheet" href="Word2Chm.css" type="text/css">
+<script src="Word2Chm.js" type="Text/JavaScript"></script>
+<title> 第6章 门禁系统管理</title>
+</head>
+<body bgcolor=white lang=ZH-CN link=blue vlink=purple style='text-justify-trim:
+punctuation' onLoad="javascript:jsMain();"><div class=WordSection22>
+
+<h1 style='margin-top:12.0pt;margin-right:0cm;margin-bottom:12.0pt;margin-left:
+0cm;line-height:normal'><a name="_Toc416704635"><span style='font-size:12.0pt;
+font-family:宋体'>第</span></a><span lang=EN-US style='font-size:12.0pt'>6</span><span
+style='font-size:12.0pt;font-family:宋体'>章</span><span style='font-size:12.0pt'>
+</span><span style='font-size:12.0pt;font-family:宋体'>门禁系统管理</span></h1>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;text-indent:18.05pt;vertical-align:baseline'><b><span
+lang=EN-US style='font-size:9.0pt'>1</span></b><span style='font-size:9.0pt;
+font-family:宋体'>．<b>系统工作原理：</b></span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;text-indent:18.0pt;vertical-align:baseline'><span
+style='font-size:9.0pt;font-family:宋体'>本门禁系统是基于</span><span lang=EN-US
+style='font-size:9.0pt'>WEB</span><span style='font-size:9.0pt;font-family:
+宋体'>的管理系统，能够实现普通门禁功能，通过计算机对网络门禁控制器进行管理，实现对人员进出的统一管理。</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;text-indent:18.0pt;vertical-align:baseline'><span
+style='font-size:9.0pt;font-family:宋体'>门禁系统可对已登记用户的开门权限进行设置；即在某个时间段内，在某些门上，允许某些人员可以验证开门。</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;text-indent:18.0pt;vertical-align:baseline'><span
+style='font-size:9.0pt;font-family:宋体'>此外，本系统目前支持将门禁设备中的数据，用于考勤系统，以节省硬件资源。</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;text-indent:18.0pt;vertical-align:baseline'><span
+style='font-size:9.0pt;font-family:宋体'>系统支持多种数据库，包括</span><span lang=EN-US
+style='font-size:9.0pt'>MySQL</span><span style='font-size:9.0pt;font-family:
+宋体'>、</span><span lang=EN-US style='font-size:9.0pt'>SQL Server</span><span
+style='font-size:9.0pt;font-family:宋体'>、</span><span lang=EN-US
+style='font-size:9.0pt'>Oracle10g</span><span style='font-size:9.0pt;
+font-family:宋体'>等；基于多业务融合设计，支持业务扩展，如考勤、巡更、访客管理等；支持多国语言。</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;text-indent:18.05pt;vertical-align:baseline'><b><span
+lang=EN-US style='font-size:9.0pt'>2</span></b><span style='font-size:9.0pt;
+font-family:宋体'>．<b>系统参数介绍：</b></span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:60.6pt;text-indent:-42.6pt;vertical-align:baseline'><span
+lang=EN-US style='font-size:9.0pt;font-family:Wingdings'>v<span
+style='font:7.0pt "Times New Roman"'>&nbsp; </span></span><span lang=EN-US
+style='font-size:9.0pt'>255</span><span style='font-size:9.0pt;font-family:
+宋体'>个时间段；</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:60.6pt;text-indent:-42.6pt;vertical-align:baseline'><span
+lang=EN-US style='font-size:9.0pt;font-family:Wingdings'>v<span
+style='font:7.0pt "Times New Roman"'>&nbsp; </span></span><span
+style='font-size:9.0pt;font-family:宋体'>无限制</span><span style='font-size:9.0pt;
+font-family:宋体'>门禁权限组；</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:60.6pt;text-indent:-42.6pt;vertical-align:baseline'><span
+lang=EN-US style='font-size:9.0pt;font-family:Wingdings'>v<span
+style='font:7.0pt "Times New Roman"'>&nbsp; </span></span><span
+style='font-size:9.0pt;font-family:宋体'>三种假日类型共</span><span lang=EN-US
+style='font-size:9.0pt'>96</span><span style='font-size:9.0pt;font-family:宋体'>个假日；</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:60.6pt;text-indent:-42.6pt;vertical-align:baseline'><span
+lang=EN-US style='font-size:9.0pt;font-family:Wingdings'>v<span
+style='font:7.0pt "Times New Roman"'>&nbsp; </span></span><span
+style='font-size:9.0pt;font-family:宋体'>反潜功能；</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:60.6pt;text-indent:-42.6pt;vertical-align:baseline'><span
+lang=EN-US style='font-size:9.0pt;font-family:Wingdings'>v<span
+style='font:7.0pt "Times New Roman"'>&nbsp; </span></span><span
+style='font-size:9.0pt;font-family:宋体'>互锁功能；</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:60.6pt;text-indent:-42.6pt;vertical-align:baseline'><span
+lang=EN-US style='font-size:9.0pt;font-family:Wingdings'>v<span
+style='font:7.0pt "Times New Roman"'>&nbsp; </span></span><span
+style='font-size:9.0pt;font-family:宋体'>联动功能；</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:60.6pt;text-indent:-42.6pt;vertical-align:baseline'><span
+lang=EN-US style='font-size:9.0pt;font-family:Wingdings'>v<span
+style='font:7.0pt "Times New Roman"'>&nbsp; </span></span><span
+style='font-size:9.0pt;font-family:宋体'>韦根卡格式；</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:60.6pt;text-indent:-42.6pt;vertical-align:baseline'><span
+lang=EN-US style='font-size:9.0pt;font-family:Wingdings'>v<span
+style='font:7.0pt "Times New Roman"'>&nbsp; </span></span><span
+style='font-size:9.0pt;font-family:宋体'>首卡常开功能；</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:60.6pt;text-indent:-42.6pt;vertical-align:baseline'><span
+lang=EN-US style='font-size:9.0pt;font-family:Wingdings'>v<span
+style='font:7.0pt "Times New Roman"'>&nbsp; </span></span><span
+style='font-size:9.0pt;font-family:宋体'>多卡开门功能；</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:60.6pt;text-indent:-42.6pt;vertical-align:baseline'><span
+lang=EN-US style='font-size:9.0pt;font-family:Wingdings'>v<span
+style='font:7.0pt "Times New Roman"'>&nbsp; </span></span><span
+style='font-size:9.0pt;font-family:宋体'>远程开门、关门；</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:60.6pt;text-indent:-42.6pt;vertical-align:baseline'><span
+lang=EN-US style='font-size:9.0pt;font-family:Wingdings'>v<span
+style='font:7.0pt "Times New Roman"'>&nbsp; </span></span><span
+style='font-size:9.0pt;font-family:宋体'>通过</span><span lang=EN-US
+style='font-size:9.0pt'>Web</span><span style='font-size:9.0pt;font-family:
+宋体'>浏览器实时监控；</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;text-indent:18.05pt;vertical-align:baseline'><b><span
+lang=EN-US style='font-size:9.0pt'>3</span></b><span style='font-size:9.0pt;
+font-family:宋体'>．<b>门禁系统操作功能介绍：</b></span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;text-indent:18.0pt;vertical-align:baseline'><span
+style='font-size:9.0pt;font-family:宋体'>点击进入【门禁】系统后，首页显示为【实时监控】。</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;text-indent:18.0pt;vertical-align:baseline'><span
+style='font-size:9.0pt;font-family:宋体'>门禁系统管理主要包括：门禁时间段、门禁节假日、门设置、门禁权限组、人员门禁权限设置、实时监控、门禁报表等。</span></p>
+
+</div>
+
+<b><span lang=EN-US style='font-size:10.5pt;font-family:"Times New Roman","serif"'><br
+clear=all style='page-break-before:auto'>
+</span></b>
+
+</body>
+</html>

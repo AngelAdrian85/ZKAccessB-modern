@@ -1,0 +1,88 @@
+251006 15:12:30  InnoDB: Started; log sequence number 0 43695
+251006 15:12:30 [Note] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: ready for connections.
+Version: '5.0.45-community-nt'  socket: ''  port: 83306  MySQL Community Edition (GPL)
+251006 15:13:02 [Note] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Normal shutdown
+
+251006 15:13:02  InnoDB: Starting shutdown...
+251006 15:13:04  InnoDB: Shutdown completed; log sequence number 0 43695
+251006 15:13:04 [Note] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Shutdown complete
+
+251006 15:13:12  InnoDB: Started; log sequence number 0 43695
+251006 15:13:12 [Note] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: ready for connections.
+Version: '5.0.45-community-nt'  socket: ''  port: 83306  MySQL Community Edition (GPL)
+251006 15:15:44 [Note] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Normal shutdown
+
+251006 15:15:46 [Warning] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Forcing close of thread 10  user: 'root'
+
+251006 15:15:46 [Warning] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Forcing close of thread 9  user: 'root'
+
+251006 15:15:46 [Warning] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Forcing close of thread 8  user: 'root'
+
+251006 15:15:46 [Warning] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Forcing close of thread 7  user: 'root'
+
+251006 15:15:46 [Warning] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Forcing close of thread 1  user: 'root'
+
+251006 15:15:46  InnoDB: Starting shutdown...
+251006 15:15:49  InnoDB: Shutdown completed; log sequence number 0 43695
+251006 15:15:49 [Note] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Shutdown complete
+
+251006 15:15:57  InnoDB: Started; log sequence number 0 43695
+251006 15:15:57 [Note] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: ready for connections.
+Version: '5.0.45-community-nt'  socket: ''  port: 83306  MySQL Community Edition (GPL)
+251006 15:20:12 [Note] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Normal shutdown
+
+251006 15:20:14 [Warning] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Forcing close of thread 10  user: 'root'
+
+251006 15:20:14 [Warning] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Forcing close of thread 9  user: 'root'
+
+251006 15:20:14 [Warning] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Forcing close of thread 8  user: 'root'
+
+251006 15:20:14 [Warning] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Forcing close of thread 7  user: 'root'
+
+251006 15:20:14 [Warning] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Forcing close of thread 2  user: 'root'
+
+251006 15:20:14  InnoDB: Starting shutdown...
+251006 15:20:14  InnoDB: Shutdown completed; log sequence number 0 43695
+251006 15:20:14 [Note] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Shutdown complete
+
+251007  7:50:35  InnoDB: Started; log sequence number 0 43695
+251007  7:50:35 [Note] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: ready for connections.
+Version: '5.0.45-community-nt'  socket: ''  port: 83306  MySQL Community Edition (GPL)
+251013  7:41:56 [Note] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Normal shutdown
+
+251013  7:41:58 [Warning] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Forcing close of thread 5753  user: 'root'
+
+251013  7:41:58 [Warning] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Forcing close of thread 5752  user: 'root'
+
+251013  7:41:58 [Warning] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Forcing close of thread 5751  user: 'root'
+
+251013  7:41:58 [Warning] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Forcing close of thread 5750  user: 'root'
+
+251013  7:41:58 [Warning] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Forcing close of thread 5749  user: 'root'
+
+251013  7:41:58  InnoDB: Starting shutdown...
+251013  7:41:59  InnoDB: Shutdown completed; log sequence number 0 43695
+251013  7:41:59 [Note] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Shutdown complete
+
+251013  7:42:30  InnoDB: Started; log sequence number 0 43695
+251013  7:42:30 [Note] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: ready for connections.
+Version: '5.0.45-community-nt'  socket: ''  port: 83306  MySQL Community Edition (GPL)
+251016  7:57:02 [Note] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Normal shutdown
+
+251016  7:57:04 [Warning] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Forcing close of thread 3682  user: 'root'
+
+251016  7:57:04 [Warning] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Forcing close of thread 3681  user: 'root'
+
+251016  7:57:04 [Warning] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Forcing close of thread 3680  user: 'root'
+
+251016  7:57:04 [Warning] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Forcing close of thread 3679  user: 'root'
+
+251016  7:57:04 [Warning] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Forcing close of thread 3678  user: 'root'
+
+251016  7:57:04  InnoDB: Starting shutdown...
+251016  7:57:06  InnoDB: Shutdown completed; log sequence number 0 43695
+251016  7:57:06 [Note] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: Shutdown complete
+
+251016  7:57:15  InnoDB: Started; log sequence number 0 43695
+251016  7:57:15 [Note] C:\Program Files (x86)\ZKTeco\ZKAccessB\mysql\bin\mysqld-nt.exe: ready for connections.
+Version: '5.0.45-community-nt'  socket: ''  port: 83306  MySQL Community Edition (GPL)

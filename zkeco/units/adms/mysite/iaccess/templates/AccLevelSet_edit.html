@@ -1,0 +1,45 @@
+{% extends "data_edit.html" %}
+{% load i18n %}
+
+{% block form %}
+	{% if request.user|HasPerm:"iaccess.change_acclevelset" or request.user|HasPerm:"iaccess.add_acclevelset"%}
+	{% autoescape off %}
+	<tr><td>
+		<div class="levelset_edit_table_title">
+			<table id="levelset_edit_table" cellpadding="3px">	
+				<tr>
+					{{ form.level_name|field_as_td_h }}
+				</tr>
+				<tr>
+					{{ form.level_timeseg|field_as_td_h }}
+				</tr>
+				<tr class="displayN">
+					{{ form.level_type|field_as_td_h }}
+				</tr>
+				{% if "mysite.visitor"|hasApp %}
+					<tr>
+						{{ form.is_visitor|field_as_td_h }}
+					</tr>
+				{% endif %}
+				<tr>
+					{{ form.door_group|field_as_td_h }}
+				</tr>
+				{% if form.non_field_errors %}
+				<tr><td>{{ form.non_field_errors }}</td></tr>
+				{% endif %}
+			</table>
+		</div>
+	</td></tr>
+	{% endautoescape %}
+	{% endif %}<!--change_accdoor-->
+{% endblock %}
+
+{% block addjs%}
+	{% if request.user|HasPerm:"iaccess.change_acclevelset" or request.user|HasPerm:"iaccess.add_acclevelset"%}
+		
+	{% else %}
+	    alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
+	    window.location.href = "/{{ request.surl }}accounts/login/";
+	{% endif %}<!--add/change_acclevelset-->
+{% endblock %}
+

@@ -1,0 +1,56 @@
+{% load i18n %}
+{
+    "personnel.Employee":{
+            "params":"",  
+            "verbose_fields":{
+                "3":"Gender",
+                "12":"Privilege",
+                "17":"hiretype",
+                "18":"emptype"
+            },
+            "head":["{% trans '人员编号' %}","{% trans '姓名' %}","{% trans '姓氏' %}","{% trans '性别' %}","{% trans '卡号' %}","{% trans '物理卡号' %}","{% trans '区位码' %}","{% trans '密码' %}","{% trans '部门编号' %}","{% trans '部门名称' %}","{% trans '延迟开门' %}","{% trans '延长时间' %}","{% trans '设备角色' %}","{% trans '预约密码' %}","{% trans '城市' %}","{% trans '身份证号码' %}","{% trans '办公电话' %}","{% trans '雇佣类型' %}","{% trans '员工类型' %}","{% trans '家庭电话' %}","{% trans '手机' %}","{% trans '生日' %}","{% trans '邮箱' %}","{% trans '聘用日期' %}","{% trans '家庭地址' %}","{% trans '办公地址' %}","{% trans '开始时间' %}","{% trans '结束时间' %}"],
+            "db_fields":["badgenumber","name","lastname","gender","card_no","card_number","site_code","Password","code","DeptName","delayed_door_open","extend_time","Privilege","selfpassword","City","identitycard","ophone","hiretype","emptype","FPHONE","pager","Birthday","email","Hiredday","homeaddress","street","acc_startdate","acc_enddate"],
+            "sql": "SELECT badgenumber,name,lastname,gender,card_no,card_number,site_code,Password,code,DeptName,delayed_door_open,extend_time,Privilege,selfpassword,City,identitycard,ophone,hiretype,emptype,FPHONE,pager,Birthday,email,Hiredday,homeaddress,street,acc_startdate,acc_enddate 
+                    FROM(
+                        SELECT ROW_NUMBER() OVER ( ORDER BY u.badgenumber ASC) as row_num,u.userid,u.defaultdeptid,u.badgenumber,u.name, u.lastname,u.gender,d.code,d.DeptName,pager,u.delayed_door_open,u.extend_time,u.card_number,u.site_code, 
+                        u.Birthday,u.Password,u.City,u.identitycard,u.email,u.Hiredday,u.hiretype,u.emptype,u.homeaddress,u.street,u.FPHONE,u.ophone,u.Privilege,u.selfpassword,u.acc_startdate,u.acc_enddate,(select cardno from personnel_issuecard i where cardstatus = '1' and i.userid_id = u.userid) as card_no 
+                        from userinfo u left join departments d on u.defaultdeptid=d.deptid where u.defaultdeptid=d.DeptId and d.code != '123456' and not(u.status=3) and not(u.status=999) and %s 
+                    ) AS RECORDS WHERE row_num>=%s and row_num<=%s 
+                    "
+    },
+        "iclock.Transaction":{
+                   "params":"",  
+                   "verbose_fields":{
+                       "3":"State"
+                   },
+                   "head":["{% trans '员工编号' %}","{% trans '姓名' %}","{% trans '考勤时间' %}","{% trans '考勤状态' %}","{% trans '设备序列号' %}"],
+                   "db_fields":["badgenumber","name", "checktime", "checktype","sn_name"],
+                   "sql": " 
+                        SELECT badgenumber,name,checktime,checktype,sn_name
+                        FROM (
+                            select ROW_NUMBER() OVER ( ORDER BY  checktime DESC, badgenumber ASC) as row_num, userinfo.badgenumber as badgenumber,userinfo.name as name,checktime,checktype,sn_name
+                                from checkinout,userinfo 
+                                where userinfo.userid=checkinout.userid and %s
+                        )
+                         AS RECORDS WHERE row_num>=%s and row_num<=%s 
+                           "
+           },
+        "iaccess.AccRTMonitor":{
+                    "params":"",
+                    "verbose_fields":{
+                    	"4":"event_type",
+                        "10":"verified"
+                    },
+                    "head":["{% trans '时间' %}","{% trans '区域' %}","{% trans '设备' %}","{% trans '事件点' %}","{% trans '事件描述' %}","{% trans '卡号' %}","{% trans '人员编号' %}","{% trans '姓 名' %}","{% trans '部门' %}","{% trans '状态' %}","{% trans '验证方式' %}","{% trans '备注' %}"],
+                    "db_fields":["time","area","device_name","event_point_name","event_type","card_no","pin","name","dept","state_name","verified","description"],
+                    "sql":"
+                        SELECT time,area,device_name,event_point_name,event_type,card_no,pin,name,dept,state_name,verified,description 
+                        FROM (
+                            select ROW_NUMBER() OVER ( ORDER BY time DESC) as row_num,
+                            a.time,a.area,a.device_name,a.event_point_name,a.event_type,a.card_no,a.pin,(isnull(a.firstname,'')+isnull(a.lastname,'')) as name,a.dept,a.state_name,a.verified,a.description 
+                            from acc_monitor_log a left join userinfo u on a.pin = u.badgenumber where %s 
+                        )
+                        AS RECORDS WHERE row_num >= %s and row_num <= %s  
+                    "
+           }    
+}

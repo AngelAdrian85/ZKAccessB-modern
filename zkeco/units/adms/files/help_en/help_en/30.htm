@@ -1,0 +1,145 @@
+<!DOCTYPE html><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=gb2312">
+<meta name="Generator" content="Word2Chm Addin (v1.4.7.5)">
+<link rel="stylesheet" href="Word2Chm.css" type="text/css">
+<script src="Word2Chm.js" type="Text/JavaScript"></script>
+<title> 6.3.5 Anti-passback Settings</title>
+</head>
+<body bgcolor=white lang=ZH-CN link=blue vlink=purple style='text-justify-trim:
+punctuation' onLoad="javascript:jsMain();"><div class=WordSection30>
+
+<h3 style='margin-top:12.0pt;margin-right:0cm;margin-bottom:12.0pt;margin-left:
+0cm;line-height:normal;vertical-align:middle'><a name="_Toc416704613"><span
+lang=EN-US style='font-size:10.5pt'>6.3.5 </span></a><a name="_Toc270513302"><span
+lang=EN-US style='font-size:10.5pt'>Anti-passback Settings</span></a></h3>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><span lang=EN-US style='font-size:9.0pt'>Currently
+anti-passback settings support in and out anti-passback. In some special
+occasions, it is required that the card holder who entered from a door by card
+punching must exit from the same door by card punching, with the entry and exit
+records strictly consistent. One who followed another to enter the door without
+card punching will be denied when trying to exit by card punching, and one who
+followed another to exit without card punching will be denied when trying to
+enter by card punching. When a person enters by card punching, and gives the
+card to another to try entering, the other person will be denied. The user can
+use this function just by enable it in the settings. This function is normally
+used in prisons, the army, national defense, scientific research, bank vaults,
+etc.</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><b><span lang=EN-US style='font-size:
+9.0pt'>Add anti-passback settings:</span></b></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><span lang=EN-US style='font-size:9.0pt'>1.
+Click [Access Control System] - [Door configurations] - [Anti-passback
+settings] - [Add] to show anti-passback setting edit interface;</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><span lang=EN-US style='font-size:9.0pt'>2.
+Select device (N-door control panel), because one device can only correspond to
+one anti-passback setting record, so when adding, devices with anti-passback
+settings cannot be seen in the dropdown list. When deleting established
+anti-passback information, the corresponding device will appear in the dropdown
+list. The settings vary with the number of doors controlled by the device:</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><span lang=EN-US style='font-size:9.0pt'>Anti-passback
+can be set between readers and between doors. The card holder enter from door
+A, he must exit from door B, this function is used for channel or ticket
+management. </span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><span lang=EN-US style='font-size:9.0pt'>Anti-passback
+settings of one-door control panel: Anti-passback between door readers;</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><span lang=EN-US style='font-size:9.0pt'>Anti-passback
+settings of a two-door control panel:</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><span lang=EN-US style='font-size:9.0pt'>Anti-passback
+between readers of door 1, anti-passback between readers of door 2,
+anti-passback between doors 1/2;</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><span lang=EN-US style='font-size:9.0pt'>Anti-passback
+settings of a four-door control panel:</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><span lang=EN-US style='font-size:9.0pt'>Anti-passback
+of doors 1-2, anti-passback of doors 3-4, anti-passback of doors 1/2-3/4,
+anti-passback of doors 1-2/3, anti-passback of doors 1-2/3/4, Anti-passback
+between readers of door 1, anti-passback between readers of door 2,
+Anti-passback between readers of door 3, anti-passback between readers of door
+4.</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><b><span lang=EN-US style='font-size:
+14.0pt;font-family:Wingdings'>?</span></b><b><span lang=EN-US style='font-size:
+14.0pt'> </span></b><b><span lang=EN-US style='font-size:9.0pt'>Note:</span></b><span
+lang=EN-US style='font-size:9.0pt'> The reader mentioned above includes Wiegand
+reader that connected with access control panel and inBIO reader. The single
+door and two door control panel with Wiegand reader include out reader and in
+reader. There is only in reader for four door control panel. The reader number
+of 1, 2 (that is RS485 address or device number, the same below) is for door 1,
+the reader number of 3, 4 is for door 2, etc. No need to consider if it is
+Wiegand reader or inBIO reader in setting of anti-passback between doors or
+between readers, just make sure the in or out state (means it is the in reader
+or out reader) and set according to the actual need. For the reader number, odd
+number is for in reader, and even number is for out reader.</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><span lang=EN-US style='font-size:9.0pt'>3.
+Select anti-passback settings, and tick one item (anti-passback without
+repetition of doors or readers can be subject to multi-choice). Click [OK] to
+complete setting, and the added anti-passback settings can be shown in the
+list.</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><b><span lang=EN-US style='font-size:
+14.0pt;font-family:Wingdings'>?</span></b><b><span lang=EN-US style='font-size:
+14.0pt'> </span></b><b><span lang=EN-US style='font-size:9.0pt'>Note: </span></b><span
+lang=EN-US style='font-size:9.0pt'>When editing, you can not modify the device,
+but can modify anti-passback settings. If anti-passback setting is not required
+for the device any more, the anti-passback setting record can be deleted. When
+deleting a device record, its anti-passback setting record, if exist, will be
+deleted.</span></p>
+
+</div>
+
+<b><span lang=EN-US style='font-size:10.5pt;font-family:"Times New Roman","serif"'><br
+clear=all style='page-break-before:auto'>
+</span></b>
+
+
+
+<div class=FooterSection style='layout-grid:15.6pt'>
+
+<div>
+
+<table cellspacing=0 cellpadding=0 hspace=0 vspace=0 align=right>
+ <tr>
+  <td valign=top align=left style='padding-top:0cm;padding-right:0cm;
+  padding-bottom:0cm;padding-left:0cm'>
+  <p class=MsoFooter align=center style='text-align:center'><span
+  class=MsoPageNumber><span lang=EN-US>&nbsp;</span></span></p>
+  <p class=MsoFooter style='margin-right:18.0pt;text-indent:18.0pt'><span
+  class=MsoPageNumber><span lang=EN-US>&nbsp;</span></span></p>
+  </td>
+ </tr>
+</table>
+
+</div>
+
+<p class=MsoFooter align=center style='margin-right:18.0pt;text-align:center;
+text-indent:18.0pt'><span lang=EN-US>&nbsp;</span></p>
+
+<p class=MsoNormal><span lang=EN-US>&nbsp;</span></p>
+
+</div>
+
+</body>
+</html>

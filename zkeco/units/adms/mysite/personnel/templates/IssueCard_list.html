@@ -1,0 +1,25 @@
+{% extends "data_list.html" %}
+{% load i18n %}
+
+{% block addjs %}
+//var current_lang = $("html").attr("lang");
+//if(current_lang == "zh-cn" || current_lang == "zh-tw")
+//{
+//	$("#UserID\\.lastname").remove();
+//	$("#id_form_search").find("tr:eq(0)").find("td:gt(3)").hide();
+//	$(".dt_bdiv tr[id^=id_row_]").find("td:eq(3)").hide();
+//}
+//可自定义查询结束数据载入页面后需要的操作
+//var after_query_load = function()
+//{
+//	var current_lang = $("html").attr("lang");
+//    if(current_lang == "zh-cn" || current_lang == "zh-tw")
+//    {
+//        if($("th[id$=lastname]").length>0)
+//        {
+//            $("th[id$=lastname]").remove();
+//            $(".dt_bdiv tr[id^=id_row_]").find("td:eq(3)").hide();
+//        }
+//    }
+//}
+{% endblock %} 

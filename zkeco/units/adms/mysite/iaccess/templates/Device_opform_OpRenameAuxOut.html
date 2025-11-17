@@ -1,0 +1,65 @@
+{% extends "data_opform.html" %}
+{% load i18n %}
+{% block form %}
+{% autoescape off %}
+<table class = "tbl_data_edit rename_aux"  cellpadding="3px">
+	<tr id="tr_auxout">
+		{% block aux_head %}<td>{% trans "辅助输出点" %}</td>{% endblock %}
+		<td>{% trans "当前名称" %}</td>
+		<td>{% trans "新名称" %}</td>
+	</tr>
+</table>
+{% if form.non_field_errors %}
+    <tr><td>{{ form.non_field_errors }}</td></tr>
+{% endif %}
+{% endautoescape %}
+{% endblock %}
+
+{% block loading %}
+
+{% endblock %}
+
+{% block addjs %}
+	{% if request.user|HasPerm:"iclock.opgetmoreoptions_device" %}
+	var dev_id = 0;
+	$(".select_row").each(function(){
+		if($(this).attr("checked"))
+		{
+			dev_id = $(this).parents("tr").attr("data");
+		}
+	});
+	
+	$.ajax({
+		type: "POST",
+		url: "/{{ request.surl }}iaccess/GetData/?func=get_device_aux_point&dev_id="+ dev_id,
+		dataType: "json",
+		async: false,
+		success: function(datas)
+		{
+			{% block aux_base_variables %}
+				var auxs = datas.aux_out_list;
+				//var tmp_name = gettext("辅助输出");
+			{% endblock%}
+			if(auxs != "")
+			{
+				for(i in auxs)
+				{
+					$("#tr_auxout").parent().append('<tr><td>'+auxs[i][3]+'</td><td>'+auxs[i][2]+'</td><td><input name="new_aux_name" maxlength="30"/><input type="hidden" name="aux_id" value='+auxs[i][0]+' /></td></tr>');		
+				}
+			}
+			else
+			{
+				$("#tr_auxout").empty().append('<td><div style="margin:2px 2px 2px 10px;color:red;">'+gettext("获取设备扩展参数失败，当前操作不可用！")+'</div></td>');
+			}
+		},
+		error: function(XMLHttpRequest, textStatus, errorThrown)
+		{
+			alert(gettext("服务器处理数据失败，请重试！错误码：")+"-623");
+		}
+	});
+
+	{% else %}
+		alert(gettext("对不起,您没有访问该页面的权限,不能浏览更多信息！"));
+		window.location.href = "/{{ request.surl }}accounts/login/";
+	{% endif %}<!-- iclock.opgetmoreoptions_device -->
+{% endblock%}

@@ -1,0 +1,101 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.10, 3.11]
+        db: [postgres, mysql, sqlite]
+
+    services: ${{ fromJson(needs_services(matrix.db)) }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies (prod + dev)
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; fi
+
+      - name: Run ruff (format + check)
+        run: |
+          python -m pip install ruff
+          python -m ruff check .
+
+      - name: Run mypy
+        run: |
+          python -m pip install mypy || true
+          if [ -f mypy.ini ]; then python -m mypy . --config-file mypy.ini || true; fi
+
+      - name: Run tests for Django projects
+        env:
+          DJANGO_SETTINGS_MODULE: zkeco_config.settings
+        run: |
+          python -m pip install pytest pytest-django
+          # Define mapping of project dirs -> settings module
+          declare -A projects
+          projects[zkeco_modern]=zkeco_config.settings
+          projects[zkeco_new]=zkeco.settings
+          projects[zkeco_clean]=config.settings
+          projects[test_clean]=core.settings
+          projects[zkeco_test]=config.settings
+
+          for proj in "${!projects[@]}"; do
+            settings=${projects[$proj]}
+            if [ -d "$proj" ]; then
+              echo "Running tests for $proj with DJANGO_SETTINGS_MODULE=$settings"
+              export PYTHONPATH="$proj"
+              export DJANGO_SETTINGS_MODULE="$settings"
+              python -m pytest -q || exit 1
+            else
+              echo "Skipping $proj (directory not present)"
+            fi
+          done
+
+    # helper job-level function for services mapping
+  env:
+    NEEDS_SERVICES: |
+      {
+        "postgres": {
+          "postgres": {
+            "image": "postgres:15",
+            "env": { "POSTGRES_DB": "zkeco_db", "POSTGRES_USER": "zkeco", "POSTGRES_PASSWORD": "zkeco_pass" },
+            "ports": ["5432:5432"],
+            "options": "--health-cmd \"pg_isready -U zkeco -d zkeco_db\" --health-interval 10s --health-timeout 5s --health-retries 5"
+          }
+        },
+        "mysql": {
+          "mysql": {
+            "image": "mysql:8",
+            "env": { "MYSQL_DATABASE": "zkeco_db", "MYSQL_USER": "zkeco", "MYSQL_PASSWORD": "zkeco_pass", "MYSQL_ROOT_PASSWORD": "rootpass" },
+            "ports": ["3306:3306"],
+            "options": "--health-cmd \"mysqladmin ping -h127.0.0.1 -prootpass\" --health-interval 10s --health-timeout 5s --health-retries 5"
+          }
+        },
+        "sqlite": {}
+      }
+
+  # Reusable expression to return the proper services mapping from the env var
+  outputs: {}
+

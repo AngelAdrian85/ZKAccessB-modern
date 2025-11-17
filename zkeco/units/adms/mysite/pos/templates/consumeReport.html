@@ -1,0 +1,285 @@
+{% extends "data_list.html" %}
+{% load i18n %}
+{% block headjs %}
+<script type="text/javascript" src="/media/jslib/consumeReport.js"></script>
+{% endblock %}
+{% block getdatalist %}
+{% endblock %}
+
+
+{% block export %}
+	{% if request.user|HasPerm:"att.dataexport_attreport" %}
+		<li id="id_li_export">
+			<div id="id_model_export"><a href="javascript:void(0)"><span class="action_export"></span>{% trans "导出" %}</a></div>
+			<div class='div_leftBottomLine'></div>
+		</li>    
+   {% endif %} 
+{% endblock %}
+
+
+{% block addjs %}
+var dbapp_url="{{dbapp_url}}";
+
+function getPubOpt(app,model,where)
+{
+    var aa= ""
+	var pubopt={
+		dbapp_url:"{{dbapp_url}}", 
+		model_url:"{{dbapp_url}}"+app+"/"+model+"/",                      //根目录地址
+		record_per_page: 15,                 //每页记录数
+		max_no_page: 50,                 //记录数少于该数据时，不分页显示
+		row_operations: false,               //对象操作true表示全部显示(默认)，false表示全部不显示，对象表示操作["New","Delete",["Leave",...]]
+		obj_edit:false,
+		disabled_actions: ['_add','_delete','_clear'],
+		model_actions:false,
+		object_actions:false,
+		scrollable:{heigh:340},
+		disable_cols:['UserID_id','UserID.pk','get_attpic','cardstatus'],
+		obj_edit:false,
+		init_query:where	
+	}
+	if (model=='IssueCard')
+	   pubopt.disable_cols.push("cardstatus");
+	return pubopt;
+}
+
+function getPubOpt_lost(app,model,where) //卡挂失
+{
+    var aa= ""
+	var pubopt={
+		dbapp_url:"{{dbapp_url}}", 
+		model_url:"{{dbapp_url}}"+app+"/"+model+"/",                      //根目录地址
+		record_per_page: 15,                 //每页记录数
+		max_no_page: 50,                 //记录数少于该数据时，不分页显示
+		row_operations: false,               //对象操作true表示全部显示(默认)，false表示全部不显示，对象表示操作["New","Delete",["Leave",...]]
+		obj_edit:false,
+		disabled_actions: ['_add','_delete','_clear'],
+		model_actions:false,
+		object_actions:false,
+		scrollable:{heigh:340},
+		disable_cols:['UserID_id','UserID.pk','get_attpic'],
+		obj_edit:false,
+		init_query:where	
+	}
+	return pubopt;
+}
+
+
+function getDataOpt(datajson,url)
+{
+	
+		hiddencol=["userid","data_verbose_column"]
+	
+	var data=[]
+	var fn=datajson.fieldnames;
+	
+	
+	for(var j=0;j<datajson.datas.length;j++)
+	{
+		var td=datajson.datas[j];
+		var tmp=[]
+		for(var i=0;i<fn.length;i++)
+		{			
+			tmp.push(encodeTxt(td[fn[i]]));			
+		}
+		data.push(tmp);
+	}
+	var opt={
+	  heads:datajson.fieldcaptions,//是一个列表，表示显示在列表表头上的文字; 
+	  fields:datajson.fieldnames,//是一个列表，表示显示在列表表头上的文字; 
+	  data:data,//二维列表，表示多行的数据；
+	  disable_cols:hiddencol,//不可见的列
+	  key_field:"id",  //关键字段名
+	  data_verbose_column:"", //数据显示字段名，为空字符串
+	  show_head: true,//显示头
+	  actions: {},//是一个对象，表示定义在该数据模型上的操作列表，其每一个操作是一个json对象
+	  base_url: "", //表示当前数据页面的URL; 
+	  row_operations: [],//为一个列表，表示要放在对当前记录进行的操作栏的操作名（字符串）
+	  multiple_select: true,//是否多选
+	  page_count: datajson.page_count, //每页显示的数据行
+	  current_page: datajson.page, //页号
+	  record_count: datajson.item_count, //如果为零，则不在页面上显示总记录数
+	  layout: "table",
+	  scrollable:{heigh:340},
+	  grid_name:"",//记录的名字
+	  tbl_id:"id_tbl",//"table"-表格形式显示, "icon"-大图标形式显示, "compact"-小图标形式显示 
+	 // a_div:$('<div class="action Link_blue1"></div>'),//默认操作的div
+	 // p_div:$('<div  class="pages floatR Link_blue2"></div>'),//默认放置分页的div
+	  //t_div:$('<div class="list_outBox"></div>'),//默认放置列表的div
+	 // grid_div:$('<div class="grid clearL"></div>'),//整个控件默认的div
+	  on_pager:function(grid,p){  			  		
+	  		var gd=grid;	  		
+	  		$("#id_calculateform").append("<input type='hidden' name='p' value='"+p +"' \>");
+	  		if($("#id_calculateform").find("input[name='pa']").length==0)	  
+	  			$("#id_calculateform").append("<input type='hidden' name='pa' value='T' \>");
+	  		var u_url=url	
+	  		var option={
+				url:u_url,	
+				dataType:"json",					
+				type:"POST",
+				success:function(data){	
+					$.extend(gd.g,getDataOpt(data,u_url));									
+					gd.g.reload_data();					
+				}
+			}
+			$("#id_calculateform").ajaxSubmit(option);
+			$("#id_calculateform").find("input[name='p']").remove();
+	  	return false;
+	  }
+	};
+	
+	return opt
+	
+	
+}
+
+{% endblock %}*/
+
+
+{% block op_for_tab %}
+	<!-- <ul>
+		{% if request.user|HasPerm:"att.opaddmanycheckexact_checkexact" %}
+		<li id="id_checkforget"><a href="javascript:void(0)"><span class="action_OpAddCheckExact"></span>{% trans '补签卡' %}</a><div class='div_leftBottomLine'></div></li>
+		{% endif %}
+		{% if request.user|HasPerm:"att.opaddmanyuserid_empspecday" %}
+		<li id="id_leave"><a href="javascript:void(0)"><span class="action_leave"></span>{% trans '补请假' %}</a><div class='div_leftBottomLine'></div></li>
+		{% endif %}
+		{% if request.user|HasPerm:"att.opaddtempshifts_user_of_run" %}
+		<li id="id_tmpshifts"><a href="javascript:void(0)"><span class="action_OpAddTempShifts"></span>{% trans '临时排班' %}</a><div class='div_leftBottomLine'></div></li>
+		{% endif %}
+		{% if request.user|HasPerm:"att.opadduserofrun_user_of_run" %}
+		<li id="id_li_shifts"><a href="javascript:void(0)"><span class="action_AddUserOfRun"></span>{% trans '新增排班' %}</a><div class='div_leftBottomLine'></div></li>
+		{% endif %}
+	</ul> -->
+{% endblock %}
+
+<style>
+.calculatediv{
+	width:300px;
+	overflow:auto;
+	}
+
+
+</style>
+{% block content %}
+<div style="margin:0px 10px 10px 10px;">
+<input type="hidden" id="id_current_report" value="1" />
+<div id="id_divsearch" class="calculate_divsearch">
+	<div id="show_emp_tree"></div>
+	<div class="clearB" style="margin:5px 0px;">
+    <form id="id_calculateform" method="post">
+    	<table>
+    	 <tr>
+		{% if request.user|HasPerm:"att.calculate_attreport" %}
+			<td>{% trans '开始日期' %}</td><td><input type="text" class="wZBaseDateField dp-applied" readonly="True" name="ComeTime" id="id_cometime"/></td>
+			<td>{% trans '结束日期' %}</td><td><input type="text" class="wZBaseDateField dp-applied" readonly="True" name="EndTime" id="id_endtime"/></td>
+		 	<!--<td><div style="margin:-3px 0px 0px 5px;"><span class="action_Search">&nbsp;</span><a id="id_query" href="#" class="Link_blue1" >{% trans '查询' %}</a></div></td>
+			<td><div style="margin:-3px 0px 0px 5px;"><span class="action_calculate">&nbsp;</span><a id="id_calculate" href="javascript:void(0)" class="Link_blue1">{% trans '统计' %}</a></div></td>
+         -->
+        {% endif %}
+        
+		</tr>
+		<tr><td colspan="3">
+        <div id="id_ReturnMsg" class="div_ReturnMsg"></div></td>
+        </tr>
+        </table>
+        <input type="hidden" name="DeptIDs" value="" />
+        <input type="hidden" name="isForce" value="0" />
+        <input type="hidden" name="UserIDs" value="" />
+    </form>
+  
+	</div>
+</div>
+<div id="calculatetabs" style="width:860px;"><!--height:440px;overflower:auto-->
+
+	    <ul class="tabs">
+	     {% if request.user|HasPerm:"att.calcresultdetail_attreport" %}
+          <li><a href="#caltabs-1" onClick="posReimburese('')">{% trans '退款明细表' %}</a></li>
+         {% endif %}
+         {% if request.user|HasPerm:"att.earchdayattreport_attreport" %}
+          <li><a href="#caltabs-2" onClick="posCarCost('')">{% trans '卡成本明细表' %}</a></li>
+         {% endif %}
+         {% if request.user|HasPerm:"att.exceptionreport_attreport" %}
+          <li><a href="#caltabs-3" onClick="CarBalanceReport('')">{% trans '卡余额表' %}</a></li>
+          {% endif %}
+         {% if request.user|HasPerm:"att.otherexceptionreport_attreport" %}
+          <li><a href="#caltabs-4" onClick="posLostCar('')">{% trans '挂失/解挂表' %}</a></li>
+          {% endif %}
+          {% if request.user|HasPerm:"att.calctotalreport_attreport" %}
+          <li><a href="#caltabs-5" onClick="PosTotalReport('')">{% trans '个人消费汇总表' %}</a></li>
+          {% endif %}
+          
+          <li><a href="#caltabs-9" onClick="FlushCard('')">{% trans '消费刷卡记录表' %}</a></li>
+			<li><a href="#caltabs-8" onClick="ChargeRecord('')">{% trans '充值表' %}</a></li>
+			<li><a href="#caltabs-7" onClick="IssueCard('')">{% trans '发卡表' %}</a></li>
+			<li><a href="#caltabs-6" onClick="ReturnCard('')">{% trans '退卡表' %}</a></li>
+			<li><a href="#caltabs-10" onClick="Allowance('')">{% trans '补助表' %}</a></li>
+			<li><a href="#caltabs-11" onClick="DateCash('')">{% trans '日现金流表' %}</a></li>
+			
+		 <!-- 
+         {% if request.user|HasPerm:"att.orgbrushrecord_attreport" %}
+		  <li><a href="#caltabs-6" onClick="OrignalRecord('')">{% trans '原始记录表' %}</a></li>
+		  {% endif %}
+         {% if request.user|HasPerm:"att.checkexact_attreport" %}
+		  <li><a href="#caltabs-7" onClick="CheckForget('')">{% trans '补签卡表' %}</a></li>
+		  {% endif %}
+         {% if request.user|HasPerm:"att.leavetotalreport_attreport" %}
+		  <li><a href="#caltabs-8" onClick="LeaveReport('')">{% trans '请假汇总表' %}</a></li>
+		  {% endif %} 
+		 -->
+		
+	    </ul>
+		<div  class="calculatediv" id="caltabs-1">
+			<div id="subtabs-1">        
+			</div>
+		</div>
+        <div class="calculatediv" id="caltabs-2" >
+			<div id="subtabs-2">
+        
+			</div>
+		</div>
+        <div class="calculatediv" id="caltabs-3" >
+			<div id="subtabs-3">
+        
+			</div>
+		</div>
+        <div class="calculatediv" id="caltabs-4" >
+			<div id="subtabs-4">
+        
+			</div>
+		</div>
+        <div class="calculatediv" id="caltabs-5"  >
+			<div id="subtabs-5">
+        
+			</div>
+		</div>	
+		
+		<div class="calculatediv" id="caltabs-9" >
+			<div id="subtabs-9">		
+			</div>
+		</div>
+		<div class="calculatediv" id="caltabs-8" >
+			<div id="subtabs-8">		
+			</div>
+		</div>
+		<div class="calculatediv" id="caltabs-7" >
+			<div id="subtabs-7">		
+			</div>
+		</div>
+		<div class="calculatediv" id="caltabs-6" >
+			<div id="subtabs-6">		
+			</div>
+		</div>
+		<div class="calculatediv" id="caltabs-10" >
+			<div id="subtabs-10">		
+			</div>
+		</div>
+		<div class="calculatediv" id="caltabs-11" >
+			<div id="subtabs-11">
+			</div>
+		</div>
+		
+</div>
+</div>
+<div id="id_attexcept_desc"></div>
+{% endblock %}

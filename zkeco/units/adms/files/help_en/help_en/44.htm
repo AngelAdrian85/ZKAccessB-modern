@@ -1,0 +1,100 @@
+<!DOCTYPE html><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=gb2312">
+<meta name="Generator" content="Word2Chm Addin (v1.4.7.5)">
+<link rel="stylesheet" href="Word2Chm.css" type="text/css">
+<script src="Word2Chm.js" type="Text/JavaScript"></script>
+<title> 7.6 Exclusion and Solutions of Exception</title>
+</head>
+<body bgcolor=white lang=ZH-CN link=blue vlink=purple style='text-justify-trim:
+punctuation' onLoad="javascript:jsMain();"><div class=WordSection44><br clear=all style='page-break-before:always'>
+
+<h2 style='margin-top:12.0pt;margin-right:0cm;margin-bottom:12.0pt;margin-left:
+0cm;line-height:normal;vertical-align:middle'><a name="_Toc416704627"><span
+lang=EN-US style='font-size:12.0pt;font-family:"Times New Roman","serif"'>7.6
+Exclusion and Solutions of Exception</span></a></h2>
+
+<p class=MsoNormal align=left style='text-align:left'><span lang=EN-US
+style='font-size:9.0pt'>1. Client browser can not playback video, preview or Real-Time
+Monitoring page has no video pop-up:</span></p>
+
+<p class=MsoNormal align=left style='text-align:left'><span lang=EN-US
+style='font-size:9.0pt'>Firstly, make sure to use IE8 and above browser, client
+and </span><span lang=EN-US style='font-size:9.0pt'>Video Server</span><span
+lang=EN-US style='font-size:9.0pt'> on the same network segment and the video
+AxtiveX installation is successful. If the ActiveX installation fails, above
+all, uninstall the video ActiveX that were originally installed, run the
+&quot;regsvr32-u NetVideoActiveX23.ocx&quot;command, and then in the browser,
+set all the options in &quot;Tools -&gt; Internet Options -&gt; Security -&gt;
+Custom Level&quot; on the ActiveX to &quot;Enable or Prompt&quot;, re-open the
+browser, re-login screen and open the video preview page, run the button
+&quot;all add items of the site&quot;.</span></p>
+
+<p class=MsoNormal><span lang=EN-US style='font-size:9.0pt'>&nbsp;</span></p>
+
+<p class=MsoNormal align=left style='text-align:left'><span lang=EN-US
+style='font-size:9.0pt'>2. In the E-Map, no video pop-up after you click the
+small camera icon:</span></p>
+
+<p class=MsoNormal align=left style='text-align:left'><span lang=EN-US
+style='font-size:9.0pt'>Above all, make sure to use IE8 and above browser,
+client and </span><span lang=EN-US style='font-size:9.0pt'>Video Server</span><span
+lang=EN-US style='font-size:9.0pt'> on the same network segment and the video
+AxtiveX installation is successful. Also, view whether the browser is
+preventing the temporary window pops up, if so, changed to allow window pops up
+to the site.</span></p>
+
+<p class=MsoNormal><span lang=EN-US style='font-size:9.0pt'>&nbsp;</span></p>
+
+<p class=MsoNormal align=left style='text-align:left'><span lang=EN-US
+style='font-size:9.0pt'>3. Video linkage is triggered, the video server does
+not have video or size of the video file that the client downloads from the </span><span
+lang=EN-US style='font-size:9.0pt'>Video Server</span><span lang=EN-US
+style='font-size:9.0pt'> is 0kb: </span></p>
+
+<p class=MsoNormal align=left style='text-align:left'><span lang=EN-US
+style='font-size:9.0pt'>First, make sure that the software server has set TimeServer
+(keep the Windows time service and has set the NTP function of the video
+server), it is recommended to set the time interval of the video server smaller
+to ensure accurate synchronization software server and video server time, so as
+to keep the time consistent between software server and controllers. You'd
+better set Linkage Recording Time more than 5 seconds, to avoid executing video
+linkage commands delay, which may lead to the downloaded 0kb video file.</span></p>
+
+<p class=MsoNormal><span lang=EN-US style='font-size:9.0pt'>&nbsp;</span></p>
+
+</div>
+
+<b><span lang=EN-US style='font-size:9.0pt;font-family:"Times New Roman","serif"'><br
+clear=all style='page-break-before:auto'>
+</span></b>
+
+
+
+<div class=FooterSection style='layout-grid:15.6pt'>
+
+<div>
+
+<table cellspacing=0 cellpadding=0 hspace=0 vspace=0 align=right>
+ <tr>
+  <td valign=top align=left style='padding-top:0cm;padding-right:0cm;
+  padding-bottom:0cm;padding-left:0cm'>
+  <p class=MsoFooter align=center style='text-align:center'><span
+  class=MsoPageNumber><span lang=EN-US>&nbsp;</span></span></p>
+  <p class=MsoFooter style='margin-right:18.0pt;text-indent:18.0pt'><span
+  class=MsoPageNumber><span lang=EN-US>&nbsp;</span></span></p>
+  </td>
+ </tr>
+</table>
+
+</div>
+
+<p class=MsoFooter align=center style='margin-right:18.0pt;text-align:center;
+text-indent:18.0pt'><span lang=EN-US>&nbsp;</span></p>
+
+<p class=MsoNormal><span lang=EN-US>&nbsp;</span></p>
+
+</div>
+
+</body>
+</html>

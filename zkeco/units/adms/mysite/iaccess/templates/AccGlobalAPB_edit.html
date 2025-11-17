@@ -1,0 +1,394 @@
+{% extends "data_edit.html" %}
+{% load i18n %}
+
+{% block form %}
+{% if request.user|HasPerm:"iaccess.add_accglobalantiback" or request.user|HasPerm:"iaccess.change_accglobalantiback" %}
+{% autoescape off %}
+	<tr>
+		{{ form.name|field_as_td_h }}
+		{{ form.timeseg|field_as_td_h }}
+	</tr>
+	<tr class="displayN">
+		{{ form.group_1|field_as_td_h }}
+		{{ form.group_2|field_as_td_h }}
+		<td><input type="text" name="group_changed" id="id_group_changed"></td>
+	</tr>
+	<tr>
+		<td colspan="8">
+			<div class="div_box1">
+				<h2>{% trans "查询" %}</h2>
+			</div>
+		</td>
+	</tr>
+	<tr>
+		<td align="right"><label>{% trans "区域" %}:</label></td>
+		<td>
+			<select id="id_select_area"><option value="0">{% trans "全部" %}</option></select>
+		</td>
+		<td>
+			<label style="margin-left:10px">{% trans "出入状态" %}:</label>
+		</td>
+		<td>
+			<select id="id_select_reader">
+				<option value="all">{% trans "全部" %}</option>
+				<option value="0">{% trans "入" %}</option>
+				<option value="1">{% trans "出" %}</option>
+			</select>
+	        <input type="button" id="id_query_reader" class="select_EmpSubmit" title={% trans "查询" %} value=""></input>
+	    </td>
+	</tr>
+	<tr>
+		<td></td>
+		<td>
+			<input type="checkbox" size="1" id="id_select_all_reader" />
+			<label>{% trans "全选" %}</label>			
+		</td>
+		<td></td>
+		<td>
+			<label>{% trans "组1" %}:</label>
+			<input type="checkbox" size="1" id="id_select_all_group_1" />
+			<label>{% trans "全选" %}</label>
+		</td>
+	</tr>
+	<tr>
+		<td rowspan="3"></td>
+		<td rowspan="3">
+			<div id="id_reader_group">
+				<ul class='level_list'></ul>
+			</div>
+		</td>		
+		<td valign="middle" align="center">
+			<button type="button" onclick="add_reader_to_group(1)"> >> </button>
+			<br />
+			<button type="button" onclick="remove_reader_from_group(1)" > << </button>
+		</td>
+		<td>
+			<div id="id_gapb_group_1">
+				<ul class='level_list'></ul>
+			</div>
+		</td>
+	</tr>
+	<tr>
+		<td></td>
+		<td>
+			<label>{% trans "组2" %}:</label>
+			<input type="checkbox" size="1" id="id_select_all_group_2" />
+			<label>{% trans "全选" %}</label>
+		</td>
+	</tr>
+	<tr>
+		<td valign="middle" align="center">
+			<button type="button" onclick="add_reader_to_group(2)" >>></button>
+			<br />
+			<button type="button" onclick="remove_reader_from_group(2)" ><<</button>
+		</td>
+		<td>
+			<div id="id_gapb_group_2">
+				<ul class='level_list'></ul>
+			</div>
+		</td>
+	</tr>
+	<tr>
+		<td></td>
+		<td colspan="4">
+			<font color="#FF6600">
+				{% trans "注: 已选择到组中的读头查询后不会再显示." %}
+			</font>						
+		</td>
+	</tr>
+    {% if form.non_field_errors %}
+    	<tr><td>{{ form.non_field_errors }}</td></tr>
+    {% endif %}
+{% endautoescape %}
+{% endif %}<!--add/change_accgapb-->
+{% endblock %}
+
+{% block addjs %}
+    {% if request.user|HasPerm:"iaccess.add_accantiback" or request.user|HasPerm:"iaccess.change_accantiback" %}
+	var selected_reader = new Array();//已被选择的读头，用于判断查询后的数据，避免数据重复
+	var old_group_reader = new Array();//编辑时初始化加载全局反潜组的读头
+	
+	function after_init()
+	{
+		get_area();
+		get_reader_and_door($("#id_select_area").val(), $("#id_select_reader").val());
+		if($("#id_name").val() != "")//编辑
+		{
+			$.ajax({
+				type: "GET",
+				url: "/{{ request.surl }}iaccess/ProcessGAPBData/?func=get_gapb_group_reader&antiback_id="+$("#id_model_pk").val(),
+				dataType: "json",
+				async: false,
+				success: function(data)
+				{
+					var group1_reader_list="";
+					var group2_reader_list="";
+					var group1 = data.group1;
+					var group2 = data.group2;
+					
+					//加载组1的读头
+					if(group1 != "")
+	                {   
+	                    for(index in group1)
+	                    {
+							group1_reader_list+='<li><input type="checkbox" name="group1" value="'+group1[index][0]+'"/><p>'+group1[index][1]+'</p></li>';
+							selected_reader.push(group1[index][0]);
+							old_group_reader.push(group1[index][0]);
+	                    }
+	                }
+	                $("#id_gapb_group_1").find("ul").append(group1_reader_list);
+					
+					//加载组2的读头
+					if(group2 != "")
+					{   
+						for(index in group2)
+						{
+							group2_reader_list+='<li><input type="checkbox" name="group2" value="'+group2[index][0]+'"/><p>'+group2[index][1]+'</p></li>';
+							selected_reader.push(group2[index][0]);
+							old_group_reader.push(group2[index][0]);
+						}
+					}
+					$("#id_gapb_group_2").find("ul").append(group2_reader_list);
+				}
+			});
+		}
+	}
+	
+	//获取用户权限内的区域
+	function get_area()
+	{
+		$.ajax({
+			type: "GET",
+			url: "/{{ request.surl }}iaccess/GetData/?func=doors&type=all",
+			dataType: "json",
+			async: false,
+			success: function(data)
+			{
+				if(data.areas != "")
+				{
+					//$("#monitor_area select option:gt(0)").empty();
+					for(a in data.areas)
+					{
+						$("#id_select_area").append('<option value="'+data.areas[a][0]+'">'+data.areas[a][1]+'</option>');
+					}
+				}
+			}
+		});
+	} 
+    
+    //获取用户权限内的门和读头
+    function get_reader_and_door(area, state)
+    {
+    	$.ajax({
+            type: "POST",
+            url:"/{{ request.surl }}iaccess/ProcessGAPBData/?func=get_door_and_reader&area="+area+"&state="+state,
+            dataType:"json",
+            async:false,
+            success:function(datas){
+                var reader_list="";
+				$("#id_reader_group").find("ul").html("");//先清除ul中的旧数据
+                var data = datas.data;
+                if(data != "")
+                {   
+                    for(index in data)
+                    {
+						if(selected_reader.length > 0)
+						{
+							var flag = false;
+							for(var i in selected_reader)
+							{
+								if(data[index][0] == selected_reader[i])//查询的数据已被选择（右边的组中），不在显示
+								{
+									flag = true;
+								}
+							}
+							if(!flag)
+							{
+								reader_list+='<li><input type="checkbox" name="reader" value="'+data[index][0]+'"/><p>'+data[index][1]+'</p></li>';									
+							}
+						}
+						else
+						{
+							reader_list+='<li><input type="checkbox" name="reader" value="'+data[index][0]+'"/><p>'+data[index][1]+'</p></li>';
+						}
+                    }
+                }
+                else
+                {
+                    reader_list+='<label class="none_selected">'+gettext("没有可选的读头！")+'</label>';
+                }
+				
+				if(reader_list == "")
+				{
+					reader_list+='<label class="none_selected">'+gettext("没有可选的读头！")+'</label>';
+				} 
+                $("#id_reader_group").find("ul").append(reader_list);
+            }
+        });
+    }
+	
+	//按数组中的特定值返回该值在数组中的索引，用以删除数组中的特定值
+	function get_array_index(array, value)
+	{
+	    for(var i in array)
+	    {
+	        if(array[i] == value)
+	        {
+	            return i;
+	        }
+	    }
+	}
+	
+
+    //将读头加入到反潜组
+    function add_reader_to_group(group)
+    {
+		
+    	if(group == 1)//Group1
+    	{
+			if($("#id_reader_group input[name='reader']").length > 0)
+			{
+				$("#id_reader_group input[name='reader']").each(function(){
+					if ($(this).attr("checked"))
+					{
+						$("#id_gapb_group_1").find("ul").append('<li><input type="checkbox" name="group1" value="'+$(this).val()+'"/><p>'+$(this).parent().find("p").text()+'</p></li>');
+						selected_reader.push($(this).val());
+						$(this).parent().remove();
+					}           
+				});
+			}
+    	}
+    	else//Group2
+    	{
+			if($("#id_reader_group input[name='reader']").length > 0)
+			{
+				$("#id_reader_group input[name='reader']").each(function(){
+					if ($(this).attr("checked"))
+					{
+						$("#id_gapb_group_2").find("ul").append('<li><input type="checkbox" name="group2" value="'+$(this).val()+'"/><p>'+$(this).parent().find("p").text()+'</p></li>');
+						selected_reader.push($(this).val());
+						$(this).parent().remove();
+					}           
+				});
+			}
+    	}
+		$("#id_select_all_reader").attr("checked", "");
+    }
+    
+    ///从反潜组移除读头
+    function remove_reader_from_group(group)
+    {
+    	if(group == 1)
+    	{
+			if($("#id_gapb_group_1 input[name='group1']").length > 0)
+			{
+				
+				$("#id_gapb_group_1 input[name='group1']").each(function(){
+					if($(this).attr("checked"))
+					{
+						if($("#id_reader_group input[name='reader']").length <= 0)
+						{
+							$("#id_reader_group").find("ul").html("");//先清除ul中的label
+						}
+						$("#id_reader_group").find("ul").append('<li><input type="checkbox" name="reader" value="'+$(this).val()+'"/><p>'+$(this).parent().find("p").text()+'</p></li>');
+						var index = get_array_index(selected_reader, $(this).val());//获取该值在数组中的索引
+						selected_reader.splice(index, 1);//删除数组中的元素，第一位参数为索引，第二位为从这个索引开始要删除的数组的元素个数
+						$(this).parent().remove();	
+					}
+				});
+			}
+			$("#id_select_all_group_1").attr("checked", "");
+    	}
+    	else
+    	{
+			if($("#id_gapb_group_2 input[name='group2']").length > 0)
+			{
+				$("#id_gapb_group_2 input[name='group2']").each(function(){
+					if($(this).attr("checked"))
+					{
+						if($("#id_reader_group input[name='reader']").length <= 0)
+						{
+							$("#id_reader_group").find("ul").html("");//先清除ul中的label
+						}						
+						$("#id_reader_group").find("ul").append('<li><input type="checkbox" name="reader" value="'+$(this).val()+'"/><p>'+$(this).parent().find("p").text()+'</p></li>');
+						var index = get_array_index(selected_reader, $(this).val());//获取该值在数组中的索引
+						selected_reader.splice(index, 1);
+						$(this).parent().remove();	
+					}           
+				});
+			}
+			$("#id_select_all_group_2").attr("checked", "");
+    	}
+    }
+    
+    //查询
+    $("#id_query_reader").click(function(){
+		get_reader_and_door($("#id_select_area").val(), $("#id_select_reader").val());
+	});
+    
+    //读头全选
+	$("#id_select_all_reader").click(function(){
+	    var select_all = $("#id_select_all_reader").attr("checked");
+	    $("#id_reader_group input").each(function(){
+	        
+	        if(select_all)
+	        {
+	            $(this).attr("checked", "checked");
+	        }
+	        else
+	        {
+	            $(this).attr("checked", "");
+	        }
+	    });
+	});
+    
+	//反潜组1全选
+	$("#id_select_all_group_1").click(function(){
+	    var select_all = $("#id_select_all_group_1").attr("checked");
+	    $("#id_gapb_group_1 input").each(function(){
+	        
+	        if(select_all)
+	        {
+	            $(this).attr("checked", "checked");
+	        }
+	        else
+	        {
+	            $(this).attr("checked", "");
+	        }
+	    });
+	});
+
+	//反潜组2全选
+	$("#id_select_all_group_2").click(function(){
+	    var select_all = $("#id_select_all_group_2").attr("checked");
+	    $("#id_gapb_group_2 input").each(function(){
+	        
+	        if(select_all)
+	        {
+	            $(this).attr("checked", "checked");
+	        }
+	        else
+	        {
+	            $(this).attr("checked", "");
+	        }
+	    });
+	});
+	
+	function before_submit()
+	{
+		$("input[name^='group']").each(function(){
+		    $(this).attr("checked","true");//提交前，将组中的选项全部选中，用于后台获取数值		
+		});	
+		if(selected_reader.sort().toString()!=old_group_reader.sort().toString())
+		{
+			$("#id_group_changed").val("true");
+		}
+		return true;
+	}
+	
+    {% else %}     
+        alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
+        window.location.href = "/{{ request.surl }}accounts/login/";
+    {% endif %}<!--add/change_accglobantiback-->
+
+{% endblock %}

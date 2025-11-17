@@ -1,0 +1,9 @@
+{% extends "data_edit.html" %}
+{% load i18n %}
+
+{% block addjs %}
+    $("#id_start_date,#id_end_date").attr("readonly","true");
+    $("#id_start_date,#id_end_date").click(function(){
+        $(this).next().click();
+    });
+{% endblock %}

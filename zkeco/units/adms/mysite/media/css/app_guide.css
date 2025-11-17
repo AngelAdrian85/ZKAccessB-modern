@@ -1,0 +1,59 @@
+@charset "utf-8";
+/* CSS Document */
+
+.font14{font-size:14px;}
+.Link_hui1{color:#888888; white-space:normal;}
+.guide_step{width:100%;border:1px solid #E6E6E6; background-color:#FFFFFF;}
+.guide_step_name{border-bottom:1px dotted #cccccc;/*height:19px;*/}
+.guide_step_name li{float:left;margin-right:5px;}
+.guide_icon_box{width:60px;height:60px;display:block; background-repeat:no-repeat; background-position:center;}
+
+/** 图标 **/
+	/** 考勤 **/
+	.icon_empspecday{background-image:url(../images/icon_guid/icon_empspecday.jpg);}
+	.icon_checkexact{background-image:url(../images/icon_guid/icon_checkexact.jpg);}
+	.icon_attuserofrun{background-image:url(../images/icon_guid/icon_attuserofrun.jpg);}
+	.icon_setuseratt{background-image:url(../images/icon_guid/icon_setuseratt.jpg);}
+	.icon_schclass{background-image:url(../images/icon_guid/icon_schclass.jpg);}
+	.icon_attcalculate{background-image:url(../images/icon_guid/icon_attcalculate.jpg);}
+	.icon_numrun{background-image:url(../images/icon_guid/icon_numrun.jpg);}
+	.icon_deviceusermanage{background-image:url(../images/icon_guid/icon_deviceusermanage.jpg);}
+	.icon_devicedatamanage{background-image:url(../images/icon_guid/icon_devicedatamanage.jpg);}
+	
+	/** 人事 **/
+	.icon_department{background-image:url(../images/icon_guid/icon_department.jpg);}
+	.icon_user{background-image:url(../images/icon_guid/icon_user.jpg);}
+	.icon_leavelog{background-image:url(../images/icon_guid/icon_leavelog.jpg);}
+	.icon_issuecard{background-image:url(../images/icon_guid/icon_issuecard.jpg);}
+	
+	/** 设备 **/
+	.icon_devrtmonitorpage{background-image:url(../images/icon_guid/icon_devrtmonitorpage.jpg);}
+	.icon_area{background-image:url(../images/icon_guid/icon_area.jpg);}
+	.icon_devcmd{background-image:url(../images/icon_guid/icon_devcmd.jpg);}
+	.icon_devlog{background-image:url(../images/icon_guid/icon_devlog.jpg);}
+	.icon_operatecmd{background-image:url(../images/icon_guid/icon_operatecmd.jpg);}
+	.icon_device{background-image:url(../images/icon_guid/icon_device.jpg);}
+
+/** 边框 **/
+.guide_step_box{position:relative;padding:4px;background-color:#F0F0F0; margin:0px auto;}
+.rightBox .guide_step_box{width:185px;}
+.tl,.tr,.bl,.br{position:absolute; width:13px; height:13px; display:block;}
+.tl{left:0px;top:0px; background:url(../images/icon_guid/guide_border_tl.jpg) top left no-repeat;}
+.tr{right:0px;_right:-1px;top:0px; background:url(../images/icon_guid/guide_border_tr.jpg) top left no-repeat;}
+.bl{left:0px;bottom:0px;_bottom:-1px; background:url(../images/icon_guid/guide_border_bl.jpg) top left no-repeat;}
+.br{right:0px;_right:-1px;bottom:0px;_bottom:-1px; background:url(../images/icon_guid/guide_border_br.jpg) top left no-repeat;}
+
+/** 箭头 **/
+.icon_arrow_r,.icon_arrow_l{width:35px;height:45px; display:block; background-repeat:no-repeat; margin:auto; background-position:right center;}
+.icon_arrow_r{background-image:url(../images/icon_guid/icon_arrow_r.jpg);}
+.icon_arrow_l{background-image:url(../images/icon_guid/icon_arrow_l.jpg);}
+.section {position:relative;margin-left:20px;}
+.section h2 span{font-size:14px;background:#ffffff url(../images/images_icon.gif) no-repeat -795px -146px;padding-left:20px;}
+.section h2 .back{position: absolute;border-top: 1px solid #E5E5E5;position: absolute;left: 0;top: 0.75em;width: 100%;height: 1.5em;z-index: -1;}
+
+/** 工作面板流程图 **/
+.move .guide_step_name{border:none;}
+.move .guide_step_box{height:35px;}
+.move .guide_step{height:35px;}
+.move .tr,.move .br{_right:-1px;}
+.icon_arrow_b{width:45px;height:15px;background:url(../images/icon_guid/icon_arrow_b.jpg) bottom center no-repeat; margin:auto;}

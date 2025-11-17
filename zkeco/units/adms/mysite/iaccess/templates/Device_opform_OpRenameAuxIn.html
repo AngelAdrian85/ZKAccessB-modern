@@ -1,0 +1,10 @@
+{% extends "Device_opform_OpRenameAuxOut.html" %}
+{% load i18n %}
+
+{% block aux_head %}<td>{% trans "辅助输入点" %}</td>{% endblock %}
+
+{% block aux_base_variables %}
+var auxs = datas.aux_in_list;
+var tmp_name = gettext("辅助输入");
+{% endblock %}
+

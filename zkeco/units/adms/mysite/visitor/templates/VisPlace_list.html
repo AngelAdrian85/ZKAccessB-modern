@@ -1,0 +1,15 @@
+{% extends "Visitor_DataBase_Set.html" %}
+{% load i18n %}
+
+{% block vis_database_set %}
+    {% if request.user|HasPerm:"visitor.browse_visplace" %}
+
+        $("#id_datalist").model_grid({
+            "model_url": "{{ model_url }}",
+            "disabled_actions": ["_change"]
+        });
+    {% else %}
+        alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
+        window.location.href = "/{{ request.surl }}accounts/login/";
+    {% endif %}
+{% endblock %}

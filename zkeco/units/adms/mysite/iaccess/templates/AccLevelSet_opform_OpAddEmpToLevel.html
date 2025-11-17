@@ -1,0 +1,40 @@
+{% extends "data_opform.html" %}
+{% load i18n %}
+
+{% block form %}
+    {% if request.user|HasPermDefaultGiven:"iaccess.opaddemptolevel_acclevelset" %}
+        {% autoescape off %}
+        <tr>
+            {{ form.level_id }}
+        </tr>
+        <tr >
+            <th></th>
+            <td >
+                <div id="show_emp_tree"></div>
+                <ul class="errorlist" id="emp_select_error">    
+                </ul>    
+            </td>
+        </tr>
+        {% endautoescape %}
+    {% endif %}<!--opaddemptolevel_acclevelset-->
+{% endblock %}
+
+{% block addjs %}
+    {% if request.user|HasPermDefaultGiven:"iaccess.opaddemptolevel_acclevelset" %}
+    $(function(){
+        $("#id_level_id").attr("class", "displayN");
+        var level_id = $("#id_level_id").val();
+        $.ajax({
+            url: "/{{ dbapp_url }}personnel/choice_widget_for_select_emp/?multiple=T&name=mutiple_emp&filter=qs_filter=openlevel_id="+level_id,
+            type: "POST",
+            dataType: "html",
+            success:function(sdata){   
+                $("#show_emp_tree").html(sdata);
+            }
+        });
+    })  
+    {% else %}
+        alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
+        window.location.href = "/{{ request.surl }}accounts/login/";
+    {% endif %}<!--opaddemptolevel_acclevelset-->
+{% endblock%}

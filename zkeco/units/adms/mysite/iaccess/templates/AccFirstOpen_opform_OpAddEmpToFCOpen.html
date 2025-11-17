@@ -1,0 +1,44 @@
+{% extends "data_opform.html" %}
+{% load i18n %}
+
+{% block form %}
+    {% if request.user|HasPerm:"iaccess.opaddemptofcopen_accfirstopen" %}
+        {% autoescape off %}
+        <table>
+        </table>
+        <tr></tr>
+        <tr>
+            <th>
+                <div id="show_emp_tree"></div>
+            </th>
+            <td>
+                <ul class="errorlist" id="emp_select_error"></ul>   
+            </td>
+        </tr>
+        {% if form.non_field_errors %}
+            <tr><td>{{ form.non_field_errors }}</td></tr>
+        {% endif %}
+        {% endautoescape %}
+    {% endif %}<!--opaddemptofcopen_accfirstopen-->
+{% endblock %}
+
+{% block addjs %}
+    {% if request.user|HasPerm:"iaccess.opaddemptofcopen_accfirstopen" %}
+    $(function(){ 
+        $.ajax({
+            url: "/{{ dbapp_url}}personnel/choice_widget_for_select_emp/?multiple=T&name=mutiple_emp",
+            type: "POST",
+            dataType: "html",
+            async: false,
+            success: function(sdata){   
+                $("#show_emp_tree").html(sdata);
+            }
+        });
+    });
+    
+    {% block extend_js %}{% endblock%}
+    {% else %}
+        alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
+        window.location.href = "/{{ request.surl }}accounts/login/";
+    {% endif %}<!--opaddemptofcopen_accfirstopen-->
+{% endblock%}

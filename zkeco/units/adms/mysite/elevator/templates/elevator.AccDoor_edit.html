@@ -1,0 +1,125 @@
+{% extends "AccDoor_edit.html" %}
+{% load i18n %}
+
+{% block form %}
+	{% if request.user|HasPermDefaultGiven:"iaccess.change_accdoor" %}
+	{% autoescape off %}
+	<tr><td>
+		<div class="door_edit_table_title">
+			<table id="door_edit_table" cellpadding="3px">
+				<tr>
+					{{ form.device|field_as_td_h }}
+				</tr>
+				<tr>
+					<th>
+						<label class="required" for="id_door_name">{% trans "编号" %}:</label>
+					</th>
+					{{ form.door_no|field_as_td_h_special }}
+				</tr>
+				<tr>
+					<th>
+						<label class="required" for="id_door_name">{% trans "楼层名称" %}:</label>
+					</th>
+					{{ form.door_name|field_as_td_h_special }}
+				</tr>
+				<tr>
+					<th>
+						<label class="required" for="id_door_name">{% trans "楼层有效时间段" %}:</label>
+					</th>
+					{{ form.lock_active|field_as_td_h_special }}
+				</tr>
+				<tr>
+					<th>
+						<label for="id_door_name">{% trans "楼层常开时间段" %}:</label>
+					</th>
+					{{ form.long_open|field_as_td_h_special }}
+				</tr>
+				<tr>
+					<th>
+						<label class="required" for="id_door_name">{% trans "按键保持时长" %}:</label>
+					</th>
+					{{ form.lock_delay|field_as_td_h_special }}
+				</tr>
+				<tr>
+					{{ form.card_intervaltime|field_as_td_h }}
+				</tr>
+
+				<tr>
+					<th>
+						<label class="required" for="id_door_name">{% trans "验证方式" %}:</label>
+					</th>
+					{{ form.opendoor_type|field_as_td_h_special }}
+				</tr>
+				<tr>
+					{{ form.wiegand_fmt|field_as_td_h }}
+				</tr>
+				<tr class="displayN">
+					{{ form.latch_door_type|field_as_td_h }}
+				</tr>
+
+				<tr class="displayN">
+					{{ form.relay_reverse_status|field_as_td_h }}
+				</tr>
+				
+				<tr class="displayN">
+					{{ form.door_sensor_status|field_as_td_h }}
+				</tr>
+				
+				<tr>
+					<th><label id="id_lable_settocurall">{% trans "将该设置应用于当前控制器所有楼层:" %}</label></th>
+					<td>
+						<input type="checkbox" name="applytocur" class="wZBaseBooleanField door_edit_checkbox" id="id_applytocur">
+					</td>
+				</tr>
+				
+				<tr>
+					<th><label id="id_lable_settoall">{% trans "将该设置应用于所有控制器所有楼层:" %}</label></th>
+					<td>
+						<input type="checkbox" name="applytoall" class="wZBaseBooleanField door_edit_checkbox" id="id_applytoall">
+					</td>
+				</tr>
+			</table>
+		</div>
+
+		{% if form.non_field_errors %}
+			<tr><td>{{ form.non_field_errors }}</td></tr>
+		{% endif %}
+	</td></tr>
+	{% endautoescape %}
+	{% endif %}<!--change_accdoor-->
+{% endblock %}
+
+
+{% block special_js_door_edit %}
+	function after_init()
+	{	
+		$("#id_opendoor_type option[value = '2']").remove();
+		$("#id_opendoor_type option[value = '8']").remove();
+		$("#id_opendoor_type option[value = '12']").remove();
+		$("#id_opendoor_type option[value = '13']").remove();
+		$("#id_opendoor_type option[value = '14']").remove();
+		$("#id_opendoor_type option[value = '30']").remove();
+	}
+	function before_submit()
+	{
+		$("#id_device").attr("disabled",false);
+		$("#id_door_no").attr("disabled",false);
+		return true;
+	}
+	
+	$("#id_span_title").find("span:eq(2)").hide();
+	if($("#id_door_no").val() != 1)
+	{
+		//$("#id_lock_active").parent().parent().hide();
+		$("#id_opendoor_type").parent().parent().hide();
+		$("#id_card_intervaltime").parent().parent().hide();
+		$("#id_wiegand_fmt").parent().parent().hide();
+		//$("#id_relay_reverse_status").parent().parent().hide();
+		$("#id_help_text").html("");
+
+	}
+	$("#id_help_text").text("");
+	$("#id_rel_log").text("{% trans '梯控系统 -> 楼层 -> 详情' %}");
+
+{% endblock %}
+

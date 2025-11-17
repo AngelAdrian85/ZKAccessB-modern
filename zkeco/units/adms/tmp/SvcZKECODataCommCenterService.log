@@ -1,0 +1,128 @@
+2025-10-06 15:13:10,867 INFO started
+2025-10-06 15:13:10,867 INFO Running
+2025-10-06 15:13:10,867 INFO python: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe
+2025-10-06 15:13:10,867 INFO pid=5036: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe manage.pyc datacommcenter
+2025-10-06 15:15:55,569 INFO started
+2025-10-06 15:15:55,569 INFO Running
+2025-10-06 15:15:55,584 INFO python: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe
+2025-10-06 15:15:55,584 INFO pid=4868: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe manage.pyc datacommcenter
+2025-10-07 07:50:33,923 INFO started
+2025-10-07 07:50:33,938 INFO Running
+2025-10-07 07:50:33,938 INFO python: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe
+2025-10-07 07:50:33,938 INFO pid=5056: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe manage.pyc datacommcenter
+SUCCESS: The process with PID 5100 (child process of PID 5056) has been terminated.
+SUCCESS: The process with PID 10784 (child process of PID 5056) has been terminated.
+SUCCESS: The process with PID 10792 (child process of PID 5056) has been terminated.
+SUCCESS: The process with PID 10804 (child process of PID 5056) has been terminated.
+SUCCESS: The process with PID 10816 (child process of PID 5056) has been terminated.
+SUCCESS: The process with PID 3508 (child process of PID 5056) has been terminated.
+SUCCESS: The process with PID 5056 (child process of PID 4600) has been terminated.
+2025-10-11 21:27:44,213 INFO 5056 terminated, restart it
+2025-10-11 21:27:44,312 INFO pid=15600: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe manage.pyc datacommcenter
+SUCCESS: The process with PID 1500 (child process of PID 15600) has been terminated.
+SUCCESS: The process with PID 11468 (child process of PID 15600) has been terminated.
+SUCCESS: The process with PID 5740 (child process of PID 15600) has been terminated.
+SUCCESS: The process with PID 4188 (child process of PID 15600) has been terminated.
+SUCCESS: The process with PID 16364 (child process of PID 15600) has been terminated.
+SUCCESS: The process with PID 15260 (child process of PID 15600) has been terminated.
+SUCCESS: The process with PID 15600 (child process of PID 4600) has been terminated.
+2025-10-12 15:27:45,035 INFO 15600 terminated, restart it
+2025-10-12 15:27:45,082 INFO pid=3068: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe manage.pyc datacommcenter
+2025-10-13 07:42:29,947 INFO started
+2025-10-13 07:42:29,947 INFO Running
+2025-10-13 07:42:29,947 INFO python: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe
+2025-10-13 07:42:29,963 INFO pid=5012: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe manage.pyc datacommcenter
+SUCCESS: The process with PID 5088 (child process of PID 5012) has been terminated.
+SUCCESS: The process with PID 10036 (child process of PID 5012) has been terminated.
+SUCCESS: The process with PID 10048 (child process of PID 5012) has been terminated.
+SUCCESS: The process with PID 10056 (child process of PID 5012) has been terminated.
+SUCCESS: The process with PID 10064 (child process of PID 5012) has been terminated.
+SUCCESS: The process with PID 4748 (child process of PID 5012) has been terminated.
+SUCCESS: The process with PID 5012 (child process of PID 4820) has been terminated.
+2025-10-14 20:31:42,177 INFO 5012 terminated, restart it
+2025-10-14 20:31:42,209 INFO pid=5576: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe manage.pyc datacommcenter
+SUCCESS: The process with PID 5028 (child process of PID 5576) has been terminated.
+SUCCESS: The process with PID 11592 (child process of PID 5576) has been terminated.
+SUCCESS: The process with PID 14300 (child process of PID 5576) has been terminated.
+SUCCESS: The process with PID 10196 (child process of PID 5576) has been terminated.
+SUCCESS: The process with PID 10460 (child process of PID 5576) has been terminated.
+SUCCESS: The process with PID 12840 (child process of PID 5576) has been terminated.
+SUCCESS: The process with PID 5576 (child process of PID 4820) has been terminated.
+2025-10-16 02:31:42,605 INFO 5576 terminated, restart it
+2025-10-16 02:31:42,637 INFO pid=13664: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe manage.pyc datacommcenter
+2025-10-16 07:57:14,713 INFO started
+2025-10-16 07:57:14,713 INFO Running
+2025-10-16 07:57:14,713 INFO python: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe
+2025-10-16 07:57:14,713 INFO pid=5388: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe manage.pyc datacommcenter
+SUCCESS: The process with PID 5408 (child process of PID 5388) has been terminated.
+SUCCESS: The process with PID 8380 (child process of PID 5388) has been terminated.
+SUCCESS: The process with PID 8364 (child process of PID 5388) has been terminated.
+SUCCESS: The process with PID 8528 (child process of PID 5388) has been terminated.
+SUCCESS: The process with PID 6776 (child process of PID 5388) has been terminated.
+SUCCESS: The process with PID 3824 (child process of PID 5388) has been terminated.
+SUCCESS: The process with PID 5388 (child process of PID 4364) has been terminated.
+2025-10-17 20:31:44,224 INFO 5388 terminated, restart it
+2025-10-17 20:31:44,282 INFO pid=13620: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe manage.pyc datacommcenter
+SUCCESS: The process with PID 12372 (child process of PID 13620) has been terminated.
+SUCCESS: The process with PID 4780 (child process of PID 13620) has been terminated.
+SUCCESS: The process with PID 692 (child process of PID 13620) has been terminated.
+SUCCESS: The process with PID 14252 (child process of PID 13620) has been terminated.
+SUCCESS: The process with PID 5504 (child process of PID 13620) has been terminated.
+SUCCESS: The process with PID 11844 (child process of PID 13620) has been terminated.
+SUCCESS: The process with PID 13620 (child process of PID 4364) has been terminated.
+2025-10-18 14:31:44,414 INFO 13620 terminated, restart it
+2025-10-18 14:31:44,490 INFO pid=15720: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe manage.pyc datacommcenter
+SUCCESS: The process with PID 15128 (child process of PID 15720) has been terminated.
+SUCCESS: The process with PID 2960 (child process of PID 15720) has been terminated.
+SUCCESS: The process with PID 14736 (child process of PID 15720) has been terminated.
+SUCCESS: The process with PID 15988 (child process of PID 15720) has been terminated.
+SUCCESS: The process with PID 2068 (child process of PID 15720) has been terminated.
+SUCCESS: The process with PID 3932 (child process of PID 15720) has been terminated.
+SUCCESS: The process with PID 15720 (child process of PID 4364) has been terminated.
+2025-10-21 02:28:29,592 INFO 15720 terminated, restart it
+2025-10-21 02:28:29,622 INFO pid=10396: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe manage.pyc datacommcenter
+SUCCESS: The process with PID 72 (child process of PID 10396) has been terminated.
+SUCCESS: The process with PID 9208 (child process of PID 10396) has been terminated.
+SUCCESS: The process with PID 992 (child process of PID 10396) has been terminated.
+SUCCESS: The process with PID 10560 (child process of PID 10396) has been terminated.
+SUCCESS: The process with PID 10796 (child process of PID 10396) has been terminated.
+SUCCESS: The process with PID 1520 (child process of PID 10396) has been terminated.
+SUCCESS: The process with PID 10396 (child process of PID 4364) has been terminated.
+2025-10-21 15:31:30,217 INFO 10396 terminated, restart it
+2025-10-21 15:31:30,276 INFO pid=1108: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe manage.pyc datacommcenter
+SUCCESS: The process with PID 10004 (child process of PID 1108) has been terminated.
+SUCCESS: The process with PID 16000 (child process of PID 1108) has been terminated.
+SUCCESS: The process with PID 780 (child process of PID 1108) has been terminated.
+SUCCESS: The process with PID 15420 (child process of PID 1108) has been terminated.
+SUCCESS: The process with PID 3100 (child process of PID 1108) has been terminated.
+SUCCESS: The process with PID 7024 (child process of PID 1108) has been terminated.
+SUCCESS: The process with PID 1108 (child process of PID 4364) has been terminated.
+2025-10-25 15:04:28,686 INFO 1108 terminated, restart it
+2025-10-25 15:04:28,710 INFO pid=15176: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe manage.pyc datacommcenter
+SUCCESS: The process with PID 8976 (child process of PID 15176) has been terminated.
+SUCCESS: The process with PID 13928 (child process of PID 15176) has been terminated.
+SUCCESS: The process with PID 13188 (child process of PID 15176) has been terminated.
+SUCCESS: The process with PID 12904 (child process of PID 15176) has been terminated.
+SUCCESS: The process with PID 15212 (child process of PID 15176) has been terminated.
+SUCCESS: The process with PID 12504 (child process of PID 15176) has been terminated.
+SUCCESS: The process with PID 15176 (child process of PID 4364) has been terminated.
+2025-10-29 01:52:36,296 INFO 15176 terminated, restart it
+2025-10-29 01:52:36,312 INFO pid=12128: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe manage.pyc datacommcenter
+SUCCESS: The process with PID 14376 (child process of PID 12128) has been terminated.
+SUCCESS: The process with PID 13604 (child process of PID 12128) has been terminated.
+SUCCESS: The process with PID 10852 (child process of PID 12128) has been terminated.
+SUCCESS: The process with PID 14136 (child process of PID 12128) has been terminated.
+SUCCESS: The process with PID 6960 (child process of PID 12128) has been terminated.
+SUCCESS: The process with PID 10516 (child process of PID 12128) has been terminated.
+SUCCESS: The process with PID 12128 (child process of PID 4364) has been terminated.
+2025-11-03 07:27:41,157 INFO 12128 terminated, restart it
+2025-11-03 07:27:41,191 INFO pid=13356: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe manage.pyc datacommcenter
+SUCCESS: The process with PID 9456 (child process of PID 13356) has been terminated.
+SUCCESS: The process with PID 5772 (child process of PID 13356) has been terminated.
+SUCCESS: The process with PID 2532 (child process of PID 13356) has been terminated.
+SUCCESS: The process with PID 16548 (child process of PID 13356) has been terminated.
+SUCCESS: The process with PID 7152 (child process of PID 13356) has been terminated.
+SUCCESS: The process with PID 12268 (child process of PID 13356) has been terminated.
+SUCCESS: The process with PID 13356 (child process of PID 4364) has been terminated.
+2025-11-07 19:23:56,094 INFO 13356 terminated, restart it
+2025-11-07 19:23:56,125 INFO pid=15612: C:\Program Files (x86)\ZKTeco\ZKAccessB\Python26\python.exe manage.pyc datacommcenter

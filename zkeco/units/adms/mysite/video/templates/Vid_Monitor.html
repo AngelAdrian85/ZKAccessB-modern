@@ -1,0 +1,220 @@
+{% load i18n %}
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="{{ LANGUAGE_CODE }}" xml:lang="{{ LANGUAGE_CODE }}" {% if LANGUAGE_BIDI %}dir="rtl"{% endif %}><head>
+    {% include "site_medias_js.html" %}
+    <head>
+    	<title>
+    		{% trans "视频预览" %}
+    	</title>
+    </head>
+    <script type="text/javascript">
+    var user_id=-1;
+    var vid_type = get_query_string("vid_type");
+    function get_query_string(sprop) 
+    {
+        var re = new RegExp("[&,?]"+sprop + "=([^\\&]*)", "i");
+        var a = re.exec(document.location.search);   
+        if (a == null) return ""; 
+        return a[1];
+    }
+    function set_video_state(vid_id)
+    {
+        var k=window.dialogArguments; 
+        var video_state=k.document.getElementById("id_video_state").value; 
+        video_state=video_state.replace(vid_id+"-","")
+        k.document.getElementById("id_video_state").value=video_state
+        window.returnValue=video_state; 
+        window.close(); 
+    }
+    function set_video_position(position)
+    {
+        var k = window.dialogArguments; 
+        var video_position = k.document.getElementById("id_video_position").value; 
+        position = parseInt(position);
+        if(position == 0)
+        {
+            video_position ='0'+video_position.substr(1,1);
+        }
+        else if(position == 1)
+        {
+            video_position = video_position.substr(0,1)+'0';
+        }
+        k.document.getElementById("id_video_position").value=video_position;
+        window.returnValue=video_position; 
+    }
+    function get_link_num(xml_str,curch) //获取硬盘录像机当前通道的已连接个数
+    {
+        var members = 0;
+        //var maxRes = 0;
+
+        if(!window.DOMParser && window.ActiveXObject){
+            var xml_dom_versions = ['MSXML.2.DOMDocument.6.0','MSXML.2.DOMDocument.3.0','Microsoft.XMLDOM'];
+            for(var i=0;i<xml_dom_versions.length;i++){
+                try //Internet Explorer
+                {
+                      xmlDoc=new ActiveXObject(xml_dom_versions[i]);
+                      xmlDoc.async="false";
+                      xmlDoc.loadXML(xml_str);
+                }
+                catch(e)
+                {
+                    
+                }
+            }
+        }
+        else if (window.DOMParser && document.implementation && document.implementation.createDocument)
+        {
+            try{
+                domParser = new DOMParser();
+                xmlDoc = domParser.parseFromString(xml_str, 'text/xml');
+            }
+            catch(e)
+            {
+            }
+        }
+        else{   
+        }
+        
+        if(xmlDoc==null){
+            alert(gettext("解析xml文件出错"));
+        }
+        members= xmlDoc.getElementsByTagName("ChannelState");
+        var cur_link_num = members[curch].getElementsByTagName("LinkNum")[0].firstChild.nodeValue;
+        return cur_link_num;
+    }
+    
+    window.onload = function() { 
+        var ocx_html = document.getElementById("ocx");
+        var vid_ip = get_query_string("vid_ip");
+        var vid_port = get_query_string("vid_port");
+        var vid_login = get_query_string("vid_login");
+        var vid_pwd = get_query_string("vid_pwd");
+        var vid_ch = get_query_string("vid_ch");
+        var ocx_obj = "";
+        if(vid_type == 200)
+        {
+            ocx_html.innerHTML = '<object classid="clsid:CAFCF48D-8E34-4490-8154-026191D73924" codebase="/media/ActiveX/NetVideoActiveX_V23.cab#version=2,3,15,1" standby="Waiting..." id="NetOCX1" width="410px" height="350px" name="ocx1" align="center"></object>'
+            ocx_obj = document.getElementById("NetOCX1");
+            if(document.getElementById("NetOCX1").object == null)
+	        {
+				alert(gettext("控件初始化失败，请确定视频设备类型是否选择正确或重装控件！"));
+	            return;               
+	        }
+            user_id = ocx_obj.Login(vid_ip, vid_port, vid_login, vid_pwd);
+            //var str = ocx_obj.GetServerWorkState();
+            //var cur_link_num = get_link_num(str,vid_ch);
+            if(user_id > -1){
+                var i = 0; 
+                ocx_obj.StartRealPlay(vid_ch, 0, 0);
+            }
+            else{
+                alert(gettext('该通道已达最大访问量或视频服务器未连接！'));
+                self.close();
+                return;
+            }
+        }
+        else if(vid_type == 101)
+        {
+            ocx_html.innerHTML = '<object classid="clsid:42B182F9-3F08-484E-9913-07193A5D36AD" codebase="/media/ActiveX/ZKClientOCXPlus_Setup.exe" id="DHiMPlayer" width="410px" height="350px" align="absbottom" viewastext></object>'
+            ocx_obj = document.getElementById("DHiMPlayer");
+            if(document.getElementById("DHiMPlayer").object == null)
+	        {
+				alert(gettext("控件初始化失败，请确定视频设备类型是否选择正确或重装控件！"));
+	            return;               
+	        }
+            var curStreamNum = ocx_obj.GetStreamNum();
+            var reg_ret = ocx_obj.SetUrl(vid_ip, vid_port, curStreamNum, vid_login, vid_pwd);
+            if (reg_ret >= 0)
+            {
+                if(curStreamNum == '11' || curStreamNum == '12'){
+                    ocx_obj.Play();
+                }
+            }
+            else
+            {
+                alert(gettext("视频服务器登录失败，请确认后重试！"));
+                self.close();
+                return;
+            }
+        }
+        else if(vid_type == 300)
+        {
+        	ocx_html.innerHTML = '<object classid="CLSID:EDD8DF0B-A160-45df-A26E-67C390A57B18" codebase="/media/ActiveX/DaHua_webrec.cab#version=3,0,0,1" standby="Waiting..." id="DaHuaocx" width="410px" height="350px" align="center" >'
+                                 +'<param name="lVideoWindNum" value=1>'
+                                 +'<param name="SetLangFromIP" value="http://' + vid_ip + '/">'
+                                 +'<param name="SetHostPort" value=' + vid_port + '>'                                
+                                 +'</object>';
+        	ocx_obj = document.getElementById("DaHuaocx");
+        	if(document.getElementById("DaHuaocx").object == null)
+	        {
+				alert(gettext("控件初始化失败，请确定视频设备类型是否选择正确或重装控件！"));
+	            return;               
+	        }
+			login = ocx_obj.LoginDeviceEx(vid_ip, vid_port, vid_login, vid_pwd, 0);
+        	if(login == 0)
+        	{
+        		alert(gettext("视频服务器登录失败，请确认后重试！"));
+        		ocx_obj.LogoutDevice();
+        		self.close();
+		        return;
+        	}
+        	if(ocx_obj.ConnectRealVideo(vid_ch,1) == 0)
+            {
+                alert(gettext("预览失败"));
+                return;
+            }
+        }
+    }
+
+    window.onbeforeunload = function()  {
+        var vid_position = get_query_string("vid_position");
+        if(vid_position != "")//当电子地图全屏时，不需要修改此参量，避免脚本错误！
+        {
+        	set_video_position(vid_position);
+        }
+        var vid_id = get_query_string("vid_id");
+        if(vid_id != "")//当电子地图全屏时，不需要修改此参量，避免脚本错误！
+        {
+        	set_video_state(vid_id);
+        }
+        if(vid_type == 200)
+        {
+        	Netocx1 = document.getElementById("NetOCX1");
+        	Netocx1.Logout();//关闭窗口前先注销用户。
+            Netocx1.ClearOCX();
+        	Netocx1.logout();//当前视频服务器变化时，释放占用的通道,中控IPC暂时不考虑
+        	Netocx1 = null;
+        }
+        else if(vid_type == 101)
+        {
+        	ZK_DHiMPlayer = document.getElementById("DHiMPlayer");
+        	ZK_DHiMPlayer.Stop();
+            ZK_DHiMPlayer = null;
+        }
+        else if(vid_type == 300)
+        {
+        	DaHuaOCX = document.getElementById("DaHuaocx")
+        	DaHuaOCX.LogoutDevice();
+        	DaHuaOCX = null;
+        }
+    }
+    var vid_time = get_query_string("vid_time");
+    if(vid_time != "")
+    {
+        setTimeout("self.close()",parseInt(vid_time)*1000);
+    }
+    </script>    
+</head>
+<body class="indexBody">
+<table>
+<tr>
+  <td id="ocx" align="center">
+    <!-- <object classid="clsid:CAFCF48D-8E34-4490-8154-026191D73924" codebase="/media/ActiveX/NetVideoActiveX23.cab#version=2,3,9,1"
+    standby="Waiting..." id="NetOCX1" width="400" height="300" name="ocx1" align="center" >
+    </object> -->
+  </td>
+</tr>
+</table>
+</body>
+</html>

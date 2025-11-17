@@ -1,0 +1,73 @@
+{% extends "data_opform.html" %}
+{% load i18n %}
+{% block form %}
+{% autoescape off %}
+	<tr>
+		<th>
+			<label class="required" for="id_door_reader_type_0">{% trans "设置联动时门相关事件输入点类型" %}:</label>
+		</th>
+		<td>
+			<ul>
+				<li>
+					<label for="id_door_reader_type_0">
+					<input id="id_door_reader_type_0" type="radio" name="door_reader_type" value="0">
+					{% trans "门" %}
+					</label>
+				</li>
+				<li>
+					<label for="id_door_reader_type_1">
+					<input id="id_door_reader_type_1" type="radio" name="door_reader_type" value="1">
+					{% trans "读头" %}
+					</label>
+				</li>
+			</ul>
+		</td>
+	</tr>
+	<tr id="addition_fields"></tr>
+	{% if form.non_field_errors %}
+        <tr><td>{{ form.non_field_errors }}</td></tr>
+    {% endif %}
+{% endautoescape %}
+{% endblock %}
+
+{% block loading %}
+
+{% endblock %}
+
+{% block addjs %}
+	{% if request.user|HasPerm:"iclock.opgetmoreoptions_device" %}
+	var dev_id = 0;
+	$(".select_row").each(function(){
+		if($(this).attr("checked"))
+		{
+			dev_id = $(this).parents("tr").attr("data");
+		}
+	});
+	
+	$.ajax({
+		type: "POST",
+		url: "/{{ request.surl }}iaccess/GetData/?func=get_linkage_input_type&dev_id="+ dev_id,
+		dataType: "json",
+		async: false,
+		success: function(datas)
+		{
+			if(datas.type == 0)
+			{
+				$("#id_door_reader_type_0").attr("checked",'checked');
+			}
+			else
+			{
+				$("#id_door_reader_type_1").attr("checked",'checked');
+			}
+		},
+		error: function(XMLHttpRequest, textStatus, errorThrown)
+		{
+			alert(gettext("服务器处理数据失败，请重试！错误码：")+"-623");
+		}
+	});
+
+	{% else %}
+		alert(gettext("对不起,您没有访问该页面的权限,不能浏览更多信息！"));
+		window.location.href = "/{{ request.surl }}accounts/login/";
+	{% endif %}<!-- iclock.opgetmoreoptions_device -->
+{% endblock%}

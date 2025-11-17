@@ -1,0 +1,6 @@
+{% extends "AccFirstOpen_opform_OpAddEmpToFCOpen.html" %}
+{% load i18n %}
+
+{% block extend_js %}
+$("#id_rel_log").text("{% trans '梯控系统 -> 楼层设置 -> 首卡开门' %}");
+{% endblock%}

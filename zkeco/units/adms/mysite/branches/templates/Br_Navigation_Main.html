@@ -1,0 +1,183 @@
+{% extends "Acc_RTMonitor.html" %}
+{% load i18n %}
+
+{% block headjs %}
+    {% if request.user|HasPerm:"contenttypes.can_MonitorAllPage" %}
+    <script src="{{ MEDIA_URL }}/jslib/jquery.contextmenu.r2.packed.js"></script>
+    <script src="{{ MEDIA_URL }}/jslib/jquery.messager.js"></script>
+        {% block add_headjs %}
+        {% endblock %}
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+    {% if request.user|HasPerm:"contenttypes.can_MonitorAllPage" %}
+    {% block monitor_doors_maps %}
+    <div id="id_monitor_branches" class="div_box"><h1>{% trans "分控监控" %}</h1>
+        <!--<div id="id_door_ops" class="grid Link_blue1">
+			<div class="floatL">
+				<<div id="monitor_device"><label>{% trans "控制器" %}</label><select><option value="0">-----------------</option></select></div>
+				<div id="monitor_door"><label>{% trans "门" %}</label><select><option value="0">-----------------</option></select></div>
+			</div>
+            <div class="floatL">
+				<table><tr>
+					<td>
+                        <div class="action openalldoor nowrap">
+                            <a id="openpart_all" onclick="show_opendoor(this.id)" href="javascript:void(0)">{% trans "开当前所有门" %}</a>
+                        </div>
+                    </td>
+					<td>
+                        <div class="action nowrap">
+                            <a id="closepart_all" onclick="show_closedoor(this.id)" href="javascript:void(0)">{% trans "关当前所有门" %}</a>
+                        </div>
+                    </td>
+				</tr></table>
+			</div>
+			<div class="action nowrap displayN"><a id="cancelall" href="javascript:void(0)">{% trans "取消全部报警" %}</a></div>
+			<div class="clear"></div>
+        </div>-->
+        <div id="id_branches_loading">{% trans "正在获取系统内用户授权范围内的所有分控服务器......" %}</div>
+        <div id="id_branches_judge">{% trans "当前没有有效的分控服务器可供显示！" %}</div>
+        <!--地图显示-start-->
+        <div id="id_branches_show" class="branches_show">
+            <ul class="tabs">
+            </ul>
+        </div>
+        <!--地图显示-end-->
+        
+        <div id="id_door_state"></div>
+		<div class="clearB"></div>
+    </div>
+	{% endblock %}<!--end of monitor_doors_maps-->
+
+    {% block alarm_sound %}
+    <div id="id_alarm_sound"></div><!--警报声-->
+    {% endblock %}<!--end of alarm_sound-->
+   
+
+    {% block addmiddiv %}
+    <div id="id_tip" style="display:none" class="div_tip ui-corner-all"></div>
+    {% endblock %}<!--end of addmiddiv-->
+
+	{% block monitor_events %}
+    
+    {% endblock %}<!-- end of monitor_events -->
+
+    {% block right_click_menu %}{% endblock %}
+
+    {% endif %}<!--can_MonitorAllPage-->
+
+{% endblock %}<!--end of content-->
+
+{% block addjs %}
+    {% if request.user|HasPerm:"contenttypes.can_RTMonitorPage" %}
+
+    {% block base_variables %}
+        //$("#id_show_alarm").hide();//默认此div不显示
+        var gdata = null;//global variable
+        var gdev_filter = "";//门状态的监控的设备条件传给事件监控
+
+        var src_disabled = "/media/images/iaccess/door_disabled.jpg";
+        var src_default = "/media/images/iaccess/door_nosensor.jpg";
+        var src_nosensor = "/media/images/iaccess/door_nosensor.jpg";
+        var src_offline = "/media/images/iaccess/door_offline.jpg";
+        var src_opened = "/media/images/iaccess/door_opened.jpg";
+        var src_closed = "/media/images/iaccess/door_closed.jpg";
+        var src_alarm = "/media/images/iaccess/door_alarm.jpg";
+        var src_open_timeout = "/media/images/iaccess/door_open_timeout.jpg";
+    {% endblock %}    
+    
+    //start of branches monitor
+    {% block electro_map %}
+        //初始化分控服务器-start
+        function init_branchess()
+        {
+            $("#id_map_loading").show();
+            var stamp0 = new Date().getTime();
+            $.ajax({
+                type: "POST",
+                url: "/{{ request.surl }}branches/BranchesServer/?func=init_branches&stamp="+stamp0,
+                dataType: "json",
+                async: true,
+                success: function(init_data)
+                {
+                    $("#id_map_loading").hide();
+                    $(".anymap").show();
+                    $("#id_branches_show div").remove();
+                    $("#id_branches_show .tabs").empty();
+                    var branches = init_data.branches;
+                    
+                    if(branches == "")
+                    {
+                        $("#id_branches_judge").show();
+                        $("#id_branches_show").hide();
+                        $(".nomap").hide();
+                        gdev_filter = "&door_id=-1";//实时监控查询条件变更
+                    }
+                    else
+                    {
+                        $("#id_branches_loading").hide();
+                        $("#id_monitor_branches").css("height","500px");
+                        $("#id_branches_show").show();
+                        $(".nomap").show();
+                        //分控信息
+                        for(a in branches)
+                        {
+                            var img_style = "";//待扩展
+
+                            $("#id_branches_show").append('<div id="id_branch_'+branches[a][0]+'" data="'+branches[a][0]+'" class="branch_div" name="'+branches[a][1]+'" style="overflow: scroll; width:1020px; height: 400px; position: absolute;border:1px solid #BBBBBB;">'
+                                                    + '<img class="branch" src="../../../file/map/'+branches[a][0]+'.jpg?'+stamp0+'" '+img_style+' />'
+                                                    + '</div>');
+                            $("#id_branches_show .tabs").append('<li><a pk="'+branches[a][0]+'" href="#id_branch_'+branches[a][0]+'">'+branches[a][1]+'</a></li>');
+                            
+                            var iframe_html = '<div><iframe name="iframe_'+branches[a][0]+'" style="width: 100%; height: 400px;" src="http://'+branches[a][2]+":"+branches[a][3]+'/iaccess/RTMonitorPage/" /></div>'
+                                           // + '<form id="mieForm" name="mieForm" method="post" action="http://'+branches[a][2]+'/accounts/login/" target="iframe1">'
+                                           // + '<input type="hidden" name="username" value="'+branches[a][4]+'"/>'
+                                           // + '<input type="hidden" name="password" value="'+branches[a][5]+'"/></form><div onload="alert(11);document.mieForm.submit();"></div>';
+                            $("#id_branch_"+branches[a][0]).append(iframe_html);
+                            //document.mieForm.submit();
+                            $.post("http://"+branches[a][2]+"/accounts/login/", {username: branches[a][4], password: branches[a][5]}, "json") 
+                            
+                        }
+                        
+                     
+                        //gdev_filter = "&door_id=" + all_doors_id;
+                        $(".can_drag").contextMenu('id_mapdoor_menu',
+                        {
+                            menuStyle: {
+                                width: '120px'
+                            },
+                            bindings:
+                            {
+                                'id_del_door': function(t)
+                                {
+                                    del_door_from_map(t);
+                                }
+                            }
+                        });
+                        $("#id_branches_show").tabs("#id_branches_show > div");//tab--此行代码不能放到ajax后
+                        tabs_width = $(".tabs").width();
+                        $(".map_div").each(function(){$(this).width(tabs_width)});//滚动条的宽度自适应
+    
+                    }
+                },
+                error: function(XMLHttpRequest, textStatus, errorThrown)
+                {
+                    alert(gettext("服务器处理数据失败，请重试！错误码：-617"));
+                }
+            });
+        }
+        init_branchess();
+        //初始化分控服务器-end
+
+
+        
+    {% endblock %}//end of the brahches monitor darcy20110714
+
+    {% else %}<!--can_RTMonitorPage-->
+        alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
+        window.location.href = "/{{ request.surl }}accounts/login/";
+    {% endif %}<!--can_RTMonitorPage-->
+
+
+{% endblock %}<!--end of addjs-->

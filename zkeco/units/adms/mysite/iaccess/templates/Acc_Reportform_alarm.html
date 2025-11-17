@@ -1,0 +1,222 @@
+{% extends "Acc_Reportform.html" %}
+{% load i18n %}
+
+{% block id_main_div_report %}
+    {% if request.user|HasPerm:"contenttypes.can_AlarmEventReportPage" %}
+    {% if request.user|HasPerm:"iaccess.browse_accrtmonitor" %}
+
+    <div><li id="id_model_export" style="display:none"><a class="action_Model_Export" href="javascript:void(0)" alt="export"></a></li></div>
+    
+    <div id="id_datalist" class="div_box h280"><h1>{% trans "门禁异常事件" %}</h1>
+    </div>
+    {% endif %}<!--browse_accrtmonitor-->
+    {% endif %}<!--contenttypes.can_AlarmEventReportPage-->
+{% endblock %}
+
+{% block acc_reportform %}
+    {% if request.user|HasPerm:"contenttypes.can_AlarmEventReportPage" %}
+    {% if request.user|HasPerm:"iaccess.browse_accrtmonitor" %}
+    
+    // 获取服务器的时间
+    var month_range = 3;// 查询记录的时间范围，单位：月，必须大于0
+    var init_search_month = 3;// 初始化页面查询记录的时间范围，单位：月，为0则查询当天记录
+    var start_time = "";// 全局变量，维护使用
+    var end_time = "";// 全局变量，维护使用
+    var init_start_time = "";// 清除事件使用
+    var init_end_time = "";// 清除事件使用
+    var format_array = null;
+    var split_str = "";// 日期分割符
+    var date_format = null;// 日期格式
+    var temp_time_val = 0;// 用于判断开始时间和结束时间的范围值
+    var init_search = true;
+    
+    get_server_time(month_range);// 获取开始时间和结束时间，以服务器时间为准
+    function get_server_time(month_range)
+    {
+        $.ajax({
+            type: "POST",
+            url: "/{{ request.surl }}iaccess/GetData/?func=init_search_time&month_range="+init_search_month,
+            dataType: "json",
+            async: false,
+            success: function(datas)
+            {
+                start_time = datas.start_time;
+                end_time = datas.end_time;
+                init_start_time = start_time;
+                init_end_time = end_time;
+                date_format = datas.date_format;
+				month_range = datas.month_range;
+                if(date_format != null && date_format != "")
+                {
+                    date_format = date_format.replace(/%/g, "");
+                    split_str = date_format.indexOf("/") >=0 ? "/" : "-";
+                    format_array = date_format.split(split_str);
+                }
+            }
+        });
+    }
+    
+    // 验证设置的访客有效期：门禁、梯控
+    function convert_search_time(search_time, month_range)
+    {
+        search_time = (search_time.split(" ")[0]).split(split_str);
+        //alert("search_time=="+search_time);
+        //alert("format_array=="+format_array);
+        var temp_array = new Array();
+        for(var i = 0; i < 3; i++)
+        {
+            if(format_array[i] == "Y")
+            {
+                temp_array[0] = search_time[i];
+            }
+            if(format_array[i] == "m")
+            {
+                temp_array[1] = search_time[i];
+            }
+            if(format_array[i] == "d")
+            {
+                temp_array[2] = search_time[i];
+            }
+        }
+        //alert("temp_array=="+temp_array);
+        if(month_range > 0)
+        {
+            var end_time_month = parseInt(temp_array[1]);
+            var start_time_year = null;
+            var start_time_month = null;
+            if(end_time_month > month_range)
+            {
+                start_time_year = temp_array[0];
+                start_time_month = end_time_month - month_range;
+            }
+            else
+            {
+                start_time_year = parseInt(temp_array[0]) - 1;
+                start_time_month = 12 - (month_range - end_time_month);
+            }
+            temp_time_val = start_time_year+((start_time_month+"").length == 2 ? start_time_month+"" : "0"+start_time_month)+temp_array[2];
+        }
+        return temp_array[0]+temp_array[1]+temp_array[2];
+    }
+    
+    
+    // 自定义查询条件
+    $("#id_header_search").hide();
+    $("#id_header_clear").hide();
+    $("#id_header_search").parent().append('<a id="id_custom_header_search" class="floatL" href="javascript:void(0)">{% trans "查询" %}</a>');
+    $("#id_header_clear").parent().append('<a id="id_custom_header_clear" class="floatL" href="javascript:void(0)">{% trans "清除" %}</a>');
+    
+    // 自定义查询按钮事件
+    $("#id_custom_header_search").click(function(){
+        var temp_start_time = $("#search_id_time__gte").val();
+        var temp_end_time = $("#search_id_time__lte").val();
+        if(temp_start_time == "")
+        {
+            alert(gettext("请选择开始时间"));
+            return false;
+        }
+        if(temp_end_time == "")
+        {
+            alert(gettext("请选择结束时间"));
+            return false;
+        }
+        temp_time_val = 0;
+        end_time_val = convert_search_time(temp_end_time, month_range);
+        start_time_val = convert_search_time(temp_start_time, 0);
+        //alert(temp_time_val+"===="+start_time_val+"===="+end_time_val);
+        if(temp_time_val > start_time_val)
+        {
+            alert(gettext("只能查询"+month_range+"个月内的数据"));
+            return false;
+        }
+        start_time = temp_start_time;
+        end_time = temp_end_time;
+        $("#id_header_search").click();
+    });
+    
+    // 自定义清除按钮事件
+    $("#id_custom_header_clear").click(function(){
+        $("#id_search").find("input, select").each(function(){
+            $(this).val("");
+        });        
+        $("#search_id_time__gte").val(init_start_time);
+        $("#search_id_time__lte").val(init_end_time);
+        start_time = $("#search_id_time__gte").val();
+        end_time = $("#search_id_time__lte").val();
+        $("#id_header_search").click();
+    });
+    
+    $("#id_datalist").model_grid({
+        "model_url": "{{ dbapp_url }}iaccess/AccRTMonitor/",
+        "base_query": ["event_type__gte=20","event_type__lt=200"],
+        "init_query": ["event_type__gte=20","event_type__lt=200","time__gte="+init_start_time,"time__lte="+init_end_time],
+        "model_actions": true,
+        //"sort_fields": ["-time"], 
+        "object_actions": false,
+        "obj_edit": false,
+        "record_per_page": 100,
+        "max_no_page": 100,  
+        "fields_show": ['show_media|media_icon','format_time','area','device_name','event_point_name','event_type','card_no','pin','show_name','dept','state_name','verified','get_description'],
+        "row_operations": [],
+        "disabled_actions": ["OpClearRTLogs","_delete","_add","_clear","_change"],
+        "multiple_select": null,
+        "action_onclick_continue": false,
+        "init_after_get_jdata": function(){
+            $("#search_id_time__gte").val(start_time);
+            $("#search_id_time__lte").val(end_time);            
+            $("#id_sys_cur_exporttitle").val('{% trans "门禁异常事件" %}');
+            $("#id_datalist div.action").append('<li id="id_export"><a alt="export" href="javascript:void(0)" class="action_Model_Export">'+gettext("导出报表")+'</a></li>')
+            $("#id_export").click(function(){
+                $("#id_model_export").click();
+            });
+            
+//            //自定义下拉框
+//            try
+//            {
+//                adjust_dropdown_list($("#search_id_event_type"));
+//            }
+//            catch(e)
+//            {
+//            }
+//            
+            
+            // 下拉列表查询条件
+            $("#search_id_device_name, #search_id_dept, #search_id_event_point_name, #search_id_state_name, #search_id_area").click(function(){
+                if($("#search_id_time__gte").val() != start_time || $("#search_id_time__lte").val() != end_time || $(this).find("option").length == 1)
+                {
+                    var field_name = $(this).attr("id").split("search_id_")[1];
+                    var operate_obj = $(this);
+                    $.ajax({
+                        type: "POST",
+                        url: "/{{ request.surl }}iaccess/GetData/?func=get_search_option",
+                        dataType: "json",
+                        data: {"start_time": $("#search_id_time__gte").val(), "end_time": $("#search_id_time__lte").val(), "field_name": field_name},
+                        async: false,
+                        success: function(datas)
+                        {
+                            if(datas.option_html != "" && datas.option_html != undefined)
+                            {
+                                operate_obj.html(datas.option_html);
+                            }
+                            datas = null;
+                        }
+                    });
+                }
+            });
+            
+            // 查询日期变动
+            $("#search_id_time__gte, #search_id_time__lte").change(function(){
+                start_time = $("#search_id_time__gte").val();
+                end_time = $("#search_id_time__lte").val();                
+            });
+        }
+    });
+
+    {% endif %}<!--browse_accrtmonitor-->
+    {% else %}
+        $("#id_search").remove();
+        alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
+        window.location.href = "/{{ request.surl }}accounts/login/";
+    {% endif %}<!--contenttypes.can_AllEventReportPage-->   
+{% endblock %}
+

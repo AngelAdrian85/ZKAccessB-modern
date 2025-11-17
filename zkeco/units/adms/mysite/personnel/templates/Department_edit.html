@@ -1,0 +1,98 @@
+{% extends "data_edit.html" %}
+{% load i18n %}
+
+{% block form %}
+{% autoescape off %} 
+<tr><td>
+
+  <table width="100%" border="0" cellspacing="0" cellpadding="3">
+    <tr>
+        {{form.name|field_as_td_h}}
+      <td  >{{form.name.errors }}</td>
+      
+    </tr>
+    <tr>
+        {{form.code|field_as_td_h}}
+	 
+      <td  >{{form.code.errors }}<div  class="floatL Link_blue1 lineH22"><a id="id_checkNo" href="javascript:void(0)">{%trans '验证'%}</a></div><div id='div_id_code'  class="floatL color_orange lineH22"></div></td>
+     
+    </tr>
+    <tr>
+	 {{form.parent|field_as_td_h}}
+      <td  >{{form.parent.errors }}</td>
+      
+    </tr>
+
+
+   {% for i,k in form.errors.items %}
+   {{i}}{{k}}
+   {% endfor %}
+   
+    <tr class="displayN"><th></th><td><input type="checkbox" name="sync_to_branch" class="wZBaseBooleanField" id="id_sync_to_branch"></td></tr>
+  </table>
+</td></tr>
+
+{% endautoescape %}
+{% endblock %}
+{% block addjs %}
+    if($("#id_model_pk").val() > 0)
+    {
+        $("#id_checkNo").parent().hide();
+    }
+    
+//    $("label[for='id_code']").attr("class","required");
+    $("#id_code").change(function(){
+        $("#id_checkNo").click();
+    });
+    
+    $("#id_checkNo").click(function(){
+        div = $("#div_id_code");
+        div.html("");
+        if($("#id_code").val().replace(/^\s\s*/, '' ).replace(/\s\s*$/, '') == "")
+        {
+            div.html("&times;"+"<font color='red'>"+gettext("不合法")+"</font>");
+            return;
+        }
+        wgCheckNo('code','div_id_code',this,'{{dbapp_url}}','personnel','Department')
+    }); 
+    
+    function after_init()
+    {
+        if($("#id_code").val() != "")//编辑时部门编号不能修改--darcy20110726
+        {
+            $("#id_code").attr("readonly", "true");
+            $("#id_checkNo").attr("hidden","true");
+        }
+    }
+
+    function before_submit()
+    {
+        {% if has_branch %}
+        if(confirm(gettext("是否立即将部门信息从主控下发到分控？")))
+        {
+            $("#id_sync_to_branch").attr("checked", true);
+        }
+        else
+        {
+            alert(gettext("您选择了不立即同步该部门到分控，请稍后手动同步到分控，以保持主控和分控数据一致性！否则该部门中的人员将无法同步到分控中！"));
+            $("#id_sync_to_branch").attr("checked", false);
+        }
+        {% endif %}
+        return true;
+    }
+    function before_submit_and_save()
+    {
+        {% if has_branch %}
+        if(confirm(gettext("是否立即将部门信息从主控下发到分控？")))
+        {
+            $("#id_sync_to_branch").attr("checked", true);
+        }
+        else
+        {
+            alert(gettext("您选择了不立即同步该部门到分控，请稍后手动同步到分控，以保持主控和分控数据一致性！否则该部门中的人员将无法同步到分控中！"));
+            $("#id_sync_to_branch").attr("checked", false);
+        }
+        {% endif %}
+        return true;
+    }
+{% endblock %}

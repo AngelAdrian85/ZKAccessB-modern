@@ -1,0 +1,20 @@
+Legacy scanner output (run on 2025-11-12)
+
+Summary:
+- Found 946 .pyc files compiled with Python 2 magic headers.
+- Found 59 .py files containing legacy `print`-style statements or Python2 idioms.
+- Found 4158 items in legacy-marked directories (examples: `zkeco/python-support`, `zkeco/units`).
+
+Top excerpts (first matches shown):
+- zkeco/python-support/base/models.pyc
+- zkeco/python-support/base/cached_model.pyc
+- zkeco/python-support/base/modeladmin.pyc
+- zkeco/python-support/base/models_addition.pyc
+- zkeco/python-support/wsgiserver.pyc
+- zkeco/python-support/svr8000.pyc
+
+Notes:
+- Many of the vendor/legacy helper modules only have .pyc present under `zkeco/python-support`.
+- Several workable .py sources exist under `zkeco/units/*` (these are good first port candidates).
+
+Use this file as the canonical inventory snapshot for planning the port.

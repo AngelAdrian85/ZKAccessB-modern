@@ -1,0 +1,115 @@
+{% extends "VisReport_edit.html" %}
+{% load i18n %}
+{% block form_edit %}
+    <tr id="visitor_info_tr">
+        <td width="260px">
+            <table>
+            	<tr>
+                	{{ form.visitor_pin|field_as_td_h }}
+                </tr>
+                <tr>
+                	{{ form.visitor_firstname|field_as_td_h }}
+                </tr>
+                <tr>
+                    {{ form.visitor_lastname|field_as_td_h }}
+                </tr>
+                <tr>
+                    {{ form.gender|field_as_td_h }}
+                </tr>
+                <tr>
+                    {{ form.visitor_company|field_as_td_h }}
+                </tr>
+                    {{ form.visit_reason|field_as_td_h }}
+                </tr>
+                <tr>
+                    {{ form.visitor_number|field_as_td_h }}
+                </tr>
+                <tr>
+                    {{ form.visited_pin|field_as_td_h }}
+                </tr>
+                <tr>
+                    {{ form.visited_firstname|field_as_td_h }}
+                </tr>
+                <tr>
+                    {{ form.visited_lastname|field_as_td_h }}
+                </tr>
+                <tr>
+                    {{ form.visited_dept|field_as_td_h }}
+                </tr>
+                <tr>
+                    {{ form.visited_phone|field_as_td_h }}
+                </tr>
+                
+			</table>
+		</td>
+		<td>
+			<table>
+				<tr>
+                    {{ form.card|field_as_td_h }}
+                </tr>
+				<tr>
+                    {{ form.car_number|field_as_td_h }}
+                </tr>
+                <tr>
+                    {{ form.park_number|field_as_td_h }}
+                </tr>
+                <tr>
+                    {{ form.entrance|field_as_td_h }}
+                </tr>
+                <tr>
+                    {{ form.exit_place|field_as_td_h }}
+                </tr>
+                <tr>
+                    {{ form.enter_time|field_as_td_h }}
+                </tr>
+                <tr>
+                    {{ form.exit_time|field_as_td_h }}
+                </tr>
+                <tr>
+					{{ form.carried_goods|field_as_td_h }}
+				</tr>
+			</table>
+		</td>
+		<td width="190px" align="right">
+			<table>
+				<tr>
+					<td width="160px" align="center">
+						<div class="div_img floatL">
+	                        <div class="div_r_t">
+	                            <div class="div_l_t">
+	                                <div class="div_r_b">
+	                                    <div class="div_l_b">
+	                                    	<img id="id_enter_photo" width="136px" height="160px" alt={% trans "进入照片" %} src="{% if instance.enter_photo %}/{{request.surl}}file/{{ instance.enter_photo }}{% else %}{{ MEDIA_URL }}/images/userImage.gif{% endif %}" onerror="this.src='{{ MEDIA_URL }}/images/userImage.gif'" />
+	                                    </div>
+	                                </div>
+	                            </div>
+	                        </div>
+	                    </div>
+	                </td>
+				</tr>
+				<tr>
+					<td align="center">{% trans "进入照片" %}</td>
+				</tr>
+				
+				<tr>
+					<td width="160px" align="center">
+						<div class="div_img floatL">
+	                        <div class="div_r_t">
+	                            <div class="div_l_t">
+	                                <div class="div_r_b">
+	                                    <div class="div_l_b">
+	                                    	<img id="id_exit_photo" width="136px" height="160px" alt={% trans "离开照片" %} src="{% if instance.exit_photo %}/{{request.surl}}file/{{ instance.exit_photo }}{% else %}{{ MEDIA_URL }}/images/userImage.gif{% endif %}" onerror="this.src='{{ MEDIA_URL }}/images/userImage.gif'" />
+	                                    </div>
+	                                </div>
+	                            </div>
+	                        </div>
+	                    </div>
+	                </td>
+				</tr>
+				<tr>
+					<td align="center">{% trans "离开照片" %}</td>
+				</tr>
+			</table>
+		</td>
+	</tr>
+{% endblock %}

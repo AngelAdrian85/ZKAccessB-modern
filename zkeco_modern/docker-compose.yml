@@ -1,0 +1,32 @@
+version: '3.8'
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: zkeco_db
+      POSTGRES_USER: zkeco
+      POSTGRES_PASSWORD: zkeco_pass
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  web:
+    build: .
+    volumes:
+      - .:/app
+    ports:
+      - "8000:8000"
+    environment:
+      - DB_ENGINE=postgres
+      - DB_NAME=zkeco_db
+      - DB_USER=zkeco
+      - DB_PASSWORD=zkeco_pass
+      - DB_HOST=db
+      - DB_PORT=5432
+      - ADMIN_USER=admin
+      - ADMIN_EMAIL=admin@example.com
+      - ADMIN_PASS=adminpass
+    depends_on:
+      - db
+
+volumes:
+  pgdata:

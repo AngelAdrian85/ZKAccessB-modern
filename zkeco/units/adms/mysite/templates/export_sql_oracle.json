@@ -1,0 +1,19 @@
+{% load i18n %}
+{
+    "iaccess.AccRTMonitor":{
+        "params":"",
+        "verbose_fields":{
+        	"4":"event_type",
+            "10":"verified"
+        },
+        "head":["{% trans '时间' %}","{% trans '区域' %}","{% trans '设备' %}","{% trans '事件点' %}","{% trans '事件描述' %}","{% trans '卡号' %}","{% trans '人员编号' %}","{% trans '姓 名' %}","{% trans '部门' %}","{% trans '状态' %}","{% trans '验证方式' %}","{% trans '备注' %}"],
+        "db_fields":["time","area","device_name","event_point_name","event_type","card_no","pin","name","dept","state_name","verified","description"],
+        "sql":"
+            SELECT time,area,device_name,event_point_name,event_type,card_no,pin,name,dept,state_name,verified,description 
+            FROM (
+                select rownum as rn,a.time,a.area,a.device_name,a.event_point_name,a.event_type,a.card_no,a.pin,a.firstname,a.dept,a.state_name,a.verified,a.description 
+                from acc_monitor_log a left join userinfo u on a.pin = u.badgenumber order by time desc
+            ) R %s R.rn between %s and %s
+        "
+    }
+}

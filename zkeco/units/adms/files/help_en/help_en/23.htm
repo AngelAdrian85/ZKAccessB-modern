@@ -1,0 +1,170 @@
+<!DOCTYPE html><html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=gb2312">
+<meta name="Generator" content="Word2Chm Addin (v1.4.7.5)">
+<link rel="stylesheet" href="Word2Chm.css" type="text/css">
+<script src="Word2Chm.js" type="Text/JavaScript"></script>
+<title> 6.1 Access Control Time Zones</title>
+</head>
+<body bgcolor=white lang=ZH-CN link=blue vlink=purple style='text-justify-trim:
+punctuation' onLoad="javascript:jsMain();"><div class=WordSection23>
+
+<h2 style='margin-top:12.0pt;margin-right:0cm;margin-bottom:12.0pt;margin-left:
+0cm;line-height:normal;vertical-align:middle'><a name="_Toc416704606"></a><a
+name="_7.1_门禁时间段"></a><a name="_6.1_Access_Control_Time Zones"></a><span
+lang=EN-US style='font-size:12.0pt;font-family:"Times New Roman","serif"'>6.1 <a
+name="_Toc270513295">Access Control Time </a>Zones</span></h2>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><span lang=EN-US style='font-size:9.0pt'>Access
+Control Time Zone can be used for door timing. The reader can be made usable
+during valid time periods of certain doors and unusable during other time
+periods. Time Zone can also be used to set Normal Open time periods for doors,
+or set access control levels so that specified users can only access specified
+doors during specified time periods (including access levels and First-Card
+Normal Open settings).</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><span lang=EN-US style='font-size:9.0pt'>The
+system controls access according to Access Control Time Zones. The system can
+define up to 255 time zones. For each time zone, you can define, During a week,
+you can define up to three intervals for each day and three holiday types for
+each time zone. Each interval is the valid interval in 24 hours of each day.
+The format of each interval for a time zone: HH: MM-HH: MM, this is accurate to
+minutes in the 24-hour system.</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><span lang=EN-US style='font-size:9.0pt'>Initially,
+by default the system has access control time zone named [Accessible 24 hours].
+This time period can be modified but cannot be deleted. The user can add Access
+Control Time Zones that can be modified.</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><b><span lang=EN-US style='font-size:
+9.0pt'>1. Add Access Control Time Zone:</span></b></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><span lang=EN-US style='font-size:9.0pt'>(1)
+Click [Access Control System] - [Time zones] - [Add] to access the time zone
+setting interface;</span></p>
+
+<p class=MsoNormal align=center style='text-align:center'><span lang=EN-US><img
+border=0 width=408 height=262 id="图片 140" src="help_en1.files/image028.jpg"></span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><b><span lang=EN-US style='font-size:
+9.0pt'>The parameters are as follows:</span></b></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><b><span lang=EN-US style='font-size:
+9.0pt'>Time Zone Name: </span></b><span lang=EN-US style='font-size:9.0pt'>Any
+character, up to a combination of 30 characters;</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><b><span lang=EN-US style='font-size:
+9.0pt'>Remarks: </span></b><span lang=EN-US style='font-size:9.0pt'>Detailed
+description of the current time zone, including an explanation of the current
+time zone and primary applications, facilitating the user or other users with
+same level to view time zone information.</span><span lang=EN-US> </span><span
+lang=EN-US style='font-size:9.0pt'>The field is up to 70 characters;</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><b><span lang=EN-US style='font-size:
+9.0pt'>Interval and Start/ End Time:</span></b><span lang=EN-US
+style='font-size:9.0pt'> One Access Control Time Zone includes 3 intervals for
+each day in a week, and three intervals for each of the three Access Control Holidays.
+Set the Start and End Time of each interval;</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><b><span lang=EN-US style='font-size:
+9.0pt'>Setting: </span></b><span lang=EN-US style='font-size:9.0pt'>If the
+interval is Normal Open, just enter 00:00-23:59 as the first interval, and
+00:00-00:00 as the second and third intervals. If the interval is Normal Close:
+All are 00:00-00:00. If only using one interval, the user just need to fill out
+the first interval (such as: Normal Open), and the second and third intervals
+will use the default value of 00:00-00:00. Similarly, when the user only uses
+the first two intervals, the third interval will use the default value of
+00:00-00:00. When using two or three intervals, the user needs to ensure two or
+three intervals have no time intersection, and the time shall not span days.
+Otherwise, the system will prompt error.</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><b><span lang=EN-US style='font-size:
+9.0pt'>Holiday Type: </span></b><span lang=EN-US style='font-size:9.0pt'>There
+are three holiday types in the time zone. They are unrelated to the day of the
+week. If a certain date is set to a certain holiday type, the three intervals
+of the holiday type will be used for access. The holiday type in a time zone is
+optional. However, if the user does not enter one, the system will give the
+default value.</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><span lang=EN-US style='font-size:9.0pt'>For
+example, set the access control interval of Holiday Type 1 as 8-20, the Access Control
+Time Period of Holiday Type 2 as Normal Open, and the Access Control Time Zone
+of Holiday Type 3 as Normal Close.</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><span lang=EN-US style='font-size:9.0pt'>(2)
+After time zone setting, click [OK] to save, and the time zone will appear in
+the list.</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><b><span lang=EN-US style='font-size:
+9.0pt'>2. Maintenance of Access Control Time Zone:</span></b></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><b><span lang=EN-US style='font-size:
+9.0pt'>Edit:</span></b><span lang=EN-US style='font-size:9.0pt'> In the time
+zone list, click the [Edit] button under “Related operation” to access the time
+zone modification interface, and modify the time zone setting. After
+modification, click [OK], and the modified time zone will be saved and shown in
+the time zone list.</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><b><span lang=EN-US style='font-size:
+9.0pt'>Delete:</span></b><span lang=EN-US style='font-size:9.0pt'> In the time
+zone list, click the [Delete] button under “Related Operation”. Click [OK] to
+delete the time zone, or click [Cancel] to cancel the operation. A time zone in
+use can not be deleted.</span></p>
+
+<p class=MsoNormal style='margin-top:6.0pt;margin-right:0cm;margin-bottom:6.0pt;
+margin-left:0cm;vertical-align:middle'><span lang=EN-US style='font-size:9.0pt'>Tick
+the check boxes before one or more time zones in the time zone list. Click the
+[Delete] button over the list, and click [OK] to delete the selected time
+zones, or click [Cancel] to cancel the operation.</span></p>
+
+</div>
+
+<b><span lang=EN-US style='font-size:12.0pt;font-family:"Times New Roman","serif"'><br
+clear=all style='page-break-before:auto'>
+</span></b>
+
+
+
+<div class=FooterSection style='layout-grid:15.6pt'>
+
+<div>
+
+<table cellspacing=0 cellpadding=0 hspace=0 vspace=0 align=right>
+ <tr>
+  <td valign=top align=left style='padding-top:0cm;padding-right:0cm;
+  padding-bottom:0cm;padding-left:0cm'>
+  <p class=MsoFooter align=center style='text-align:center'><span
+  class=MsoPageNumber><span lang=EN-US>&nbsp;</span></span></p>
+  <p class=MsoFooter style='margin-right:18.0pt;text-indent:18.0pt'><span
+  class=MsoPageNumber><span lang=EN-US>&nbsp;</span></span></p>
+  </td>
+ </tr>
+</table>
+
+</div>
+
+<p class=MsoFooter align=center style='margin-right:18.0pt;text-align:center;
+text-indent:18.0pt'><span lang=EN-US>&nbsp;</span></p>
+
+<p class=MsoNormal><span lang=EN-US>&nbsp;</span></p>
+
+</div>
+
+</body>
+</html>

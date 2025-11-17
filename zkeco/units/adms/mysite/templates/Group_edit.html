@@ -1,0 +1,10 @@
+{% extends "data_edit.html" %}
+{% load i18n %}
+{% block addjs %}
+    {% if "mysite.iaccess"|hasApp and "mysite"|is_zkaccess_att%}
+        if(!contain_att_temp)
+        {
+             $("#id_permissions").find("a[href *='#id_tab_att']").attr("style", "display:none");
+        }
+    {% endif %}
+{% endblock %}

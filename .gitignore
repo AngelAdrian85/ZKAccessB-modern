@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+venv*/
+\.venv/
+fresh_venv/
+new_venv/
+venv311/
+zkeco_new/venv/
+zkeco_modern/venv/
+zkeco_new/venv/Lib/
+zkeco_new/venv/Scripts/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Django
+*.log
+*.pot
+*.pyc
+local_settings.py
+db.sqlite3
+media/
+staticfiles/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor directories
+.vscode/
+.idea/
+
+# Pytest
+.pytest_cache/
+
+# mypy
+.mypy_cache/
+
+# Node
+node_modules/
+
+# MySQL data and runtime
+mysql/data/
+
+# Zip/patch outputs
+*.zip

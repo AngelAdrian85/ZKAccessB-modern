@@ -1,0 +1,9 @@
+# Minimal dependencies for zkeco_modern
+Django>=4.2,<5
+mysqlclient>=2.1
+django-debug-toolbar>=4.0
+django-extensions>=3.2
+
+# Optional (add as needed):
+# djangorestframework
+# celery

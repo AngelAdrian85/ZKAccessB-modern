@@ -1,0 +1,155 @@
+{% extends "data_opform.html" %}
+{% load i18n %}
+{% block form %}
+{% autoescape off %}
+<table class = "tbl_data_edit"  cellpadding="3px">
+	<tr id="tr_auxout">
+		<th><label class="required">{%trans "选择辅助输出点"%}:</label></th>
+		<td>
+			<div style="height: 230px;" id="id_door_group" name="door_group" class="wZBaseZManyToManyField">
+				<ul style="list-style-type: none;" class="filetree treeview">
+					<li class="root_node expandable lastExpandable" id="id_all"><div class="hitarea root_node-hitarea expandable-hitarea lastExpandable-hitarea "></div>
+						<p class="t">{%trans "全部" %}</p><!-- <input id="id_0" type="checkbox" value="0" name="auxout" class="displayN"> -->
+						<ul id="id_aux_info">					
+						</ul>
+					</li>
+				</ul>
+			</div>
+		</td>
+	</tr>
+	<tr id="action_type">
+		<th><label class="required">{%trans "选择操作类型" %}:</label></th>
+		<td>
+			<div>
+				<input type="radio" name="action" value="0" checked="checked"/>{%trans "关闭" %}
+				<input type="radio" name="action" value="1"/>{%trans "打开" %}
+				<input type="radio" name="action" value="255"/>{%trans "常开" %}
+			</div>
+		</td>
+	</tr>
+	<tr id="openTime_tr" class="displayN">
+		<th><label class="required">{%trans "打开时长" %}:</label></th>
+		<td>
+			<div><input type="text" id="openTime" name="openTime" value="20"/>{%trans " 秒 (范围:1-254)" %}</div>
+		</td>
+	</tr>
+</table>
+{% if form.non_field_errors %}
+    <tr><td>{{ form.non_field_errors }}</td></tr>
+{% endif %}
+{% endautoescape %}
+{% endblock %}
+
+{% block loading %}
+
+{% endblock %}
+
+{% block addjs %}
+	{% if request.user|HasPerm:"iclock.opgetmoreoptions_device" %}
+	var dev_id = 0;
+	$(".select_row").each(function(){
+		if($(this).attr("checked"))
+		{
+			dev_id = $(this).parents("tr").attr("data");
+		}
+	});
+	
+	$.ajax({
+		type: "POST",
+		url: "/{{ request.surl }}iaccess/GetData/?func=get_device_aux_point&dev_id="+ dev_id,
+		dataType: "json",
+		async: false,
+		success: function(data)
+		{
+			var info = data.aux_out_list;
+			if(info != "")
+			{
+				for(i in info)
+				{
+					$("#id_all ul").append('<li><div class="hitarea expandable-hitarea lastExpandable-hitarea "></div><p class="t">'+info[i][2]+'<input type="checkbox" value="'+info[i][1]+'" id="id_'+info[i][1]+'" name="auxout" class="displayN" disabled="true"></p></li>');
+				}
+			}
+			else
+			{
+				$("#tr_auxout").empty().append('<td><div style="margin:2px 2px 2px 10px;color:red;">'+gettext("获取设备扩展参数失败，当前操作不可用！")+'</div></td>');
+			}
+		},
+		error: function(XMLHttpRequest, textStatus, errorThrown)
+		{
+			alert(gettext("服务器处理数据失败，请重试！错误码：")+"-623");
+		}
+	});
+	
+	//remove_single_perm_node($("#id_door_group .filetree"));
+	$("#id_door_group .filetree").treeview();
+	//check_root("id_door_group"); //默认肯定是全部都未选中--darcy20120515
+	check_selected("id_door_group"); 
+	
+	$("#id_aux_info li p").click(function(){
+		//alert($(this).find("input").val())
+		var has_false = false;
+		$("#id_aux_info li p").each(function(){
+			if($(this).hasClass("s") == false)//有一个false就点掉“全部”
+			{
+				$("#id_all p:first").removeClass("s");
+				has_false = true;
+			}
+			if(!has_false)//全选
+			{
+				$("#id_all p:first").addClass("s");
+			}
+		});
+	});
+
+	//切换操作类型方式
+	$("#action_type input[name='action']").click(function(){
+		if(this.value == '0' || this.value == '255')
+		{
+			$("#openTime_tr").hide();
+		}
+		if(this.value == '1')
+		{
+			$("#openTime_tr").show();
+		}
+	});
+
+    var before_submit = function()
+	{
+		after_init = undefined;
+		
+		var has_s = false;//检查是否有选择
+		$("#id_all p").each(function(){
+			if($(this).hasClass("s"))
+			{
+				has_s = true;
+			}
+		});
+		if(!has_s)
+		{
+			alert(gettext("请选择辅助输出点！"));
+			return false;
+		}
+		var action_type = $("#action_type input[name='action']:checked").val();
+		if(action_type != '0' && action_type != '255')
+		{
+			if($("#openTime").val() < 0 || $("#openTime").val() > 254)
+			{
+				alert(gettext("请输入正确的时间！"));
+				return false;
+			}
+			$("#action_type input[name='action']:checked").val($("#openTime").val());
+		}
+		$("#id_aux_info li p").each(function(){
+			if($(this).hasClass("s"))
+			{
+				$(this).find("input").removeAttr("disabled");
+			}
+		});
+		return true;
+    }
+
+	{% else %}
+		alert(gettext("对不起,您没有访问该页面的权限,不能浏览更多信息！"));
+		window.location.href = "/{{ request.surl }}accounts/login/";
+	{% endif %}<!-- iclock.opgetmoreoptions_device -->
+{% endblock%}

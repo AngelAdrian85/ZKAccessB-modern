@@ -1,0 +1,75 @@
+{% extends "data_list.html" %}
+{% load i18n %}
+
+{% block headjs %}
+    <link id="skin" rel="stylesheet" href="{{ MEDIA_URL }}/jBox/Skins2/Blue/jbox.css" />
+    <script type="text/javascript" src="{{ MEDIA_URL }}/jBox/jquery.jBox-2.3.min.js"></script>
+    <script type="text/javascript" src="{{ MEDIA_URL }}/jBox/i18n/jquery.jBox-zh-CN.js"></script>    
+{% endblock %}
+
+{% block extrajs %}	
+    $("#id_OpLeaveRegister").parent().append($("#id_OpLeaveRegister"));
+    $("#id_OpLeaveRegister").after($("#id_op_for_tab").find(".div_leftBottomLine").eq(0));
+{% endblock %}
+
+{% block addjs %}
+	{% if request.user|HasPerm:"visitor.browse_visvisitor" %}
+    $(function(){
+    	$("label[for^='id_entrance__name']").text(gettext("进入地点")+":");
+        $("label[for^='id_exit_place__name']").text(gettext("离开地点")+":");
+        $("label[for^='id_visitor__PIN']").text('{% trans "访客编号" %}:');
+        $("label[for^='id_visitor__EName']").text('{% trans "访客姓名" %}:');
+        $("label[for^='id_visitor__lastname']").text('{% trans "访客姓氏" %}:');
+        $("label[for^='id_visited_emp__EName']").text('{% trans "被访人姓名" %}:');
+        $("label[for^='id_visited_emp__lastname']").text('{% trans "被访人姓氏" %}:');
+        
+		get_total_info();
+    });
+    
+    //统计人数
+    function get_total_info()
+    {
+    	var html = "";
+    	var total_info = $("#id_total_info").text();
+    	if(total_info == "")//首次加载
+    	{
+    		html += '<li id="id_total_info">';
+    	}
+    	
+    	 $.ajax({
+            url: "/{{ request.surl }}visitor/GetData/?func=get_total_info",
+            type: "GET",
+            dataType: "json",
+            async: false,
+            success: function(datas){
+                //html += gettext("当日进入:")
+                //+datas.enter_times_total+" "+gettext("次")+'/'+datas.enter_number_total+" "+gettext("人")
+                //+'&nbsp;&nbsp;&nbsp;&nbsp;'+gettext("当日离开:")+datas.exit_times+" "+gettext("次")
+                //+'/'+datas.exit_number+" "+gettext("人")+'&nbsp;&nbsp;&nbsp;&nbsp;'+gettext("未离开:")
+                //+datas.surplus_times+" "+gettext("次")+'/'+datas.surplus_number+" "+gettext("人");
+                html += datas.statistic_info;
+                datas = null;
+            	window.setTimeout('get_total_info()', 1000*60*5);//3分钟重新统计一次
+            }
+        });
+        if(total_info == "")
+        {
+        	html += '</li>';
+        	$("#id_datalist div.action").append(html);
+        }
+        else
+        {
+        	$("#id_total_info").html(html);
+        }
+        html = null;
+        total_info = null;
+    }
+    
+    window.setTimeout('get_total_info()', 1000);
+    {% else %}
+        $("#id_search").remove();
+        alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
+        window.location.href = "/{{ request.surl }}accounts/login/";
+    {% endif %}
+{% endblock %}
+

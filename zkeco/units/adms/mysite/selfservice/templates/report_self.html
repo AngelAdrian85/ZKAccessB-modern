@@ -1,0 +1,6 @@
+{% extends "calculateReport.html" %}
+{% load i18n %}
+{% block worktable %}{% endblock %}
+{% block option_settings %} {% endblock %}
+{% block change_pwd %}<a id="id_btn_changePW" ref="/{{request.surl }}selfservice/password_change/" href='javascript:void(0);' >{% trans '修改密码' %}</a>{% endblock %}
+{% block headjs %}<script src="{{ MEDIA_URL }}/jslib/change_pwd_self.js"></script>{% endblock %}
