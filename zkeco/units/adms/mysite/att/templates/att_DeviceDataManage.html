@@ -1,11 +1,11 @@
-{% extends "data_list.html" %}
+{# extends "data_list.html" #}
 
-{% load i18n %}
+{# load i18n #}
 
-{%  block search_div  %}
+{# block search_div #}
 
 <div style="margin-bottom: 0px ! important; padding-bottom: 2px;" class="div_box" id="id_search">
-                    <h1 style="margin-bottom: 5px;">{%trans '查询'%}</h1>
+                    <h1 style="margin-bottom: 5px;">{# trans '查询' #}</h1>
                     <table style="width: 99%;">
                     <tbody>
                     <tr>
@@ -13,9 +13,9 @@
                             <div>
                                 <table width="100%" id="id_form_search" class="tbl_form_search">
                                        <tbody><tr class="header_div_left"> 
-                                            <td align="right"><label class="" for="id_alias">{%trans '设备名称'%}:</label></td> <td><input type="text" maxlength="20" name="alias" id="id_alias"></td>
-                                            <td align="right"><label for="id_sn">{%trans '序列号'%}:</label></td> <td><input type="text" maxlength="20" name="sn" id="id_sn" ></td>
-                                            <td align="right"><label class="" for="id_area__areaname">{%trans '区域名称'%}:</label></td> <td><input type="text" maxlength="30" name="area__areaname" id="id_area__areaname" ></td>
+                                            <td align="right"><label class="" for="id_alias">{# trans '设备名称' #}:</label></td> <td><input type="text" maxlength="20" name="alias" id="id_alias"></td>
+                                            <td align="right"><label for="id_sn">{# trans '序列号' #}:</label></td> <td><input type="text" maxlength="20" name="sn" id="id_sn" ></td>
+                                            <td align="right"><label class="" for="id_area__areaname">{# trans '区域名称' #}:</label></td> <td><input type="text" maxlength="30" name="area__areaname" id="id_area__areaname" ></td>
                                            </tr>
                                            <tr class="header_div_left">
                                          </tr> 
@@ -26,15 +26,15 @@
                         <td width="160" valign="bottom">  
                                 <div class="topSearchBtn" style="text-align: right; height: 20px; width: 190px;">
                                     <span class="Link_blue1">
-                                        <span class="action_topSearch floatL"></span><a class="floatL" id="id_header_search" href="javascript:void(0)">{%trans '查询'%}</a>
+                                        <span class="action_topSearch floatL"></span><a class="floatL" id="id_header_search" href="javascript:void(0)">{# trans '查询' #}</a>
                                     </span>
                                     
                                     <span id="id_advanced_search" class="Link_blue1">
-                                        <span class="action_advancedSearch floatL"></span><a class="floatL" href="javascript:void(0)">{%trans '高级'%}</a>
+                                        <span class="action_advancedSearch floatL"></span><a class="floatL" href="javascript:void(0)">{# trans '高级' #}</a>
                                     </span>
                                     
                                     <span class="Link_blue1">
-                                        <span class="action_topClear floatL"></span><a class="floatL" id="id_header_clear" href="javascript:void(0)">{%trans '清除'%}</a>
+                                        <span class="action_topClear floatL"></span><a class="floatL" id="id_header_clear" href="javascript:void(0)">{# trans '清除' #}</a>
                                     </span>
                                 </div>
                        </td>
@@ -42,22 +42,22 @@
                     </tbody></table>
                 </div>
 
-{% endblock %}
+{# endblock #}
 
 
-{% block getdatalist %}
-{% endblock %}
+{# block getdatalist #}
+{# endblock #}
 
-{% block addjs %}
+{# block addjs #}
 var data=[]
 
 $(function(){
     $("#div_id_middiv").hide();
     $(".leftBoxMiddle").hide();
-    {% if request.user|HasPerm:"contenttypes.can_AttDeviceDataManage" %}
+    {# if request.user|HasPerm:"contenttypes.can_AttDeviceDataManage" #}
     $('#id_datalist').model_grid(
         {
-        'model_url':'{{dbapp_url}}iclock/Device/?device_type__exact=1',
+        'model_url':'&#123;&#123; dbapp_url &#125;&#125;iclock/Device/?device_type__exact=1',
         'model_actions':false,
         'object_actions':true,
         'obj_edit':false,
@@ -66,14 +66,14 @@ $(function(){
         'need_plus_sign':false,
         'multiple_select':true,
         'init_after_get_jdata':function(){
-            $("#id_datalist").get(0).g.a_div.after("<div class='floatL' style='_position:relative;_z-index:10;'><ul id='id_action_more' class='nav Link_blue2 font12 noUnderl floatL ul_action_more'><li><a href='javascript:void(0)' class='action_more'>{% trans '更多' %}...</a><ul class='action_more_list'></ul></li></ul></div>");
+            $("#id_datalist").get(0).g.a_div.after("<div class='floatL' style='_position:relative;_z-index:10;'><ul id='id_action_more' class='nav Link_blue2 font12 noUnderl floatL ul_action_more'><li><a href='javascript:void(0)' class='action_more'>{# trans '更多' #}...</a><ul class='action_more_list'></ul></li></ul></div>");
             var $app_menu=$("#id_datalist").get(0).g.a_div;
             var $menu_more=$(".action_more_list");
             var min_width=380;
             resize_menu($app_menu,$menu_more,min_width,"id_action_more");
             $('.nav li').sfHover();
 			
-            {% block extrajs %}{% endblock %}
+            {# block extrajs #} {# endblock #}
         },
         'disabled_actions':['OpLinkageInputCfg','_change','Pause','PowerSuspend','ResetPassword','_delete','Resume','Syncdata','SyncACPanelTime','OpChangeIPOfACPanel','OpBrowseLog','UploadLogs','OpEnableDevice','OpDisableDevice','OpUpgradeFirmware','OpChangeMThreshold','OpCtrlAuxOut','OpSetDSTime','OpRemoveDSTime','UploadUserInfo','OpEnableAccPush','OpDisableAccPush','OpEnableAccGAPB','OpDisableAccGAPB','OpChangeBaudrate']
     })
@@ -81,7 +81,7 @@ $(function(){
 
     var listDiv=""
     data=$("#id_datalist").get(0).g.data
-    {% endif %}
+    {# endif #}
     $("input[name='rdo_style']").click(function(){
         var v=$(this).val();
         if(v==1)
@@ -124,13 +124,13 @@ function showBox(data)
 				
 				+"<div class='iclockButton Link_blue2' >"
 				+"<input type='checkbox' class='class_select' id='id_row_"+i+"' />"
-				+"<a href='javascript:void(0)' onclick='view_edit(this)' alt='{{dbapp_url}}iclock/Device/"+data[i][0]+"/'><img border='0' src='/media/img/model/iclock.Device.png' onmouseover='index_tip_info(this);' onmouseout='tip_info_exit();' index='"+i+"'/><br />"+data[i][1]+"</a>"
+				+"<a href='javascript:void(0)' onclick='view_edit(this)' alt='&#123;&#123; dbapp_url &#125;&#125;iclock/Device/"+data[i][0]+"/'><img border='0' src='/media/img/model/iclock.Device.png' onmouseover='index_tip_info(this);' onmouseout='tip_info_exit();' index='"+i+"'/><br />"+data[i][1]+"</a>"
 				+"</div>"
 				+"<div id='tt_"+data[i][0]+"' class='iclockTT'>"
 					+"<span>"+data[i][0]+"<br/>"
-					+"{%trans "区域" %}:"+data[i][2]+"<br/>"
-					+"{%trans "状态" %}:"+data[i][7]+"<br/></span>"
-					//+"{%trans "数据维护" %}:"+data[i]+"</span>"
+					+"{# trans "区域" #}:"+data[i][2]+"<br/>"
+					+"{# trans "状态" #}:"+data[i][7]+"<br/></span>"
+					//+"{# trans "数据维护" #}:"+data[i]+"</span>"
 					
 					
 				+'</div>'
@@ -140,20 +140,20 @@ function showBox(data)
             
 	}
 	else
-		html+="<div id='id_datalist_view' class='NoIclock'>{%trans "没有设备！" %}</div>"
+		html+="<div id='id_datalist_view' class='NoIclock'>{# trans "没有设备！" #}</div>"
 	return html;
 
 }
 function getMoreInfo(index){
-	return 		"<iframe class='maskIframe'></iframe><div><table><tr><th>{% trans "设备名称" %}:</th><td>"+(data[index][8]=="None"?"":data[index][8])
-				+"</td></tr><tr><th>{% trans "设备别名" %}:</th><td>"+data[index][1]
-				+"</td></tr><tr><th>{% trans "传送时间" %}:</th><td>"+data[index][4]
-				+"</td></tr><tr><th>{% trans "刷新间隔时间" %}:</th><td>"+data[index][5]
-				+"</td></tr><tr><th>{% trans "最近联机时间" %}:</th><td>"+data[index][6]
-				+"</td></tr><tr><th>{% trans "固件版本" %}:</th><td>"+(data[index][8]=="None"?"":data[index][8])
-				+"</td></tr><tr><th>{% trans "用户数" %}:</th><td>"+(data[index][10]=="None"?"":data[index][10])
-				+"</td></tr><tr><th>{% trans "指纹数" %}:</th><td>"+(data[index][11]=="None"?"":data[index][11])
-				+"</td></tr><tr><th>{% trans "记录数" %}:</th><td>"+(data[index][12]=="None"?"":data[index][12])
+	return 		"<iframe class='maskIframe'></iframe><div><table><tr><th>{# trans "设备名称" #}:</th><td>"+(data[index][8]=="None"?"":data[index][8])
+				+"</td></tr><tr><th>{# trans "设备别名" #}:</th><td>"+data[index][1]
+				+"</td></tr><tr><th>{# trans "传送时间" #}:</th><td>"+data[index][4]
+				+"</td></tr><tr><th>{# trans "刷新间隔时间" #}:</th><td>"+data[index][5]
+				+"</td></tr><tr><th>{# trans "最近联机时间" #}:</th><td>"+data[index][6]
+				+"</td></tr><tr><th>{# trans "固件版本" #}:</th><td>"+(data[index][8]=="None"?"":data[index][8])
+				+"</td></tr><tr><th>{# trans "用户数" #}:</th><td>"+(data[index][10]=="None"?"":data[index][10])
+				+"</td></tr><tr><th>{# trans "指纹数" #}:</th><td>"+(data[index][11]=="None"?"":data[index][11])
+				+"</td></tr><tr><th>{# trans "记录数" #}:</th><td>"+(data[index][12]=="None"?"":data[index][12])
 				+"</td></tr></table></div>"
 }
 
@@ -183,16 +183,16 @@ function tip_info_exit()
 	$("#id_tip").css("display","none")
 }
 
-{% endblock %}
-{% block addmiddiv %}
-{% if request.user|HasPerm:"contenttypes.can_AttDeviceDataManage" %}
+{# endblock #}
+{# block addmiddiv #}
+{# if request.user|HasPerm:"contenttypes.can_AttDeviceDataManage" #}
 <div id="id_tip" style="display:none" class="div_tip ui-corner-all"></div>
-<div id="div_id_middiv">{% trans '显示方式' %}
-<input type="radio" name="rdo_style" value=1 checked="checked">{% trans '列表方式' %}</input>
-<input type="radio" name="rdo_style" value=2>{% trans '图表方式' %}</input>
+<div id="div_id_middiv">{# trans '显示方式' #}
+<input type="radio" name="rdo_style" value=1 checked="checked">{# trans '列表方式' #}</input>
+<input type="radio" name="rdo_style" value=2>{# trans '图表方式' #}</input>
 </div>
 <div id="id_datalist"></div>
-{% else %}
-<div>{% trans '用户无设备浏览权限，请与管理员联系' %}</div>
-{% endif %}
-{% endblock %}
+{# else #}
+<div>{# trans '用户无设备浏览权限，请与管理员联系' #}</div>
+{# endif #}
+{# endblock #}

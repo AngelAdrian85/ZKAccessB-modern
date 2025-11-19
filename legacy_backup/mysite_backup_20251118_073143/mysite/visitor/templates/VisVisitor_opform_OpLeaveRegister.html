@@ -1,0 +1,493 @@
+<!--  
+<object classid="clsid:5EB842AE-5C49-4FD8-8CE9-77D4AF9FD4FF" id="IdrControl" width="100" height="100" codebase="idr.cab" class="displayN">
+</object>
+-->
+<!-- 新中新身份证读写器 -->
+<object classid="clsid:4B3CB088-9A00-4D24-87AA-F65C58531039" id="SynCardOcx" codeBase="../cabs/SynCardOcx.CAB#version=1,0,0,1" width="102" height="126" class="displayN">
+</object>
+
+﻿<OBJECT classid="clsid:285A9058-12DF-4B1D-AEA1-0FD2412CC761" width="20" height="20" id="zkissonlinex" class="displayN">
+</OBJECT>
+<COMMENT style="display:None">
+    <EMBED type="application/x-eskerplus"
+        classid="clsid:285A9058-12DF-4B1D-AEA1-0FD2412CC761"
+        codebase="ZKISSOnlineX.ocx"                
+        width=20 height=20>
+    </EMBED>
+</COMMENT>
+
+
+{% extends "data_edit.html" %}
+{% load i18n %}
+{% load visitor_tags %}
+
+{% block form %}
+{% autoescape off %}
+<tr>
+    <td>
+        <table width="100%" border="0" cellspacing="0" cellpadding="3">
+        	<tr><td class="displayN">{{ form.install_language }}</td></tr>
+            <tr>
+                {% if '3'|get_leave_type %}
+	                <th height="20">{% trans '单号' %}:</th><!-- 访客单单号-->
+	                <td><input type="text" name="visitor_form" id="id_visitor_form" /></td>
+                {% else %}
+                    {% if '2'|get_leave_type %}
+	                    <th height="20">{% trans '卡号' %}:</th>
+	                    <td><input type="text" name="card" id="id_card" />&nbsp;<a href="javascript:void(0)" id="id_read_card" class="displayN">{% trans '读取' %}</a></td>
+                    {% else %}
+	                    <th>{% trans "证件类型" %}:</th>
+	                    <td>{{ form.cert_type }}</td>
+	                    </tr><tr>
+	                    <th height="20">{% trans '证件号码' %}:</th>
+	                    <td><input type="text" name="cert_number" id="id_cert_number" />&nbsp;<a href="javascript:void(0)" id="id_read_certificate">{% trans '读取' %}</a>&nbsp;<a href="javascript:void(0)" id="id_scan_certificate" title={% trans '使用证件扫描仪' %}>{% trans '扫描' %}</a></td>
+                    {% endif %}
+                {% endif %}
+            </tr>
+            <tr>
+                <th>{% trans '姓名' %}:</th>
+                <td><input type="text" name="visitor_firstname" id="id_visitor_firstname" readonly /></td>
+            </tr>
+            <tr id="tr_lastname">
+                <th>{% trans '姓氏' %}:</th>
+                <td><input type="text" name="visitor_lastname" id="id_visitor_lastname" readonly /></td>
+            </tr>
+            <tr>
+                <th>{% trans '离开时间' %}:</th>
+                <td>{{ form.exit_time }}</td>
+            </tr>
+            <tr>
+                <th><label for="id_place" class="required">{% trans '离开地点' %}:</label></th>
+                <td>{{ form.place }}</td>
+            </tr>
+            <tr>
+                <th>{% trans '携带物品' %}:</th>
+                <td><textarea class="wZBaseTextField" name="carried_goods" cols="25" rows="5" id="id_carried_goods" readonly></textarea></td>            
+            </tr>
+            {% if "mysite.iaccess"|hasApp %}
+            <tr id="tr_return_card" class="displayN">
+            	<th><label for="id_return_card" class="required">{% trans '是否归还卡' %}:</label></th>
+            	<td>{{ form.return_card }}</td>
+            </tr>
+            {% endif %}
+		</table>
+	</td>
+	<td>
+		<table>
+			<tr>
+				<td width="160px" align="center">
+					<div class="div_img floatL">
+                        <div class="div_r_t">
+                            <div class="div_l_t">
+                                <div class="div_r_b">
+                                    <div class="div_l_b">
+                                        <img id="id_enter_photo" width="136px" height="160px" alt="enter photo" onerror="this.src='/media/images/userImage.gif'" src="/media/images/userImage.gif" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </td>
+			</tr>
+			<tr>
+				<td align="center">{% trans "进入照片" %}</td>
+			</tr>
+		</table>
+	</td>
+	<td>
+		<table>
+			<tr>
+				<td width="150px" align="center">
+                    <div class="div_img floatL">
+                        <div class="div_r_t">
+                            <div class="div_l_t">
+                                <div class="div_r_b">
+                                    <div class="div_l_b">
+                                        <img id="id_exit_photo" width="136px" height="160px" alt="exit photo" onerror="this.src='/media/images/userImage.gif'" src="/media/images/userImage.gif" />
+                    					<input type="hidden" id="id_exit_cap_photo_val" name="exit_cap_photo_val" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </td>
+			</tr>
+			<tr>
+				<td align="center">{% trans "离开照片" %}</td>
+			</tr>
+		</table>
+	</td>
+	<td>
+		<table>
+			<tr>
+				<td width="150px" align="center">
+                    <div id="id_cap_div" style="width:142px; height:167px; border: 1px solid #CAE2F9;">
+                        <object classid="clsid:d27cdb6e-ae6d-11cf-96b8-444553540000" id="myFlash"  width="142" height="167" codebase="http://fpdownload.macromedia.com/pub/shockwave/cabs/flash/swflash.cab#version=8,0,0,0" id="video" align="middle">
+                            <param name="allowScriptAccess" value="sameDomain" />
+                            <param name="movie" value="{{ MEDIA_URL }}/swf/capture.swf" />
+                            <param name="quality" value="high" />
+                            <param name="bgcolor" value="#ffffff" />
+                            <param name="wmode" value="transparent" />
+                            <embed wmode="transparent" src="{{ MEDIA_URL }}/swf/capture.swf"  width="142" height="167" quality="high" bgcolor="#ffffff" align="middle" allowScriptAccess="sameDomain" type="application/x-shockwave-flash" name="myFlash" swLiveConnect="true" pluginspage="http://www.macromedia.com/go/getflashplayer" />
+                        </object>
+                    </div>
+                </td>
+			</tr>
+		</table>
+	</td>
+</tr>
+
+{% endautoescape %}
+{% endblock %}
+{% block addjs %}
+    $("input").addClass("wZBaseCharField");//给输入框添加样式
+	if($("#id_install_language").val() == 'zh-cn')
+	{
+		$("#tr_lastname").attr("class", "displayN");
+	}
+    //摄像头拍照功能-darcy20120322
+    function myFlash_DoFSCommand(command, args){
+        if(command === "send_pic")//发送的是base64的图片
+        {
+        	//alert(args.length);
+			var photo_byte = "data:image/gif;base64,"+args;
+	        $("#id_exit_photo")[0].src = photo_byte;
+	        $("#id_exit_cap_photo_val").val(args);
+			photo_byte = null;
+        }
+    }
+
+//    //调用身份证读卡器，渲染
+//    $("#id_read_certificate").click(function(){
+//    	if(!$.browser.msie)
+//        {
+//            return false;
+//        }
+//        var flag = false;
+//        for(var i in IdrControl)
+//        {
+//            if(i == "isSuccess")
+//            {
+//                flag = true;
+//            }
+//        }
+//        if(!flag)
+//        {
+//            //$("#id_fingerprint_download").show();
+//            return false;
+//        }
+//        flag = null;
+//        if($("#id_cert_type").val() == 2)//第二代身份证
+//        {
+//	        //注意：第一个参数为对应的设备端口，USB型为1001，串口型为1至16
+//	        var result = IdrControl.ReadCard("1001", "c:\\visitor_photo\\read.bmp");
+//	        if (result ==1 )
+//	        {
+//	            $("#id_cert_number").val(IdrControl.GetCode());
+//	            $("#id_visitor").val(IdrControl.GetName());
+//	            $("#id_cert_number").focus();
+//	        }
+//	        else
+//	        {
+//	            if (result == -1)
+//	            {
+//	                alert(gettext("端口初始化失败！"));
+//	            }
+//	            if (result == -2)
+//	            {
+//	                alert(gettext("请重新将卡片放到读卡器上！"));
+//	            }
+//	            if (result == -3)
+//	            {
+//	                alert(gettext("读取数据失败！"));
+//	            }
+//	            if (result == -4)
+//	            {
+//	                alert(gettext("生成照片文件失败，请检查设定路径和磁盘空间！"));
+//	            }
+//	        }
+//        }
+//        else
+//        {
+//            alert(gettext("目前该功能仅支持二代身份证！"));
+//        }    
+//    });
+    
+    //扫描证件
+    $("#id_scan_certificate").click(function(){
+        if(!$.browser.msie)
+        {
+            return false;
+        }
+        var flag = false;
+        for(var i in zkissonlinex)
+        {
+            if(i == "ZKISSOnlineXVersion")
+            {
+                flag = true;
+            }
+        }
+        if(!flag)
+        {
+            //$("#id_fingerprint_download").show();
+            return false;
+        }
+        flag = null;
+        var result = zkissonlinex.InitExternalLibrary();
+        if(result == 0)
+        {
+            var c_number = $("#id_cert_type").val();
+            result = zkissonlinex.LoadIdcardLibrary();
+            if(result == 0) 
+            {
+                var certificate_info = "";
+                if(c_number == 1)//一代身份证
+                {
+                    certificate_info = zkissonlinex.RecogIdcardExALL("c://visitor_photo/all.jpg", true, 0, 0x7f, "c://visitor_photo/head.jpg", 1);
+                }
+                else if(c_number == 2)//二代身份证
+                {
+                    certificate_info = zkissonlinex.RecogNewIdcardALL("c://visitor_photo/all.jpg", true, 0x7f, "c://visitor_photo/head.jpg");
+                }
+                else if(c_number == 3)//防伪身份证
+                {
+                    certificate_info = zkissonlinex.RecogIdcardExALL("c://visitor_photo/all.jpg", true, 0, 0x7f, "c://visitor_photo/head.jpg", 3);
+                }
+                else if(c_number == 4)//驾照
+                {
+                    certificate_info = zkissonlinex.RecogDPALL("c://visitor_photo/all.jpg", true, 0x7f, "c://visitor_photo/head.jpg");
+                }
+                else if(c_number == 5)//护照
+                {
+                    certificate_info = zkissonlinex.RecogPassPortALL("c://visitor_photo/all.jpg", true, 0x7f, "c://visitor_photo/head.jpg");
+                }
+                else
+                {
+                    alert(gettext("暂时不支持该证件类型！"));
+                }
+                
+                if(certificate_info == "" || certificate_info == null)
+                {
+                    alert(gettext("请选择正确的证件类型或调整证件的位置！"));
+                }
+                else
+                {
+                    //result的返回结果格式 "name:张三,sex:男,number:11223344,other:"
+                    var visitor = certificate_info.split(",");
+                    $("#id_cert_number").val(visitor[7].split(":")[1]);
+                    $("#id_visitor").val(visitor[0].split(":")[1]);
+                    $("#id_cert_number").focus();
+                    visitor = null;
+                }
+            }
+            else
+            {
+                alert(gettext("加载核心失败！"));
+            }
+        }
+        else
+        {
+            alert(gettext("初始化失败！"));
+        }
+    });
+    
+    
+    //调用新中心身份证读卡器
+    $("#id_read_certificate").click(function(){
+    	if(!$.browser.msie)
+        {
+            return false;
+        }
+        var flag = false;
+        for(var i in SynCardOcx)
+        {
+            if(i == "CardNo")
+            {
+                flag = true;
+            }
+        }
+        if(!flag)
+        {
+            return false;
+        }
+        flag = null;
+        if($("#id_cert_type").val() == 2)//第二代身份证
+        {
+            var str = SynCardOcx.FindReader();//查找身份证阅读器
+            if(str > 0)
+            {
+                SynCardOcx.SetReadType(0);//手动读卡
+                var nRet = SynCardOcx.ReadCardMsg();//读取结果
+                if(nRet==0)
+                {
+                    $("#id_cert_number").val(SynCardOcx.CardNo);
+                    $("#id_visitor").val(SynCardOcx.NameA);
+                    $("#id_cert_number").focus();
+                }
+                else
+                {
+                    alert("请放好身份证！");
+                }
+            }
+            else
+            {
+                alert(gettext("没有检测到身份证阅读器！"));
+            }
+        }
+        else
+        {
+            alert(gettext("目前该功能仅支持二代身份证！"));
+        }    
+    });
+    
+    //使用扫描仪或者读写器读取证件信息后，没有触发 change 事件，需要加这个触发条件
+    $("#id_cert_number").blur(function(){
+    	if($("#id_visitor_firstname").val() == "" && $("#id_cert_number").val() != "")//光标离开后没有信息则查询
+    	{
+    		leave_check("c_number", $("#id_cert_number").val());
+    	}
+	})
+    
+    //证件号码查询
+    $("#id_cert_number").change(function(){
+    	var c_number = $("#id_cert_number").val();
+    	if(c_number != "")
+    	{
+    		leave_check("c_number", c_number);
+    	}
+    	c_number = null;
+	})
+    
+    //卡号文本框离开时检查
+    $("#id_card").change(function(){
+    	var card = $("#id_card").val();
+    	if(card != "")
+    	{
+    		leave_check("card", card);
+    	}
+    	card = null;
+	})
+	
+	//访客单号查询
+    $("#id_visitor_form").change(function(){
+    	var form_number = $("#id_visitor_form").val();
+    	if(form_number != "")
+    	{
+    		leave_check("form", form_number);
+    	}
+    	form_number = null;
+	})
+	
+	function leave_check(type, value)
+	{
+		$.ajax({
+	        url: "/{{ request.surl }}visitor/GetData/?func=get_visitor_by_check&state=exit&type="+type+"&param_value="+value,
+	        type: "GET",
+	        dataType: "json",
+	        success:function(datas){
+	        	$("#id_visitor_firstname").val(datas.firstname);
+	        	$("#id_visitor_lastname").val(datas.lastname);
+	        	$("#id_cert_number").val(datas.c_number);
+	        	$("#id_card").val(datas.card);
+	        	$("#id_carried_goods").val(datas.article);
+	        	if(datas.photo != "")
+	        	{
+	        		$("#id_enter_photo")[0].src = "/file//"+datas.photo;
+	        	}
+	        	if(datas.often_visit)
+	        	{
+	        		$("#tr_return_card").removeAttr("class");
+	        	}
+	        	datas = null;
+	        }
+		});
+	}
+	
+	
+	//各控件不在IE浏览器下的处理, 后续需要抽出到一个js文件中
+    if(!$.browser.msie){
+        //读写器
+        $("#id_read_certificate").attr({disabled:"true", title: "{% trans '目前该功能仅支持IE系列及IE内核的浏览器，请更换！' %}"}).css({cursor:"default",color:"#888888"}).unbind().click(function(){
+            alert(gettext("目前该功能仅支持IE系列及IE内核的浏览器，请更换！"));
+            return false;
+        });
+        //扫描仪
+        $("#id_scan_certificate").attr({disabled:"true", title: "{% trans '目前该功能仅支持IE系列及IE内核的浏览器，请更换！' %}"}).css({cursor:"default",color:"#888888"}).unbind().click(function(){
+            alert(gettext("目前该功能仅支持IE系列及IE内核的浏览器，请更换！"));
+            return false;
+        });
+        
+    }
+    else
+    {
+        //IE下判断各控件是否需要安装驱动
+//        var IdrControl_flag = false;
+        var synjones_flag = false;
+        var zkissonlinex_flag = false;
+        
+//        //读写器
+//        for(var i in IdrControl)
+//        {
+//            if(i == "isSuccess")
+//            {
+//                //alert("IdrControl have installed")
+//                IdrControl_flag = true;
+//            }
+//        }
+//        if(!IdrControl_flag)
+//        {
+//            //alert("IdrControl did not install")
+//			$("#id_read_certificate").attr({title: "{% trans '请注册读写器控件' %}"}).css({cursor:"default",color:"#888888"}).unbind().click(function(){
+//	            if(confirm(gettext("没有注册读写器控件，是否下载控件？")))
+//	            {
+//	            	window.location.href = "/data/system/help/?p=/file/"+$("#id_lng").val()+"/help/visitorDriverInstall.html";
+//	            	return false;
+//	            }
+//	        });                   
+//        }
+        
+        //新中新身份证阅读器
+        for(var i in SynCardOcx)
+        {
+            if(i == "CardNo")
+            {
+                synjones_flag = true;
+            }
+        }
+        if(!synjones_flag)
+        {
+            $("#id_read_certificate").attr({title: "{% trans '请注册读写器控件' %}"}).css({cursor:"default",color:"#888888"}).unbind().click(function(){
+                if(confirm(gettext("没有注册读写器控件，是否下载控件？")))
+                {
+                    window.location.href = "/data/system/help/?p=/file/"+$("#id_lng").val()+"/help/visitorDriverInstall.html";
+                    return false;
+                }
+            });                   
+        }
+        
+        
+        //扫描仪
+        for(var i in zkissonlinex)
+        {
+            if(i == "ZKISSOnlineXVersion")
+            {
+                //alert("have installed")
+                zkissonlinex_flag = true;
+            }
+        } 
+        if(!zkissonlinex_flag)
+        {
+            //alert("did not install")
+            $("#id_scan_certificate").attr({title: "{% trans '请注册扫描仪控件' %}"}).css({cursor:"default",color:"#888888"}).unbind().click(function()
+            {
+            	if(confirm(gettext("没有注册扫描仪控件，是否下载控件？")))
+	            {
+	            	window.location.href = "/data/system/help/?p=/file/"+$("#id_lng").val()+"/help/visitorDriverInstall.html";
+	            	return false;
+	            }
+			});                     
+        }
+    }
+	
+    
+{% endblock %}

@@ -1,13 +1,13 @@
-{% extends "data_list.html" %}
+{# extends "data_list.html" #}
 
-{% block tblHeader %}
-fieldHeaders=["{{ cl.FieldName.SN }}","{{ cl.FieldName.admin }}","{{ cl.FieldName.OP }}","{{ cl.FieldName.OPTime }}","{{ cl.FieldName.Object }}"
+{# block tblHeader #}
+fieldHeaders=["&#123;&#123; cl.FieldName.SN &#125;&#125;","&#123;&#123; cl.FieldName.admin &#125;&#125;","&#123;&#123; cl.FieldName.OP &#125;&#125;","&#123;&#123; cl.FieldName.OPTime &#125;&#125;","&#123;&#123; cl.FieldName.Object &#125;&#125;"
 ];
 options.disableCols=["0"];
 options.canAdd=false;
 options.canEdit=false;
-{% endblock %}
-{% block rowdata %}
-{% for item in latest_item_list %}
-["{{ item.id }}", "{{ item.SN }}","{{ item.admin }}","{{ item.OpName }}","{{ item.OPTime|shortTime }}","{{ item.ObjName }}"]{%if not forloop.last%},{%endif%}{% endfor %}
-{% endblock %}
+{# endblock #}
+{# block rowdata #}
+{# for item in latest_item_list #}
+["&#123;&#123; item.id &#125;&#125;", "&#123;&#123; item.SN &#125;&#125;","&#123;&#123; item.admin &#125;&#125;","&#123;&#123; item.OpName &#125;&#125;","&#123;&#123; item.OPTime|shortTime &#125;&#125;","&#123;&#123; item.ObjName &#125;&#125;"]{# if not forloop.last #},{# endif #} {# endfor #}
+{# endblock #}

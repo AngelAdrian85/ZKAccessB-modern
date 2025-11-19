@@ -1,13 +1,13 @@
-{% extends "data_list.html" %}
-{% load i18n %}
-{% block op_for_tab %}
-{% endblock %}
-{% block headjs %}
+{# extends "data_list.html" #}
+{# load i18n #}
+{# block op_for_tab #}
+{# endblock #}
+{# block headjs #}
 
-<script type="text/javascript" src="/media/jslib/USER_OF_RUN.js"></script>
+<script></script>
 <link rel="stylesheet" type="text/css" href="/media/css/picture.css" />
-{% endblock %}
-{% block addjs %}
+{# endblock #}
+{# block addjs #}
 var weekStartDay=0
 function setPostData()
 {
@@ -59,8 +59,8 @@ $(function(){
     render_widgets($("#id_conditions"));
     
     $("div#id_shifts_all").model_grid({
-           dbapp_url:"{{dbapp_url}}", 
-           model_url:"{{dbapp_url}}att/USER_OF_RUN/",                      //根目录地址
+           dbapp_url:"&#123;&#123; dbapp_url &#125;&#125;", 
+           model_url:"&#123;&#123; dbapp_url &#125;&#125;att/USER_OF_RUN/",                      //根目录地址
            record_per_page: 15,                 //每页记录数
            max_no_page: 50,                 //记录数少于该数据时，不分页显示
            row_operations: false,               //对象操作true表示全部显示(默认)，false表示全部不显示，对象表示操作["New","Delete",["Leave",...]]
@@ -90,14 +90,14 @@ $(function(){
             $("div#id_shifts_all").empty();
             $("div#id_shifts_all").model_grid({
                     init_query:setPostData(),
-                   dbapp_url:"{{dbapp_url}}", 
-                   model_url:"{{dbapp_url}}att/USER_TEMP_SCH/",                      //根目录地址
+                   dbapp_url:"&#123;&#123; dbapp_url &#125;&#125;", 
+                   model_url:"&#123;&#123; dbapp_url &#125;&#125;att/USER_TEMP_SCH/",                      //根目录地址
                    record_per_page: 15,                 //每页记录数
                    max_no_page: 50,                 //记录数少于该数据时，不分页显示
                    row_operations: false,               //对象操作true表示全部显示(默认)，false表示全部不显示，对象表示操作["New","Delete",["Leave",...]]
                    obj_edit:false,
                    disabled_actions: ['_change','_add','_delete','_clear'],
-                model_actions: false,         //模型操作true表示全部显示(默认)，false表示全部不显示，{op1:{},op2:{}}表示显示这些操作
+                model_actions: false,         //模型操作true表示全部显示(默认)，false表示全部不显示，{op1:{},op2:{&#125;&#125;表示显示这些操作
                 
                 row_operations: false ,              //对象操作true表示全部显示(默认)，false表示全部不显示，对象表示操作["New","Delete",["Leave",...]]
                 do_action_masker_div:[$("#div_id_main_userofrun"),$("#id_model_extend")],//操作所需要覆盖的div
@@ -118,8 +118,8 @@ $(function(){
            
            $("div#id_shifts_all").empty();
            $("div#id_shifts_all").model_grid({
-                  dbapp_url:"{{dbapp_url}}", 
-                  model_url:"{{dbapp_url}}att/USER_OF_RUN/",                      //根目录地址
+                  dbapp_url:"&#123;&#123; dbapp_url &#125;&#125;", 
+                  model_url:"&#123;&#123; dbapp_url &#125;&#125;att/USER_OF_RUN/",                      //根目录地址
                   init_query:setPostData(),
                   record_per_page: 15,                 //每页记录数
                   max_no_page: 50,                 //记录数少于该数据时，不分页显示
@@ -173,29 +173,29 @@ $(function(){
         );
 
 
-    $("#tz").html("<div align='center'><h4><span class='icon_Shift_Detail'>&nbsp;</span>{% trans '单击人员查看排班详情!' %}  </h4></div>");
+    $("#tz").html("<div align='center'><h4><span class='icon_Shift_Detail'>&nbsp;</span>{# trans '单击人员查看排班详情!' #}  </h4></div>");
    
 });
 
 var week=[
-		"{% trans '星期日S' %}",
-	     "{% trans '星期一S' %}",
-	     "{% trans '星期二S' %}",
-	     "{% trans '星期三S' %}",
-	     "{% trans '星期四S' %}",
-	     "{% trans '星期五S' %}",
-	     "{% trans '星期六S' %}"
+		"{# trans '星期日S' #}",
+	     "{# trans '星期一S' #}",
+	     "{# trans '星期二S' #}",
+	     "{# trans '星期三S' #}",
+	     "{# trans '星期四S' #}",
+	     "{# trans '星期五S' #}",
+	     "{# trans '星期六S' #}"
 ];
 
 function show_shift_Detail(rowData)
 {   
    
     var Shift_id=rowData[0];
-    $("#id_Shift_Detail fieldset legend").html(rowData[1]+"&nbsp;&nbsp;&nbsp;{% trans '时段明细' %}");
+    $("#id_Shift_Detail fieldset legend").html(rowData[1]+"&nbsp;&nbsp;&nbsp;{# trans '时段明细' #}");
     queryStr="Shift_id="+Shift_id+"&unit="+rowData[2]+"&weekStartDay=0";
     $.ajax({
         type:"POST",
-        url: "{{dbapp_url}}../att/shift_detail/",
+        url: "&#123;&#123; dbapp_url &#125;&#125;../att/shift_detail/",
         data:queryStr,
         dataType:"json",
         success:function(json){
@@ -261,11 +261,11 @@ function getTZDayLabel(day,st)
 
 
 
-{% endblock%}
+{# endblock #}
 
 
 
-{% block content %}
+{# block content #}
 <input type="hidden" id="id_cur_table" value="1" \>
 <div id="div_id_main_userofrun" class="module" style="position:relative;"><form id="id_cond_form" method="POST">
     <table id="changelist" border="0" style="margin: 0px; float: left; ">
@@ -276,15 +276,15 @@ function getTZDayLabel(day,st)
             <table border="0" cellpadding="0" cellspacing="0">
                 <tr>
                 <!-- 
-                  <td width="65" style="padding-left:10px;"><label for="id_ComeTime" class="required">{%trans '开始日期:'%}</label></td>
+                  <td width="65" style="padding-left:10px;"><label for="id_ComeTime" class="required">{# trans '开始日期:' #}</label></td>
 
                   <td width="180" style="border:0px;"><input type="None" size="11" class="wZBaseDateField dp-applied vDateOnlyField" readonly="True"  id="id_ComeTime" maxlength="10" name="ComeTime"/></td>
-                  <td width="65"><label for="id_EndTime" class="required">{%trans '结束日期:'%}</label></td>
+                  <td width="65"><label for="id_EndTime" class="required">{# trans '结束日期:' #}</label></td>
 
                   <td><input type="None" size="11" class="wZBaseDateField dp-applied vDateOnlyField" readonly="True"  id="id_EndTime" maxlength="10" name="EndTime"/></td>
                    --><td class="Link_blue3">
-                        <span class="action_Search">&nbsp;</span><a href="javaScript:void(0)" id="id_show_EmpShift">{%trans '查询排班表' %}</a>
-                        <span class="action_Search">&nbsp;</span><a href="javaScript:void(0)" id="id_show_tmpShift">{%trans '查询临时排班表' %}</a>
+                        <span class="action_Search">&nbsp;</span><a href="javaScript:void(0)" id="id_show_EmpShift">{# trans '查询排班表' #}</a>
+                        <span class="action_Search">&nbsp;</span><a href="javaScript:void(0)" id="id_show_tmpShift">{# trans '查询临时排班表' #}</a>
                         <input type="text" style="display:none;" value="0" id="isTmporary" />
                     </td>
                 </tr>
@@ -296,7 +296,7 @@ function getTZDayLabel(day,st)
     </tr>
     <tr><td colspan="3">
         <div>
-            <div id="id_div_title" class="div_box"><h1>{% trans '员工排班列表' %}</h1>
+            <div id="id_div_title" class="div_box"><h1>{# trans '员工排班列表' #}</h1>
                 <div id="id_shifts_all"  ></div>
             </div>
         </div>
@@ -304,7 +304,7 @@ function getTZDayLabel(day,st)
     </tr>
     <tr><td colspan="3">
         <div id="id_shift_details" class="div_box">
-            <h1>{%trans "排班时间段详细明细" %}</h1>
+            <h1>{# trans "排班时间段详细明细" #}</h1>
             <div class="div_userOfRun_details">
             <div id="tz"></div>
             </div>
@@ -317,6 +317,6 @@ function getTZDayLabel(day,st)
     <div id='id_numrun_tip'></div>
 </div>
 <div id="div_id_showaction"></div>
-{% block getdatalist %}
-{% endblock %}
-{% endblock %}
+{# block getdatalist #}
+{# endblock #}
+{# endblock #}

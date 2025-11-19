@@ -1,68 +1,68 @@
-{% extends "data_list.html" %}
-{% load i18n %}
-{% block model_extend %}{%endblock%}
-{% block content %}
+{# extends "data_list.html" #}
+{# load i18n #}
+{# block model_extend #}{# endblock #}
+{# block content #}
     <div style="margin-left:10px;">
         <form method="post" onkeydown="if(event.keyCode==13){return false;}"  id="id_edit_form" enctype="multipart/form-data">
         <!--<div>
-            <div class="div_box1"><h2>{% trans "来访时间过长提醒" %}</h2>
-                <span>&nbsp;&nbsp;&nbsp;{% trans "来访时长" %}:
-                <input type="text" name="time_length" id="id_time_length" size="3"></input>&nbsp;{% trans "小时" %}
+            <div class="div_box1"><h2>{# trans "来访时间过长提醒" #}</h2>
+                <span>&nbsp;&nbsp;&nbsp;{# trans "来访时长" #}:
+                <input type="text" name="time_length" id="id_time_length" size="3"></input>&nbsp;{# trans "小时" #}
                 </span>
             </div>
-            <div class="div_box1"><h2>{% trans "来访次数过多提醒" %}</h2>
-                <span>&nbsp;&nbsp;&nbsp;{% trans "间隔时间" %}:
-                <input type="text" name="time_table" id="id_time_table" size="3"></input>&nbsp;{% trans "天" %}
+            <div class="div_box1"><h2>{# trans "来访次数过多提醒" #}</h2>
+                <span>&nbsp;&nbsp;&nbsp;{# trans "间隔时间" #}:
+                <input type="text" name="time_table" id="id_time_table" size="3"></input>&nbsp;{# trans "天" #}
                 </span>
-                <span>&nbsp;&nbsp;&nbsp;{% trans "次数" %}:
-                <input type="text" name="times" id="id_times" size="3"></input>&nbsp;{% trans "次" %}
+                <span>&nbsp;&nbsp;&nbsp;{# trans "次数" #}:
+                <input type="text" name="times" id="id_times" size="3"></input>&nbsp;{# trans "次" #}
                 </span>
             </div>-->
-            <!-- <div class="div_box1"><h2>{% trans "设置自动刷新访客列表时间" %}</h2>
-                <span>&nbsp;&nbsp;&nbsp;{% trans "时间间隔" %}:</span>
-                <input type="text" name="interval" id="id_interval" size="3" />&nbsp;{% trans "分钟" %}
+            <!-- <div class="div_box1"><h2>{# trans "设置自动刷新访客列表时间" #}</h2>
+                <span>&nbsp;&nbsp;&nbsp;{# trans "时间间隔" #}:</span>
+                <input type="text" name="interval" id="id_interval" size="3" />&nbsp;{# trans "分钟" #}
             </div>  -->
-            <div class="div_box1" id="div_photo"><h2>{% trans "设置访客头像是证件头像还是抓拍头像" %}</h2>
-                <span>&nbsp;&nbsp;&nbsp;{% trans "访客头像" %}:
+            <div class="div_box1" id="div_photo"><h2>{# trans "设置访客头像是证件头像还是抓拍头像" #}</h2>
+                <span>&nbsp;&nbsp;&nbsp;{# trans "访客头像" #}:
                     <select id="id_photo_type" name="photo_type" >
-                        <option value="1">{% trans "证件头像" %}</option>
-                        <option value="2">{% trans "抓拍头像" %}</option>
+                        <option value="1">{# trans "证件头像" #}</option>
+                        <option value="2">{# trans "抓拍头像" #}</option>
                     </select>
                 </span>
             </div>
-            <div class="div_box1"><h2>{% trans "设置访客离开登记方式" %}</h2>
-                <span>&nbsp;&nbsp;&nbsp;{% trans "登记方式" %}:
+            <div class="div_box1"><h2>{# trans "设置访客离开登记方式" #}</h2>
+                <span>&nbsp;&nbsp;&nbsp;{# trans "登记方式" #}:
                     <select id="id_leave_type" name="leave_type" >
-                        <option value="1" id="id_certificate">{% trans "证件" %}</option>
-                        <option value="2">{% trans "卡" %}</option>
-                        <option value="3">{% trans "访客单" %}</option>
+                        <option value="1" id="id_certificate">{# trans "证件" #}</option>
+                        <option value="2">{# trans "卡" #}</option>
+                        <option value="3">{# trans "访客单" #}</option>
                     </select><br />
                     <div>
                         <span class="icon_note">&nbsp;</span>
                         <font color="#FF6600">
-                        {% trans "注：选择离开登记方式后，进入登记需要填写对应方式的信息。如选择了证件登记，证件号码就必须填写；选择访客单登记，必须打印访客单。"%}
+                        {# trans "注：选择离开登记方式后，进入登记需要填写对应方式的信息。如选择了证件登记，证件号码就必须填写；选择访客单登记，必须打印访客单。" #}
                         </font>
                     </div>
                 </span>
             </div>
-            <div class="div_box1"><h2>{% trans "设置是否打印访客单" %}</h2>
-                <span>&nbsp;&nbsp;&nbsp;{% trans "是否打印" %}:
+            <div class="div_box1"><h2>{# trans "设置是否打印访客单" #}</h2>
+                <span>&nbsp;&nbsp;&nbsp;{# trans "是否打印" #}:
                     <select id="id_is_print" name="is_print" >
-                        <option value="1">{% trans "是" %}</option>
-                        <option value="0">{% trans "否" %}</option>
+                        <option value="1">{# trans "是" #}</option>
+                        <option value="0">{# trans "否" #}</option>
                     </select>
                 </span>
             </div>             
-            <div class="div_box1"><h2>{% trans "设置离开未登记是否提醒" %}</h2>
-                <span>&nbsp;&nbsp;&nbsp;{% trans "是否提醒" %}:
+            <div class="div_box1"><h2>{# trans "设置离开未登记是否提醒" #}</h2>
+                <span>&nbsp;&nbsp;&nbsp;{# trans "是否提醒" #}:
                     <select id="id_is_warning" name="is_warning" >
-                        <option value="1">{% trans "是" %}</option>
-                        <option value="0">{% trans "否" %}</option>
+                        <option value="1">{# trans "是" #}</option>
+                        <option value="0">{# trans "否" #}</option>
                     </select><br>
                     <div>
                         <span class="icon_note">&nbsp;</span>
                         <font color="#FF6600">
-                        {% trans "注：选择提醒，访客离开未按正常流程登记，下次来访时自动提醒登记人员。"%}
+                        {# trans "注：选择提醒，访客离开未按正常流程登记，下次来访时自动提醒登记人员。" #}
                         </font>
                     </div>
                 </span>
@@ -72,20 +72,20 @@
         <div class="editformbtn">
             <div class="lineH22 img_padding">
                 <span class="action_OK"></span>
-                <a id="OK" href="javascript:void(0)" class="Link_blue1">{% trans "确定" %}</a>
+                <a id="OK" href="javascript:void(0)" class="Link_blue1">{# trans "确定" #}</a>
             </div>
         </div>
         <input type="hidden" name="down_event_hours" id="id_down_event_hours" value=""/>
         </form>
     </div>
     
-{% endblock %}
-{% block extend_js %}
+{# endblock #}
+{# block extend_js #}
     <script>
         //发送请求从后端获取上次设置的内容
         $.ajax({
             type: "GET",
-            url: "/{{ request.surl }}visitor/ProcessVisitorOption/?func=get_option",
+            url: "/&#123;&#123; request.surl &#125;&#125;visitor/ProcessVisitorOption/?func=get_option",
             dataType: "json",
             async: false,
             success: function(data)
@@ -132,4 +132,4 @@
         });
         
     </script>
-{% endblock %}
+{# endblock #}

@@ -1,0 +1,68 @@
+{% extends "data_list.html" %}
+
+{% load i18n %}
+
+{% block extend_model_grid %}
+	{% if request.user|HasPerm:"personnel.browse_employee" %}
+		{% if "mysite.iaccess&mysite.att"|hasApp:'%' {% if "mysite"|is_zkaccess_att:'%' disable_cols:['attarea','photo','level_count','Tele',{% if "mysite"|is_zkaccess_5to4:'%' 'get_template',{% endif %}'identitycard','Education'],
+			{% else %}
+				disable_cols:['photo','level_count','Tele'],
+			{% endif %}
+		{% else %}
+			{% if "mysite.iaccess"|hasApp:'%' disable_cols:['attarea','photo','level_count','Tele','identitycard','Education'],
+			{% else %}
+				disable_cols:['level_count','photo','Tele'],
+			{% endif %}
+		{% endif %}
+	{% else %}
+	    $("#id_search").remove();
+	    alert(gettext("对不起,您没有访问该页面的权限,不能浏览更多信息！"));
+	    window.location.href="/{{ request.surl }}accounts/login/";
+	{% endif %}<!--personnel.browse_employee-->
+{% endblock %}
+
+{% block extend_disabled_actions %}
+	{% if request.user|HasPerm:"personnel.browse_employee" %}
+		{% if "mysite.iaccess&mysite.att"|hasApp:'%' {% if "mysite"|is_zkaccess_att:'%' {% if "en"|has_language:'%' ,'OpAdjustArea','OpEmpType','OpLeave','OpRegisterFinger','OpTitileChange','OpAddLevelToEmp','OpDelLevelFromEmp','OpSyncToDevice'
+				{% else %}
+					,'OpAdjustArea','OpRegisterFinger','OpAddLevelToEmp','OpDelLevelFromEmp','OpSyncToDevice'
+				{% endif %}
+			{% else %}
+				,'OpAddLevelToEmp','OpDelLevelFromEmp'
+			{% endif %}
+		{% else %}
+			{% if "mysite.iaccess"|hasApp:'%' ,'OpAdjustArea','OpEmpType','OpLeave','OpRegisterFinger','OpTitileChange','OpAddLevelToEmp','OpDelLevelFromEmp','OpSyncToDevice'
+			{% else %}
+				,'OpAddLevelToEmp','OpDelLevelFromEmp'
+			{% endif %}
+		{% endif %}
+	{% else %}
+	    $("#id_search").remove();
+	    alert(gettext("对不起,您没有访问该页面的权限,不能浏览更多信息！"));
+	    window.location.href="/{{ request.surl }}accounts/login/";
+	{% endif %}<!--personnel.browse_employee-->
+{% endblock %}
+
+{% block addjs %}
+//var current_lang = $("html").attr("lang");
+//if(current_lang == "zh-cn" || current_lang == "zh-tw")
+//{
+//	$("#lastname").remove();
+//	$("#id_form_search").find("tr:eq(0)").find("td:gt(3)").hide();
+//	$(".dt_bdiv tr[id^=id_row_]").find("td:eq(3)").hide();
+//}
+
+//可自定义查询结束数据载入页面后需要的操作
+//var after_query_load = function()
+//{
+//	var current_lang = $("html").attr("lang");
+//    if(current_lang == "zh-cn" || current_lang == "zh-tw")
+//    {
+//        if($("th[id$=lastname]").length>0)
+//        {
+//           $("th[id$=lastname]").remove();
+//            $(".dt_bdiv tr[id^=id_row_]").find("td:eq(3)").hide();
+//        }
+//    }
+//}
+{% endblock %} 

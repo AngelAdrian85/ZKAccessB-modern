@@ -1,4 +1,7 @@
-# Development and testing requirements
+django==4.2.26
+pytest
+pytest-django
+pyyaml# Development and testing requirements
 pytest>=7.0
 pytest-django>=4.5
 coverage>=6.5

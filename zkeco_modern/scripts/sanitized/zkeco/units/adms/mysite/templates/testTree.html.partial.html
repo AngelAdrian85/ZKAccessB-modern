@@ -1,0 +1,29 @@
+{% extends "data_list.html" %}
+{% block headjs %}
+<script></script>
+<script></script>
+
+<script></script>
+<link rel="stylesheet" type="text/css" href="/media/css/jquery.treeview.css" />
+{% endblock %}
+
+{% load i18n %}
+
+{% block content %}
+  <ul id="black">
+  
+  </ul>
+  
+{% endblock %}
+
+{% block getdatalist %}
+{% endblock %}
+
+{% block addjs %}
+    $(document).ready(function(){
+    		$("#black").treeview({
+    			url: "../iclock/ouputtreejson"
+    		})
+    	});    
+{% endblock %}
+ 

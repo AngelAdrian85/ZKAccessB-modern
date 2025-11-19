@@ -1,0 +1,473 @@
+{% extends "Acc_Monitor_All.html" %}
+{% load i18n %}
+
+{% block content %}
+    {% if request.user|HasPerm:"contenttypes.can_MonitorAlarmPage" %}
+    <div id="id_monitor_events" class="div_box acc_monitor_380" sytle="min-height: 50em;">
+        <h1 style="float:none;">{% trans "报警事件监控" %}</h1>
+        <div class="grid clearL">
+        <div id="id_cancel_all" class="action Link_blue1" style="display:none"></div>
+        </div>
+        <div id="id_showTbl" class="dt_bdiv" style="min-height: 30em;">
+            <table border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                    <td style="vertical-align:top;border:0px;">
+                        <div>
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th width="5%"><input type="checkBox" id="id_select_all" onclick="selectAll()"></input></th>
+                                        <th width="25%">{% trans "门名称" %}</th>
+                                        <th width="25%">{% trans "所属设备" %}</th>
+                                        <th width="15%">{% trans "门编号" %}</th>
+                                        <th width="15%">{% trans "当前状态" %}</th>
+                                        <th width="15%">{% trans "事件描述" %}</th>
+                                        <th width="20%">{% trans "操作" %}</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rt_content">
+                                </tbody>
+                            </table>
+                        </div>
+                    </td>
+                    <td style="vertical-align:top;border:0px;width:1px;overflow:hidden;">
+                        <div style="height:260px;width:0px; overflow:hidden"></div>
+                    </td>
+                </tr>
+            </table>
+        </div>
+    </div>
+    {% endif %}<!--can_MonitorAlarmPage-->
+{% endblock %}
+{% block addjs_base %}
+$("#id_showTbl").css("margin-top","-8px");
+function selectAll(){
+    if($('#id_select_all').select = true)
+    {
+        $("input[name=alarm_list]").select = true;
+    }
+    else
+    {
+        $("input[name=alarm_list]").select = false;
+    }
+}
+{% endblock %}
+{% block getdatalist %} {% endblock %}
+
+{% block show_tip_info %} {% endblock %}
+{% block base_variables %} {% endblock %}
+{% block monitor_log %}
+    {% if request.user|HasPerm:"contenttypes.can_MonitorAlarmPage" %}
+    //用于向服务器端获取实时事件数据
+    var logid = {% if logid %} {{ logid }} {% else %}-1{% endif %};//-1为初始值
+    var row = "row0";//第一次加载页面时初始化该值
+    //var mail_content_title = gettext("门名称")+"     "+gettext("所属设备")+"     "+gettext("门编号")+"     "+gettext("当前状态")+"\r\n";
+    //邮件内容标题设计到转码和翻译的问题，暂未实现
+    
+    var mail_content = ""; //初始化页面时将设备信息存在变量
+    var mail_append = "";   //刷新页面是将报警设备信息附加在这里，作为发送邮件的最终内容
+    
+    $(function(){
+        var stamp = (new Date()).getTime();
+        var url = "/{{ request.surl }}iaccess/GetData/?func=doors&type=all&stamp="+ stamp;
+        $.ajax({
+            type: "GET",
+            url: url,
+            dataType: "json",
+            async: false,
+            success: function(data)
+            {
+                show_door(data);
+            }
+        });
+    });
+    
+    function show_door(data)
+    {
+        var html = "";
+        var doors = data.doors;
+        var door_total = doors.length;
+        if(door_total > 0)
+        {   
+            for(var index in doors)
+            {
+                //input中data为门的id
+                var door_name = doors[index][3];
+                var door_id = doors[index][0];
+                mail_content += door_name +"," +doors[index][1]+","+doors[index][2]+","+door_id+"\r\n";
+                html += '<tr id="door_'+door_id+'" data="'+door_id+'" style="display:none">'
+                     +'<td><div align="center"><input type="checkBox" id="'+door_id+'_doors_id" class="cancelalarm_list"></input></div></td>'
+                     +'<td>'+door_name+'</td><td>'+doors[index][1]+'</td><td>'+doors[index][2]+'</td>'
+                     +'<td id="door_state_td_'+door_id+'"></td>'
+                     +'<td id="id_event_'+door_id+'"></td>'
+                     +'<td><a id="cancelalarm" class="door_ops cancelalarm_list" href="javascript:void(0)" onclick="control_door(this.id, '+door_id+')">{% trans "取消报警" %}</a></td></tr>';
+                door_name = null;
+                door_id = null;
+            }
+        }
+        $("#rt_content").append(html);
+        html = null;
+        doors = null;
+        door_total = null;
+    }
+    
+    function control_door(mode, door_id) 
+    {
+        if(mode == "cancelalarm")
+        {
+        	getUrl = "/{{ request.surl }}iaccess/SendDoorData/?func="+ mode +"&type=part&data="+door_id;
+            send_doors_data(mode, getUrl);
+        }
+        else if(mode == "cancelall")//取消所有报警
+        {
+            getUrl = "/{{ request.surl }}iaccess/SendDoorData/?func="+ mode +"&type=part&data="+door_id;
+            send_doors_data(mode, getUrl);
+        }
+        mode = null;
+        door_id = null;
+    }
+    
+    //下发命令
+    function send_doors_data(mode, getUrl)
+    {
+        $.ajax({
+            type: "GET",
+            url: getUrl,
+            dataType: "json",
+            async: true,
+            success: function(data)
+            {
+                var result = data.result;
+                var tips = '';
+                if(mode == 'cancelalarm' || mode == 'cancelall')
+                {
+                	var alarm_tips = "";
+                	for(index in result)
+                    {
+                        if(result[index].ret < 0)
+                        {
+                            tips += result[index].door_name + ' ';
+                        }
+                        //else if(result[index].ret == 1002)
+                        //{
+                        	//alarm_tips += result[index].door_name + ' ';
+                        //}
+                    }
+                    //if(result != "" && alarm_tips != "")
+                    //{
+                    	//alert(gettext("请先关闭门！"));
+                    //}
+                    if(result == '' || tips != '')
+                    {
+                        tips += gettext("操作失败！");
+                        alert(tips);
+                    }
+                    else
+                    {
+                        tips += gettext("操作成功！");
+                        alert(tips);
+                    }
+                }
+                data = result = tips = null;
+            },
+            error:function(XMLHttpRequest, textStatus, errorThrown)
+            {
+                alert(gettext("发送请求失败，请重试！"));
+            }
+        });
+        mode = null;
+        getUrl = null;
+    }
+    
+    function get_select(type)
+    {
+        var list="";
+        //兼容IE,FireFox必须采用这种写法
+        jQuery.each(jQuery('input[type=checkbox][class=cancelalarm_list]'),function (i,item)
+        {   
+            if($(item).attr("checked")){
+                if(list=="")
+                {
+                    list = list + (this.id.toString()).split("_")[0];
+                }
+                else
+                {
+                    list = list + "," + (this.id.toString()).split("_")[0];
+                }
+            }
+        }); 
+        
+        if(type == "1") //取消报警
+        {
+            if(list=="" || list == null)
+            {
+                alert(gettext("请选择报警设备!"));
+            }
+            else
+            {
+            	//alert("list=="+list);
+                control_door("cancelalarm", list);
+            }
+        }
+        if(type == "0") //发送邮件
+        {
+            var send_mail_form = '<div id="id_mail_form" class="div_box">'
+                +'<h1>'+gettext("邮件通知")+'</h1>'
+                +'<table><tr><td height="10px">&nbsp;</td></tr>'
+                    +'<tr><td><ul>'
+                        +'<li>'+gettext("请输入邮箱地址，多个地址用 ';' 隔开")+'</li>'
+                        +'<li><textarea name="receiver" id="id_send_addr" cols="55" rows="4"></textarea></li>'
+                    +'</ul></td></tr>'
+                +'<tr><td height="10px">&nbsp;</td></tr></table>'
+                +'<div class="btns_class"><button class="btn" id="send_mail" type="button">'+gettext("确定")+'</button>'
+                +'<button class="btn" id="id_Cancel" type="button">'+gettext("取消")+'</button></div>'
+            +'</div>';
+            
+            $(send_mail_form).dialog();
+            
+            $("#id_mail_form").find("#id_Cancel").click(function(){
+                $("#id_close").click();
+            });
+            
+            $("#send_mail").click(function(){
+                $.ajax({ 
+                    type: "POST",
+                    url:"/{{ request.surl }}iaccess/send_mail_by_hand/",
+                    data: {"content": mail_append, "receiver": $("#id_send_addr").val()},
+                    dataType:"json",
+                    async:false,
+                    success:function(datas){
+                        if(datas.ret > 0)
+                        {
+                            alert(gettext("邮件发送成功!"));
+                        } 
+                        else if (datas.ret == -2)
+                        {
+                            alert(gettext("邮件发送失败,门禁参数配置中邮箱配置错误!"));
+                        }
+                        else
+                        {
+                            alert(gettext("邮件发送失败!"));
+                        }
+                        datas = null;
+                        $("#id_Cancel").click();
+                    }
+                });
+            });
+            send_mail_form = null;
+        }
+        type = null;
+    }
+    
+    function selectAll(){
+        if($("#id_select_all").attr("checked"))
+        {
+            jQuery.each(jQuery('input[type=checkbox]'),function (i,item)
+            {   
+                //alert("i=" + i + ",item="+jQuery(item).attr('自定义属性')); 
+                $(item).attr("checked", true);
+            });
+        }
+        else
+        {
+            jQuery.each(jQuery('input[type=checkbox]'),function (i,item)
+            {   
+                //alert("i=" + i + ",item="+jQuery(item).attr('自定义属性')); 
+                $(item).attr("checked", false);
+            });
+        }
+    }
+
+    function OnRefresh() 
+    { 
+        if($("#id_monitor_events").find("#rt_content tr").length > 100) 
+        { 
+            $("#id_monitor_events").find("#rt_content").find("tr:gt(100)").remove(); 
+        } 
+        getUrl = '/{{ request.surl }}iaccess/GetRTLog/?type=all&logid='+ logid +'&step=100';
+        $.ajax({ 
+            type: "GET", 
+            url: getUrl, 
+            dataType: "json", 
+            async: true, 
+            success: function(rtlog) 
+            {
+                if(rtlog.log_id == -1)//第一次请求(含非第一次请求，缓存清空后重新开始)
+                {
+                    logid = rtlog.all_id-10;
+                    a_logid = rtlog.alarm_id;//获取监控全部记录开始时的alarm_id(跳转页面使用)
+                }
+                else if(rtlog.log_id == undefined)//避免服务异常时（如监控时手动停止服务），造成返回的数据为{}造成的监控停止问题。-darcy20111010
+                {
+                    logid = -1;//重新计算缓存中记录条数
+                }
+                else
+                {
+                    logid += rtlog.log_count;
+                }
+                var states = rtlog.door_states;
+                var list = "";
+                var mail_list = mail_content.split("\r\n");
+                mail_append = "";
+                for(var index in states)
+                {
+                    var door_datas = states[index];//该变量记录了当前某个门的状态
+                    var door_id = door_datas.id;//门id
+                    var $td_event_text = $("#id_event_"+door_id);//报警事件描述 --by huangjs20120302
+                    var $td_text = $("#door_state_td_"+door_id+"");
+                    var $tr = $("#door_"+door_id);
+                    
+                    var alarm = door_datas.alarm;//报警状态
+                    var is_new_firmware = door_datas.is_new_firmware//新老固件判断
+                    var reuse_alarm = door_datas.reuse_alarm;//判断报警状态是否复用字段
+                    if(alarm != 0)//有报警
+                    {
+                        var alarm_door_id = door_datas.id
+                        $td_text.text(gettext("报警"));
+                        //增加报警事件描述 --by huangjs20120302
+                        if(reuse_alarm == 0)//旧固件报警、新固件的超时报警才会进来
+                        {
+                        	if(alarm == 1)
+                        	{
+                        		$td_event_text.text(gettext("报警"));
+                        	}
+                        	else if(alarm == 2)
+                        	{
+                        		if(is_new_firmware == 0)//旧固件2为门开超时，不是报警--huangjs20120601
+								{
+									door_datas = null;
+	                                door_id = null;
+	                                $td_event_text = null;
+	                                $td_text = null;
+	                                $tr = null;
+	                                alarm = null;
+	                                is_new_firmware = null;
+	                                reuse_alarm = null;
+									continue;
+                        		}
+                        		else//新固件超时报警
+								{
+	                        		$td_event_text.text(gettext("门开超时"));
+	                        	}
+                        	}
+                        }
+                        else//新固件报警类型的判断
+                        {
+                        	if(alarm == 1)
+                        	{
+                        		$td_event_text.text(gettext("门被意外打开"));
+                        	}
+                        	else if(alarm == 2 || alarm == 3 || alarm == 6 || alarm == 7 || alarm == 10 || alarm == 11 || alarm == 14 || alarm == 15)
+                        	{
+                        		$td_event_text.text(gettext("防拆"));
+                        	}
+                        	else if(alarm == 4 || alarm == 5)
+	                        {
+	                        	$td_event_text.text(gettext("胁迫密码开门"));
+	                        }
+	                        else if(alarm == 8 || alarm == 9)
+	                        {
+	                        	$td_event_text.text(gettext("胁迫指纹开门"));
+	                        }
+	                        else if(alarm == 12 || alarm == 13)//胁迫密码和胁迫指纹两个报警
+	                        { 
+	                        	$td_event_text.text(gettext("胁迫开门"));
+	                        }
+                        }
+                        
+                        $td_text.parent().attr("class", "AlarmLog");
+                        $tr.show()
+                        if(list=="")
+                        {
+                            list = list.concat("'"+door_datas.id.toString());
+                        }
+                        else
+                        {
+                            list = list.concat(","+door_datas.id.toString());
+                        }
+                        
+                        for(var i=0;i<mail_list.length;i++)
+                        {
+                            var record = mail_list[i];
+                            var record_list = record.split(",");
+                     
+                            if(alarm_door_id==record_list[3] && alarm != 0)
+                            {
+                                //record_list[3] =  $td_text.html()+"\r\n";
+                                mail_append += "Door Name:"+record_list[0]+"   "+"Owned Device:"+record_list[1]+"   "+"Door Number:"+record_list[2]+"   "+"Current Status:"+$td_event_text.text()+"          ";
+                            }
+                        }
+                    }
+                    else
+                    {
+                        $td_text.text(gettext("正常"));
+                        $tr.hide();
+                    }
+                    
+                    door_datas = null;
+                    door_id = null;
+                    $td_event_text = null;
+                    $td_text = null;
+                    $tr = null;
+                    alarm = null;
+                    is_new_firmware = null;
+                    reuse_alarm = null;
+                }//for循环结束
+                
+                if(list != "")
+                {
+                    list = list.concat("'");
+                    var html = '<li><a id="acknowledge" class="door_ops cancelalarm_list" href="javascript:void(0)" onclick="get_select(0)">{% trans "通知" %}</a> &nbsp;</li>' +
+                    '<li><a id="cancel" class="door_ops cancelalarm_list" href="javascript:void(0)" onclick="get_select(1)">{% trans "取消报警" %}</a> &nbsp;</li>' +
+                    '<li><a id="cancelall" class="door_ops cancelalarm_list" href="javascript:void(0)" onclick="control_door(this.id, '+list+')">{% trans "取消全部报警" %}</a></li>';
+                    $("#id_cancel_all").empty();
+                    $("#id_cancel_all").append(html);
+                    $("#id_cancel_all").show();
+                }
+                else
+                {
+                    $("#id_cancel_all").hide();
+                }
+                
+                //事件监控
+                if(rtlog.data != "")
+                {
+                    for(var index in rtlog.data)
+                    {
+                        var datas = rtlog.data[index];
+                        var type = datas.event_type;
+                        //var class_type = "";
+                        //var device = datas.device;
+                        
+                        if(type >= 100 && type < 200 || type == 28)//门开超时新增为报警
+                        {
+                            $("#event"+datas.event_point).text(datas.content);
+                        }
+                        datas = null;
+                        type = null;
+                    }
+                }
+                states = null;
+                //list = null;
+                //mail_list = null;
+                //mail_append = null;
+                
+                window.setTimeout('OnRefresh()', 3000)//等三秒执行刷新函数  
+            },
+            error:function(XMLHttpRequest, textStatus, errorThrown)
+            {
+                //window.setTimeout('OnRefresh()', 3000)//等*秒执行刷新函数
+            }
+        }); 
+    } 
+    
+    //window.onload = function(){get_doors_area_device(url);}
+    //get_doors_area_device(url);
+    window.setTimeout('OnRefresh()', 100);//第一次等1秒执行刷新函数
+    
+    {% else %}
+        alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
+        window.location.href = "/{{ request.surl }}accounts/login/";
+    {% endif %}<!--can_MonitorAlarmPage-->
+   
+{% endblock %}

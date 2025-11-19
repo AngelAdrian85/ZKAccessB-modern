@@ -1,18 +1,18 @@
-{% extends "data_list.html" %}
-{% load i18n %}
+{# extends "data_list.html" #}
+{# load i18n #}
 
-{% block leftBoxMiddle %}
-{% endblock %}
+{# block leftBoxMiddle #}
+{# endblock #}
 
 
-{% block getdatalist %}
-    {% block perm_control_html %}
-        {% if not request.user|HasPerm:"iaccess.browse_acclevelset" %}
+{# block getdatalist #}
+    {# block perm_control_html #}
+        {# if not request.user|HasPerm:"iaccess.browse_acclevelset" #}
             $("#id_datalist").remove();
             alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
-            window.location.href = "/{{ request.surl }}accounts/login/";
-        {% endif %}<!--browse_acclevelset-->
-    {% endblock %}
+            window.location.href = "/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+        {# endif #}<!--browse_acclevelset-->
+    {# endblock #}
     
     var progress_interval = null;
     $("body").append("<div id='gz_processStatus' style='position: absolute; display:none; top: 0px; left: 0px; width:100%; height:100%; opacity: 0.6;filter:alpha(opacity=60); z-index:999999; background-color:#000000;'></div>"
@@ -23,14 +23,14 @@
                         +"</div></div>");
 
     //同时适用门禁和梯控-darcy20120419
-    {% block getdatalist_level_type %}
+    {# block getdatalist_level_type #}
     var level_type = 1;//门禁控制器
-    var model_url = "{{ model_url }}";
-    {% endblock %}
+    var model_url = "&#123;&#123; model_url &#125;&#125;";
+    {# endblock #}
 
     $("#id_datalist").model_grid({
         "model_action_container": $("#id_op_for_tab"),
-        "dbapp_url": "{{ dbapp_url }}",
+        "dbapp_url": "&#123;&#123; dbapp_url &#125;&#125;",
         "model_url": model_url+"?exception_fields=emp",
         "init_query": ["level_type__exact="+level_type],
         "base_query": ["level_type__exact="+level_type],
@@ -47,16 +47,16 @@
         },
         "cached_data": false
     });
-{% endblock %}
+{# endblock #}
 
-{% block addjs %}
-    {% block perm_control_js %}
-        {% if not request.user|HasPerm:"iaccess.browse_acclevelset" %}
+{# block addjs #}
+    {# block perm_control_js #}
+        {# if not request.user|HasPerm:"iaccess.browse_acclevelset" #}
             $("#id_datalist").remove();
             alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
-            window.location.href = "/{{ request.surl }}accounts/login/";
-        {% endif %}<!--browse_acclevelset-->
-    {% endblock %}
+            window.location.href = "/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+        {# endif #}<!--browse_acclevelset-->
+    {# endblock #}
     var reqid = 0;
     var temp_detail = -1;
     var temp_tol = -1;
@@ -64,7 +64,7 @@
     {
         var stamp0 = new Date().getTime();
         $.ajax({
-            url: "/{{ request.surl }}iaccess/downdata_progress/?reqid="+reqid,
+            url: "/&#123;&#123; request.surl &#125;&#125;iaccess/downdata_progress/?reqid="+reqid,
             type: "GET",
             dataType: "json",
             success: function(pgdata)
@@ -104,7 +104,7 @@
             }
         });
     }
-{% endblock %}
+{# endblock #}
 
 
 

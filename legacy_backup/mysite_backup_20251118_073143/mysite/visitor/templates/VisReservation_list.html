@@ -1,0 +1,11 @@
+{% extends "data_list.html" %}
+{% load i18n %}
+
+{% block addjs %}
+    $(function(){
+    	$("label[for^='id_visited_emp__EName']").text(gettext("被访人姓名")+":");
+        $("label[for^='id_visited_emp__lastname']").text(gettext("被访人姓氏")+":");
+    });
+    
+{% endblock %}
+

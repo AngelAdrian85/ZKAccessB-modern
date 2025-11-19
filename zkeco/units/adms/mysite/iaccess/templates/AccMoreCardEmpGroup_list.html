@@ -1,26 +1,26 @@
-{% extends "Acc_Door_Set.html" %}
-{% load i18n %}
-{% block id_main_div %}
-    {% if request.user|HasPerm:"personnel.browse_accmorecardempgroup" %}
+{# extends "Acc_Door_Set.html" #}
+{# load i18n #}
+{# block id_main_div #}
+    {# if request.user|HasPerm:"personnel.browse_accmorecardempgroup" #}
         <div id="id_accmorecardempgroup" style="margin:15px 0px 10px 0px;">
-        {% block datalist_before %}
-            <div id="id_datalist" class="div_box" style="float:left; width:45%; margin:0px 0px 0px 10px; _margin:0px 0px 0px 5px;"><h1>{% trans "多卡开门人员组列表" %}</h1>    
+        {# block datalist_before #}
+            <div id="id_datalist" class="div_box" style="float:left; width:45%; margin:0px 0px 0px 10px; _margin:0px 0px 0px 5px;"><h1>{# trans "多卡开门人员组列表" #}</h1>    
             </div>
-        {% endblock %}<!--endblock of datalist_before-add by darcy-->
+        {# endblock #}<!--endblock of datalist_before-add by darcy-->
         
-        {% block extend_before %}
-            <div id="id_extend" class="div_box" style="float:right; width:46%; margin:0px 10px 0px 0px;_margin:0px 5px 0px 0px;"><h1 style="width:98%">{% trans "浏览指定人员组的人员" %}</h1>
+        {# block extend_before #}
+            <div id="id_extend" class="div_box" style="float:right; width:46%; margin:0px 10px 0px 0px;_margin:0px 5px 0px 0px;"><h1 style="width:98%">{# trans "浏览指定人员组的人员" #}</h1>
             </div>
-        {% endblock %}<!--endblock of extend_before-add by darcy-->
+        {# endblock #}<!--endblock of extend_before-add by darcy-->
         </div>
-    {% endif %}<!--personnel.browse_accmorecardempgroup-->
-{% endblock %}<!--endblock of content-add by darcy-->
+    {# endif #}<!--personnel.browse_accmorecardempgroup-->
+{# endblock #}<!--endblock of content-add by darcy-->
 
-{% block acc_door_set %}
-    {% if request.user|HasPerm:"personnel.browse_accmorecardempgroup" %}
+{# block acc_door_set #}
+    {# if request.user|HasPerm:"personnel.browse_accmorecardempgroup" #}
     
     $("#id_datalist").model_grid({
-        "model_url": "{{ model_url }}",
+        "model_url": "&#123;&#123; model_url &#125;&#125;",
         "async": false,
         "sort_fields": ["group_name"], 
         "cached_data": false,
@@ -48,7 +48,7 @@
             }
             
             $("#id_extend").model_grid({
-                "model_url": "{{ dbapp_url }}personnel/Employee/",
+                "model_url": "&#123;&#123; dbapp_url &#125;&#125;personnel/Employee/",
                 "base_query": base_query,
                 "need_plus_sign": false,
                 "model_actions": false,
@@ -62,7 +62,7 @@
                 "row_operations": [],
                 "cached_data": false,
                 "init_after_get_jdata": function(){
-                    {% if request.user|HasPerm:"personnel.opdelempfrommcegroup_accmorecardempgroup" %}
+                    {# if request.user|HasPerm:"personnel.opdelempfrommcegroup_accmorecardempgroup" #}
                     $("#id_extend div.action").append('<li name="OpDelEmpOfMCEGroup" id="id_OpDelEmpOfMCEGroup"><a alt="OpDelEmpOfMCEGroup" href="javascript:void(0)" class="action_OpDelEmpOfMCEGroup">'+gettext("删除人员")+'</a></li>')
                     $("#id_OpDelEmpOfMCEGroup a").click(function(){
                         var emps = new Array()
@@ -84,7 +84,7 @@
                         $.ajax({
                             type: "POST",
                             dataType: "json",
-                            url: "/{{ request.surl }}iaccess/MCEGroupEmpOp/?data="+ left_data +"&emps="+ emps,
+                            url: "/&#123;&#123; request.surl &#125;&#125;iaccess/MCEGroupEmpOp/?data="+ left_data +"&emps="+ emps,
                             success: function(data)
                             {
                                 if(data.ret == 1)
@@ -105,7 +105,7 @@
                             }            
                         });
                     });
-                    {% endif %}<!--opdelempfrommcegroup_accmorecardempgroup-->
+                    {# endif #}<!--opdelempfrommcegroup_accmorecardempgroup-->
                 }  
             });
             
@@ -157,12 +157,12 @@
         }
     });
 
-    {% else %}
+    {# else #}
         $("#id_search").remove();
         alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
-        window.location.href = "/{{ request.surl }}accounts/login/";
-    {% endif %}<!--personnel.browse_accmorecardempgroup-->
-{% endblock %}
+        window.location.href = "/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+    {# endif #}<!--personnel.browse_accmorecardempgroup-->
+{# endblock #}
 
 
 

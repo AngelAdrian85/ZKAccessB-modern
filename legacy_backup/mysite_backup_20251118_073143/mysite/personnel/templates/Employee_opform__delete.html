@@ -1,0 +1,41 @@
+{% extends "data_opform.html" %}
+{% load i18n %}
+
+{% block pre_addfields %}
+    <th></th>
+    <td>
+        <table>
+            <tr>
+                <td>
+                    <div id="objs_for_op" style="padding:2px;margin:0px 0px 2px 0px;">{% if form.tips_text %}{{ form.tips_text }}?{% endif %}</div>
+                </td>
+                <td>
+                    <div id="id_op_for_model" data="{{op.for_model}}"></div><div id="id_store_select_emp">
+                        <table id="id_tbl"></table>
+                    </div>
+                </td>
+            </tr>
+            <tr class="displayN"><th></th><td><input type="checkbox" name="sync_to_branch" class="wZBaseBooleanField" id="id_sync_to_branch"></td></tr>
+        </table>
+    </td>
+{% endblock %}
+
+{% block addjs %}
+function before_submit()
+{
+    {% if has_branch %}
+    if(confirm(gettext("是否立即将删除的人员信息从主控同步到分控？")))
+    {
+        $("#id_sync_to_branch").attr("checked", true);
+    }
+    else
+    {
+        alert(gettext("您选择了不立即同步该人员信息到分控，请稍后手动同步到分控，以保持主控和分控数据一致性！"));            
+        $("#id_sync_to_branch").attr("checked", false);
+    }
+    {% endif %}
+    return true;
+}
+{% endblock %}
+
+

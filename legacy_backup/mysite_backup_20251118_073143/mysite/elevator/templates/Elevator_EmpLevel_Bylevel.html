@@ -1,0 +1,25 @@
+{% extends "Acc_EmpLevel_Bylevel.html" %}
+{% load i18n %}
+
+{% block perm_control_getdatalist %}
+    {% if not request.user|HasPerm:"contenttypes.can_EmpLevelByEleLevelPage" %}
+        $("#id_search").remove();
+        alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
+        window.location.href="/{{ request.surl }}accounts/login/";
+    {% endif %}<!--contenttypes.can_EmpLevelByEleLevelPage-->
+{% endblock %}
+
+{% block getdatalist_level_type %}
+"init_query": ["level_type__exact=2"],
+"base_query": ["level_type__exact=2"],
+{% endblock %}
+
+{% block perm_control_addjs %}
+    {% if not request.user|HasPerm:"contenttypes.can_EmpLevelByEleLevelPage" %}
+		$("#id_advanced_search").hide();	
+        $("#id_search").remove();
+        alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
+        window.location.href = "/{{ request.surl }}accounts/login/";
+    {% endif %}<!--contenttypes.can_EmpLevelByEleLevelPage-->
+{% endblock %}
+

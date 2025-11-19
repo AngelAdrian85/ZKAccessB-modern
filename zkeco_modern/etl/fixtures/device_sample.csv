@@ -1,0 +1,2 @@
+sn,device_name,device_type,area_name,fw_version,com_port,com_address,fp_count,transaction_count,acpanel_type
+SN3001,FrontGate,1,Main Building,1.2,COM1,192.168.1.10,10,100,ACX

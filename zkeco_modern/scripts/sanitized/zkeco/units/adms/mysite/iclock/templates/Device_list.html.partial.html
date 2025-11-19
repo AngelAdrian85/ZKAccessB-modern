@@ -1,0 +1,55 @@
+{% extends "data_list.html" %}
+
+{% load i18n %}
+
+
+{% block extend_disabled_actions %}
+    {% if request.user|HasPerm:"iclock.browse_device" %}
+         ,'OpRenameAuxOut','OpRenameAuxIn','OpLinkageInputCfg','OpChangeBaudrate','OpEnableAccPush','OpDisableAccPush','OpEnableAccGAPB','OpDisableAccGAPB','ClearData','ClearPicture','ClearTransaction','OpReloadData','OpReloadLogData','SyncACPanelTime','OpChangeIPOfACPanel','RefreshDeviceInfo','ResetPassword','OpEnableDevice','OpDisableDevice','UploadLogs','UploadUserInfo','Reboot','OpUpgradeFirmware','OpGetMoreOptions','OpChangeMThreshold','OpCtrlAuxOut','OpSetDSTime','OpRemoveDSTime',{% if "mysite.iaccess&mysite.att"|hasApp:'%' {% else %} {% if "mysite.iaccess"|hasApp:'%' {% else %},'OpSearchACPanel','OpUpgradeFirmware',{% endif %} {% endif %}
+    {% else %}
+        $("#id_search").remove();
+        alert(gettext("对不起,您没有访问该页面的权限,不能浏览更多信息！"));
+        window.location.href="/{{ request.surl }}accounts/login/";
+    {% endif %}<!--iclock.browse_device-->
+    
+{% endblock %}
+
+{% block extrajs %}	
+    {% if request.user|HasPerm:"iclock.browse_device" %}
+        $("#id_datalist").find("#id_OpBrowseLog").remove();
+      
+        {% if "mysite.iaccess&mysite.att"|hasApp:'or' "mysite.iaccess"|hasApp:'%' $("#id_OpSearchACPanel").parent().append($("#id_OpSearchACPanel"));
+        {% else %}
+            {% if "mysite.att"|hasApp:'%' $("#id_OpSearchACPanel").remove();
+            {% endif %}
+        {% endif %}
+        $("#id_OpSearchACPanel").after($("#id_op_for_tab").find(".div_leftBottomLine").eq(0));
+    {% else %}
+        $("#id_search").remove();
+        alert(gettext("对不起,您没有访问该页面的权限,不能浏览更多信息！"));
+        window.location.href="/{{ request.surl }}accounts/login/";
+    {% endif %}<!--iclock.browse_device-->
+
+{% endblock %}
+
+{% block extend_model_grid %}
+    {% if request.user|HasPerm:"iclock.browse_device" %}
+        'model_actions':true,
+        'object_actions':true,
+        'multiple_select':true,
+        'need_plus_sign':false,
+        {% if "mysite.iaccess&mysite.att"|hasApp:'%' {% if "mysite"|is_zkaccess_att:'%' disable_cols:['last_activity','user_count','fp_count','transaction_count','get_dstime_name','show_fp_mthreshold','acpanel_type','Fpversion','show_status'],
+            {% else %}
+                disable_cols:['last_activity','user_count','fp_count','transaction_count','get_dstime_name','show_fp_mthreshold','acpanel_type','Fpversion','show_enabled|boolean_icon'],
+            {% endif %}
+        {% endif %}
+
+    {% else %}
+        $("#id_search").remove();
+        alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
+        window.location.href="/{{ request.surl }}accounts/login/";
+    {% endif %}<!--iclock.browse_device-->
+{% endblock %}
+
+
+

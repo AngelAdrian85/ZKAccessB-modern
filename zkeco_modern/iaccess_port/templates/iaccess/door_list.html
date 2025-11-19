@@ -1,0 +1,16 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Doors (ORM-backed)</h1>
+
+{% if doors %}
+  <ul>
+  {% for d in doors %}
+    <li>{{ d.id }} - {{ d.name }}</li>
+  {% endfor %}
+  </ul>
+{% else %}
+  <p>No door data available via ORM. This page is a migration placeholder.</p>
+{% endif %}
+
+{% endblock %}

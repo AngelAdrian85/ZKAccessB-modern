@@ -1,0 +1,466 @@
+{% extends "data_edit.html" %}
+{% load i18n %}
+
+{% block form %}
+    {% if request.user|HasPerm:"iaccess.add_acclinkageio" or request.user|HasPerm:"iaccess.change_acclinkageio" %}
+        {% autoescape off %}
+        <tr><td>
+            <div id="acc_linkageio">
+                <table>
+                    <tr>
+                        {{ form.linkage_name|field_as_td_h }}
+                    </tr>
+                    <tr>
+                        {{ form.device|field_as_td_h }}
+                    </tr>
+                </table>
+            </div>        
+            <div id="acc_linkageio_opt" class="div_box1 floatL linkageio_edit_table_title">
+                <h2>{% trans '联动条件' %}</h2>
+                <table>
+                    <tr>
+                        {{ form.trigger_opt|field_as_td_h }}
+                    </tr>
+                    <tr id="tr_in_address">
+                        {{ form.in_address|field_as_td_h }}
+                    </tr>            
+                </table>
+            </div>
+            <div id="acc_linkageio_action" class="div_box1 floatL linkageio_edit_table_title">
+                <h2>{% trans '联动动作' %}</h2>
+                <table>
+                    <tr id="tr_out_address">
+                        {{ form.out_address|field_as_td_h }}
+                    </tr>
+                    <tr id="out_action">
+                        {{ form.action_type|field_as_td_h }}
+                    </tr>
+                    <tr id="tr_delay_time">
+                        {{ form.delay_time|field_as_td_h }}
+                    </tr>
+                    <tr>
+                        {{ form.email_address|field_as_td_h }}
+                    </tr> 
+                </table>
+            </div>
+        {% if "mysite.video"|hasApp %}
+            <div id="acc_linkageio_video" class="div_box1 floatL linkageio_edit_table_title">
+                <h2>{% trans '视频联动' %}</h2>
+                <table>
+                    <tr id="tr_video_linkageio_state">
+                        {{ form.video_linkageio_state|field_as_td_h }}
+                        <td>
+                            <input id="id_video_linkageio_state1" style="margin-right:1px" type="checkbox" value=1>{% trans "录像" %}
+                        </td>
+                        {{ form.video_linkageio_record_time|field_as_td_h }}
+                    </tr>
+                    <!-- lgr 20140919 -->
+                    <tr id="tr_video_linkageio_state2">
+                        <th></th><td></td>
+                        <td>
+                            <div style="margin:0 40px 0 0;">
+                                <input id="id_video_linkageio_state2" style="margin-right:1px" type="checkbox" value=1>{% trans "弹出视频"%}
+                            </div>
+                        </td>
+                        {{ form.video_linkageio_time|field_as_td_h }}
+                    </tr>
+                    <tr id="tr_video_linkageio_record_time">
+                    	<th></th><td></td>
+                        <td> 
+                            <div style="margin:0 40px 0 0;">
+                                <input id="id_video_linkageio_state3" style="margin-right:1px" type="checkbox" value=2>{% trans "弹出照片"%}
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+            </div>  
+        {% endif %}  
+                    
+        </td></tr>
+        {% if form.non_field_errors %}
+            <tr><td>{{ form.non_field_errors }}</td></tr>
+        {% endif %}
+        {% endautoescape %}
+    {% endif %}<!--add/change_acclinkageio-->
+{% endblock %}
+
+{% block addjs %}
+    {% if request.user|HasPerm:"iaccess.add_acclinkageio" or request.user|HasPerm:"iaccess.change_acclinkageio" %}
+    var linkageio_opt_click = false;
+    var acc_device = $("#id_device").val();
+    var after_init = function()
+    {
+        if($("#id_linkage_name").val() != "")//编辑时disable device选择框
+        {
+            $("#id_device").attr("disabled", true);
+            show_setup($("#id_device").val());
+        }
+        else//新增时
+        {
+            $("#acc_linkageio_opt").hide();
+            $("#acc_linkageio_action").hide();
+            $("#acc_linkageio_video").hide();
+        }
+        
+        //调整邮件多文本框大小---huangjs
+        $("#id_email_address").attr("cols", "30");
+		$("#id_email_address").attr("rows", "5");
+		
+        //select option分层级ie不兼容问题,以及ie6不支持option的disabled的问题
+        if($.browser.msie) 
+        {
+            $("#id_device .level_1").each(function(){
+                $(this).text("         "+$(this).text());
+            });
+
+            $("#id_device .level_0").each(function(){
+                $(this).attr("style", "color:#999999");
+            });
+
+            $("#id_device").change(function(){
+                var options = $("#id_device option");   
+                var len = options.length;
+                for(var i = 0; i < len; i++){   
+                    if(options[i].disabled && options[i].selected) {  
+                        options[0].selected = "selected";   
+                        break;   
+                    }   
+                }   
+            });
+        }
+        after_init = undefined;
+    } 
+
+    function before_submit()
+    {
+    	var video_linkageio_state_val1 = "0";
+    	var video_linkageio_state_val2 = "0";
+    	var video_linkageio_state_val3 = "0";
+        if($("#id_delay_time").val() < 0)
+        {
+            alert(gettext("开门延时不能小于0，请输入正确的延时时长!"));
+            return false;
+        }
+        if($("#id_video_linkageio_time").val() < 1)
+        {
+            alert(gettext("视频时长不能小于0，请输入正确的视频时长!"));
+            return false;
+        }
+        if($("#id_video_linkageio_record_time").val() <1 )
+        {
+        	alert(gettext("录像时长不能小于0，请输入正确的录像时长!"));
+        	return false;
+        }
+        if($("#id_video_linkageio_state1").attr("checked"))
+        {
+            video_linkageio_state_val2 = "1";
+        }
+        if($("#id_video_linkageio_state2").attr("checked"))
+        {
+        	video_linkageio_state_val1 = "1";
+        }
+        if($("#id_video_linkageio_state3").attr("checked"))
+        {
+        	video_linkageio_state_val1 = "2";
+            video_linkageio_state_val3 = "1";
+        }
+        $("#id_video_linkageio_state").val(video_linkageio_state_val1+video_linkageio_state_val2+video_linkageio_state_val3);
+        $("#id_video_linkageio_time").attr("disabled", false);
+        $("#id_video_linkageio_record_time").attr("disabled", false);
+        $("#id_device").attr("disabled", false);
+        return true;
+    }
+    function after_submit()
+    {
+        //问题：ie下新增联动确定、编辑联动改变触发条件后返回联动列表页面，触发条件下拉框消失。
+        if($("#dropdown_box"))
+        {
+            $(".dropdown_box").remove();
+            $(".dropdown_box_list").remove();
+        }
+        adjust_dropdown_list($("#search_id_trigger_opt"));
+        after_submit = undefined;
+    }
+    function after_tempSave()
+    {
+        //问题：ie下新增联动、编辑联动临时保存后，触发条件下拉框消失。
+        if($("#id_device").val() != acc_device || linkageio_opt_click)
+        {
+            adjust_dropdown_list($("#search_id_trigger_opt"));
+            linkageio_opt_click = false;
+            acc_device = $("#id_device").val();
+        }
+    }
+    
+    function after_save_continue()
+    {
+        $("#acc_linkageio_opt").hide();
+        $("#acc_linkageio_action").hide();
+        $("#acc_linkageio_video").hide();
+    }
+
+
+    function show_setup(device_id)
+    {
+        if(device_id == "")
+        {
+            return;
+        }
+        geturl = "/{{ request.surl }}iaccess/GetData/?func=linkageio_info&device_id="+ device_id;   
+        $.ajax({
+            type: "GET",
+            url: geturl,
+            dataType: "json",
+            async: false,
+            success: function(data){
+                //此处根据设备参数决定显示的内容
+                in_html = data.in_html;//输入点下拉选项
+                out_html = data.out_html;//输出点下拉选项
+                device_type = data.device_type;//设备类型
+                if(in_html == "")//设备尚未连接过
+                {
+                    alert(gettext("当前选择设备的扩展参数获取失败，无法对该设备进行联动设置！"));
+                    $("#id_device #id_null").attr("selected", "selected");
+                    return false;
+                }
+                
+                var in_address = $("#id_in_address").val();//获取输入点的值
+                var out_address = $("#id_out_address").val();//获取输出点的值
+                $("#tr_in_address").find("td").html('<select name="in_address" class="wZBaseSmallIntegerField required" id="id_in_address">'+in_html+'</select>');
+                $("#tr_out_address").find("td").html('<select name="out_address" id="id_out_address">'+out_html+'</select>');
+                $("#id_out_address").val($("#id_out_address option[value="+out_address+"]").text());//darcy20120710
+                
+                $("#acc_linkageio_opt").show();
+                $("#acc_linkageio_action").show();
+                $("#acc_linkageio_video").show();
+                $("#tr_delay_time").hide();
+                
+                $("#out_action").hide();
+                //$("#video_channel_num").hide();
+                if($("#id_action_type").val() == 1)//编辑时且联动动作为打开
+                {
+                    $("#tr_delay_time").show();
+                }
+                if($("#id_out_address").val() != "")
+                {
+                    $("#out_action").show();
+                }
+                
+                var in_address_html = $("#id_in_address").html();
+                //处理联动事件和输入点之间的联动关系
+                function trigger_opt(value,dev_type)
+                {
+                    $("#id_trigger_opt").val(value);
+//                    if(dev_type != 5)//---如果不是电梯控制器，则屏蔽”启动消防开门“联动设置条件 --by liangm 20120903
+//                    {
+//                    	$("#id_trigger_opt option").each(function(){
+//                            if($(this).val() == 210)
+//                            {
+//                                $(this).remove();
+//                                return false;
+//                            }
+//                        });
+//                    }
+                    adjust_dropdown_list($("#id_trigger_opt"));
+                    $(".dropdown_box").css("width","141px");
+                    $(".dropdown_boxImg").css("width","123px");
+                    $("#id_trigger_opt").val(value);//以上三行兼容IE，火狐中联动触发条件下拉菜单问题
+                    $("#id_in_address").empty().append(in_address_html);
+                    var $option=$("#id_in_address option");
+                    if(value < 220 || value > 221)//门、读头
+                    {
+                    	var event_array = new Array(5,10,24,25,28,36,37,38,100,102,200,201,202,204,205,209);
+                    	if(check_door_event(event_array, value))//只能门的联动
+                    	{
+                    		$option.each(function(){
+	                            if($(this).val() >= 10)
+	                            {
+	                                $(this).remove();
+	                            }
+	                        });
+                    	}
+                    	else//门和读头都能联动
+                    	{
+                    		$option.each(function(){
+	                            if($(this).val() > 300 && $(this).val() < 10000)
+	                            {
+	                                $(this).remove();
+	                            }
+	                        });
+                    	}
+                    }
+                    else//只能辅助输入的联动
+                    {
+                        $option.each(function(){
+                            if($(this).val() > 0 && $(this).val() < 300 || $(this).val() > 10000)
+                            {
+                                $(this).remove();
+                            }
+                        });
+                    }
+                    $("#id_action_type option[value='']").remove();//去掉blank=True产生的默认空值
+                    //$("#id_lchannel_num option[value='']").remove();//去掉blank=True产生的默认空值
+                }
+                
+                
+                //初始时(含编辑)
+                trigger_opt($("#id_trigger_opt").val(),device_type);
+                $("#id_in_address").val(in_address);
+                //$("#id_in_address").val($("#id_in_address option[value="+in_address+"]").text());辅助输入暂不影响
+                
+                //变化时
+                $("#id_trigger_opt").change(function(){
+                    var value = $(this).val();
+                    trigger_opt(value,device_type);
+                    $("#id_in_address").val(0);//firefox下会生效
+                });
+                
+                $(".dropdown_box_list div").live('click',function(){                  
+                    //IE6下select隐藏不了的Bug,不能删除
+                    linkageio_opt_click = true;
+                    var value = $(this).attr('id');
+                    $("#id_trigger_opt").css('display','block');
+                    $("#id_trigger_opt").css('display','none');
+					$(".dropdown_box").remove();
+					$(".dropdown_box_list").remove();
+                    $("#id_in_address").val(0);
+                    trigger_opt(value,device_type);
+                });
+                
+                
+                //根据输入点弹出联动动作
+                $("#id_out_address").change(function(){
+                    if($(this).val()!="" && $(this).val()>=0)
+                    {
+                        $("#out_action").show();
+                        if($("#id_action_type").val() == 1)
+                        {
+                            $("#tr_delay_time").show();
+                        }
+                    }
+                    else
+                    {
+                        $("#out_action").hide();
+                        $("#tr_delay_time").hide();
+                    }
+                });
+                
+                $("#id_action_type").change(function(){
+                    if($(this).val() == 255 || $(this).val() == 0)
+                    {
+                        $("#tr_delay_time").hide();
+                        $("#id_delay_time").val("0");
+                    }
+                    else
+                    {
+                        $("#tr_delay_time").show();
+                        $("#id_delay_time").val("20");
+                    }
+                });
+            },
+            error:function (XMLHttpRequest, textStatus, errorThrown) 
+            {
+                //alert(textStatus+" "+errorThrown);
+                alert(gettext("服务器处理数据失败，请重试！错误码：")+"-606");
+                return false;
+            }
+        });
+    }
+    
+    
+    $("#id_device").change(function(){
+        $("#acc_linkageio_opt").hide();
+        $("#acc_linkageio_action").hide();
+        $("#acc_linkageio_video").hide();
+        if($("#id_linkage_name").val() == "")
+        {
+            $("#id_device #id_null").attr("selected", "selected");
+            alert(gettext("请输入联动设置名称！"));
+            $("#id_linkage_name").focus()
+            return false;
+        }   
+        if($("#id_action_type").val() != 0)
+        {
+            $("#id_action_type").val(0);
+            $("#tr_delay_time").hide();
+        }
+        //begin IE下触发条件下拉框重复---liangm 20120308
+        $(".dropdown_box").remove();
+		$(".dropdown_box_list").remove();
+		//end
+        show_setup($(this).val()); 
+    });
+    
+    $("#id_video_linkageio_state").hide();
+    //以下为视频联动动作复选框
+	$("#id_video_linkageio_time").attr("disabled", true);
+	$("#id_video_linkageio_record_time").attr("disabled", true);
+	if($("#id_video_linkageio_state").val()!= null || $("#id_video_linkageio_state").val() != "000")
+	{	
+		var video_val = $("#id_video_linkageio_state").val();
+		if (video_val != undefined)
+		{
+            if(video_val.substr(1,1) == "1")
+            {
+                $("#id_video_linkageio_state1").attr("checked", 'checked'); 
+                $("#id_video_linkageio_record_time").attr("disabled", false);
+            }  
+			if(video_val.substr(0,1) == "1")
+			{
+				$("#id_video_linkageio_state2").attr("checked", 'checked'); 
+				$("#id_video_linkageio_time").attr("disabled", false);
+			} 
+            if(video_val.substr(0,1) == "2")
+            {
+                $("#id_video_linkageio_state3").attr("checked", 'checked'); 
+                $("#id_video_linkageio_time").attr("disabled", true);
+            } 
+		}
+	}
+     
+    // 联动动作勾选事件
+    $("#id_video_linkageio_state1").click(function(){
+        $("#id_video_linkageio_record_time").attr("disabled", $("#id_video_linkageio_state1").attr("checked") ? false : true);
+    });
+    
+	$("#id_video_linkageio_state2").click(function(){
+        if($("#id_video_linkageio_state2").attr("checked"))
+        {
+            $("#id_video_linkageio_state3").removeAttr("checked");
+            $("#id_video_linkageio_time").attr("disabled", false);
+        }
+        else
+        {
+            $("#id_video_linkageio_time").attr("disabled", true);
+        }
+    });
+    
+    $("#id_video_linkageio_state3").click(function(){
+        if($("#id_video_linkageio_state3").attr("checked"))
+        {
+            $("#id_video_linkageio_state2").removeAttr("checked");
+            $("#id_video_linkageio_time").attr("disabled", true);
+        }
+    });
+    
+    
+    //判断属于门的事件
+    function check_door_event(event_array, event)
+    {
+    	var ret = false;
+    	for(var i in event_array)
+    	{
+    		if(event == event_array[i])
+    		{
+    			ret = true;
+    			break;
+    		}
+    	}
+    	return ret
+    }
+    {% else %}
+        alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
+        window.location.href = "/{{ request.surl }}accounts/login/";
+    {% endif %}<!--add/change_acclinkageio-->
+
+{% endblock %}

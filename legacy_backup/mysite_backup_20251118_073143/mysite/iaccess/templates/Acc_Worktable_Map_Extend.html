@@ -1,0 +1,67 @@
+{% extends "Acc_Electro_Map.html" %}
+{% load i18n %}
+
+{% block worktable_mapsize %}
+tabs_width = "609px";
+{% endblock %}
+
+{% block right_click_menu %}
+{% endblock %}
+
+{% block show_tip_info %}
+{% endblock %}
+
+{% block doors_info %}
+$("#id_map_"+gdata[p][5]+" .map").before('<div id="door_'+gdata[p][0]+'" data="'+gdata[p][0]+'" style="float: left; position: absolute;">'
+                                        + '<img id="id_img_row_'+p+'"  index="'+p+'" name="'+gdata[p][4]+'-'+gdata[p][0]+'-'+gdata[p][5]+'" '
+                                        + 'src="/media/images/iaccess/door_default.jpg" '
+                                        + ' style="left:'+gdata[p][7]+'px; top:'+gdata[p][8]+'px; width:'+gdata[p][6]+'px; position: opposite;" class="can_drag">'
+                                        + '</div>');//name 记录id+门id+地图id，扩展用
+{% endblock %}
+
+{% block move_map %}
+{% endblock %}
+
+{% block init_height%}
+"height:500px"
+{% endblock %}
+
+{% block table_head %}
+   <th width="30%">{% trans '时间' %}</th>
+   <!-- <th width="12%">{% trans '设备' %}</th> -->
+   <th width="30%">{% trans '事件点' %}</th>
+   <!-- <th width="15%">{% trans '事件描述' %}</th> -->
+   <!-- <th width="9%">{% trans '卡号' %}</th> -->
+   <th width="20%">{% trans '人员编号(姓名)' %}</th>
+   <th width="20%">{% trans '出入状态' %}</th>
+   <!-- <th width="10%">{% trans '验证方式' %}</th> -->
+{% endblock %}
+
+{% block worktable_map_js %}
+var title_info = '{% trans "设备" %}: ' + datas.device
+                + '     &#xd;{% trans "事件描述" %}: ' + datas.content
+                + '     &#xd;{% trans "卡号" %}: ' + datas.card
+                + '     &#xd;{% trans "验证方式" %}: ' + datas.verified;
+rtlisthtml += '<td width="15%" title="'+title_info+'">'+datas.time+'</td>'
+        + '<td width="15%" title="'+title_info+'">'+datas.event_point+'</td>'
+        + '<td width="13%" title="'+title_info+'">'+datas.emp+'</td>'
+        + '<td width="8%" title="'+title_info+'">'+datas.state+'</td>'
+        + '<td class = "displayN">'+type+'</td></tr>';
+{% endblock %}
+
+
+{% block addjs_base %}
+var $parent = $("#id_bigger").parent().parent().parent();
+var html = '<td><div class="action nowrap displayN nomap" style="display: block;"><a target="_blank" href="/iaccess/ElectroMapPage/">{% trans "全功能" %}</a></div></td>';
+$parent.append(html);
+
+$parent.find("td:lt(5)").remove();
+
+$("#id_monitor_events").css({"height":"40em"});
+$("#id_showTbl").css({"width":"660px"});
+$("#add_card_menu").remove();
+$("#id_add_card").remove();
+{% endblock %}
+
+
+

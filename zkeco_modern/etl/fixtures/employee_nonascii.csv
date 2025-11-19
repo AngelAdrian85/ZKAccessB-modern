@@ -1,0 +1,3 @@
+userid,badgenumber,firstname,lastname,card_number,site_code,email,identitycard,acc_startdate,acc_enddate,deptname
+4001,4001,José,Niño,0004001,004,jose.nino@example.local,ID4001,2020-01-01,2025-01-01,International
+4002,4002,Мария,Иванова,0004002,004,maria.ivanova@example.local,ID4002,2021-02-02,2026-02-02,Engineering

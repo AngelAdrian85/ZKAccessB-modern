@@ -1,23 +1,23 @@
-{% extends "special_menu.html" %}
-{% load i18n %}
+{# extends "special_menu.html" #}
+{# load i18n #}
 
-{% block headjs %}
-    {% block add_headjs %}
-    {% endblock %}
-{% endblock %}
+{# block headjs #}
+    {# block add_headjs #}
+    {# endblock #}
+{# endblock #}
 
-{% block content %}
-    {% if request.user|HasPerm:"contenttypes.can_VideoPreviewPage" %}
+{# block content #}
+    {# if request.user|HasPerm:"contenttypes.can_VideoPreviewPage" #}
     <!-- <div style="padding-bottom: 2px ! important;" class="div_box2" id="id_search"> -->
     <div id="id_datalist" class="div_box">
-        <h1>{% trans "视频预览" %}</h1>
+        <h1>{# trans "视频预览" #}</h1>
         <div id="id_video_chanel" style="float:left; width:240px;">
         	<div>
         		<!--<table  id="id_form_search" class="tbl_form_search">-->
         		<table  class="tbl_form_search" >
                 	<tbody>  
                     	<tr class="header_div_left">
-                        	<th align="left"><label>{% trans "视频服务器" %}:</label></th>
+                        	<th align="left"><label>{# trans "视频服务器" #}:</label></th>
                         	<td align="left">
                             	<select  id="id_videoserver" style="width:150px !important;">
                             	</select>
@@ -26,7 +26,7 @@
                 	</tbody>
 				</table>
         	</div>
-            <fieldset><legend>{% trans "通道列表" %}</legend>
+            <fieldset><legend>{# trans "通道列表" #}</legend>
                 <div style="height:280px;padding:5px; overflow:auto;">
                     <table width="100%" cellspacing="0" cellpadding="0">
                         <tr>
@@ -70,7 +70,7 @@
     </div>
     <INPUT id=CurSelWnd value=0 type=hidden>
     <INPUT id=CurWndChannel value=-1 type=hidden>
-	<SCRIPT for=Netocx1 event=GetSelectWndInfo(SelectWndInfo)>
+	<script>
 	var xmlDoc = new ActiveXObject("Microsoft.XMLDOM");
     xmlDoc.async="false"
     xmlDoc.loadXML(SelectWndInfo)	
@@ -84,16 +84,16 @@
 	{
 		CurWndChannel.value =  iWndChannel;
 	}  
-	</SCRIPT>
-    {% endif %}<!--contenttypes.can_VideoPreviewPage -->
-{% endblock %}
+	</script>
+    {# endif #}<!--contenttypes.can_VideoPreviewPage -->
+{# endblock #}
 
-{% block getdatalist %}
+{# block getdatalist #}
 
-{% endblock %}
+{# endblock #}
 
-{% block addjs %}
-    {% if request.user|HasPerm:"contenttypes.can_VideoPreviewPage" %}
+{# block addjs #}
+    {# if request.user|HasPerm:"contenttypes.can_VideoPreviewPage" #}
     var cur_link_num = 0;//当前通道连接数或码流
     var rtlisthtml = "";
     var DHiMPlayer = null;
@@ -111,7 +111,7 @@
         if(!$.browser.msie)
         {
             alert(gettext("目前该功能仅支持IE系列及IE内核的浏览器，请更换！"));
-            window.location.href = "/{{ request.surl }}video/ChannelMngPage/";
+            window.location.href = "/&#123;&#123; request.surl &#125;&#125;video/ChannelMngPage/";
             return;              
         } 
         else
@@ -121,7 +121,7 @@
             //if(channel_length == 0)
             //{
                 //alert(gettext("当前系统中没有添加视频服务器，请添加！"));
-                //window.location.href = "/{{ request.surl }}data/iclock/device/";
+                //window.location.href = "/&#123;&#123; request.surl &#125;&#125;data/iclock/device/";
                // return; 
             //}
             if(channel_length > 0)
@@ -323,7 +323,7 @@
     
     //加载视频服务器
     $(function(){
-    	var url = '/{{ request.surl }}video/GetData/?func=get_video';
+    	var url = '/&#123;&#123; request.surl &#125;&#125;video/GetData/?func=get_video';
     	$.ajax({
 			   type: "GET",
 			   url: url,
@@ -346,7 +346,7 @@
   	//获取视频通道
 	function get_channels(id)//视频服务器id
 	{	          
-	    var url = '/{{ request.surl }}video/GetData/?func=get_channels&videosever_id='+id;
+	    var url = '/&#123;&#123; request.surl &#125;&#125;video/GetData/?func=get_channels&videosever_id='+id;
         $.ajax({
 			   type: "GET",
 			   url: url,
@@ -384,8 +384,8 @@
         }
     }
     
-    {% else %}<!--contenttypes.can_VideoPreviewPage -->
+    {# else #}<!--contenttypes.can_VideoPreviewPage -->
         alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
-        window.location.href="/{{ request.surl }}accounts/login/";
-    {% endif %}<!--contenttypes.can_VideoPreviewPage -->
-{% endblock %}
+        window.location.href="/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+    {# endif #}<!--contenttypes.can_VideoPreviewPage -->
+{# endblock #}

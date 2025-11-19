@@ -1,0 +1,3 @@
+serial, name, type, area, firmware, com_port, com_address, fpcnt, trans_count, acpanel_type
+SN3001,FrontGateRenamed,1,Main Building,1.2,COM1,192.168.1.10,10,100,ACX
+SN3002,SideDoor,2,Annex,1.0,COM2,192.168.1.11,5,50,ACY

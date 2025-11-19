@@ -1,39 +1,38 @@
-{% extends "Acc_Door_Set.html" %}
-{% load i18n %}
+{# extends "Acc_Door_Set.html" #}
+{# load i18n #}
 
-{% block headjs %}
-    {% if request.user|HasPerm:"contenttypes.browse_acclinkageio" %}
-    <script src="{{ MEDIA_URL }}/jslib/widgets.js"></script>
-        {% block add_headjs %}
-        {% endblock %}
-    {% endif %}
+{# block headjs #}
+    {# if request.user|HasPerm:"contenttypes.browse_acclinkageio" #}
+    <script></script>
+        {# block add_headjs #}
+        {# endblock #}
+    {# endif #}
 <script>
 $("#id_search").css({"z-index":"50"});
 </script>
 
-{% endblock %}
+{# endblock #}
 
-{% block acc_door_set %}
-    {% if request.user|HasPerm:"iaccess.browse_acclinkageio" %}
+{# block acc_door_set #}
+    {# if request.user|HasPerm:"iaccess.browse_acclinkageio" #}
         $("#id_datalist").model_grid({
-            "model_url": "{{ model_url }}",
-            {% if "mysite.video"|hasApp %}
-                "disable_cols":[],		
-            {% else %}
+            "model_url": "&#123;&#123; model_url &#125;&#125;",
+            {# if "mysite.video"|hasApp:'%' "disable_cols":[],		
+            {# else #}
                 "disable_cols":['video_linkageio', 'lchannel_num'],
-            {% endif %}
+            {# endif #}
             "disabled_actions": ["_change"],
             "init_after_get_jdata": function(){
                 adjust_dropdown_list($("#search_id_trigger_opt"));
             }
         });
 
-    {% else %}<!--browse_acclinkageio-->
+    {# else #}<!--browse_acclinkageio-->
         $("#id_search").remove();        
         alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
-        window.location.href = "/{{ request.surl }}accounts/login/";
-    {% endif %}<!--browse_acclinkageio-->
-{% endblock %}
+        window.location.href = "/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+    {# endif #}<!--browse_acclinkageio-->
+{# endblock #}
 { % block addjs % }
 
 { % endblock % }

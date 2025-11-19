@@ -1,0 +1,391 @@
+{% extends "special_menu.html" %}
+{% load i18n %}
+
+{% block headjs %}
+    {% block add_headjs %}
+    {% endblock %}
+{% endblock %}
+
+{% block content %}
+    {% if request.user|HasPerm:"contenttypes.can_VideoPreviewPage" %}
+    <!-- <div style="padding-bottom: 2px ! important;" class="div_box2" id="id_search"> -->
+    <div id="id_datalist" class="div_box">
+        <h1>{% trans "视频预览" %}</h1>
+        <div id="id_video_chanel" style="float:left; width:240px;">
+        	<div>
+        		<!--<table  id="id_form_search" class="tbl_form_search">-->
+        		<table  class="tbl_form_search" >
+                	<tbody>  
+                    	<tr class="header_div_left">
+                        	<th align="left"><label>{% trans "视频服务器" %}:</label></th>
+                        	<td align="left">
+                            	<select  id="id_videoserver" style="width:150px !important;">
+                            	</select>
+                        	</td>
+                   		 </tr> 
+                	</tbody>
+				</table>
+        	</div>
+            <fieldset><legend>{% trans "通道列表" %}</legend>
+                <div style="height:280px;padding:5px; overflow:auto;">
+                    <table width="100%" cellspacing="0" cellpadding="0">
+                        <tr>
+                          <td valign="top">
+                            <table cellspacing="0" cellpadding="0" width="100%">
+                                <tbody id="rt_content" class="video_list Link_hui">
+                                <tr>
+                                    <td id="video_prompt" class="Link_hui"><br /></td>
+                                </tr>
+                                </tbody>
+                            </table>
+                          </td>
+                        </tr>
+                    </table>
+                </div>
+            </fieldset>
+        </div>
+        <div id="id_video_ax" style="float:left; width:550px;padding-left:50px;display:none;">
+            <table cellspacing="0" cellpadding="0">
+                <tbody>
+                    <tr>
+                        <td class="corner_tl"></td>
+                        <td class="corner_tm"></td>
+                        <td class="corner_tr"></td>
+                    </tr>
+                    <tr>
+                        <td class="corner_ml"></td>
+                        <td class="corner_mm" id = "ocx_obj">
+                        </td>
+                        <td class="corner_mr"></td>
+                    </tr>
+                    <tr>
+                        <td class="corner_bl"></td>
+                        <td class="corner_bm"></td>
+                        <td class="corner_br"></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="clear"></div>
+    </div>
+    <INPUT id=CurSelWnd value=0 type=hidden>
+    <INPUT id=CurWndChannel value=-1 type=hidden>
+	<script>
+	var xmlDoc = new ActiveXObject("Microsoft.XMLDOM");
+    xmlDoc.async="false"
+    xmlDoc.loadXML(SelectWndInfo)	
+	CurSelWnd.value = xmlDoc.documentElement.childNodes[0].childNodes[0].nodeValue;//选中的窗口
+	iWndChannel = parseInt(xmlDoc.documentElement.childNodes[1].childNodes[0].nodeValue);    //选中窗口对应的通道
+	if(parseInt(iWndChannel) >= 32)
+	{
+	   	CurWndChannel.value = parseInt(iWndChannel) - 32; 
+	}
+	else
+	{
+		CurWndChannel.value =  iWndChannel;
+	}  
+	</script>
+    {% endif %}<!--contenttypes.can_VideoPreviewPage -->
+{% endblock %}
+
+{% block getdatalist %}
+
+{% endblock %}
+
+{% block addjs %}
+    {% if request.user|HasPerm:"contenttypes.can_VideoPreviewPage" %}
+    var cur_link_num = 0;//当前通道连接数或码流
+    var rtlisthtml = "";
+    var DHiMPlayer = null;
+    var Netocx1 = null;
+    var DaHuaOCX = null;
+    var server_ip = null;//记录上一次的视频服务器的IP地址
+    var m_bChannelPlay = null;		  //通道是否在预览
+	var m_iWindowChannel = null;      //窗口对应的通道
+	var m_iChannelWindow = null;      //通道对应的窗口
+    var Brand = null;//视频设备品牌
+    var preview_state = false;//视频预览状态。
+    //页面加载判断浏览器并处理
+    window.onload = function()
+    {
+        if(!$.browser.msie)
+        {
+            alert(gettext("目前该功能仅支持IE系列及IE内核的浏览器，请更换！"));
+            window.location.href = "/{{ request.surl }}video/ChannelMngPage/";
+            return;              
+        } 
+        else
+        {
+            //只有ie浏览器下才将右侧放开。--darcy20120228
+            channel_length = $("td[id^=localcenter]").length;
+            //if(channel_length == 0)
+            //{
+                //alert(gettext("当前系统中没有添加视频服务器，请添加！"));
+                //window.location.href = "/{{ request.surl }}data/iclock/device/";
+               // return; 
+            //}
+            if(channel_length > 0)
+            {
+                $($("td[id^=localcenter]")[0]).click();//默认预览第一个通道
+                $("#id_video_ax").show();
+            }
+        }
+    }
+
+    //视频通道列表
+    function channel_list(data)
+    {
+        rtlisthtml = "";
+        
+        for(a in data.channels) 
+        {
+          rtlisthtml += '<tr id="' + data.channels[a][1]+ '">'
+              + '<td id="localcenter'+ data.channels[a][1]+'"'
+              + 'name="'+ data.channels[a][1]+'"'
+              + 'onClick="show_child(this)"><div>' + data.channels[a][6] + '</div></td></tr>';
+        }
+        
+        if(Netocx1 != null)
+        {
+        	Netocx1.Logout();//登录前先注销。
+        	document.getElementById("NetOCX1").logout();//当前视频服务器变化时，释放占用的通道,中控IPC暂时不考虑
+        	Netocx1 = null;
+        }
+        if(DHiMPlayer != null)
+        {
+            DHiMPlayer.Stop();
+            DHiMPlayer = null;
+        }
+        if(DaHuaOCX != null)
+        {
+        	DaHuaOCX.LogoutDevice();
+        	DaHuaOCX = null;
+        }
+        $("#ocx_obj").empty();//清空object
+        //处理通道列表的样式。-darcy20120314
+        $("#rt_content").empty(); 
+        $("#rt_content").append(rtlisthtml);       
+        $("#rt_content").find("tr:odd").addClass("video_list_evenbg");
+        Brand = data.channels[0][0];
+        var ip = data.channels[0][2];
+        var port = data.channels[0][3];
+        var user = data.channels[0][4];
+        var pwd = data.channels[0][5];
+        if(Brand == 200)
+        {
+        	$("#ocx_obj").append('<object classid="clsid:5A418331-514E-4C54-B526-6AC3C135FFD2" codebase="/media/ActiveX/NetVideoActiveX_V23.cab#version=2,3,15,1" standby="Waiting..." id="Netocx1" width="530px" height="360px" name="ocx1" align="center" ></object>');
+        	Netocx1 = document.getElementById("Netocx1");
+        	if(document.getElementById("Netocx1").object == null)
+	        {
+				alert(gettext("控件初始化失败，请确定视频设备类型是否选择正确或重装控件！"));
+	            return;               
+	        }
+	        
+	        m_bChannelPlay = new Array();		  //通道是否在预览
+			m_iWindowChannel = new Array();      //窗口对应的通道
+			m_iChannelWindow = new Array();      //通道对应的窗口
+        	var user_id = Netocx1.Login(ip,port,user,pwd);
+        	Netocx1.GetRegeditInfo();//根据显示器，自动调节监控画面窄/宽屏
+        	if(user_id < 0)
+        	{
+        		alert(gettext("视频服务器登录失败，请确认后重试！"));
+		        //Netocx1.ClearOCX();该object下不支持该函数
+		        return;
+        	}	
+        }
+        else if(Brand == 101)
+        {
+            $("#ocx_obj").append('<object classid="clsid:42B182F9-3F08-484E-9913-07193A5D36AD" codebase="/media/ActiveX/ZKClientOCXPlus_Setup.exe" id="DHiMPlayer" align="absbottom" viewastext width="530px" height="360px"  align="center"></object>');
+            DHiMPlayer = document.getElementById("DHiMPlayer");
+            if(document.getElementById("DHiMPlayer").object == null)
+            {
+                alert(gettext("控件初始化失败，请确定视频设备类型是否选择正确或重装控件！"));
+                return;               
+            }
+            //var curStreamNum = DHiMPlayer.GetStreamNum();
+            var reg_ret = DHiMPlayer.SetUrl(ip,port,12,user,pwd);//11为主码流，12为次码流
+            if (reg_ret < 0)
+            {
+                alert(gettext("用户注册失败，请检查设备配置"));
+                return;
+                
+            }
+        }
+        else if(Brand == 300)
+        {
+            $("#ocx_obj").append('<object classid="CLSID:EDD8DF0B-A160-45df-A26E-67C390A57B18" codebase="/media/ActiveX/DaHua_webrec.cab#version=3,0,0,1" standby="Waiting..." id="DaHuaocx" width="530px" height="360px" align="center" >'
+                                 +'<param name="lVideoWindNum" value=9>'
+                                 +'<param name="SetLangFromIP" value="http://' + ip + '/">'
+                                 +'<param name="SetHostPort" value=' + port + '>'
+                                 //+'<param name="SetLanguage" value=' + 'English' + '>'
+                                 +'</object>');
+        	DaHuaOCX = document.getElementById("DaHuaocx");
+        	if(document.getElementById("DaHuaocx").object == null)
+	        {
+				alert(gettext("控件初始化失败，请确定视频设备类型是否选择正确或重装控件！"));
+	            return;               
+	        }
+			login = DaHuaOCX.LoginDeviceEx(ip, port, user, pwd, 0);
+        	if(login == 0)
+        	{
+        		alert(gettext("视频服务器登录失败，请确认后重试！"));
+        		DaHuaOCX.LogoutDevice();
+		        return;
+        	}
+        }
+        var tbd = $("#rt_content");
+        var tbdr = tbd.find("tr");
+        var focus_row = {};
+        for(var i=0;i<tbdr.length;i++)
+        {
+        	tbdr.eq(i)
+        	.hover(			
+        		function(){
+        			$(this).addClass("video_list_hover");
+        		},
+        		function(){
+        			$(this).removeClass("video_list_hover");
+        		}
+        	)
+        	.click(function(){
+        		$(this).addClass("video_list_focus");
+        		if(focus_row.click_row && focus_row.click_row.get(0) != this){
+        			focus_row.click_row.removeClass("video_list_focus");
+        		}
+        		focus_row.click_row = $(this);
+        	});
+        }        
+    }
+    
+    function show_child(data)
+    {
+    	var iChannelNum = parseInt(data.name);
+        if(Brand == 200)
+        {
+            iPreWndChannel = parseInt(CurWndChannel.value);
+            if(m_bChannelPlay[iChannelNum] == 0 || m_bChannelPlay[iChannelNum] == undefined)
+            {	 	
+                 if(iPreWndChannel >= 0)
+                 {
+                     StopPlay(iPreWndChannel);  
+                 }   
+                 if(!Netocx1.StartRealPlay(iChannelNum, CurSelWnd.value))
+                 {
+                    alert(gettext("预览失败"));
+                    return;
+                 }
+                 m_bChannelPlay[iChannelNum] = 1; 
+                 m_iWindowChannel[parseInt(CurSelWnd.value)] = iChannelNum;
+                 m_iChannelWindow[iChannelNum] = CurSelWnd.value;
+            }
+            
+            else    
+            { 
+                StopPlay(iChannelNum);
+            }  
+        }
+        else if(Brand ==101)
+        {
+        	if(!preview_state)
+        	{
+	            if(DHiMPlayer.Play() == -1)
+	            {
+	                alert(gettext("预览失败"));
+	                return;
+	            }
+	            preview_state = true;
+            }
+        }
+        else if(Brand == 300)
+        {
+            if(DaHuaOCX.ConnectRealVideo(iChannelNum,1) == 0)
+            {
+                alert(gettext("预览失败"));
+                return;
+            }
+            
+        }
+    }
+	
+	function StopPlay(iChannelNum)
+	{
+		Netocx1.StopRealPlay(iChannelNum);
+		m_bChannelPlay[iChannelNum] = 0;
+		m_iWindowChannel[parseInt(CurSelWnd.value)] = 0;  
+	}
+	
+    $("#id_videoserver").change(function(){
+    	preview_state = false;
+        current_video_server = $(this).val();
+        get_channels(current_video_server); 
+        $($("td[id^=localcenter]")[0]).click();//默认加载视频服务器的第一个视频通道
+    });
+    
+    //加载视频服务器
+    $(function(){
+    	var url = '/{{ request.surl }}video/GetData/?func=get_video';
+    	$.ajax({
+			   type: "GET",
+			   url: url,
+			   dataType: "json",
+			   async: false,
+			   success: function(data)
+			   {
+					if(data.videos != "")
+					{
+					   for(a in data.videos)
+					   {
+							$("#id_videoserver").append('<option value="'+data.videos[a][0]+'">'+data.videos[a][1]+'</option>');
+					   }
+					   get_channels(data.videos[0][0]);//默认加载第一个视频服务器的视频通道
+					}
+			   }
+        });        		   
+    });
+  	
+  	//获取视频通道
+	function get_channels(id)//视频服务器id
+	{	          
+	    var url = '/{{ request.surl }}video/GetData/?func=get_channels&videosever_id='+id;
+        $.ajax({
+			   type: "GET",
+			   url: url,
+			   dataType: "json",
+			   async: false,
+			   success: function(data)
+			   {
+					if(data.channels != "")
+					{
+					   channel_list(data);
+					}
+					else
+					{
+						alert(gettext("请启用当前视频设备下被禁用的视频通道！"))
+					}
+			   }
+        });        		   
+    }
+    window.onbeforeunload = function()  {
+        if(Netocx1 != null)
+        {
+            Netocx1.Logout();//关闭窗口前注销用户
+        	document.getElementById("NetOCX1").logout();
+        	Netocx1 = null;
+        }
+        if(DHiMPlayer != null)
+        {
+            DHiMPlayer.Stop();
+            DHiMPlayer = null;
+        }
+        if(DaHuaOCX != null)
+        {
+        	DaHuaOCX.LogoutDevice();
+        	DaHuaOCX = null;
+        }
+    }
+    
+    {% else %}<!--contenttypes.can_VideoPreviewPage -->
+        alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
+        window.location.href="/{{ request.surl }}accounts/login/";
+    {% endif %}<!--contenttypes.can_VideoPreviewPage -->
+{% endblock %}

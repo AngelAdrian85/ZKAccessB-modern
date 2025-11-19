@@ -19,8 +19,17 @@ sys.path[:] = [
     p for p in sys.path if not (p and any(marker in p for marker in bad_path_markers))
 ]
 
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Optional: enable importing legacy 'zkeco' unit apps for local exploration.
+# Set environment variable INCLUDE_LEGACY=1 to allow adding the legacy 'zkeco' folder
+# to sys.path. This is intentionally opt-in and should NOT be enabled in production.
+if os.environ.get("INCLUDE_LEGACY") == "1":
+    legacy_root = BASE_DIR.parent / "zkeco"
+    if legacy_root.exists():
+        sys.path.insert(0, str(legacy_root))
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = "django-insecure-your-secret-key-here"
@@ -42,6 +51,11 @@ INSTALLED_APPS = [
     "debug_toolbar",
 ]
 
+# When opting into legacy exploration, enable the local stub app which
+# renders legacy templates for demo purposes.
+if os.environ.get("INCLUDE_LEGACY") == "1":
+    INSTALLED_APPS.append("legacy_stub")
+
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -58,7 +72,7 @@ ROOT_URLCONF = "zkeco_config.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+    "DIRS": [],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -70,6 +84,19 @@ TEMPLATES = [
         },
     },
 ]
+
+# If enabling legacy exploration, add the legacy templates folder to TEMPLATES DIRS
+if os.environ.get("INCLUDE_LEGACY") == "1":
+    legacy_templates = BASE_DIR.parent / 'zkeco' / 'units' / 'adms' / 'mysite' / 'templates'
+    if legacy_templates.exists():
+        TEMPLATES[0]["DIRS"].insert(0, str(legacy_templates))
+    # register the legacy_stub template tags as builtins so legacy templates can use filters
+    try:
+        builtins = TEMPLATES[0]["OPTIONS"].setdefault("builtins", [])
+        if "legacy_stub.templatetags.legacy_filters" not in builtins:
+            builtins.append("legacy_stub.templatetags.legacy_filters")
+    except Exception:
+        pass
 
 WSGI_APPLICATION = "zkeco_config.wsgi.application"
 

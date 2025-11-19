@@ -1,0 +1,55 @@
+[
+  {
+    "model": "legacy_models.dept",
+    "pk": 1,
+    "fields": {
+      "code": "HQ",
+      "DeptName": "Headquarters"
+    }
+  },
+  {
+    "model": "legacy_models.area",
+    "pk": 1,
+    "fields": {
+      "areaname": "Main Building"
+    }
+  },
+  {
+    "model": "legacy_models.employee",
+    "pk": 1,
+    "fields": {
+      "userid": 1001,
+      "badgenumber": "1001",
+      "firstname": "John",
+      "lastname": "Doe",
+      "gender": "M",
+      "defaultdept": 1,
+      "card_number": "0001001",
+      "site_code": "001",
+      "email": "john.doe@example.local",
+      "identitycard": "ID1001",
+      "acc_startdate": null,
+      "acc_enddate": null
+    }
+  },
+  {
+    "model": "legacy_models.issuecard",
+    "pk": 1,
+    "fields": {
+      "cardno": "0001001",
+      "cardstatus": "1",
+      "userid": 1
+    }
+  },
+  {
+    "model": "legacy_models.device",
+    "pk": 1,
+    "fields": {
+      "sn": "SN12345",
+      "device_name": "FrontDoorController",
+      "device_type": 1,
+      "area": 1,
+      "fw_version": "1.0"
+    }
+  }
+]

@@ -1,0 +1,49 @@
+{% extends "data_edit.html" %}
+{% load i18n %}
+
+{% block form %}
+    {% autoescape off %}
+    {% if "mysite.visitor"|hasApp %}  
+    <tr class="displayN">
+   		<td>{{ form.install_language }}</td>
+   	</tr>
+    <tr>
+    	{{ form.visited_emp|field_as_td_h }}
+   	</tr>
+   	<tr>
+    	{{ form.visitor_firstname|field_as_td_h }}
+   	</tr>
+   	<tr id="tr_lastname">
+    	{{ form.visitor_lastname|field_as_td_h }}
+   	</tr>
+   	<tr>
+    	{{ form.visitor_company|field_as_td_h }}
+   	</tr>
+   	<tr id="tr_visit_reason">
+    	{{ form.visit_reason|field_as_td_h }}
+   	</tr>
+   	<tr>
+    	{{ form.visit_date|field_as_td_h }}
+   	</tr>
+   	<tr>
+    	{{ form.remark|field_as_td_h }}
+   	</tr>
+    {% endif %}
+    {% if form.non_field_errors %}
+        <tr><td>{{ form.non_field_errors }}</td></tr>
+    {% endif %}    
+    {% endautoescape %}
+{% endblock %}
+
+{% block addjs %}
+	if($("#id_install_language").val() == 'zh-cn')
+	{
+		$("#tr_lastname").remove();
+	}
+	
+	$(function(){
+		adjust_dropdown_list($("#id_visit_reason"));
+	});
+	
+{% endblock %}
+

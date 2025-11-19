@@ -1,0 +1,158 @@
+{% extends "data_edit.html" %}
+{% load i18n %}
+
+{% block form %}
+    {% autoescape off %}
+    {% if "mysite.visitor"|hasApp %}
+   	{% block form_edit %}
+    <tr id="visitor_info_tr">
+        <td width="250px">
+            <table>
+                <tr>
+                    {{ form.cert_type|field_as_td_h }}
+                </tr>
+                <tr>
+                    {{ form.cert_number|field_as_td_h }}
+                </tr>
+                <tr>
+                    {{ form.visitor_pin|field_as_td_h }}
+                </tr>
+                <tr>
+                	{{ form.visitor_firstname|field_as_td_h }}
+                </tr>
+                <tr>
+                	{{ form.gender|field_as_td_h }}
+                </tr>
+                <tr>
+                	{{ form.homeaddress|field_as_td_h }}
+                </tr>
+                <tr>
+                	{{ form.card|field_as_td_h }}
+                </tr>
+                <tr>
+                    {{ form.visited_pin|field_as_td_h }}
+                </tr>
+                <tr>
+                    {{ form.visited_firstname|field_as_td_h }}
+                </tr>
+                <tr>
+                    {{ form.visited_dept|field_as_td_h }}
+                </tr>
+                <tr>
+                    {{ form.visited_phone|field_as_td_h }}
+                </tr>
+			</table>
+		</td>
+		<td>
+			<table>
+				<tr>
+                	{{ form.visitor_form|field_as_td_h }}
+                </tr>
+				<tr>
+                    {{ form.visitor_company|field_as_td_h }}
+                </tr>
+                    {{ form.visit_reason|field_as_td_h }}
+                </tr>
+                <tr>
+                    {{ form.visitor_number|field_as_td_h }}
+                </tr>
+                <tr>
+                    {{ form.car_number|field_as_td_h }}
+                </tr>
+                <tr>
+                    {{ form.park_number|field_as_td_h }}
+                </tr>
+                <tr>
+                    {{ form.entrance|field_as_td_h }}
+                </tr>
+                <tr>
+                    {{ form.exit_place|field_as_td_h }}
+                </tr>
+                <tr>
+                    {{ form.enter_time|field_as_td_h }}
+                </tr>
+                <tr>
+                    {{ form.exit_time|field_as_td_h }}
+                </tr>
+			</table>
+		</td>
+		<td align="right" width="390px">
+			<table>
+				<tr>
+					{{ form.carried_goods|field_as_td_h }}
+					<td>
+	                    <div class="div_img floatL">
+	                        <div class="ar_r_t">
+	                            <div class="ar_l_t">
+	                                <div class="ar_r_b">
+	                                    <div class="ar_l_b">
+	                                    	<img id='id_img_visitor_certificate' width="120px" height="140px" src="{% if instance.photo %}/{{request.surl}}file/{{ instance.photo }}{% else %}/{{request.surl}}file/error.jpg{% endif %}" onerror="this.src='{{ MEDIA_URL }}/images/userImage.gif'"  alt="credentials photo"/>
+	                                    </div>
+	                                </div>
+	                            </div>
+	                        </div>
+	                    </div>
+	                </td>
+				</tr>
+				<tr>
+					<td>&nbsp;</td>
+					<td align="center">
+						<div class="div_img floatL">
+	                        <div class="div_r_t">
+	                            <div class="div_l_t">
+	                                <div class="div_r_b">
+	                                    <div class="div_l_b">
+	                                    	<img id="id_enter_photo" width="136px" height="160px" alt={% trans "进入照片" %} src="{% if instance.enter_photo %}/{{request.surl}}file/{{ instance.enter_photo }}{% else %}{{ MEDIA_URL }}/images/userImage.gif{% endif %}" onerror="this.src='{{ MEDIA_URL }}/images/userImage.gif'" />
+	                                    </div>
+	                                </div>
+	                            </div>
+	                        </div>
+	                    </div>
+	                </td>
+	                <td align="center">
+						<div class="div_img floatL">
+	                        <div class="div_r_t">
+	                            <div class="div_l_t">
+	                                <div class="div_r_b">
+	                                    <div class="div_l_b">
+	                                    	<img id="id_exit_photo" width="136px" height="160px" alt={% trans "离开照片" %} src="{% if instance.exit_photo %}/{{request.surl}}file/{{ instance.exit_photo }}{% else %}{{ MEDIA_URL }}/images/userImage.gif{% endif %}" onerror="this.src='{{ MEDIA_URL }}/images/userImage.gif'" />
+	                                    </div>
+	                                </div>
+	                            </div>
+	                        </div>
+	                    </div>
+	                </td>
+				</tr>
+			</table>
+		</td>
+	</tr>
+	{% endblock %}
+    {% endif %}
+    {% if form.non_field_errors %}
+        <tr><td>{{ form.non_field_errors }}</td></tr>
+    {% endif %}    
+    {% endautoescape %}
+{% endblock %}
+
+{% block addjs %}
+	var after_init = function()
+	{
+        $("#OK").parent().hide();
+		$("#Cancel").text(gettext("退出"))
+        $("#searching").hide();
+        $("#searched").hide();
+		$("#total_tip").hide();
+        $("#id_showTbl").hide();
+		after_init = undefined;
+		
+		$("#visitor_info_tr input, #visitor_info_tr select, #visitor_info_tr textarea").each(function(){
+		    $(this).attr("readonly", "true");
+		});
+    }
+    //去掉日期控件，暂时--20120810
+    $("#id_help").parent().remove();//去掉帮助
+    $("#id_enter_time").parent().html('<input type="text" value="'+$("#id_enter_time").val()+'" />');
+	$("#id_exit_time").parent().html('<input type="text" value="'+$("#id_exit_time").val()+'" />');
+	$("#id_carried_goods").attr({rows: "10", cols: "22"});//改变携带物品的行数
+    
+{% endblock %}

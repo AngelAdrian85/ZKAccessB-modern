@@ -1,0 +1,77 @@
+{% extends "data_opform.html" %}
+{% load i18n %}
+{% block form %}
+{% autoescape off %}
+	<table style="padding: 20px; padding-left:40px;">
+		<tr>
+			<td>
+				<table id="id_funOn_table" width="550px" style="border-right:1px solid #71a8d8;border-bottom:1px solid #71a8d8;"></table>
+			<td>
+		<tr>
+	</table>
+</div>
+{% if form.non_field_errors %}
+    <tr><td>{{ form.non_field_errors }}</td></tr>
+{% endif %}
+{% endautoescape %}
+{% endblock %}
+
+{% block loading %}
+
+{% endblock %}
+
+{% block addjs %}
+	{% if request.user|HasPerm:"iclock.opgetmoreoptions_device" %}
+	
+	var after_init = function()
+	{
+		if($("#id_funOn_table").html() != null)
+		{
+			$("#OK").parent().hide();
+			$("#Cancel").text(gettext("退出"));			
+		}
+	}
+	
+
+	var dev_id = 0;
+	$(".select_row").each(function(){
+		if($(this).attr("checked"))
+		{
+			dev_id = $(this).parents("tr").attr("data");
+		}
+	});
+	
+	$.ajax({
+		type: "POST",
+		url: "/{{ request.surl }}iaccess/GetData/?func=get_devFunOn&dev_id="+ dev_id,
+		dataType: "json",
+		async: false,
+		success: function(datas)
+		{
+			funOn_list = datas.funOn_list;
+			var html = "";
+			if (funOn_list =='')
+			{ 
+			   alert(gettext("请选择门禁设备，该功能仅针对门禁设备"));
+			}  
+			for(var i in funOn_list)
+			{
+				html += '<tr height="23px"><td style="width:70%;border-left:1px solid #71a8d8;border-top: 1px solid #71a8d8;text-align:center;">' + funOn_list[i][0] + '</td>'
+					+'<td style="width:30%;border-left:1px solid #71a8d8;border-top: 1px solid #71a8d8;text-align:center;">' + funOn_list[i][1] + '</td></tr>';
+			}
+			$("#id_funOn_table").append(html);
+			funOn_list = null;
+			datas = null;
+			html = null;
+		},
+		error: function(XMLHttpRequest, textStatus, errorThrown)
+		{
+			alert(gettext("服务器处理数据失败，请重试！错误码：")+"-623");
+		}
+	});
+
+	{% else %}
+		alert(gettext("对不起,您没有访问该页面的权限,不能浏览更多信息！"));
+		window.location.href = "/{{ request.surl }}accounts/login/";
+	{% endif %}<!-- iclock.opgetmoreoptions_device -->
+{% endblock%}

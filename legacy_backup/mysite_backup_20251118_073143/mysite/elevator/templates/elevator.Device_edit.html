@@ -1,0 +1,11 @@
+{% extends "Device_edit.html" %}
+{% load i18n %}
+
+{% block ele_extboard_html %}
+	<tr class="div_id_ele displayN">
+		{{ form.ele_extboard_count|field_as_td_h }}
+	</tr>
+	<tr class="div_id_ele displayN">
+		{{ form.relay_per_board|field_as_td_h }}
+	</tr>
+{% endblock %}

@@ -1,0 +1,27 @@
+employee:
+  userid: ["userid", "user_id", "id"]
+  badgenumber: ["badgenumber", "badge", "cardno"]
+  firstname: ["firstname", "first_name", "name"]
+  lastname: ["lastname", "last_name"]
+  dept: ["dept", "department", "DeptName", "deptname"]
+  email: ["email"]
+  identitycard: ["identitycard", "idcard"]
+  acc_startdate: ["acc_startdate", "accstartdate"]
+  acc_enddate: ["acc_enddate", "accenddate"]
+
+issuecard:
+  cardno: ["cardno", "card_no", "cardnumber", "card"]
+  cardstatus: ["cardstatus", "status"]
+  userid: ["userid", "user_id"]
+
+device:
+  sn: ["sn", "serial", "serial_no"]
+  device_name: ["device_name", "name"]
+  device_type: ["device_type", "type"]
+  area_name: ["area_name", "area"]
+  fw_version: ["fw_version", "firmware"]
+  com_port: ["com_port"]
+  com_address: ["com_address"]
+  fp_count: ["fp_count", "fpcnt"]
+  transaction_count: ["transaction_count", "trans_count"]
+  acpanel_type: ["acpanel_type"]

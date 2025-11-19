@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Employees (ORM-backed)</h1>
+
+{% if employees %}
+  <table class="table">
+    <thead>
+      <tr><th>User ID</th><th>Name</th><th>PK</th></tr>
+    </thead>
+    <tbody>
+    {% for e in employees %}
+      <tr>
+        <td>{{ e.userid }}</td>
+        <td>{{ e.firstname }} {{ e.lastname }}</td>
+        <td>{{ e.pk }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p>No employee data available via ORM. This is a placeholder page for the migrated employee list.</p>
+  <ul>
+    <li>If you want to load sample data, run the ETL: <code>python manage.py import_legacy --employees zkeco_modern/etl/fixtures/employee_sample.csv --commit</code></li>
+  </ul>
+{% endif %}
+
+{% endblock %}

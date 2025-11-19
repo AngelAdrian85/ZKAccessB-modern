@@ -1,0 +1,116 @@
+<object id="PrintActiveX" classid="clsid:3ede745c-4adb-42a6-ab25-5621edbdfd6b" codebase="../cabs/QWPrint.cab#version=1,3,8,2" height="0" width="0" > </object>
+
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="{{ LANGUAGE_CODE }}" xml:lang="{{ LANGUAGE_CODE }}" {% if LANGUAGE_BIDI %}dir="rtl"{% endif %}>
+    <head>
+        <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+        <title></title>
+        <style>.font{font-size:12px;}</style>
+        <script src="{{ MEDIA_URL }}/jslib/jquery.js"></script>
+    </head>
+    <body>
+        <br/>
+        <div style="width:240px">
+            <div align="center"><b>访客单"</b></div>
+            <table border="1" cellspacing="0" cellpadding="0" class="font">
+                <tr>
+                    <td rowspan="4"><img id="id_photo_byte" width="75px" height="85px"/></td>
+                    <td align="center">访客"</td>
+                    <td width="90px" id="id_visitor">&nbsp;</td>
+                </tr>
+                <tr>
+                    <td align="center">被访人员" %}</td>
+                    <td id="id_visited_name">&nbsp;</td>
+                </tr>
+                <tr>
+                    <td align="center">来访人数" %}</td>
+                    <td id="id_number">&nbsp;</td>
+                </tr>
+                <tr>
+                    <td align="center">来访事由" %}</td>
+                    <td id="id_reason">&nbsp;</td>
+                </tr>
+                
+                <tr id="tr_ID">
+                    <td align="center" height="22px">证件号码" %}</td>
+                    <td colspan="2" id="id_ID">&nbsp;</td>
+                </tr>
+                
+                <tr>
+                    <td align="center" height="22px">来访单位" %}</td>
+                    <td colspan="2" id="id_company">&nbsp;</td>
+                </tr>
+                <tr>
+                    <td align="center" height="22px">携带物品" %}</td>
+                    <td colspan="2" id="id_produce">&nbsp;</td>
+                </tr>
+                <tr>
+                    <td align="center" height="22px">被访部门" %}</td>
+                    <td colspan="2" id="id_dept">&nbsp;</td>
+                </tr>
+                <tr>
+                    <td align="center" height="22px">进入时间" %}</td>
+                    <td colspan="3" id="id_enter_time">&nbsp;</td>
+                </tr>
+                <tr>
+                    <td align="center" height="22px">离开时间" %}</td>
+                    <td colspan="2">&nbsp;</td>
+                </tr>
+                <tr>
+                    <td align="center" height="22px">被访人签名" %}</td>
+                    <td colspan="2">&nbsp;</td>
+                </tr>
+                <tr>
+                    <td align="center" height="22px">保安签名" %}</td>
+                    <td colspan="2">&nbsp;</td>
+                </tr>
+                <tr>
+                    <td colspan="3" align="center"><br><img id="id_barcode_img" src="/file/photo/%s" /></td>
+                </tr>
+                <tr id="abc">
+                    <td>
+                        <input type="button" name="print" value="预览并打印" onclick="printView()">
+                    </td>
+                    <td>
+                        <input type="button" name="print" value="直接打印" onclick="print()" />  
+                    </td>
+                </tr>
+            </table>
+        </div><br>
+        <div id="id_print_button" style="height:25px;padding:5px 0 5px 0;text-align: right;">
+            <button style="padding:0px 10px 0px 10px; background-color:rgb(134, 174, 0);border: 1px solid #004B6A;border-radius: 3px 3px 3px 3px;color: #FFFFFF;cursor: default;height: 22px;margin: 1px 7px 0 0;filter:progid:DXImageTransform.Microsoft.gradient(startColorstr='#92b61a', endColorstr='#6b8b00');" value="true" onclick="print_form()">打印</button>
+        </div>
+        
+    </body>
+</html>
+
+<script type="text/javascript">
+
+    function remove1()
+    {
+        $("#abc").remove();
+        PrintActiveX.PrintView();
+        //PrintActiveX.Print(false);
+    }
+    
+    function printView()
+    {
+        PrintActiveX.PrintView();
+    } 
+    
+    function print()
+    {
+        PrintActiveX.paddingTop=30;
+        PrintActiveX.paddingRight=0;
+        PrintActiveX.paddingBottom=0;
+        PrintActiveX.paddingLeft=80;
+        PrintActiveX.header="<div style=\"float:left;border-bottom:1px solid #eeeeee;padding:0px;\">&b&w<span style=\"padding-right:20px;float:right\"></span>&b</div>";
+        PrintActiveX.pageWidth=750;
+        PrintActiveX.pageHeight=1100;
+        PrintActiveX.orientation=1;
+    
+        PrintActiveX.Print(false);
+    } 
+    
+</script>
+

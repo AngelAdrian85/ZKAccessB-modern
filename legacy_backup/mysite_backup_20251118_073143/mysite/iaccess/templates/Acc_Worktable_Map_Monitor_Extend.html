@@ -1,0 +1,43 @@
+{% extends "Acc_Electro_Map.html" %}
+{% load i18n %}
+
+{% block init_height%}
+"height:500px"
+{% endblock %}
+
+{% block table_head %}
+   <th width="30%">{% trans '时间' %}</th>
+   <!-- <th width="12%">{% trans '设备' %}</th> -->
+   <th width="30%">{% trans '事件点' %}</th>
+   <!-- <th width="15%">{% trans '事件描述' %}</th> -->
+   <!-- <th width="9%">{% trans '卡号' %}</th> -->
+   <th width="20%">{% trans '人员编号(姓名)' %}</th>
+   <th width="20%">{% trans '出入状态' %}</th>
+   <!-- <th width="10%">{% trans '验证方式' %}</th> -->
+{% endblock %}
+
+{% block addjs_base %}
+$("#id_monitor_events").css({"height":"40em"});
+$(".rightBox").css({"min-width":"660px"});
+$("#add_card_menu").remove();
+$("#id_add_card").remove();
+
+//$("#id_electro_map").hide();
+{% endblock %}
+
+{% block right_click_menu %}
+{% endblock %}
+
+
+{% block worktable_map_js %}
+var title_info = '{% trans "设备" %}: ' + datas.device
+                + '     &#xd;{% trans "事件描述" %}: ' + datas.content
+                + '     &#xd;{% trans "卡号" %}: ' + datas.card
+                + '     &#xd;{% trans "验证方式" %}: ' + datas.verified;
+rtlisthtml += '<td width="15%" title="'+title_info+'">'+datas.time+'</td>'
+        + '<td width="15%" title="'+title_info+'">'+datas.event_point+'</td>'
+        + '<td width="13%" title="'+title_info+'">'+datas.emp+'</td>'
+        + '<td width="8%" title="'+title_info+'">'+datas.state+'</td>'
+        + '<td class = "displayN">'+type+'</td></tr>';
+{% endblock %}
+

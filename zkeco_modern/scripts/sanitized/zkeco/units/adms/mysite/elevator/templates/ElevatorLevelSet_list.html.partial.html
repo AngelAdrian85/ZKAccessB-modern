@@ -1,0 +1,28 @@
+{% extends "AccLevelSet_list.html" %}
+{% load i18n %}
+
+{% block leftBoxMiddle %}
+{% endblock %}
+
+{% block perm_control_html %}
+    {% if not request.user|HasPerm:"contenttypes.can_FloorLevelSetPage" %}
+        $("#id_datalist").remove();
+        alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
+        window.location.href = "/{{ request.surl }}accounts/login/";
+    {% endif %}<!--can_FloorLevelSetPage-->
+{% endblock %}
+//同时适用门禁和梯控-darcy20120419
+{% block getdatalist_level_type %}
+	$("#id_advanced_search").hide();
+    var level_type = 2;//电梯控制器
+    var model_url = "/data/iaccess/AccLevelSet/";
+    $("#id_sys_cur_model").val("AccLevelSet");
+{% endblock %}
+
+{% block perm_control_js %}
+    {% if not request.user|HasPerm:"contenttypes.can_FloorLevelSetPage" %}
+        $("#id_datalist").remove();
+        alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
+        window.location.href = "/{{ request.surl }}accounts/login/";
+    {% endif %}<!--can_FloorLevelSetPage-->
+{% endblock %}

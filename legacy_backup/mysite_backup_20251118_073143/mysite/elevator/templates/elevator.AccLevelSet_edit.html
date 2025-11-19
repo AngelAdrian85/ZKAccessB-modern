@@ -1,0 +1,55 @@
+{% extends "AccLevelSet_edit.html" %}
+{% load i18n %}
+
+{% block form %}
+	{% if request.user|HasPermDefaultGiven:"iaccess.change_acclevelset" %}
+	{% autoescape off %}
+	<tr><td>
+		<div class="levelset_edit_table_title">
+			<table id="levelset_edit_table" cellpadding="3px">	
+				<tr>
+					{{ form.level_name|field_as_td_h }}
+				</tr>
+				<tr>
+					<th><label class="required" for="id_door_group">{% trans "时间段" %}:</label></th>
+					{{ form.level_timeseg|field_as_td_h_special }}
+				</tr>
+				{% if "mysite.visitor"|hasApp %}
+					<tr>
+						{{ form.is_visitor|field_as_td_h }}
+					</tr>
+				{% endif %}
+				<tr>
+					<th><label for="id_door_group">{% trans "控制组合" %}:</label></th>
+					{{ form.door_group|field_as_td_h_special }}
+				</tr>
+				{% if form.non_field_errors %}
+				<tr><td>{{ form.non_field_errors }}</td></tr>
+				{% endif %}
+			</table>
+		</div>
+		<div class="displayN"><input type="text" name="level_type" id="id_level_type" value='2' /></div>
+		
+	</td></tr>
+	{% endautoescape %}
+	{% endif %}<!--change_accdoor-->
+{% endblock %}
+
+{% block addjs%}
+	{% if request.user|HasPermDefaultGiven:"iaccess.change_acclevelset" %}
+
+		$("#id_help_text").html("{% trans '梯控权限组定义的是某个时间段内某些楼层的访问权限，具体是哪个时间段由下面的时间段属性设置，具体是哪些楼层有下面的控制组合属性指定。<br>系统中不允许设置时间段和控制组合完全相同的两个权限组。' %}")  
+		var str = $("#id_span_title").html();
+		var tem = gettext("当前位置");
+
+		index = str.indexOf(tem); 
+		//alert(index)
+		str = str.substring(0,index) + "{% trans '当前位置：梯控系统 -> 梯控权限组 -> 新增' %}";
+		$("#id_span_title").html(str);
+		$(".icon_help_current").remove();
+
+	{% else %}
+	    alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
+	    window.location.href = "/{{ request.surl }}accounts/login/";
+	{% endif %}<!--add/change_accdoor-->
+{% endblock %}

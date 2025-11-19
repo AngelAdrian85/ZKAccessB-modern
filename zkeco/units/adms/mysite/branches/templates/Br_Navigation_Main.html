@@ -1,43 +1,43 @@
-{% extends "Acc_RTMonitor.html" %}
-{% load i18n %}
+{# extends "Acc_RTMonitor.html" #}
+{# load i18n #}
 
-{% block headjs %}
-    {% if request.user|HasPerm:"contenttypes.can_MonitorAllPage" %}
-    <script src="{{ MEDIA_URL }}/jslib/jquery.contextmenu.r2.packed.js"></script>
-    <script src="{{ MEDIA_URL }}/jslib/jquery.messager.js"></script>
-        {% block add_headjs %}
-        {% endblock %}
-    {% endif %}
-{% endblock %}
+{# block headjs #}
+    {# if request.user|HasPerm:"contenttypes.can_MonitorAllPage" #}
+    <script></script>
+    <script></script>
+        {# block add_headjs #}
+        {# endblock #}
+    {# endif #}
+{# endblock #}
 
-{% block content %}
-    {% if request.user|HasPerm:"contenttypes.can_MonitorAllPage" %}
-    {% block monitor_doors_maps %}
-    <div id="id_monitor_branches" class="div_box"><h1>{% trans "分控监控" %}</h1>
+{# block content #}
+    {# if request.user|HasPerm:"contenttypes.can_MonitorAllPage" #}
+    {# block monitor_doors_maps #}
+    <div id="id_monitor_branches" class="div_box"><h1>{# trans "分控监控" #}</h1>
         <!--<div id="id_door_ops" class="grid Link_blue1">
 			<div class="floatL">
-				<<div id="monitor_device"><label>{% trans "控制器" %}</label><select><option value="0">-----------------</option></select></div>
-				<div id="monitor_door"><label>{% trans "门" %}</label><select><option value="0">-----------------</option></select></div>
+				<<div id="monitor_device"><label>{# trans "控制器" #}</label><select><option value="0">-----------------</option></select></div>
+				<div id="monitor_door"><label>{# trans "门" #}</label><select><option value="0">-----------------</option></select></div>
 			</div>
             <div class="floatL">
 				<table><tr>
 					<td>
                         <div class="action openalldoor nowrap">
-                            <a id="openpart_all" onclick="show_opendoor(this.id)" href="javascript:void(0)">{% trans "开当前所有门" %}</a>
+                            <a id="openpart_all" onclick="show_opendoor(this.id)" href="javascript:void(0)">{# trans "开当前所有门" #}</a>
                         </div>
                     </td>
 					<td>
                         <div class="action nowrap">
-                            <a id="closepart_all" onclick="show_closedoor(this.id)" href="javascript:void(0)">{% trans "关当前所有门" %}</a>
+                            <a id="closepart_all" onclick="show_closedoor(this.id)" href="javascript:void(0)">{# trans "关当前所有门" #}</a>
                         </div>
                     </td>
 				</tr></table>
 			</div>
-			<div class="action nowrap displayN"><a id="cancelall" href="javascript:void(0)">{% trans "取消全部报警" %}</a></div>
+			<div class="action nowrap displayN"><a id="cancelall" href="javascript:void(0)">{# trans "取消全部报警" #}</a></div>
 			<div class="clear"></div>
         </div>-->
-        <div id="id_branches_loading">{% trans "正在获取系统内用户授权范围内的所有分控服务器......" %}</div>
-        <div id="id_branches_judge">{% trans "当前没有有效的分控服务器可供显示！" %}</div>
+        <div id="id_branches_loading">{# trans "正在获取系统内用户授权范围内的所有分控服务器......" #}</div>
+        <div id="id_branches_judge">{# trans "当前没有有效的分控服务器可供显示！" #}</div>
         <!--地图显示-start-->
         <div id="id_branches_show" class="branches_show">
             <ul class="tabs">
@@ -48,31 +48,31 @@
         <div id="id_door_state"></div>
 		<div class="clearB"></div>
     </div>
-	{% endblock %}<!--end of monitor_doors_maps-->
+	{# endblock #}<!--end of monitor_doors_maps-->
 
-    {% block alarm_sound %}
+    {# block alarm_sound #}
     <div id="id_alarm_sound"></div><!--警报声-->
-    {% endblock %}<!--end of alarm_sound-->
+    {# endblock #}<!--end of alarm_sound-->
    
 
-    {% block addmiddiv %}
+    {# block addmiddiv #}
     <div id="id_tip" style="display:none" class="div_tip ui-corner-all"></div>
-    {% endblock %}<!--end of addmiddiv-->
+    {# endblock #}<!--end of addmiddiv-->
 
-	{% block monitor_events %}
+	{# block monitor_events #}
     
-    {% endblock %}<!-- end of monitor_events -->
+    {# endblock #}<!-- end of monitor_events -->
 
-    {% block right_click_menu %}{% endblock %}
+    {# block right_click_menu #} {# endblock #}
 
-    {% endif %}<!--can_MonitorAllPage-->
+    {# endif #}<!--can_MonitorAllPage-->
 
-{% endblock %}<!--end of content-->
+{# endblock #}<!--end of content-->
 
-{% block addjs %}
-    {% if request.user|HasPerm:"contenttypes.can_RTMonitorPage" %}
+{# block addjs #}
+    {# if request.user|HasPerm:"contenttypes.can_RTMonitorPage" #}
 
-    {% block base_variables %}
+    {# block base_variables #}
         //$("#id_show_alarm").hide();//默认此div不显示
         var gdata = null;//global variable
         var gdev_filter = "";//门状态的监控的设备条件传给事件监控
@@ -85,10 +85,10 @@
         var src_closed = "/media/images/iaccess/door_closed.jpg";
         var src_alarm = "/media/images/iaccess/door_alarm.jpg";
         var src_open_timeout = "/media/images/iaccess/door_open_timeout.jpg";
-    {% endblock %}    
+    {# endblock #}    
     
     //start of branches monitor
-    {% block electro_map %}
+    {# block electro_map #}
         //初始化分控服务器-start
         function init_branchess()
         {
@@ -96,7 +96,7 @@
             var stamp0 = new Date().getTime();
             $.ajax({
                 type: "POST",
-                url: "/{{ request.surl }}branches/BranchesServer/?func=init_branches&stamp="+stamp0,
+                url: "/&#123;&#123; request.surl &#125;&#125;branches/BranchesServer/?func=init_branches&stamp="+stamp0,
                 dataType: "json",
                 async: true,
                 success: function(init_data)
@@ -172,12 +172,12 @@
 
 
         
-    {% endblock %}//end of the brahches monitor darcy20110714
+    {# endblock #}//end of the brahches monitor darcy20110714
 
-    {% else %}<!--can_RTMonitorPage-->
+    {# else #}<!--can_RTMonitorPage-->
         alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
-        window.location.href = "/{{ request.surl }}accounts/login/";
-    {% endif %}<!--can_RTMonitorPage-->
+        window.location.href = "/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+    {# endif #}<!--can_RTMonitorPage-->
 
 
-{% endblock %}<!--end of addjs-->
+{# endblock #}<!--end of addjs-->

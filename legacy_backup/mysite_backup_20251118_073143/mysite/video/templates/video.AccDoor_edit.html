@@ -1,0 +1,133 @@
+{% extends "AccDoor_edit.html" %}
+{% load i18n %}
+
+{% block reader_extend_header %}
+	<td>
+		<span>{% trans "绑定视频通道" %}</span>
+	</td>
+{% endblock %}		
+
+{% block reader_extend_1 %}
+	<td>
+		<select class="videoserver" id="video_0">
+			<option value="-1" selected="selected">{% trans "请选定视频服务器" %}</option>
+		</select>
+		<select name="channel_0" id="channel_0">
+			<option value="-1" selected="selected">{% trans "请选定视频通道" %}</option>
+		</select>
+	</td>					
+{% endblock %}	
+{% block reader_extend_2 %}
+	<td>
+		<select class="videoserver" id="video_1">
+			<option value="-1" selected="selected">{% trans "请选定视频服务器" %}</option>
+		</select>
+		<select name="channel_1" id="channel_1">
+			<option value="-1" selected="selected">{% trans "请选定视频通道" %}</option>
+		</select>
+	</td>					
+{% endblock %}
+
+{% block special_js_door_edit %}
+	//获取视频设备，用以选择视频通道供读头绑定
+	var url = '/{{ request.surl }}video/GetData/?func=get_video';
+	$.ajax({
+		type: "GET",
+		url: url,
+		dataType: "json",
+		async: false,
+		success: function(data)
+		{
+			if(data.videos != "")
+			{
+			   for(a in data.videos)
+			   {
+				   $(".videoserver").append('<option value="'+data.videos[a][0]+'">'+data.videos[a][1]+'</option>');
+			   }
+			}
+		}
+	});        		   
+		
+	//展示读头已绑定的视频设备和视频通道
+	var door_id = $("#id_model_pk").val();		
+	var url = '/{{ request.surl }}video/GetData/?func=get_channel_for_accdoor&door_id='+$("#id_model_pk").val();//$("#id_model_pk").val()为当前门id
+	$.ajax({
+		type: "GET",
+		url: url,
+		dataType: "json",
+		async: false,
+		success: function(data)
+		{
+			if(data.datas != "")//如果没有设置过，此处为空。
+			{
+				for(j in data.datas)
+				{	
+				   $("#video_"+data.datas[j][3]).val(data.datas[j][0]);//显示已选定的视频设备
+				   var channel_id = "#channel_"+data.datas[j][3];
+				   var operateURL =  '/{{ request.surl }}video/GetData/?func=get_channels&video_id='+data.datas[j][0]+'&reader_id='+data.datas[j][1];
+				   $(channel_id+" option:gt(0)").remove();
+				   $.ajax({			//根据已绑定的视频设备，获取视频设备下的视频通道
+					   type:"GET", 
+					   url:operateURL, 
+					   dataType:"json", 
+					   async:false, 
+					   success:function(data)
+					   {
+							if(data.channels != "")
+							{
+							   for(a in data.channels)
+							   {
+								   $(channel_id).append('<option value="'+data.channels[a][0]+'">'+data.channels[a][1]+'</option>');
+							   }
+							}
+					   }
+					});
+					$(channel_id).val(data.datas[j][2]);//显示已选定的视频通道
+				}
+			}
+		}
+	});        		   
+		
+	//根据视频设备的选择变化，获取对应的视频通道  
+	$("select[id^='video']").change(function(){
+		var video_id = $(this).val();
+		var reader_id = $(this).parent().parent().find("input[id^='id_reader_id']").val();
+		var channel_id = "#channel_"+this.id.split("_")[1];
+		var operate_url =  '/{{ request.surl }}video/GetData/?func=get_channels&video_id='+video_id+'&reader_id='+reader_id;
+		$(channel_id+" option:gt(0)").remove();
+		if (video_id == -1)//当用户没有选择视频设备时，不在发送ajax请求
+		{
+			return;
+		}
+		$.ajax({
+		   type: "GET", 
+		   url: operate_url, 
+		   dataType: "json", 
+		   async: false, 
+		   success: function(data)
+		   {
+				if(data.channels != "")
+				{
+				   for(a in data.channels)
+				   {
+					   $(channel_id).append('<option value="'+data.channels[a][0]+'">'+data.channels[a][1]+'</option>');
+				   }
+				}
+		   }
+	   });
+	});
+		
+	$("select[id^='channel_']").change(function(){
+		var val_0=$("#channel_0").val();
+		var val_1=$("#channel_1").val();
+		if(val_0 == val_1 && val_1 != -1)
+		{
+			alert(gettext("视频通道不能重复选择，请重新选择！"));
+			$(this).val("-1");//需要重新选择-darcy20120424
+			return false;
+		}
+	});
+{% endblock %}
+
+
+

@@ -1,21 +1,21 @@
-{% extends "special_menu.html" %}
-{% load i18n %}
+{# extends "special_menu.html" #}
+{# load i18n #}
 
-{% block headjs %}
-{% if request.user|HasPerm:"contenttypes.can_DevRTMonitorPage" %}
-<script src="{{ MEDIA_URL }}/jslib/check_browser.js"></script>
-{% endif %}
-{% endblock %}
+{# block headjs #}
+{# if request.user|HasPerm:"contenttypes.can_DevRTMonitorPage" #}
+<script></script>
+{# endif #}
+{# endblock #}
 
-{% block content %}
-    {% if request.user|HasPerm:"contenttypes.can_DevRTMonitorPage" %}
+{# block content #}
+    {# if request.user|HasPerm:"contenttypes.can_DevRTMonitorPage" #}
     <div id="id_monitor_events" class="div_box acc_monitor_380" style=" min-height: 35em;">
-        <h1>{% trans "设备监控" %}</h1>
+        <h1>{# trans "设备监控" #}</h1>
         <div class = "grid clearL">
-        <div class = "action Link_blue1"><li id="start_RM"><a alt="start_RM" href="javascript:void(0)" class="action_start_RM">{% trans '开始监控' %}</a>&nbsp</li>
-        <li id="end_RM"><a alt="end_RM" href="javascript:void(0)" class="action_start_RM">{% trans '停止监控' %}</a>&nbsp</li>
-        <li id="start_Service"><a alt="start_Service" href="javascript:void(0)" class="action_start_Service">{% trans '启动服务' %}</a>&nbsp</li>
-        <li id="id_export"><a class="action_Model_Export" href="javascript:void(0)" alt="export">{% trans '导出' %}</a>&nbsp</li>
+        <div class = "action Link_blue1"><li id="start_RM"><a alt="start_RM" href="javascript:void(0)" class="action_start_RM">{# trans '开始监控' #}</a>&nbsp</li>
+        <li id="end_RM"><a alt="end_RM" href="javascript:void(0)" class="action_start_RM">{# trans '停止监控' #}</a>&nbsp</li>
+        <li id="start_Service"><a alt="start_Service" href="javascript:void(0)" class="action_start_Service">{# trans '启动服务' #}</a>&nbsp</li>
+        <li id="id_export"><a class="action_Model_Export" href="javascript:void(0)" alt="export">{# trans '导出' #}</a>&nbsp</li>
         </div></div>
 
         <div id="id_showTbl">
@@ -26,12 +26,12 @@
                             <table class="table">
                                 <thead id ="rt_head">
                                     <tr>
-                                        <th width="20%">{% trans '设备名称' %}</th>
-                                        <th width="15%">{% trans '序列号' %}</th>
-                                        <th width="20%">{% trans '操作类型' %}</th>
-                                        <th width="20%">{% trans '当前状态' %}</th>
-                                        <th width="15%">{% trans '待执行命令条数' %}</th>
-                                        <th  width="10%" >{% trans '操作' %}</th>
+                                        <th width="20%">{# trans '设备名称' #}</th>
+                                        <th width="15%">{# trans '序列号' #}</th>
+                                        <th width="20%">{# trans '操作类型' #}</th>
+                                        <th width="20%">{# trans '当前状态' #}</th>
+                                        <th width="15%">{# trans '待执行命令条数' #}</th>
+                                        <th  width="10%" >{# trans '操作' #}</th>
                                     </tr>
                                 </thead>
                                 <tbody id="rt_content">
@@ -49,16 +49,16 @@
             </div>
         </div>
     </div>
-    {% endif %}<!--contenttypes.can_DevRTMonitorPage -->
-{% endblock %}
+    {# endif #}<!--contenttypes.can_DevRTMonitorPage -->
+{# endblock #}
 
-{% block getdatalist %}
+{# block getdatalist #}
 
-{% endblock %}
+{# endblock #}
 
 
-{% block addjs %}
-    {% if request.user|HasPerm:"contenttypes.can_DevRTMonitorPage" %}
+{# block addjs #}
+    {# if request.user|HasPerm:"contenttypes.can_DevRTMonitorPage" #}
     var gdata = null;
     var is_RM = true;  //是否正在监控
     var is_click = false; //主要是为了防止服务正在启动时，鼠标仍然悬浮在带有“服务未启动”的数据上，导致提示信息不能及时隐藏。
@@ -105,7 +105,7 @@
     function OnRefresh() 
     {   
         document.getElementById("tooltip2").style.visibility="hidden";
-        getUrl='/{{ request.surl }}iaccess/GetDevLog/';
+        getUrl='/&#123;&#123; request.surl &#125;&#125;iaccess/GetDevLog/';
         $.ajax({ 
             type:"GET", 
             url:getUrl, 
@@ -157,7 +157,7 @@
                     		    + '<td width="20%">'+cmd+'</td>'
                     		    + '<td width="20%">'+datas.op_state+'</td>'
                     		    + '<td width="15%">'+datas.CmdCount+'</td>'
-                    		    + '<td width="10%" id="device_'+datas.id+'" value="'+datas.id+'"><a href="javascript:void(0);">{% trans '取消' %}</a></td></tr>'
+                    		    + '<td width="10%" id="device_'+datas.id+'" value="'+datas.id+'"><a href="javascript:void(0);">{# trans '取消' #}</a></td></tr>'
                 
                     if(row == "row0")
                     {
@@ -202,7 +202,7 @@
                     if(confirm(gettext("确定要清除命令队列？")))
                     {
                         var val=$(this).parent().attr("value");
-                        var operateURL =  '/{{ request.surl }}iaccess/ClearCmdCache/?devid='+val;
+                        var operateURL =  '/&#123;&#123; request.surl &#125;&#125;iaccess/ClearCmdCache/?devid='+val;
                         $.ajax({
                             type:"POST", 
                             url:operateURL, 
@@ -320,8 +320,8 @@
 
     
     
-    {% else %}<!--contenttypes.can_DevRTMonitorPage -->
+    {# else #}<!--contenttypes.can_DevRTMonitorPage -->
         alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
-        window.location.href="/{{ request.surl }}accounts/login/";
-    {% endif %}<!--contenttypes.can_DevRTMonitorPage -->
-{% endblock %}
+        window.location.href="/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+    {# endif #}<!--contenttypes.can_DevRTMonitorPage -->
+{# endblock #}

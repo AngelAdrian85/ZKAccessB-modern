@@ -1,34 +1,34 @@
-{% extends "Acc_Monitor_All.html" %}
-{% load i18n %}
+{# extends "Acc_Monitor_All.html" #}
+{# load i18n #}
 
-{% block add_headjs %}
-{% if request.user|HasPerm:"contenttypes.can_ElectroMapPage" %}
-<script src="{{ MEDIA_URL }}/jslib/electro_map.js"></script>
-{% endif %}
-{% endblock %}
+{# block add_headjs #}
+{# if request.user|HasPerm:"contenttypes.can_ElectroMapPage" #}
+<script></script>
+{# endif #}
+{# endblock #}
 
 
 
-{% block monitor_events_style %}height: 30em;{% endblock %}
-{% block monitor_datalist_style %}height:300px;{% endblock %}
+{# block monitor_events_style #}height: 30em;{# endblock #}
+{# block monitor_datalist_style #}height:300px;{# endblock #}
 
-{% block right_click_menu %}
+{# block right_click_menu #}
 <!--右键菜单的源-start-->
 <div class="contextMenu displayN" id="id_mapdoor_menu">
     <ul>
-        <li id="id_del_door" class="door_ops"><img src="/media/img/icon_deletelink.gif" />{% trans "移除门" %}</li>
+        <li id="id_del_door" class="door_ops"><img src="/media/img/icon_deletelink.gif" />{# trans "移除门" #}</li>
     </ul>
 </div>
 <!--右键菜单的源-end-->
-{% endblock %}
+{# endblock #}
 
-{% block addjs_base %}{% endblock %}
-{% block getdatalist %}{% endblock %}
+{# block addjs_base #} {# endblock #}
+{# block getdatalist #} {# endblock #}
 
-    {% if request.user|HasPerm:"contenttypes.can_ElectroMapPage" %}
-    {% block electro_map %}
+    {# if request.user|HasPerm:"contenttypes.can_ElectroMapPage" #}
+    {# block electro_map #}
 
-    {% if request.user|HasPerm:"iaccess.opsavemapdoorpos_accmap" %}
+    {# if request.user|HasPerm:"iaccess.opsavemapdoorpos_accmap" #}
     //门图标的拖动---start
     var ie = document.all;//只有ie支持document.all
     var ff = document.getElementById&&!document.all;//非ie浏览器，如 ff等
@@ -85,7 +85,7 @@
     document.onmouseup = onmouseup;
     //document.onmouseup = new Function("isdrag=false; check_top_left_zero(document.onmouseup)");//离开光标时还原全局变量的值
     //门图标的拖动---end
-    {% endif %}
+    {# endif #}
 
     //初始化电子地图-start
     function init_maps()
@@ -94,7 +94,7 @@
         var stamp0 = new Date().getTime();
         $.ajax({
             type: "POST",
-            url: "/{{ request.surl }}iaccess/ElectroMap/?func=init_maps&stamp="+stamp0,
+            url: "/&#123;&#123; request.surl &#125;&#125;iaccess/ElectroMap/?func=init_maps&stamp="+stamp0,
             dataType: "json",
             async: true,
             success: function(init_data)
@@ -203,7 +203,7 @@
         var stamp2 = new Date().getTime();
         $.ajax({
             type: "POST",
-            url: "/{{ request.surl }}iaccess/ElectroMap/?func=get_doors&map_pk="+map_pk+"&stamp="+stamp2,
+            url: "/&#123;&#123; request.surl &#125;&#125;iaccess/ElectroMap/?func=get_doors&map_pk="+map_pk+"&stamp="+stamp2,
             dataType: "html",
             async: true,
             success: function(doors_left_html)
@@ -252,7 +252,7 @@
                     }
                     $.ajax({
                         type: "POST",
-                        url: "/{{ request.surl }}iaccess/ElectroMap/?func=add_doors&map_pk="+map_pk+"&doors_add_id="+doors_add_id+"&stamp="+ stamp2,
+                        url: "/&#123;&#123; request.surl &#125;&#125;iaccess/ElectroMap/?func=add_doors&map_pk="+map_pk+"&doors_add_id="+doors_add_id+"&stamp="+ stamp2,
                         dataType: "json",
                         async: true,
                         success: function(data2)
@@ -292,7 +292,7 @@
         var stamp3 = new Date().getTime();
         $.ajax({
             type: "POST",
-            url: "/{{ request.surl }}iaccess/ElectroMap/?func=del_door&map_pk="+map_pk+"&door_del_id="+door_del_id+"&stamp="+ stamp3,
+            url: "/&#123;&#123; request.surl &#125;&#125;iaccess/ElectroMap/?func=del_door&map_pk="+map_pk+"&door_del_id="+door_del_id+"&stamp="+ stamp3,
             dataType: "json",
             async: true,
             success: function(data3)
@@ -413,8 +413,8 @@
 			div_dialog.append($btns_div);
 		}
 
-		var surl = "{{request.surl}}";
-		var dbapp_url = "{{request.dbapp_url}}";
+		var surl = "&#123;&#123; request.surl &#125;&#125;";
+		var dbapp_url = "&#123;&#123; request.dbapp_url &#125;&#125;";
 		var $common_opt = $("#id_map_ops");
 		$common_opt.find("a[relgo]").click(function(e){
 			var this_a = this;
@@ -471,7 +471,7 @@
             var stamp1 = new Date().getTime();
             $.ajax({
                 type: "POST",
-                url: "/{{ request.surl }}iaccess/ElectroMap/?func=del_map&map_pk="+map_pk+"&stamp="+stamp1,
+                url: "/&#123;&#123; request.surl &#125;&#125;iaccess/ElectroMap/?func=del_map&map_pk="+map_pk+"&stamp="+stamp1,
                 dataType: "json",
                 async: true,
                 success: function(data)
@@ -521,7 +521,7 @@
         var stamp5 = new Date().getTime();
         $.ajax({
             type: "POST",
-            url: "/{{ request.surl }}iaccess/ElectroMap/?func=save_mapdoorpos&pos_array="+pos_array+"&map_array="+map_array+"&stamp="+stamp5,
+            url: "/&#123;&#123; request.surl &#125;&#125;iaccess/ElectroMap/?func=save_mapdoorpos&pos_array="+pos_array+"&map_array="+map_array+"&stamp="+stamp5,
             dataType: "json",
             async: true,
             success: function(rdata)
@@ -546,11 +546,11 @@
     //保存变动后的门坐标以及地图尺寸--end
 
 
-    {% endblock %}<!--end of electro_map-->
+    {# endblock #}<!--end of electro_map-->
 
-    {% else %}
+    {# else #}
         alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
-        window.location.href = "/{{ request.surl }}accounts/login/";
-    {% endif %}<!--can_ElectroMapPage-->
+        window.location.href = "/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+    {# endif #}<!--can_ElectroMapPage-->
    
 

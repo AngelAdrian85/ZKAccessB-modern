@@ -1,0 +1,567 @@
+{% extends "data_edit.html" %}
+{% load i18n %}
+
+{% block form %}
+	{% if request.user|HasPerm:"iaccess.add_accwiegandfmt" or request.user|HasPerm:"iaccess.change_accwiegandfmt" %}
+	{% autoescape off %}
+	<table>
+		<tr>
+			<td><label class="required" for="id_wiegand_name">{% trans "名称" %}</label></td>
+			<td>{{ form.wiegand_name.as_widget }}</td>
+		</tr>		
+		<tr id="tr_default_fmt">
+			<td><label for="id_default_fmt">{% trans "自动匹配" %}</label></td>
+			<td>{{ form.default_fmt.as_widget }}</td>
+		</tr>		
+		<tr>
+			<td align="left"><label class="required" for="id_wiegand_count">{% trans "总位数" %}</label></td>
+			<td>{{ form.wiegand_count.as_widget }}</td>
+		</tr>
+		<tr class="displayN">
+			<td colspan="2">{{ form.wiegand_mode.as_widget }}</td>
+		</tr>
+		<tr height="30px">
+			<td olspan="2">
+				<div style="padding-top:10px">
+					<input type="radio" name="wgMode" id="wgMode1" value="1" />{% trans "模式一" %}
+				</div>
+			</td>
+		</tr>
+		<tr class="id_tr_mode_1">
+			<td><label for="id_first_p">{% trans "第一个奇偶校验位(p)" %}</label></td>
+			<td>{{ form.first_p.as_widget }}</td>
+		</tr>
+		<tr class="id_tr_mode_1">
+			<td><label for="id_second_p">{% trans "第二个奇偶校验位(p)" %}</label></td>
+			<td>{{ form.second_p.as_widget }}</td>
+		</tr>
+	</table>
+	<table id="id_table_mode_1">
+		<tr>
+			<th colspan="2">
+				<table height="60px" id="tb_wiegand_mode_1" class="wg_table_inner_mode_one">
+					<tr>
+						<td colspan="2">{% trans "偶校验(e)" %}</td>
+						<td colspan="2">{% trans "奇校验(o)" %}</td>
+						<td colspan="2">{% trans "CID(c)" %}</td>
+						<td colspan="2">{% trans "设备代码(f)" %}</td>
+						<td colspan="2">{% trans "区位码(s)" %}</td>
+						<td colspan="2">{% trans "厂商代码(m)" %}</td>
+					</tr>
+					<tr>
+						<td>{% trans "起始位" %}</td>
+						<td>{% trans "长度" %}</td>
+						<td>{% trans "起始位" %}</td>
+						<td>{% trans "长度" %}</td>
+						<td>{% trans "起始位" %}</td>
+						<td>{% trans "长度" %}</td>
+						<td>{% trans "起始位" %}</td>
+						<td>{% trans "长度" %}</td>
+						<td>{% trans "起始位" %}</td>
+						<td>{% trans "长度" %}</td>
+						<td>{% trans "起始位" %}</td>
+						<td>{% trans "长度" %}</td>
+					</tr>
+					<tr>
+						{{ form.even_parity_start|field_as_td_h_special }}
+						{{ form.even_parity_count|field_as_td_h_special }}
+						{{ form.odd_parity_start|field_as_td_h_special }}
+						{{ form.odd_parity_count|field_as_td_h_special }}
+						{{ form.cid_start|field_as_td_h_special }}
+						{{ form.cid_count|field_as_td_h_special }}
+						{{ form.facility_code_start|field_as_td_h_special }}
+						{{ form.facility_code_count|field_as_td_h_special }}
+						{{ form.site_code_start|field_as_td_h_special }}
+						{{ form.site_code_count|field_as_td_h_special }}
+						{{ form.manufactory_code_start|field_as_td_h_special }}
+						{{ form.manufactory_code_count|field_as_td_h_special }}
+					</tr>
+				</table>
+			</th>
+		</tr>
+	</table>
+	<table>
+		<tr height="30px">
+			<td olspan="2">
+				<div style="padding-top:10px">
+					<input type="radio" name="wgMode" id="wgMode2" value="2" />{% trans "模式二" %}
+				</div>
+			</td>
+		</tr>
+	</table>
+	<table width="750px" class="wg_table_inner_mode_two" id="id_table_mode_2">
+		<tr>
+			<td width="150px"><label for="id_before_fmt">{% trans "卡校验格式" %}</label></td>
+			<td>{{ form.before_fmt.as_widget }}</td>
+		</tr>
+		<tr>
+			<td><label for="id_after_fmt">{% trans "奇偶校验格式" %}</label></td>
+			<td>{{ form.after_fmt.as_widget }}</td>
+		</tr>
+	</table>
+	<div style="padding:10px;" id="idWGTestDiv"><a id="idWGTest" href="javascript:void(0)" class="Link_blue1">{% trans "测试韦根格式" %}</a></div>
+	
+	<div style="position: absolute; width: auto; height: auto; top: 1px; left: 10%; z-index: 2015; display: none;" class="jbox" id="idTestDiv">
+	    <div style="height: 25px; display: none; cursor: move;" class="jbox-help-title jbox-title-panel"></div>
+	    <div style="height: 25px; padding: 5px 0px; display: none;" class="jbox-help-button jbox-button-panel"></div>
+	    <table cellspacing="0" cellpadding="0" border="0" style="margin:0px;padding:0px;border:none;">
+	        <tbody>
+	            <tr>
+	                <td style="margin:0px;padding:0px;border:none;" class="jbox-border"></td>
+	                <td valign="top" style="margin:0px;padding:0px;border:none;">
+	                    <div style="width:auto; height:auto;" class="jbox-container">
+	                        <a style="position: absolute; display: none; cursor: pointer; top: 6px; right: 6px; width: 15px; height: 15px;" onmouseout="$(this).removeClass('jbox-close-hover');" onmouseover="$(this).addClass('jbox-close-hover');" title="关闭" class="jbox-close"></a>
+	                        <div style="height: 25px; cursor: move;" class="jbox-title-panel">
+	                            <div style="float:left; width:890px; line-height:24px; padding-left:18px;overflow:hidden;text-overflow:ellipsis;word-break:break-all;" class="jbox-title jbox-title-icon">Testing wiegand card format</div>
+	                        </div>
+	                        <div id="jbox-states">
+	                            <div style="display: block;" class="jbox-state" id="jbox-state-state0">
+	                                <div style="min-width:50px;width:940px; height:553px;">
+	                                    <div style="min-height: 70px; height: 553px; text-align: center; display: none;" class="jbox-content-loading" id="jbox-content-loading">
+	                                        <div style="display:block; margin:auto; width:220px; height:19px; padding-top: 221.6px;" class="jbox-content-loading-image"></div>
+	                                    </div>
+	                                    <div style="height: 553px; overflow-x: hidden; overflow-y: auto; position: static; left: -10000px;" class="jbox-content" id="jbox-content">
+											<div style="padding-left:10px; padding-top:10px;">
+												<table border="0" cellpadding="0" cellspacing="0">
+													<tr>
+														<td height="230px"><span style="padding-left:10px;">{% trans "选择门" %}:</span></td>
+														<td><span id="id_show_devices"></span></td>
+													</tr>
+												</table>
+											</div>
+											<div style="padding-left:10px;">
+												<div id="beginDiv"><button class="btn" id="id_begin" type="button">{% trans "开始测试" %}</button></div>
+												<div id="stopDiv" class="displayN">
+													<button class="btn" id="id_stop" type="button">{% trans "停止测试" %}</button><div class="ACPanel_Searching"><img style="padding-left:10px;" align="top" src="/media/images/searching.gif"></div>
+												</div>
+												<div class="displayN">
+													<input type="text" id="id_wgfmtStr" name="wgfmtStr" value="" />
+												</div>
+												<div id="id_showTbl" style="overflow-x:auto;border:1px solid #71A8D8;height:200px; width:97%;">
+													<table border="0" cellpadding="0" cellspacing="0">
+														<tr>
+															<td style="vertical-align:top;border:0px;">
+																<div>
+																	<table class="table">
+																		<thead>
+																			<tr>
+																				<th width="15%">{% trans '时间' %}</th>
+																				<th width="12%">{% trans '设备' %}</th>
+																				<th width="15%">{% trans '事件点' %}</th>
+																				<th width="15%">{% trans '事件描述' %}</th>
+																				<th width="9%">{% trans '卡号' %}</th>
+																				<th width="13%">{% trans '人员编号(姓名)' %}</th>
+																				<th width="8%">{% trans '状态' %}</th>
+																				<th width="10%">{% trans '验证方式' %}</th>
+																			</tr>
+																		</thead>
+																		<tbody id="rt_content">
+																		</tbody>
+																	</table>
+																</div>
+															</td>
+														</tr>
+													</table>
+												</div>
+												<div style="padding-top:20px;"><button type="button" id="id_close" class="btn"> {% trans "关闭" %} </button></div>
+											</div>											
+	                                    </div>
+	                                </div>
+	                                <div style="height:25px;padding:5px 0 5px 0;text-align: right;display:none;" class="jbox-button-panel">
+	                                    <span style="float:left;display:block;line-height:25px;" class="jbox-bottom-text"></span>
+	                                </div>
+	                            </div>
+	                        </div>
+	                    </div>
+	                </td>
+	                <td style="margin:0px;padding:0px;border:none;" class="jbox-border"></td>
+	            </tr>
+	        </tbody>
+	    </table>
+	</div>
+
+	{% if form.non_field_errors %}
+		<tr><td>{{ form.non_field_errors }}</td></tr>
+	{% endif %}
+
+	{% endautoescape %}
+	{% endif %}<!--add/change_accwiegandfmt-->
+{% endblock %}
+
+{% block addjs %}
+//	if($("#id_model_pk").val() > 0)
+//	{
+//		$("#idWGTestDiv").show();
+//	}
+	
+	//新增默认韦根格式
+	if($("#id_model_pk").val() == "None" || $("#id_model_pk").val() > 10)
+	{
+		//$("#tr_default_fmt").hide();
+	}
+	else
+	{
+		$("#id_wiegand_name").attr("readonly", "true");//名称不让更改
+		$("#id_wiegand_count").attr("readonly", "true");//总位数不让更改
+	}
+	
+	// 限制只能是数字
+	$("#id_wiegand_count").attr("maxlength", "2");
+	$("#id_first_p").attr("maxlength", "2");
+	$("#id_second_p").attr("maxlength", "2");
+	$("#id_first_p").attr("class", "wZBaseIntegerField");
+	$("#id_second_p").attr("class", "wZBaseIntegerField");
+	$("#tb_wiegand_mode_1").find("input").each(function(){
+	    $(this).attr("class", "wZBaseIntegerField");
+		$(this).attr("maxlength", "2");
+	});
+	
+	
+	// 调整长度
+	$("#id_before_fmt").attr("style", "width:550px");
+	$("#id_after_fmt").attr("style", "width:550px");
+	
+	$("input[name^='wiegand_mode']").each(function(){
+		if($(this).attr("checked"))
+		{
+			if($(this).val() == 1)
+			{
+				$("#wgMode1").click();
+				 mode_2_readonly();
+			}
+			else
+			{
+				$("#wgMode2").click();
+				 mode_1_readonly();
+			}
+		}
+	});
+	
+	$("input[name^='wgMode']").click(function(){
+		if($(this).val() == 1)
+		{
+			$("#id_wiegand_mode_0").click();
+			mode_2_readonly();
+		}
+		else
+		{
+			$("#id_wiegand_mode_1").click();
+			 mode_1_readonly();
+		}
+	});
+	
+	function mode_1_readonly()
+	{
+		$("#id_table_mode_1").find("input").each(function(){
+		   $(this).attr("readonly", "readonly");
+		});
+		$(".id_tr_mode_1").find("input").each(function(){
+		   $(this).attr("readonly", "readonly");
+		});
+		$("#id_table_mode_2").find("input").each(function(){
+		   $(this).removeAttr("readonly");
+		});		
+	}
+	
+	function mode_2_readonly()
+	{
+		$("#id_table_mode_2").find("input").each(function(){
+		   $(this).attr("readonly", "readonly");
+		});		
+
+		$("#id_table_mode_1").find("input").each(function(){
+		   $(this).removeAttr("readonly");
+		});
+		$(".id_tr_mode_1").find("input").each(function(){
+		   $(this).removeAttr("readonly");
+		});
+	}
+	
+	
+	var before_submit = function(){
+		return dataValid();
+	}
+	
+	var wgMode = "";
+	function dataValid()
+	{
+		wgMode = "";
+		$("input[name^='wgMode']").each(function(){
+			if($(this).attr("checked"))
+			{
+				wgMode = $(this).val();
+			}
+		});
+		if(wgMode == 1)
+		{
+			// 模式一暂不做判断，后续需要补充
+		}
+		else
+		{
+			if($("#id_before_fmt").val().length != $("#id_wiegand_count").val())
+			{
+				$("#id_info").html("").append('<ul class="errorlist"><li>{% trans "卡校验格式长度必须等于总位数!" %}</li></ul>');
+				return false;
+			}
+			if($("#id_after_fmt").val().length != $("#id_wiegand_count").val())
+			{
+				$("#id_info").html("").append('<ul class="errorlist"><li>{% trans "奇偶校验格式长度必须等于总位数!" %}</li></ul>');
+				return false;
+			}
+		}
+		return true;
+	}
+	
+	$("#idWGTest").click(function(){
+		if($("#id_wiegand_count").val() == "" || $("#id_wiegand_name").val() == "")
+		{
+			$("#OK").click();
+			return false;
+		}
+		if(dataValid())
+		{
+			var data = {};
+			data["wgMode"] = wgMode;
+			$("#id_edit_form").find("input[type='text']").each(function(){
+				data[$(this).attr("name")] = $(this).val();
+			});
+			
+			// 从后台生成韦根格式字符串
+			$.ajax({
+				url:"/{{request.surl}}iaccess/opWgFmtData/",
+				type: "POST",
+				data: data,
+				dataType: "json",
+				async: true,
+				success:function(datas)
+				{
+					$("#id_wgfmtStr").val(datas.wgfmtStr);
+					wgfmt_test_fun();
+				}
+			});
+		}
+	});
+	
+	//----------------以下是韦根测试
+	var id_doors = [];
+	var stop_post = null;
+	var log_id = -1;
+	var time_now = "";
+	var disabled_select_door = false;
+	
+	function wgfmt_test_fun()
+	{
+		$("#idTestDiv").show();
+		id_doors = [];
+		stop_post = null;
+		log_id = -1;
+		time_now = "";
+		disabled_select_door = false;
+		
+		$("#id_show_devices").html("");
+		$("#rt_content").html("");
+		show_device();// 加载设备-门树形菜单
+	}	
+		
+	
+	function show_device()
+	{
+		if($("#id_door").html() == null)
+		{
+			$.ajax({
+				url: "/{{request.surls}}iaccess/GetData/?func=get_doors_tree&filter=wgFmt",
+				dataType: "html",
+				success: function(data_html)
+				{
+					document.getElementById("id_show_devices").innerHTML = data_html;
+					$("#id_door").find("ul").each(function(){
+						$(this).attr("style","display:none");
+					})
+					$("#id_door .filetree").treeview();
+					check_root("id_door"); 
+					check_selected("id_door");
+					$("#id_door").find("p").click(function(){
+						get_child(this);
+					});
+					$("#id_door").css({padding:"0px",height:"auto"});
+					$("#id_show_devices").css({width:$("#id_door").width()});
+					$("#id_door").find("ul").each(function(){
+						$(this).attr("style","");
+					})
+					$($("#id_door").find("ul")[0]).attr("style","height: 220px; overflow: auto;")
+					
+					data_html = null;
+				},
+				error: function (XMLHttpRequest, textStatus, errorThrown)
+				{
+					alert(gettext("服务器处理数据失败，请重试！错误码：-625"));
+				}
+			});
+		}
+		$("#id_door").attr("class","");
+	}
+	
+	function get_child(tag)
+	{
+		if($(tag).attr("class")=="t s" && $(tag).find("input").length!=0)//为最后一级标签时
+		{
+			var id_s = $(tag).find("input")[0].id.split("_")[1];
+			id_doors.push(id_s);
+		}
+		else if($(tag).attr("class")=="t u" && $(tag).find("input").length != 0)
+		{
+			var id_d = $(tag).find("input")[0].id.split("_")[1];
+			var index = get_index(id_d,id_doors,false);
+			id_doors.splice(index, 1);
+		}
+		else if($(tag).find("input").length==0)//为父标签时
+		{
+			$($(tag).next()).find("p").each(function(){
+				get_child(this);
+			});
+		}
+	}
+	
+	function get_index(num, array, is_emp)
+	{
+		for(var i=0;i<array.length;i++)
+		{
+			if(!is_emp)
+			{
+				if(array[i] == num)
+				{
+					return i;
+				}
+			}
+			else
+			{
+				if(array[i][1] == num)
+				{
+					return i;
+				}
+			}
+		}
+		return -1;
+	}
+	
+	// 开始监控
+	$("#id_begin").click(function(){
+		var doors = id_doors.join("_");
+		if(doors == "")
+		{
+			alert(gettext("请选择要测试的门！"));
+			return false;
+		}
+		set_wgFmt_test(doors, "set");
+		$("#beginDiv").hide();
+		$("#stopDiv").show();
+		
+		if(disabled_select_door == false)
+		{
+			set_select_door("del");
+			disabled_select_door = true;
+		}
+		stop_post = setInterval("getRTLog()", 2000);
+	});
+	
+	// 停止监控
+	$("#id_stop").click(function(){
+		$("#stopDiv").hide();
+		$("#beginDiv").show();
+		if(disabled_select_door)
+		{
+			set_select_door("add");
+			disabled_select_door = false;
+		}
+		clearInterval(stop_post);
+	});
+	
+	//  关闭、退出按钮
+	$("#id_close").click(function(){
+		var doors = id_doors.join("_");
+		if(doors != "")
+		{
+			set_wgFmt_test(doors, "del");
+		}
+		if(disabled_select_door)
+		{
+			set_select_door("add");
+			disabled_select_door = false;
+		}
+		clearInterval(stop_post);
+		window.setTimeout(function(){
+			$("#idTestDiv").hide();
+			$("#stopDiv").hide();
+			$("#beginDiv").show();
+		}, 150);
+	});
+	
+	// 设置是否允许勾选门
+	function set_select_door(opType)
+	{
+		if(opType == "add")// 添加绑定click事件
+		{
+			check_selected("id_door");
+			$("#id_door").find("p").click(function(){
+				get_child(this);
+			});
+		}
+		else// 移除绑定事件
+		{
+			$("#id_door").find("p").each(function(){
+				$(this).unbind('click');
+			});	
+		}
+	}
+	
+	// 设置测试韦根格式
+	function set_wgFmt_test(doors, opType)
+	{
+		$.ajax({
+			url:"/{{request.surl}}iaccess/set_wgFmtTest/",
+			type:"POST",
+			data:{"doors": doors, "opType": opType, "wgfmtStr": $("#id_wgfmtStr").val()},
+			dataType:"json",
+			async: true,
+			success:function(datas)
+			{
+			}
+		});
+	}
+
+	// 从数据库中获取实时刷卡数据
+	function getRTLog()
+	{
+		var doors = id_doors.join("_");
+		$.ajax({
+			url:"/{{request.surl}}iaccess/get_wgFmtTest_log/?doors="+doors+"&log_id="+log_id+"&time_now="+time_now,
+			dataType:"json",
+			type:"POST",
+			success:function(datas)
+			{
+				time_now = datas.time_now;
+				var ret_list = datas.ret_list;
+				var rtlisthtml = "";
+				for(var i = 0; i < ret_list.length; i++)
+				{
+					log_id = ret_list[i][0];
+					rtlisthtml += '<tr><td width="15%">'+ret_list[i][1]+'</td>'
+								+ '<td width="12%">'+ret_list[i][2]+'</td>'
+								+ '<td width="15%">'+ret_list[i][3]+'</td>'
+								+ '<td width="15%">'+ret_list[i][4]+'</td>'
+								+ '<td width="9%">'+ret_list[i][5]+'</td>'
+								+ '<td width="13%">'+ret_list[i][6]+'</td>'
+								+ '<td width="8%">'+ret_list[i][7]+'</td>'
+								+ '<td width="10%">'+ret_list[i][8]+'</td></tr>';
+				}
+				$("#rt_content").prepend(rtlisthtml);
+				if($("#rt_content tr").length > 5)
+				{
+					$("#rt_content").find("tr:gt(5)").remove();
+				}
+			}
+		});
+	}
+	
+{% endblock %}
+

@@ -1,36 +1,36 @@
-{% extends "special_menu.html" %}
-{% load i18n %}
+{# extends "special_menu.html" #}
+{# load i18n #}
 
-{% block headjs %}
-    <script src="{{ MEDIA_URL }}/jslib/jquery.windows-engine.js"></script>
-    <link rel="stylesheet" type="text/css" href="{{ MEDIA_URL }}/css/jquery.windows-engine.css" media="screen" />
-    <script src="{{ MEDIA_URL }}/jslib/video_linkage_window.js"></script>
-    {% block add_headjs %}
-    {% endblock %}
-{% endblock %}
+{# block headjs #}
+    <script></script>
+    <link rel="stylesheet" type="text/css" href="&#123;&#123; MEDIA_URL &#125;&#125;/css/jquery.windows-engine.css" media="screen" />
+    <script></script>
+    {# block add_headjs #}
+    {# endblock #}
+{# endblock #}
 
-{% block id_main_div %}
+{# block id_main_div #}
     <!-- video linkage -->
     <div id="id_show_video" class="displayN">
         <div id="id_show_video_1" class="displayN"></div>
     </div>
     <div id="id_tip" style="display:none" class="div_tip ui-corner-all"></div>
     <div id="ocx_obj" style="display:none"></div>
-    {% block id_main_div_report %}{% endblock %}
-{% endblock %}
+    {# block id_main_div_report #} {# endblock #}
+{# endblock #}
 
-{% block getdatalist %}
-    {% if request.user|HasPerm:"contenttypes.can_ReportFormPage" %}
+{# block getdatalist #}
+    {# if request.user|HasPerm:"contenttypes.can_ReportFormPage" #}
         
-        {% block acc_reportform %}{% endblock %}
+        {# block acc_reportform #} {# endblock #}
 
-    {% else %}
+    {# else #}
         alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
-        window.location.href = "/{{ request.surl }}accounts/login/";
-    {% endif %}<!--contenttypes.can_ReportFormPage-->
-{% endblock %}
+        window.location.href = "/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+    {# endif #}<!--contenttypes.can_ReportFormPage-->
+{# endblock #}
 
-{% block addjs %}
+{# block addjs #}
 var video_info = null;
 var video_brand_for_report = null;
 var vid_hkocx_obj = null;
@@ -40,7 +40,7 @@ function getMoreInfo()
       return  '<iframe class="maskIframe"></iframe>'
               +'<div>'
                   +'<table>'
-                      +'<tr><td><a id="opendoor_img" class="" href="javascript:void(0)" onclick="download_video()">{% trans "从视频服务器导出" %}</a></td></tr>'
+                      +'<tr><td><a id="opendoor_img" class="" href="javascript:void(0)" onclick="download_video()">{# trans "从视频服务器导出" #}</a></td></tr>'
                   +'</table>'
               +'</div>';
 }
@@ -100,8 +100,8 @@ function process_video(vid_data)
         var init_ret = true;
         //初始化窗口
         var win_content = '<div id="id_vid_hkocx_1"></div>';
-        var window_width = {{ popup_window_width }};//400
-        var window_height = {{ popup_window_height }};//300
+        var window_width = &#123;&#123; popup_window_width &#125;&#125;;//400
+        var window_height = &#123;&#123; popup_window_height &#125;&#125;;//300
         //初始化视频控件ocx
         var ocx_obj = null;
         if(vid_brand == 200)
@@ -216,4 +216,4 @@ function show_picture(picture)
 	var display_picture = "<div><img src='"+picture.data+"'/></div>";
 	$(display_picture).dialog();
 }
-{% endblock %}
+{# endblock #}

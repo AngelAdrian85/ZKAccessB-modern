@@ -1,0 +1,6 @@
+timestamp,duration_s,model,action,identifier,pk
+2025-11-18T09:25:07.138527Z,0.007,employee,create,3001,
+2025-11-18T09:25:07.138527Z,0.007,employee,create,3002,
+2025-11-18T09:25:07.142527Z,0.002,device,create,SN3001,
+2025-11-18T09:25:07.145526Z,0.002,issuecard,create,0003001,
+2025-11-18T09:25:07.145526Z,0.002,issuecard,create,0003002,

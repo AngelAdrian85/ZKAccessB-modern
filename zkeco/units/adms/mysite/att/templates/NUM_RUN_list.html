@@ -1,14 +1,14 @@
-{% extends "data_list.html" %}
-{% load i18n %}
+{# extends "data_list.html" #}
+{# load i18n #}
 
-{% block addjs %}
+{# block addjs #}
 
 var data=[
-{% for item in latest_item_list %}
-["{{ item.Num_runID }}","{{ item.Name }}","{{ item.StartDate }}","{{ item.EndDate }}","{{ item.Cycle }}","{{ item.get_Units_display }}","{{ item.Units }}"],{% endfor %}
+{# for item in latest_item_list #}
+["&#123;&#123; item.Num_runID &#125;&#125;","&#123;&#123; item.Name &#125;&#125;","&#123;&#123; item.StartDate &#125;&#125;","&#123;&#123; item.EndDate &#125;&#125;","&#123;&#123; item.Cycle &#125;&#125;","&#123;&#123; item.get_Units_display &#125;&#125;","&#123;&#123; item.Units &#125;&#125;"],{# endfor #}
 ]
 
-fieldHeaders=["{{ cl.FieldName.Name }}","{{ cl.FieldName.StartDate }}","{{ cl.FieldName.EndDate }}","{{ cl.FieldName.Cycle }}","{{ cl.FieldName.Units }}"];
+fieldHeaders=["&#123;&#123; cl.FieldName.Name &#125;&#125;","&#123;&#123; cl.FieldName.StartDate &#125;&#125;","&#123;&#123; cl.FieldName.EndDate &#125;&#125;","&#123;&#123; cl.FieldName.Cycle &#125;&#125;","&#123;&#123; cl.FieldName.Units &#125;&#125;"];
 //options.disableCols=[0,6];
 //options.canSelectRow=true;
 weekStartDay=0;
@@ -26,11 +26,11 @@ $(function(){
 	$(".tabBodyR").css({height:"20px"})	;
 	$("#id_search").find("table").eq(0).css({width:"96%"});
 	}
-    $("#tz").html("<div align='center'><h4><span class='icon_Shift_Detail'>&nbsp;</span>{%trans "点击班次，显示该班次时间段明细"%}</h4></div>");
+    $("#tz").html("<div align='center'><h4><span class='icon_Shift_Detail'>&nbsp;</span>{# trans "点击班次，显示该班次时间段明细" #}</h4></div>");
 
     $.ajax({ 
         type: "POST",
-        url:"{{dbapp_url}}../att/getschclass/",
+        url:"&#123;&#123; dbapp_url &#125;&#125;../att/getschclass/",
         dataType:"json",
         success:function(json){
                     schClass=json;
@@ -68,7 +68,7 @@ function PageSelectRow(rowData)
 function show_shift_Detail(rowData)
 {   
     var Shift_id=rowData[0];
-    $("#id_Shift_Detail fieldset legend").html(rowData[1]+"&nbsp;&nbsp;&nbsp;{% trans '时段明细' %}");
+    $("#id_Shift_Detail fieldset legend").html(rowData[1]+"&nbsp;&nbsp;&nbsp;{# trans '时段明细' #}");
     queryStr="Shift_id="+Shift_id+"&unit="+rowData[4]+"&weekStartDay="+weekStartDay;
     $.ajax({
         type:"POST",
@@ -161,17 +161,17 @@ function getTZWeekLabel(index)
 {  
     
     //index+=parseInt(weekStartDay); 
-	return ["{% trans '星期日' %}","{% trans '星期一' %}","{% trans '星期二' %}","{% trans '星期三' %}","{% trans '星期四' %}","{% trans '星期五' %}","{% trans '星期六' %}"][index % 7];
+	return ["{# trans '星期日' #}","{# trans '星期一' #}","{# trans '星期二' #}","{# trans '星期三' #}","{# trans '星期四' #}","{# trans '星期五' #}","{# trans '星期六' #}"][index % 7];
 }
 
 var week=[
-		"{% trans '星期日' %}",
-	     "{% trans '星期一' %}",
-	     "{% trans '星期二' %}",
-	     "{% trans '星期三' %}",
-	     "{% trans '星期四' %}",
-	     "{% trans '星期五' %}",
-	     "{% trans '星期六' %}"
+		"{# trans '星期日' #}",
+	     "{# trans '星期一' #}",
+	     "{# trans '星期二' #}",
+	     "{# trans '星期三' #}",
+	     "{# trans '星期四' #}",
+	     "{# trans '星期五' #}",
+	     "{# trans '星期六' #}"
 ];
 function getSchClass_html()
 {
@@ -185,7 +185,7 @@ function getDates_html(d)
     var dates_html="<tr><td>"
            +"<div id='select_div'>"
            +"<input type='checkbox' id='is_select_all_dates' onclick='check_all_for_row_dates(this.checked);' />"
-           +"({%trans '选择:'%} <span id='selected_count_dates'>0</span>)"
+           +"({# trans '选择:' #} <span id='selected_count_dates'>0</span>)"
        +"</td></tr>";
     var cycle=d[4];
     var unit=d[6];
@@ -265,20 +265,20 @@ function doAction(url, action)
 function createDlgShift()
 {
     var block_html="<div class='dialog' style='width:600px;'>"
-                        + 		"<div class='dheader'><span>"+selected_data[1]+"   {%trans "增加时段" %}</span><span class='close' onclick='javascript:$.unblockUI();'></span></div>"
+                        + 		"<div class='dheader'><span>"+selected_data[1]+"   {# trans "增加时段" #}</span><span class='close' onclick='javascript:$.unblockUI();'></span></div>"
                         + 		"<div class='dcontent'><form id='id_edit_form'>"
                         +           "<table align='center'>"
                                         +"<tr><td>&nbsp;</td></tr>"
                                         +"<tr>"
-                                        +"<td><fieldset><legend>{%trans '时段表:'%}</legend>"
+                                        +"<td><fieldset><legend>{# trans '时段表:' #}</legend>"
                                         +"<div style='padding-left:35px;'><select id='id_sTimeTbl_sel' multiple='multiple' size='10' style='width:240px !important; align:center'>"+getSchClass_html()+"</select></div></fieldset>"
-                                        +"{% trans '请按Ctrl选择更多的时段表' %}"
-                                        +"<fieldset><legend></legend><input type='checkbox' id='is_overtime' name='is_OT'>{% trans '设计超时？' %}</input>"
-                                        +"<div id='show_ot' style='padding-left:3px;'>{% trans '超时:' %}<input type='text' id='id_overTime' size='5' name='OverTime'></input>{% trans '分钟' %}</div>"
+                                        +"{# trans '请按Ctrl选择更多的时段表' #}"
+                                        +"<fieldset><legend></legend><input type='checkbox' id='is_overtime' name='is_OT'>{# trans '设计超时？' #}</input>"
+                                        +"<div id='show_ot' style='padding-left:3px;'>{# trans '超时:' #}<input type='text' id='id_overTime' size='5' name='OverTime'></input>{# trans '分钟' #}</div>"
                                         +"</fieldset></td>"
                                         
                                         +"<td>"
-                                        +"<fieldset><legend>{%trans '日期:'%}</legend>"
+                                        +"<fieldset><legend>{# trans '日期:' #}</legend>"
                                         +"<div style='height:230px;width:200px;overflow-y:scroll'><table >"+getDates_html(selected_data)+"</table></div></fieldset>"
                                         +"</td>"                
                                         +"</tr>"
@@ -299,7 +299,7 @@ function createDlgShift()
             var sTimeTbl=$("#id_sTimeTbl_sel").val();
             var sDates=getSelected_Dates();
             if(sTimeTbl==null || sDates.length==0)
-                $("#id_error_sec").html("<ul class='errorlist'><li>{%trans '时段和日期必须选择一个！'%}</li></ul>");
+                $("#id_error_sec").html("<ul class='errorlist'><li>{# trans '时段和日期必须选择一个！' #}</li></ul>");
             else{ 
                 $("#id_error_sec").css("display","none");
                 $("#id_sTimeTbl").val(sTimeTbl);
@@ -319,18 +319,18 @@ function createDlgShift()
 
 }
 extraBatchOp=[
-{action:{% if user|HasPerm:"iclock.addShiftTimeTable_num_run" %} function(url){doAction(url, 'addShiftTimeTable')}{% else %}''{% endif %}, title: '{%trans "增加时段"%}'},
-{action:{% if user|HasPerm:"iclock.deleteAllShiftTimeTbl_num_run" %} function(url){doAction(url, 'deleteAllShiftTimeTbl')}{% else %}''{% endif %}, title: '{%trans "删除时段"%}'}
+{action:{# if user|HasPerm:"iclock.addShiftTimeTable_num_run" #} function(url){doAction(url, 'addShiftTimeTable')} {# else #}''{# endif #}, title: '{# trans "增加时段" #}'},
+{action:{# if user|HasPerm:"iclock.deleteAllShiftTimeTbl_num_run" #} function(url){doAction(url, 'deleteAllShiftTimeTbl')} {# else #}''{# endif #}, title: '{# trans "删除时段" #}'}
 ];
-{% endblock %}
+{# endblock #}
 
 
-{% block AddDiv %}
+{# block AddDiv #}
 <div id="id_Shift_Detail"></div>
 <div id="id_showTbl" class="div_box" style="overflow:hidden; position:relative !important;">
-<h1>{%trans "时间段明细"%}</h1>
+<h1>{# trans "时间段明细" #}</h1>
 <div id="tz" style="display:block"></div>
 <div id="id_numrun_tip" class="numrun_tip"></div>
 </div>
-<link rel="stylesheet" type="text/css" href="{{ MEDIA_URL }}/css/picture.css" />
-{% endblock %}
+<link rel="stylesheet" type="text/css" href="&#123;&#123; MEDIA_URL &#125;&#125;/css/picture.css" />
+{# endblock #}

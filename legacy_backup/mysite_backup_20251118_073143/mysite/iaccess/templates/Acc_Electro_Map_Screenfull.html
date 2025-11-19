@@ -1,0 +1,52 @@
+{% extends "Acc_Electro_Map.html" %}
+{% load i18n %}
+{% block move_map %}{% endblock %}<!-- 地图上的图标不需要拖动-darcy20120314 -->
+{% block base_remove_content %}{% endblock %}
+{% block data_remove_left %}{% endblock %}
+{% block data_remove_tab %}{% endblock %}
+{% block door_state_height %}{% endblock %}
+{% block remove_map_title %}{% endblock %}
+{% block remove_menu %}{% endblock %}
+{% block remove_map_class %}{% endblock %}
+{% block remove_monitor_events_title %}{% endblock %}
+{% block change_showTb1_style %}style="position:fixed;bottom:0;width:100%;"{% endblock %}
+{% block remove_td %}{% endblock %}
+{% block remove_div %}{% endblock %}
+{% block right_click_menu %}
+<!--右键菜单的源-start-->
+    <div class="contextMenu displayN" id="id_mapdoor_menu">
+        <ul>
+            <li id="id_del_door_or_channel" class="door_ops"><img src="/media/img/icon_deletelink.gif" />{% trans "移除" %}</li>
+        </ul>
+    </div>
+<!--右键菜单的源-end-->
+{% endblock %}
+{% block show_monitor_events %}
+	if($("#rt_content").find("tr").length > 1)
+	{
+		$("#rt_content").find("tr:gt(0)").remove();
+	}
+	$("#rt_content").prepend(rtlisthtml);
+{% endblock %}
+{% block addjs_base %}
+{% endblock %}
+{% block change_tip_info_1 %}"top": (offset.top+60), "left": (offset.left+20){% endblock %}
+{% block change_tip_info_2 %}"top": (offset.top+60), "left": (offset.left+20){% endblock %}
+{% block getdatalist %}{% endblock %}
+
+{% if request.user|HasPerm:"contenttypes.can_ElectroMapPage" %}
+    {% block map_fullscreen_style %}
+        $("#id_map_show").append('<div id="id_map_'+maps[a][0]+'" data="'+maps[a][0]+'" class="map_div" name="'+maps[a][1]+'" style="position: absolute;">'
+                             + '<img class="map" src="../../../file/map/'+maps[a][0]+'.jpg?'+stamp0+'" '+img_style+' />'
+                             + '</div>');
+    {% endblock %}
+    {% block edit_maps %}
+        $(".rightBox").removeClass("rightBox");
+    {% endblock %}
+
+    {% block vid_new_window_settings %}var posy = $(document).scrollTop()+$(window).height()-390;{% endblock %}
+
+{% else %}
+    alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
+    window.location.href = "/{{ request.surl }}accounts/login/";
+{% endif %}<!--can_ElectroMapPage-->

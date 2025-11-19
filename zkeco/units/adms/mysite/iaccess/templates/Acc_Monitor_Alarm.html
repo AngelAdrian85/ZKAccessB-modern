@@ -1,10 +1,10 @@
-{% extends "Acc_Monitor_All.html" %}
-{% load i18n %}
+{# extends "Acc_Monitor_All.html" #}
+{# load i18n #}
 
-{% block content %}
-    {% if request.user|HasPerm:"contenttypes.can_MonitorAlarmPage" %}
+{# block content #}
+    {# if request.user|HasPerm:"contenttypes.can_MonitorAlarmPage" #}
     <div id="id_monitor_events" class="div_box acc_monitor_380" sytle="min-height: 50em;">
-        <h1 style="float:none;">{% trans "报警事件监控" %}</h1>
+        <h1 style="float:none;">{# trans "报警事件监控" #}</h1>
         <div class="grid clearL">
         <div id="id_cancel_all" class="action Link_blue1" style="display:none"></div>
         </div>
@@ -17,12 +17,12 @@
                                 <thead>
                                     <tr>
                                         <th width="5%"><input type="checkBox" id="id_select_all" onclick="selectAll()"></input></th>
-                                        <th width="25%">{% trans "门名称" %}</th>
-                                        <th width="25%">{% trans "所属设备" %}</th>
-                                        <th width="15%">{% trans "门编号" %}</th>
-                                        <th width="15%">{% trans "当前状态" %}</th>
-                                        <th width="15%">{% trans "事件描述" %}</th>
-                                        <th width="20%">{% trans "操作" %}</th>
+                                        <th width="25%">{# trans "门名称" #}</th>
+                                        <th width="25%">{# trans "所属设备" #}</th>
+                                        <th width="15%">{# trans "门编号" #}</th>
+                                        <th width="15%">{# trans "当前状态" #}</th>
+                                        <th width="15%">{# trans "事件描述" #}</th>
+                                        <th width="20%">{# trans "操作" #}</th>
                                     </tr>
                                 </thead>
                                 <tbody id="rt_content">
@@ -37,9 +37,9 @@
             </table>
         </div>
     </div>
-    {% endif %}<!--can_MonitorAlarmPage-->
-{% endblock %}
-{% block addjs_base %}
+    {# endif #}<!--can_MonitorAlarmPage-->
+{# endblock #}
+{# block addjs_base #}
 $("#id_showTbl").css("margin-top","-8px");
 function selectAll(){
     if($('#id_select_all').select = true)
@@ -51,15 +51,15 @@ function selectAll(){
         $("input[name=alarm_list]").select = false;
     }
 }
-{% endblock %}
-{% block getdatalist %}{% endblock %}
+{# endblock #}
+{# block getdatalist #} {# endblock #}
 
-{% block show_tip_info %}{% endblock %}
-{% block base_variables %}{% endblock %}
-{% block monitor_log %}
-    {% if request.user|HasPerm:"contenttypes.can_MonitorAlarmPage" %}
+{# block show_tip_info #} {# endblock #}
+{# block base_variables #} {# endblock #}
+{# block monitor_log #}
+    {# if request.user|HasPerm:"contenttypes.can_MonitorAlarmPage" #}
     //用于向服务器端获取实时事件数据
-    var logid = {% if logid %}{{ logid }}{% else %}-1{% endif %};//-1为初始值
+    var logid = {# if logid #} &#123;&#123; logid &#125;&#125; {# else #}-1{# endif #};//-1为初始值
     var row = "row0";//第一次加载页面时初始化该值
     //var mail_content_title = gettext("门名称")+"     "+gettext("所属设备")+"     "+gettext("门编号")+"     "+gettext("当前状态")+"\r\n";
     //邮件内容标题设计到转码和翻译的问题，暂未实现
@@ -69,7 +69,7 @@ function selectAll(){
     
     $(function(){
         var stamp = (new Date()).getTime();
-        var url = "/{{ request.surl }}iaccess/GetData/?func=doors&type=all&stamp="+ stamp;
+        var url = "/&#123;&#123; request.surl &#125;&#125;iaccess/GetData/?func=doors&type=all&stamp="+ stamp;
         $.ajax({
             type: "GET",
             url: url,
@@ -100,7 +100,7 @@ function selectAll(){
                      +'<td>'+door_name+'</td><td>'+doors[index][1]+'</td><td>'+doors[index][2]+'</td>'
                      +'<td id="door_state_td_'+door_id+'"></td>'
                      +'<td id="id_event_'+door_id+'"></td>'
-                     +'<td><a id="cancelalarm" class="door_ops cancelalarm_list" href="javascript:void(0)" onclick="control_door(this.id, '+door_id+')">{% trans "取消报警" %}</a></td></tr>';
+                     +'<td><a id="cancelalarm" class="door_ops cancelalarm_list" href="javascript:void(0)" onclick="control_door(this.id, '+door_id+')">{# trans "取消报警" #}</a></td></tr>';
                 door_name = null;
                 door_id = null;
             }
@@ -115,12 +115,12 @@ function selectAll(){
     {
         if(mode == "cancelalarm")
         {
-        	getUrl = "/{{ request.surl }}iaccess/SendDoorData/?func="+ mode +"&type=part&data="+door_id;
+        	getUrl = "/&#123;&#123; request.surl &#125;&#125;iaccess/SendDoorData/?func="+ mode +"&type=part&data="+door_id;
             send_doors_data(mode, getUrl);
         }
         else if(mode == "cancelall")//取消所有报警
         {
-            getUrl = "/{{ request.surl }}iaccess/SendDoorData/?func="+ mode +"&type=part&data="+door_id;
+            getUrl = "/&#123;&#123; request.surl &#125;&#125;iaccess/SendDoorData/?func="+ mode +"&type=part&data="+door_id;
             send_doors_data(mode, getUrl);
         }
         mode = null;
@@ -232,7 +232,7 @@ function selectAll(){
             $("#send_mail").click(function(){
                 $.ajax({ 
                     type: "POST",
-                    url:"/{{ request.surl }}iaccess/send_mail_by_hand/",
+                    url:"/&#123;&#123; request.surl &#125;&#125;iaccess/send_mail_by_hand/",
                     data: {"content": mail_append, "receiver": $("#id_send_addr").val()},
                     dataType:"json",
                     async:false,
@@ -284,7 +284,7 @@ function selectAll(){
         { 
             $("#id_monitor_events").find("#rt_content").find("tr:gt(100)").remove(); 
         } 
-        getUrl = '/{{ request.surl }}iaccess/GetRTLog/?type=all&logid='+ logid +'&step=100';
+        getUrl = '/&#123;&#123; request.surl &#125;&#125;iaccess/GetRTLog/?type=all&logid='+ logid +'&step=100';
         $.ajax({ 
             type: "GET", 
             url: getUrl, 
@@ -417,9 +417,9 @@ function selectAll(){
                 if(list != "")
                 {
                     list = list.concat("'");
-                    var html = '<li><a id="acknowledge" class="door_ops cancelalarm_list" href="javascript:void(0)" onclick="get_select(0)">{% trans "通知" %}</a> &nbsp;</li>' +
-                    '<li><a id="cancel" class="door_ops cancelalarm_list" href="javascript:void(0)" onclick="get_select(1)">{% trans "取消报警" %}</a> &nbsp;</li>' +
-                    '<li><a id="cancelall" class="door_ops cancelalarm_list" href="javascript:void(0)" onclick="control_door(this.id, '+list+')">{% trans "取消全部报警" %}</a></li>';
+                    var html = '<li><a id="acknowledge" class="door_ops cancelalarm_list" href="javascript:void(0)" onclick="get_select(0)">{# trans "通知" #}</a> &nbsp;</li>' +
+                    '<li><a id="cancel" class="door_ops cancelalarm_list" href="javascript:void(0)" onclick="get_select(1)">{# trans "取消报警" #}</a> &nbsp;</li>' +
+                    '<li><a id="cancelall" class="door_ops cancelalarm_list" href="javascript:void(0)" onclick="control_door(this.id, '+list+')">{# trans "取消全部报警" #}</a></li>';
                     $("#id_cancel_all").empty();
                     $("#id_cancel_all").append(html);
                     $("#id_cancel_all").show();
@@ -465,9 +465,9 @@ function selectAll(){
     //get_doors_area_device(url);
     window.setTimeout('OnRefresh()', 100);//第一次等1秒执行刷新函数
     
-    {% else %}
+    {# else #}
         alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
-        window.location.href = "/{{ request.surl }}accounts/login/";
-    {% endif %}<!--can_MonitorAlarmPage-->
+        window.location.href = "/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+    {# endif #}<!--can_MonitorAlarmPage-->
    
-{% endblock %}
+{# endblock #}

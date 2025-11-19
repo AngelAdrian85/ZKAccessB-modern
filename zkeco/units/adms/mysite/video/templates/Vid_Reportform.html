@@ -1,15 +1,15 @@
-{% extends "special_menu.html" %}
-{% load i18n %}
+{# extends "special_menu.html" #}
+{# load i18n #}
 
-{% block getdatalist %}
-    {% if request.user|HasPerm:"contenttypes.can_ReportFormPage" %}
+{# block getdatalist #}
+    {# if request.user|HasPerm:"contenttypes.can_ReportFormPage" #}
         
-        {% block acc_reportform %}{% endblock %}
+        {# block acc_reportform #} {# endblock #}
 
-    {% else %}
+    {# else #}
         alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
-        window.location.href = "/{{ request.surl }}accounts/login/";
-    {% endif %}<!--contenttypes.can_ReportFormPage-->
-{% endblock %}
+        window.location.href = "/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+    {# endif #}<!--contenttypes.can_ReportFormPage-->
+{# endblock #}
 
-{% block addjs %}{% endblock %}
+{# block addjs #} {# endblock #}

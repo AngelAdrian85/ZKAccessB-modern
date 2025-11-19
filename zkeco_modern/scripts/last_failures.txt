@@ -1,0 +1,234 @@
+﻿F                                                                        [100%]
+================================== FAILURES ===================================
+________________________ test_render_legacy_templates _________________________
+
+    def test_render_legacy_templates():
+        failures = []
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+        import re
+        import json
+    
+        def sanitize(src: str) -> str:
+            # Strip inheritance/includes for isolated parsing to avoid
+            # cross-file block mismatches during this discovery phase.
+            src = re.sub(r'{%\s*extends\b[^%]*%}', '', src)
+            src = re.sub(r'{%\s*include\b[^%]*%}', '', src)
+            # Convert HTML comments that contain Django template tags into
+            # Django `{% comment %}` blocks so the template parser does not
+            # attempt to parse incomplete legacy snippets left inside HTML
+            # comments (many legacy templates use HTML comments to 'comment'
+            # out template code ù but Django still parses tags inside them).
+            def _html_comment_repl(m):
+                body = m.group(1)
+                if "{%" in body or "{{" in body:
+                    # neutralize Django template delimiters inside HTML comments
+                    # so the template parser ignores them, but keep the HTML
+                    # comment so surrounding markup remains intact.
+                    safe = body.replace("{{", "&#123;&#123;").replace("{%", "&#123;%")
+                    return "<!--" + safe + "-->"
+                return m.group(0)
+    
+            src = re.sub(r'<!--(.*?)-->', _html_comment_repl, src, flags=re.S)
+    
+            # Remove legacy filter-block wrappers entirely (keep inner content)
+            # e.g. `{% filter cl spec %} ... {% endfilter %}` -> `...`
+            for _ in range(3):
+                new = re.sub(r'{%\s*filter\b[^%]*%}(.*?){%\s*endfilter\s*%}', r"\1", src, flags=re.S)
+                if new == src:
+                    break
+                src = new
+    
+            # Fix adjacent token artifacts where a closing tag is immediately
+            # followed by an opening tag (e.g. "%'}{{" or "%'}{%"), which
+            # can confuse the Django parser. Insert a space between them.
+            src = re.sub(r"(['\"]?\})(\{\{|\{%)", r"\1 \2", src)
+            # Also ensure a bare closing brace followed immediately by an open
+            # brace is separated (catch other variants).
+            src = re.sub(r"\}(\{)", r"} \1", src)
+    
+            # Normalize some legacy template token shapes to modern Django syntax
+            # e.g. {% trans"text" %} -> {% trans "text" %}
+            # Replace simple {% trans "..." %} usages with the raw string to avoid
+            # legacy trans syntax variations that modern Django may reject.
+            src = re.sub(r'{%\s*trans\s+(".*?"|\'.*?\')\s*%}', lambda m: m.group(1), src, flags=re.S)
+            # Normalize compact legacy `trans"text"` usages to `trans "text"`.
+            src = re.sub(r'\btrans"([^\"]+)"', r'trans "\1"', src)
+            # Quote simple unquoted filter args: {{ var|cl spec }} -> {{ var|cl:'spec' }}
+            # Run multiple passes until stable to catch chained cases and nested constructs.
+            pattern = re.compile(r"\|([A-Za-z0-9_]+)\s+([^\s\|'\"\)\}\|]+)")
+            for _ in range(8):
+                new = pattern.sub(r"|\1:'\2'", src)
+                if new == src:
+                    break
+                src = new
+            # Also catch cases where filter args contain dots/slashes or percent signs.
+            pattern2 = re.compile(r"\|([A-Za-z0-9_]+)\s+([^\s\|'\"\)\}\|<>%/.,:-]+)")
+            for _ in range(4):
+                new = pattern2.sub(r"|\1:'\2'", src)
+                if new == src:
+                    break
+                src = new
+            # Replace quoted non-ASCII (e.g., Chinese) literals inside templates with a
+            # safe ASCII placeholder to avoid parser confusion from legacy encodings.
+            src = re.sub(r'\"([^\"]*[\u4e00-\u9fff][^\"]*)\"', '"STR"', src)
+            # Also replace single-quoted non-ASCII literals
+            src = re.sub(r"'([^']*[\u4e00-\u9fff][^']*)'", "'STR'", src)
+            # Insert a space between a quoted filter argument and the closing
+            # variable/tag brace when they are adjacent, e.g. `:'%'} -> :'%'}
+            # becomes `:'%' }` so Django's parser doesn't include the `}` in the
+            # argument token. Run a couple passes to catch chained cases.
+            for _ in range(3):
+                src = re.sub(r"(:'[^']+')\}", r"\1 }", src)
+                src = re.sub(r'(:"[^"]+")\}', r'\1 }', src)
+            # Also fix sequences where a quoted-arg is immediately followed by a
+            # template tag opener without spacing (e.g. "%' }{%" variants).
+            src = re.sub(r"(['\"])\s*\}\s*(\{%|\{\{)", r"\1 } \2", src)
+    
+            # NOTE: final, global `{% ... %}` -> `{# ... #}` fallback removed
+            # for now so we can collect the true set of remaining Template
+            # syntax failures and implement precise shims. Restore or keep a
+            # safer fallback later once targeted shims are in place.
+            # Attempt to repair simple mismatched block closers by scanning
+            # template tags and mapping any `end*` that doesn't match the
+            # most-recent opener to the expected end tag. This is a best-effort
+            # heuristic to fix legacy templates with swapped/mismatched closers.
+            def _repair_blocks(text: str) -> str:
+                tag_re = re.compile(r"{%\s*([^\s%]+)([^%]*)%}")
+                openers = {
+                    "if",
+                    "for",
+                    "block",
+                    "autoescape",
+                    "filter",
+                    "ifequal",
+                    "ifnotequal",
+                    "with",
+                    "blocktrans",
+                    "raw",
+                    "verbatim",
+                    "spaceless",
+                }
+                middle_tags = {"else", "elif", "empty"}
+                out = []
+                last = 0
+                stack = []
+                for m in tag_re.finditer(text):
+                    out.append(text[last:m.start()])
+                    tag_name = m.group(1)
+                    full = m.group(0)
+                    lower = tag_name.lower()
+                    if lower in openers:
+                        stack.append(lower)
+                        out.append(full)
+                    elif lower in middle_tags:
+                        out.append(full)
+                    elif lower.startswith("end"):
+                        end_name = lower[3:]
+                        if stack:
+                            top = stack[-1]
+                            if end_name == top:
+                                stack.pop()
+                                out.append(full)
+                            else:
+                                # replace the end tag name to match the opener
+                                fixed = re.sub(r"^{%\s*end[^\s%]+", "{% end" + top, full, flags=re.I)
+                                out.append(fixed)
+                                stack.pop()
+                        else:
+                            out.append(full)
+                    else:
+                        # other tags, leave as-is
+                        out.append(full)
+                    last = m.end()
+                out.append(text[last:])
+                # if any openers remain, close them to avoid unclosed-tag errors
+                if stack:
+                    for opener in reversed(stack):
+                        out.append("{% end" + opener + " %}")
+                return "".join(out)
+    
+            src = _repair_blocks(src)
+            # As a conservative fallback (temporary), comment out any template
+            # tags whose root name is not in a small whitelist. This avoids many
+            # legacy/unknown tags causing parser mismatches while we iterate on
+            # implementing precise shims. We'll re-enable or replace these tags
+            # with proper shims later.
+            def _comment_unknown_tags(text: str) -> str:
+                tag_re = re.compile(r"({%\s*([^\s%]+)(?:[^%]*)%})")
+                safe = {
+                    "if",
+                    "endif",
+                    "for",
+                    "endfor",
+                    "else",
+                    "elif",
+                    "empty",
+                    "block",
+                    "endblock",
+                    "autoescape",
+                    "endautoescape",
+                    "with",
+                    "endwith",
+                    "load",
+                    "include",
+                    "extends",
+                    "trans",
+                    "blocktrans",
+                    "endblocktrans",
+                    "verbatim",
+                    "endverbatim",
+                    "raw",
+                    "endraw",
+                    "filter",
+                    "endfilter",
+                }
+                out = []
+                last = 0
+                for m in tag_re.finditer(text):
+                    out.append(text[last:m.start()])
+                    full = m.group(1)
+                    name = m.group(2).lower()
+                    if name in safe or (name.startswith("end") and name in safe):
+                        out.append(full)
+                    else:
+                        # comment it out
+                        out.append("{# " + full[2:-2].strip() + " #}")
+                    last = m.end()
+                out.append(text[last:])
+                return "".join(out)
+    
+            src = _comment_unknown_tags(src)
+            return src
+    
+        for fullpath in find_legacy_templates(repo_root):
+            try:
+                with open(fullpath, "r", encoding="utf-8", errors="ignore") as fh:
+                    src = fh.read()
+                try:
+                    Template(src).render(Context({}))
+                except TemplateSyntaxError:
+                    # attempt sanitized parse for legacy syntax oddities
+                    src2 = sanitize(src)
+                    Template(src2).render(Context({}))
+            except TemplateSyntaxError as e:
+                failures.append((fullpath, str(e)))
+            except Exception:
+                # ignore other runtime errors for now
+                pass
+    
+        # after scanning all templates, write failures to a JSON file for
+        # easier offline analysis and debugging
+        if failures:
+            outp = os.path.join(os.path.dirname(__file__), "..", "scripts", "failures.json")
+            os.makedirs(os.path.dirname(outp), exist_ok=True)
+            with open(outp, "w", encoding="utf-8") as fh:
+                json.dump([{"file": f, "error": e} for f, e in failures], fh, ensure_ascii=False, indent=2)
+    
+>       assert not failures, f"Template syntax failures: {failures}"
+E       AssertionError: Template syntax failures: [('C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\templates\\data_list.html', "Could not parse the remainder: '}' from '}'"), ('C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\templates\\setoption.html', "Invalid block tag on line 18: 'endblock'. Did you forget to register or load this tag?"), ('C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\templates\\special_menu.html', "Invalid block tag on line 18: 'endblock'. Did you forget to register or load this tag?"), ('C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\att\\templates\\NUM_RUN_list.html', "Invalid block tag on line 148: 'else', expected 'endblock'. Did you forget to register or load this tag?"), ('C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\elevator\\templates\\Elevator_Floor_Mng.html', "Could not parse the remainder: '}'fp_count',{%' from '}'fp_count',{%'"), ('C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\iaccess\\templates\\AccLevelSet_list.html', "Invalid block tag on line 38: 'endblock'. Did you forget to register or load this tag?"), ('C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\iaccess\\templates\\AccLinkageIO_list.html', "Invalid block tag on line 31: 'else', expected 'endblock'. Did you forget to register or load this tag?"), ('C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\iaccess\\templates\\Acc_Door_Mng.html', "Could not parse the remainder: '}'fp_count',{%' from '}'fp_count',{%'"), ('C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\iaccess\\templates\\Acc_Door_Set.html', "Invalid block tag on line 29: 'endblock'. Did you forget to register or load this tag?"), ('C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\iaccess\\templates\\Acc_Electro_Map.html', "Invalid block tag on line 375: 'else', expected 'endblock'. Did you forget to register or load this tag?"), ('C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\iaccess\\templates\\Acc_EmpLevel_Bylevel.html', "Invalid block tag on line 173: 'endif', expected 'endblock'. Did you forget to register or load this tag?"), ('C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\iaccess\\templates\\Acc_Monitor_Alarm.html', "Invalid block tag on line 268: 'endblock'. Did you forget to register or load this tag?"), ('C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\iaccess\\templates\\Acc_Monitor_All.html', "Invalid block tag on line 726: 'else', expected 'endblock'. Did you forget to register or load this tag?"), ('C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\iaccess\\templates\\Acc_Reportform_alarm.html', "Invalid block tag on line 103: 'else', expected 'endblock'. Did you forget to register or load this tag?"), ('C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\iaccess\\templates\\Acc_Reportform_allevent.html', "Invalid block tag on line 108: 'else', expected 'endblock'. Did you forget to register or load this tag?"), ('C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\iaccess\\templates\\Auxiliary_Mng.html', "Could not parse the remainder: '}'fp_count',{%' from '}'fp_count',{%'"), ('C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\iclock\\templates\\Area_list.html', "Invalid block tag on line 9: 'else', expected 'endblock'. Did you forget to register or load this tag?"), ('C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\iclock\\templates\\Device_list.html', "Could not parse the remainder: '}' from '}'"), ('C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\iclock\\templates\\Dev_RTMonitor.html', "Invalid block tag on line 251: 'else', expected 'endblock'. Did you forget to register or load this tag?"), ('C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\personnel\\templates\\Employee_edit.html', "Could not parse the remainder: '}' from '}'"), ('C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\personnel\\templates\\Employee_list.html', "Could not parse the remainder: '}'get_template',{%' from '}'get_template',{%'"), ('C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\personnel\\templates\\LeaveLog_list.html', "Invalid block tag on line 12: 'else', expected 'endif'. Did you forget to register or load this tag?"), ('C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\video\\templates\\Vid_Linkage.html', "Invalid block tag on line 381: 'else', expected 'endblock'. Did you forget to register or load this tag?"), ('C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\visitor\\templates\\Visitor_Level_Set.html', "Invalid block tag on line 159: 'endblock'. Did you forget to register or load this tag?"), ('C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\visitor\\templates\\Visitor_Preview.html', "Invalid block tag on line 79: 'endblock'. Did you forget to register or load this tag?"), ('C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\worktable\\templates\\worktable_DeleteData.html', "Invalid block tag on line 114: 'endblock'. Did you forget to register or load this tag?")]
+E       assert not [('C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\templates\\data_list.html', "Could n...AccLevelSet_list.html', "Invalid block tag on line 38: 'endblock'. Did you forget to register or load this tag?"), ...]
+
+zkeco_modern\tests\test_legacy_templates_render.py:234: AssertionError
+=========================== short test summary info ===========================
+FAILED zkeco_modern\tests\test_legacy_templates_render.py::test_render_legacy_templates
+1 failed in 0.52s

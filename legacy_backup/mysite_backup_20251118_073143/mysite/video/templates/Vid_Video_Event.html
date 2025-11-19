@@ -1,0 +1,137 @@
+{% extends "Vid_Reportform.html" %}
+{% load i18n %}
+
+{% block headjs %}
+    {% if request.user|HasPerm:"contenttypes.can_VideoEventPage" %}
+    <script src="{{ MEDIA_URL }}/jslib/widgets.js"></script>
+        {% block add_headjs %}
+        {% endblock %}
+    {% endif %}
+{% endblock %}
+
+{% block id_main_div %}
+    {% if request.user|HasPerm:"contenttypes.can_VideoEventPage" %}
+
+    {% if request.user|HasPerm:"iaccess.browse_accrtmonitor" %}
+    
+    <div ><li id="id_model_export" style="display:none"><a class="action_Model_Export" href="javascript:void(0)" alt="export"></a></li></div>
+    <div id="id_datalist" style="z-index:-1" class="div_box h280"><h1>{% trans "Video Events" %}</h1>
+    </div>
+    <div id="id_ocx" class="displayN"></div>
+    
+    {% endif %}<!--browse_accrtmonitor-->
+    {% endif %}<!--contenttypes.can_VideoEventPage-->
+{% endblock %}
+
+{% block acc_reportform %}
+    {% if request.user|HasPerm:"contenttypes.can_VideoEventPage" %}
+    {% if request.user|HasPerm:"iaccess.browse_accrtmonitor" %}
+    //var user_id = -1;//
+    var vid_hkocx_obj = null;//海康dvr控件
+    var user_id = null;
+    $("#id_datalist").model_grid({
+        "model_url": "{{ dbapp_url }}iaccess/AccRTMonitor/",
+        "base_query": ['qs_filter=video_event=*'],
+        "model_actions": true,
+        "object_actions": false,
+        "obj_edit": false,
+        "record_per_page": 15,
+        "sort_fields": ["-time"],  
+        "max_no_page": 20,  
+        "disable_cols": ['out_address','in_address'],
+        "disabled_actions": ["OpClearAbnormityLogs","OpClearRTLogs","_delete","_add","_clear","_change"],
+        "multiple_select": null,
+        "action_onclick_continue": false,
+        "row_operations": [],
+        "init_after_get_jdata": function(){    
+            //自定义下拉框
+            adjust_dropdown_list($("#search_id_event_type"));
+            $("tr[id^='id_row_'] a").each(function(){
+                $(this).click(function(){
+                    //if(!$.browser.msie)
+                    if(!$.browser.msie)
+                    {
+                        alert(gettext("目前该功能仅支持IE系列及IE内核的浏览器，请更换！"));
+                        return;              
+                    }
+                    else
+                    {
+                        var vid_data = $(this).attr("data").split(",");
+                        //alert(vid_data)
+                        var device_ip = vid_data[0];
+                        var device_port = vid_data[1];
+                        var login_user = vid_data[2];
+                        var login_pwd = vid_data[3];
+                        var channel_no = vid_data[4];
+                        var start_time = vid_data[5];
+                        var end_time = vid_data[6];
+                        var ocx_html = '<div id="id_show_video_form" class="show_video_form div_box displayN">'
+                                            +'<h1>{% trans "视频回放" %}</h1>'
+                                            +'<div id = "id_vid_hkocx"></div>'
+                                            +'<div class="btns_class">'
+                                                +'<button class="btn" id="id_Cancel" type="button">{% trans "返回" %}</button>'
+                                            +'</div>'
+                                        +'</div>';
+                        $("#id_ocx").empty().append(ocx_html);
+                        //alert(vid_hkocx_obj);
+                        //每次均动态创建，后续需改为只创建一次（主要是dialog问题导致无法连续预览,id_vid_hkocx被清空）-darcy20120302
+                        //if(!vid_hkocx_obj)
+                        //{
+                            $("#id_vid_hkocx").append('<object classid="clsid:CAFCF48D-8E34-4490-8154-026191D73924" codebase="/media/ActiveX/NetVideoActiveX23.cab#version=2,3,9,1" standby="Waiting..." id="Netocx1" width="400" height="300" name="ocx1" align="center" ></object>');
+                            //alert($("#id_vid_hkocx").html())
+                            if(document.getElementById("Netocx1").object == null)
+                            {
+                               alert(gettext("控件初始化失败，请确定视频设备类型是否选择正确或重装控件！"));
+                               return;               
+                            }
+                            else
+                            {
+                                vid_hkocx_obj = document.getElementById("Netocx1");
+                                user_id = vid_hkocx_obj.Login(device_ip, device_port, login_user, login_pwd);//返回当前登录的用户数，-1代表失败
+                            }
+                        //}
+                        
+                        //alert(user_id)
+                        $("#id_show_video_form").find("#id_Cancel").click(function(){
+                            $("#id_close").click();//Logout?ClearOCX?
+                            vid_hkocx_obj.Logout();//登录前先注销。
+                            vid_hkocx_obj.ClearOCX();
+                        });
+                        
+                        if(user_id < 0)
+                        {
+                            alert(gettext("视频服务器登录失败，请确认后重试！"));
+                            return;
+                        }
+                        else
+                        {
+                            //暂时按照时间来查询，后续可以按照点来查询。"2012-2-26 15:05:00"
+                            var ret = vid_hkocx_obj.PlayBackByTime(channel_no, start_time, end_time);//record_time
+                            //alert(ret);
+                            
+                            if(ret)
+                            {
+                                $("#id_show_video_form").show();
+                                $("#id_show_video_form").dialog();
+                            }
+                            else
+                            {
+                                alert(gettext("视频回放失败，请确认后重试！"));
+                                vid_hkocx_obj.Logout();//登录前先注销。
+                                vid_hkocx_obj.ClearOCX();
+                                return;
+                            }
+                        }
+                    }
+                });
+            });
+        }
+
+    });
+    {% endif %}<!--browse_accrtmonitor-->
+    {% else %}
+        $("#id_search").remove();
+        alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
+        window.location.href = "/{{ request.surl }}accounts/login/";
+    {% endif %}<!--contenttypes.can_VideoEventPage-->
+{% endblock %}

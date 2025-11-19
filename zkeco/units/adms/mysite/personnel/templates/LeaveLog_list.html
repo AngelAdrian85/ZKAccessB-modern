@@ -1,63 +1,52 @@
-{% extends "data_list.html" %}
+{# extends "data_list.html" #}
 
-{% load i18n %}
+{# load i18n #}
 
-{% block extend_model_grid %}
-	{% if request.user|HasPerm:"personnel.browse_leavelog" %}
-		{% if "mysite.iaccess&mysite.att"|hasApp %}
-			{% if "en"|has_language %}
-				disable_cols:['isClassAtt','UserID.isblacklist'],
-			{% else %}
-				{% if not "mysite"|is_contain_att %}
-					disable_cols:['isClassAtt', 'UserID.isblacklist'],
-				{% else %}
+{# block extend_model_grid #}
+	{# if request.user|HasPerm:"personnel.browse_leavelog" #}
+		{# if "mysite.iaccess&mysite.att"|hasApp:'%' {# if "en"|has_language:'%' disable_cols:['isClassAtt','UserID.isblacklist'],
+			{# else #}
+				{# if not "mysite"|is_contain_att:'%' disable_cols:['isClassAtt', 'UserID.isblacklist'],
+				{# else #}
 					disable_cols:['UserID.isblacklist'],
-				{% endif %}
-			{% endif %}
-		{% else %}
-			{% if "mysite.pos"|hasApp %}
-			disable_cols:['isReturnTools','isReturnClothes','isReturnCard'],
-			{%else%}
+				{# endif #}
+			{# endif #}
+		{# else #}
+			{# if "mysite.pos"|hasApp:'%' disable_cols:['isReturnTools','isReturnClothes','isReturnCard'],
+			{#else #}
 		    
-				{% if "mysite.att"|hasApp %}
-					disable_cols:['isClassAccess'],
-				{% endif %}
-			{% endif %}
-		{% endif %}
-	{% else %}
+				{# if "mysite.att"|hasApp:'%' disable_cols:['isClassAccess'],
+				{# endif #}
+			{# endif #}
+		{# endif #}
+	{# else #}
 	    $("#id_search").remove();
 	    alert(gettext("对不起,您没有访问该页面的权限,不能浏览更多信息！"));
-	    window.location.href="/{{ request.surl }}accounts/login/";
-	{% endif %}<!--personnel.browse_leavelog-->
-{% endblock %}
+	    window.location.href="/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+	{# endif #}<!--personnel.browse_leavelog-->
+{# endblock #}
 
-{% block extend_disabled_actions %}
-	{% if request.user|HasPerm:"personnel.browse_leavelog" %}
-		{% if "mysite.iaccess&mysite.att"|hasApp %}
-			{% if "mysite"|is_zkaccess_att %}
-				{% if "en"|has_language %}
-					,'OpCloseAtt'
-				{% else %}
-					{% if not "mysite"|is_contain_att %}
-						,'OpCloseAtt'
-					{% endif %}
-				{% endif %}
-			{% else %}
+{# block extend_disabled_actions #}
+	{# if request.user|HasPerm:"personnel.browse_leavelog" #}
+		{# if "mysite.iaccess&mysite.att"|hasApp:'%' {# if "mysite"|is_zkaccess_att:'%' {# if "en"|has_language:'%' ,'OpCloseAtt'
+				{# else #}
+					{# if not "mysite"|is_contain_att:'%' ,'OpCloseAtt'
+					{# endif #}
+				{# endif #}
+			{# else #}
 				,'OpAddLevelToEmp','OpDelLevelFromEmp'
-			{% endif %}
-		{% else %}
-			{% if "mysite.pos"|hasApp %}
-							,'OpCloseAccess','OpCloseAtt'
-					{%else%}	
-				{% if "mysite.att"|hasApp %}
-					,'OpCloseAccess'
-				{% endif %}
-			{% endif %}
-		{% endif %}
-	{% else %}
+			{# endif #}
+		{# else #}
+			{# if "mysite.pos"|hasApp:'%' ,'OpCloseAccess','OpCloseAtt'
+					{#else #}	
+				{# if "mysite.att"|hasApp:'%' ,'OpCloseAccess'
+				{# endif #}
+			{# endif #}
+		{# endif #}
+	{# else #}
 	    $("#id_search").remove();
 	    alert(gettext("对不起,您没有访问该页面的权限,不能浏览更多信息！"));
-	    window.location.href="/{{ request.surl }}accounts/login/";
-	{% endif %}<!--personnel.browse_leavelog-->
-{% endblock %}
+	    window.location.href="/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+	{# endif #}<!--personnel.browse_leavelog-->
+{# endblock #}
 

@@ -1,0 +1,4 @@
+userid,badgenumber,firstname,lastname,deptname
+,5001,NoID,User,Temp
+5002,,MissingBadge,User,Temp
+5003,5003,Partial,,Temp

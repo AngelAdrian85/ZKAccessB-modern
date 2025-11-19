@@ -1,25 +1,25 @@
-{% extends "special_menu.html" %}
-{% load i18n %}
+{# extends "special_menu.html" #}
+{# load i18n #}
 
-{% block headjs %}
-    {% if request.user|HasPerm:"contenttypes.can_VideoLinkagePage" %}
-    <script src="{{ MEDIA_URL }}/jslib/check_browser.js"></script>
-    {% endif %}
-{% endblock %}
+{# block headjs #}
+    {# if request.user|HasPerm:"contenttypes.can_VideoLinkagePage" #}
+    <script></script>
+    {# endif #}
+{# endblock #}
 
-{% block content %}
-    {% if request.user|HasPerm:"contenttypes.can_VideoLinkagePage" %}
+{# block content #}
+    {# if request.user|HasPerm:"contenttypes.can_VideoLinkagePage" #}
     <!--<div id="" style="padding-bottom: 2px ! important;" class="">-->
         <!--<h1>查 找</h1>--> 
     <div id="id_search" class="div_box" style="margin-bottom:0px !important; padding-bottom:2px;">
-        <h1 style="margin-bottom:5px;">{% trans "查询" %}</h1>
+        <h1 style="margin-bottom:5px;">{# trans "查询" #}</h1>
         <table style="width: 99%;"><tbody><tr>
 			<td>
                 <div>
                     <table id="" width="100%" class="tbl_form_search">
                         <tbody>  
                             <tr class="header_div_left">
-                            	<td align="right"><label class="" >{% trans "开始时间" %}:</label></td> 
+                            	<td align="right"><label class="" >{# trans "开始时间" #}:</label></td> 
                                 <td>
                                 	<input type="text" id="search_id_starttime" class="wZBaseDateTimeField dp-applied" size="30" maxlength="30" name="" fieldname="starttime">
                                 	|&nbsp;
@@ -29,13 +29,13 @@
                             			</a>
                             		</span>
                             	</td>
-                                <td align="right"><label class="" >{% trans "控制器" %}:</label></td>
+                                <td align="right"><label class="" >{# trans "控制器" #}:</label></td>
                                 <td id="acc_device"><select style=" !important; width:143px;"><option value="0">-----------------</option></select></td> 
-                                <td align="right"><label class="" >{% trans "视频服务器" %}:</label></td>
+                                <td align="right"><label class="" >{# trans "视频服务器" #}:</label></td>
                                 <td id="video_server"><select style=" !important; width:143px;"><option value="0">-----------------</option></select></td> 
                             </tr> 
                             <tr>
-                                <td align="right"><label class="" >{% trans "结束时间" %}:</label></td>
+                                <td align="right"><label class="" >{# trans "结束时间" #}:</label></td>
                                 <td>
                                 	<input type="text" id="search_id_endtime" class="wZBaseDateTimeField dp-applied" size="30" maxlength="30" name="" fieldname="endtime">
                             		|&nbsp;
@@ -45,7 +45,7 @@
                             			</a>
                             		</span>
                             	</td>
-                            	<td align="right"><label class="" >{% trans "门" %}:</label></td>
+                            	<td align="right"><label class="" >{# trans "门" #}:</label></td>
                                 <td id="acc_door"><select style=" !important; width:143px;"><option value="0">-----------------</option></select></td> 
                             </tr> 
                         </tbody>
@@ -55,7 +55,7 @@
             <td width="160" valign="bottom">  
                 <div class="topSearchBtn" style="text-align: center; height: 20px; width: 190px;">
                     <span class="Link_blue1">
-                        <span class="action_topSearch floatL"></span><a class="floatL" id="id_video_search" href="javascript:void(0)">{% trans "查询" %}</a>
+                        <span class="action_topSearch floatL"></span><a class="floatL" id="id_video_search" href="javascript:void(0)">{# trans "查询" #}</a>
                     </span>                              
                 </div>
             </td></tr>
@@ -64,7 +64,7 @@
     
     <div id="id_vid_linage" style="margin:15px 0px 0px 10px;">
         <div id="id_datalist" class="div_box"  style="float:left; margin:0px; width:45%;">
-            <h1>{% trans "视频联动录像" %}</h1>
+            <h1>{# trans "视频联动录像" #}</h1>
 
             <div id="id_showTbl">
                 <div class="monitor_head">
@@ -72,9 +72,9 @@
                     <table class="table">
                         <thead>
                             <tr>
-                            <th width="10%">{% trans '序号' %}</th>
-                            <th width="70%">{% trans '文件名' %}</th>
-                            <th width="20%" >{% trans '操作' %}</th>
+                            <th width="10%">{# trans '序号' #}</th>
+                            <th width="70%">{# trans '文件名' #}</th>
+                            <th width="20%" >{# trans '操作' #}</th>
                             </tr>
                         </thead>
                     </table>
@@ -88,7 +88,7 @@
             </div>
         </div>
         <div id="id_extend" class="div_box" style="float:right; width:43%; margin:0px 10px 0px 0px;_margin:0px 5px 0px 0px;">
-            <h1>{% trans "视频回放" %}</h1>
+            <h1>{# trans "视频回放" #}</h1>
             <table>
             <tr>
               <td width="100%" align="center"><object classid="clsid:CAFCF48D-8E34-4490-8154-026191D73924" codebase="/media/ActiveX/NetVideoActiveX23.cab#version=2,3,9,1"
@@ -99,16 +99,16 @@
         </div>
     </div>
     
-    {% endif %}<!--contenttypes.can_VideoLinkagePage -->
-{% endblock %}
+    {# endif #}<!--contenttypes.can_VideoLinkagePage -->
+{# endblock #}
 
-{% block getdatalist %}
+{# block getdatalist #}
 
-{% endblock %}
+{# endblock #}
 
 
-{% block addjs %}
-    {% if request.user|HasPerm:"contenttypes.can_VideoLinkagePage" %}
+{# block addjs #}
+    {# if request.user|HasPerm:"contenttypes.can_VideoLinkagePage" #}
     
     //页面加载判断浏览器并处理
         window.onload = function()
@@ -116,7 +116,7 @@
             if(!$.browser.msie)
             {
                 alert(gettext("目前该功能仅支持IE系列及IE内核的浏览器，请更换！"));
-                window.location.href = "/{{ request.surl }}video/ChannelMngPage/";
+                window.location.href = "/&#123;&#123; request.surl &#125;&#125;video/ChannelMngPage/";
                 return;              
             } 
             else
@@ -126,7 +126,7 @@
                 if(channel_length == 0)
                 {
                     alert(gettext("当前系统中没有添加视频服务器，请添加！"));
-                    window.location.href = "/{{ request.surl }}data/iclock/device/";
+                    window.location.href = "/&#123;&#123; request.surl &#125;&#125;data/iclock/device/";
                     return; 
                 }
                 else
@@ -248,7 +248,7 @@
         {
             return ;
         }
-        url = "/{{ request.surl }}video/GetData/?func=video&type=videoserver&server_id="+ current_video_id;
+        url = "/&#123;&#123; request.surl &#125;&#125;video/GetData/?func=video&type=videoserver&server_id="+ current_video_id;
         $.ajax({
             type: "GET",
             url: url,
@@ -267,22 +267,22 @@
     });
     
     $("#acc_device select").change(function(){
-        //url = "/{{ request.surl }}video/GetData/?func=video&type=device&device_id="+$(this).val();
+        //url = "/&#123;&#123; request.surl &#125;&#125;video/GetData/?func=video&type=device&device_id="+$(this).val();
         //gdev_filter = "&area_id="+$(this).val();
         if($(this).val()=="0")
         {
-         url = "/{{ request.surl }}video/GetData/?func=video&type=all_device&device_id="+$(this).val();
+         url = "/&#123;&#123; request.surl &#125;&#125;video/GetData/?func=video&type=all_device&device_id="+$(this).val();
         }
         else
         {
-        url = "/{{ request.surl }}video/GetData/?func=video&type=device&device_id="+$(this).val();
+        url = "/&#123;&#123; request.surl &#125;&#125;video/GetData/?func=video&type=device&device_id="+$(this).val();
         }
         
         query_load(url);
     });
 
     $("#acc_door select").change(function(){
-        url = "/{{ request.surl }}video/GetData/?func=video&type=door&door_id="+$(this).val();
+        url = "/&#123;&#123; request.surl &#125;&#125;video/GetData/?func=video&type=door&door_id="+$(this).val();
         query_load(url);
     });
 
@@ -291,7 +291,7 @@
     });
     
     var stamp = new Date().getTime();
-    url = "/{{ request.surl }}video/GetData/?func=video&type=all_device&stamp="+ stamp;
+    url = "/&#123;&#123; request.surl &#125;&#125;video/GetData/?func=video&type=all_device&stamp="+ stamp;
     query_load(url)
     
     var UserID
@@ -371,11 +371,11 @@
                 //+ '<td width="25%">' + members[i].getElementsByTagName("StartTime")[0].firstChild.nodeValue +'</td>'
                 //+ '<td width="25%">' + members[i].getElementsByTagName("StopTime")[0].firstChild.nodeValue +'</td>'
                 //+ '<td width="10%">' + members[i].getElementsByTagName("FileSize")[0].firstChild.nodeValue +'</td>'
-                //+ '<td id="playvideo_'+ id +'" value="'+ fname +'"><a href="javascript:void(0);">{% trans '播放' %}</a></td>'
-                //+ '<td id="stopvideo_'+ id +'" value="'+ fname +'"><a href="javascript:void(0);">{% trans '停止' %}</a></td>'
+                //+ '<td id="playvideo_'+ id +'" value="'+ fname +'"><a href="javascript:void(0);">{# trans '播放' #}</a></td>'
+                //+ '<td id="stopvideo_'+ id +'" value="'+ fname +'"><a href="javascript:void(0);">{# trans '停止' #}</a></td>'
                 + '<td class="Link_blue1" id="id_td_row_menu" style="width="20%"><div style="width: 58px;"><ul class="ul_row_menu">'
-                + '<li id="playvideo_' + id +'" title="'+ fname + '"><a  href="javascript:void(0)">{% trans '播放' %}</a></li>' 
-                + '<li id="stopvideo_' + id +'" title="'+ fname + '"><a  href="javascript:void(0)">{% trans '停止' %}</a></li>' + '</ul></div></td></tr>'
+                + '<li id="playvideo_' + id +'" title="'+ fname + '"><a  href="javascript:void(0)">{# trans '播放' #}</a></li>' 
+                + '<li id="stopvideo_' + id +'" title="'+ fname + '"><a  href="javascript:void(0)">{# trans '停止' #}</a></li>' + '</ul></div></td></tr>'
         }
         //$("#id_datalist").find("#rt_content").empty(); 
         $("#id_datalist").find("#rt_content").append(htmlx);  
@@ -435,8 +435,8 @@
     $("#search_id_endtime").val(st.format('yyyy-MM-dd 23:59:59'));
 
     //SearchRemoteRecord("192.168.12.167", 8000, "admin", "12345");
-    {% else %}<!--contenttypes.can_VideoLinkagePage -->
+    {# else #}<!--contenttypes.can_VideoLinkagePage -->
         alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
-        window.location.href="/{{ request.surl }}accounts/login/";
-    {% endif %}<!--contenttypes.can_VideoLinkagePage -->
-{% endblock %}
+        window.location.href="/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+    {# endif #}<!--contenttypes.can_VideoLinkagePage -->
+{# endblock #}

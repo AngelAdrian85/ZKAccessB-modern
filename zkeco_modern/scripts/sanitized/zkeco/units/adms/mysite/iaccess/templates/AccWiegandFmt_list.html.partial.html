@@ -1,0 +1,40 @@
+{% extends "Acc_Door_Set.html" %}
+{% load i18n %}
+{% block headjs %}
+    <link id="skin" rel="stylesheet" href="{{ MEDIA_URL }}/jBox/Skins2/Blue/jbox.css" />
+    <script></script>
+    <script></script>    
+{% endblock %}
+
+{% block acc_door_set %}
+    {% if request.user|HasPerm:"iaccess.browse_accwiegandfmt" %}
+        $("#id_datalist").model_grid({
+            "model_url":"{{ model_url }}",
+            "row_operations":["op_edit","_delete"],
+            "disabled_actions":["_change"],
+            "base_query": ["id__gt=1"],
+            "init_query": ["id__gt=1"],
+            "init_after_get_jdata": function(){
+                $("input[class^='select_row']").each(function(){
+					if($(this).val() <= 11)//去掉27种内置韦根卡格式 删除操作
+					{
+						$(this).parent().parent().parent().find("li:last").html("");
+					}
+				});
+            },
+            "reload_after_get_jdata":function(){
+                $("input[class^='select_row']").each(function(){
+					if($(this).val() <= 11)
+					{
+						$(this).parent().parent().parent().find("li:last").html("");
+					}
+				});
+            }
+        });
+    {% else %}<!--browse_accwiegandfmt-->
+        $("#id_datalist").remove();
+        alert(gettext("对不起,您没有韦根卡格式设置的权限,不能进行当前操作！"));
+        window.location.href = "/{{ request.surl }}accounts/login/";
+    {% endif %}<!--browse_accwiegandfmt-->
+{% endblock %}
+

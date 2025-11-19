@@ -1,0 +1,147 @@
+{% extends "data_edit.html" %}
+{% load i18n %}
+
+{% block form %}
+	{% if request.user|HasPermDefaultGiven:"iaccess.change_auxiliary" %}
+	{% autoescape off %}
+	<tr>
+		<td>
+			<div class="door_edit_table_title">
+				<table id="door_edit_table" cellpadding="3px">
+					<tr>
+						{{ form.device|field_as_td_h }}
+					</tr>
+					<tr>
+						{{ form.aux_no|field_as_td_h }}
+					</tr>
+					<tr>
+						{{ form.aux_name|field_as_td_h }}
+					</tr>
+					<tr>
+						{{ form.printer_number|field_as_td_h }}
+					</tr>
+					<tr class="displayN">
+						{{ form.aux_state|field_as_td_h }}
+					</tr>
+					<tr id="tr_time_zone_status"><!-- 控制 -->
+						{{form.time_zone_status|field_as_td_h}}
+					</tr>
+					<tr id="tr_time_zone"><!-- 被控制 -->
+						{{form.time_zone|field_as_td_h}}
+					</tr>
+					<tr class="displayN">
+						<th><label id="id_lable_settocurall">{% trans "将该设置应用于当前控制器所有辅助输出:" %}</label></th>
+						<td>
+							<input type="checkbox" name="applytocur" class="wZBaseBooleanField door_edit_checkbox" id="id_applytocur">
+						</td>
+					</tr>
+					<tr class="displayN">
+						<th><label id="id_lable_settoall">{% trans "将该设置应用于所有控制器所有辅助输出:" %}</label></th>
+						<td>
+							<input type="checkbox" name="applytoall" class="wZBaseBooleanField door_edit_checkbox" id="id_applytoall">
+						</td>
+					</tr>
+				</table>
+			</div>
+		</td>
+	</tr>
+	{% if form.non_field_errors %}
+		<tr><td>{{ form.non_field_errors }}</td></tr>
+	{% endif %}
+	
+	{% endautoescape %}
+	{% endif %}<!--change_accdoor-->
+{% endblock %}
+
+{% block addjs%}
+	$("#id_device").css("width","144px");
+	{% if request.user|HasPermDefaultGiven:"iaccess.change_auxiliary" %}
+		function before_submit()
+		{	
+			$("#id_device").attr("disabled",false);
+			dev_id = $("#id_device").val();
+			return true;
+		}
+		
+		init();// 初始化页面
+		function init()
+		{
+			$("#id_device").attr("disabled",true);
+			$("#id_aux_no").attr("readonly",true);
+			
+			if($("#id_aux_state").val() == 0)
+			{
+				$("#tr_time_zone_status").hide();
+                $("#tr_time_zone").hide();
+			}
+			
+			$.ajax({
+                type: "GET",
+                url: "/{{ request.surl }}iaccess/GetData/?func=machine_args&device_id="+ $("#id_device").val(),
+                dataType: "json",
+                async: false,
+                success: function(data)
+                {
+                	if(data.aux_out_tz_fun_on == 0)
+                	{
+                		$("#tr_time_zone_status").hide();
+                		$("#tr_time_zone").hide();
+                	}
+                }
+        	});
+		}
+		
+		<!-- 林jquery -->
+		function check_time_zone_status(change,val)
+		{
+			if(val == 0)
+			{
+				$("#id_time_zone_status").hide();
+				$("#id_time_zone_status").val('');
+				$("#id_time_zone").hide();				
+				$("#id_time_zone").attr("checked",false);
+			}
+			else
+			{
+				$("#id_time_zone_status").show();
+				$("#id_time_zone").show();
+				if(change == true)
+				{
+					$("#id_time_zone").attr("checked",true);
+					$("#id_back_lock").attr("checked",true);
+				}
+			}
+		}
+		
+		if($("#id_time_zone_status").val() == 0)
+		{
+			$("#tr_time_zone").hide();
+			$("#id_time_zone").val("");
+		}
+		
+		$("#id_time_zone_status").change(function(){
+			if($(this).val() == 0)
+			{
+				$("#tr_time_zone").hide();
+				$("#id_time_zone").val("");
+			}
+			else
+			{
+				$("#tr_time_zone").show();
+			}
+		});
+			
+	{% else %}
+	    alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
+	    window.location.href = "/{{ request.surl }}accounts/login/";
+	{% endif %}<!--add/change_accdoor-->
+{% endblock %}
+
+{% block inputfocus %}
+	{% if not request.user|HasPermDefaultGiven:"iaccess.change_auxiliary" %}
+	    alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
+	    window.location.href = "/{{ request.surl }}accounts/login/";
+	{% endif %}<!--add/change_accdoor-->
+{% endblock %}
+
+

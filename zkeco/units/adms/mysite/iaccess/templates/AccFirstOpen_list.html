@@ -1,39 +1,39 @@
-{% extends "Acc_Door_Set.html" %}
-{% load i18n %}
+{# extends "Acc_Door_Set.html" #}
+{# load i18n #}
 
-{% block id_main_div %}
-{% if request.user|HasPermDefaultGiven:"iaccess.browse_accdoor" %}
-{% if request.user|HasPermDefaultGiven:"iaccess.browse_accfirstopen" %}
+{# block id_main_div #}
+{# if request.user|HasPermDefaultGiven:"iaccess.browse_accdoor" #}
+{# if request.user|HasPermDefaultGiven:"iaccess.browse_accfirstopen" #}
     <div id="id_accfirstopen" style="margin:5px 0px 0px 0px;">
-    {% block datalist_before %}
+    {# block datalist_before #}
         <div id="id_current_door"></div>
-        <div id="id_datalist" class="div_box" style="float:left; width:48%; margin:5px 0px 0px 10px;margin:5px 0px 0px 5px\9;"><h1>{% trans "首卡常开设置" %}</h1>    
+        <div id="id_datalist" class="div_box" style="float:left; width:48%; margin:5px 0px 0px 10px;margin:5px 0px 0px 5px\9;"><h1>{# trans "首卡常开设置" #}</h1>    
         </div>
-    {% endblock %}<!--endblock of datalist_before-add by darcy-->
+    {# endblock #}<!--endblock of datalist_before-add by darcy-->
 
-    {% block extend_before %}
-        <div id="id_extend" class="div_box" style="float:right; width:42%; margin:5px 10px 0px 5px; margin:5px 5px 0px 5px\9;"><h1 style="width:100%">{% trans "浏览开门人员" %}</h1>
+    {# block extend_before #}
+        <div id="id_extend" class="div_box" style="float:right; width:42%; margin:5px 10px 0px 5px; margin:5px 5px 0px 5px\9;"><h1 style="width:100%">{# trans "浏览开门人员" #}</h1>
         </div>
-    {% endblock %}<!--endblock of extend_before-add by darcy-->
+    {# endblock #}<!--endblock of extend_before-add by darcy-->
     </div>
-{% endif %}<!--iaccess.browse_accfirstopen-->
-{% endif %}<!--iaccess.browse_accdoor-->
+{# endif #}<!--iaccess.browse_accfirstopen-->
+{# endif #}<!--iaccess.browse_accdoor-->
 
-{% endblock %}<!--endblock of content-add by darcy-->
+{# endblock #}<!--endblock of content-add by darcy-->
 
-{% block acc_door_set %}
-    {% if not request.user|HasPermDefaultGiven:"iaccess.browse_accdoor" or not request.user|HasPermDefaultGiven:"iaccess.browse_accfirstopen"%}
+{# block acc_door_set #}
+    {# if not request.user|HasPermDefaultGiven:"iaccess.browse_accdoor" or not request.user|HasPermDefaultGiven:"iaccess.browse_accfirstopen" #}
         alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
-        window.location.href="/{{ request.surl }}accounts/login/";
-    {% endif %}<!--iaccess.browse_accdoor-->
-    {% block process_menu %}
-    {% endblock %}
+        window.location.href="/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+    {# endif #}<!--iaccess.browse_accdoor-->
+    {# block process_menu #}
+    {# endblock #}
     var url_search = window.location.search;//?_lock=1&door__id=1
     var door_id = url_search.split("=")[2];
     var door_name = '';
     $.ajax({
         type: "POST",
-        url: "/{{ request.surl }}iaccess/GetData/?func=get_doorname&door_id="+ door_id,
+        url: "/&#123;&#123; request.surl &#125;&#125;iaccess/GetData/?func=get_doorname&door_id="+ door_id,
         dataType: "json",
         async: false,
         success: function(data){
@@ -41,7 +41,7 @@
             $("#id_current_door").append('<label class="current_doorname"  name="'+door_name+'" value="'+door_id+'" style="margin: 2px 2px 3px 10px;">'+gettext("当前门:")+door_name+'</label>');
         
             $("#id_datalist").model_grid({
-                {% block datalist %}"model_url": "{{ model_url }}",{% endblock %}
+                {# block datalist #}"model_url": "&#123;&#123; model_url &#125;&#125;",{# endblock #}
                 "base_query": ["door__id__exact="+door_id],
                 "disabled_actions": ["_change",'OpDelEmpFromFCOpen'],
                 "async": false,
@@ -69,7 +69,7 @@
             }
             
             $("#id_extend").model_grid({
-                "model_url": "{{ dbapp_url }}personnel/Employee/",
+                "model_url": "&#123;&#123; dbapp_url &#125;&#125;personnel/Employee/",
                 "base_query": base_query,
                 "need_plus_sign": false,
                 "model_actions": false,
@@ -83,7 +83,7 @@
                 "row_operations": []
             });
 
-            {% if request.user|HasPermDefaultGiven:"iaccess.opdelempfromfcopen_accfirstopen" %}
+            {# if request.user|HasPermDefaultGiven:"iaccess.opdelempfromfcopen_accfirstopen" #}
             $("#id_extend div.action").append('<li name="OpDelEmpOfFCOpen" id="id_OpDelEmpOfFCOpen"><a alt="OpDelEmpOfFCOpen" href="javascript:void(0)" class="action_OpDelEmpOfFCOpen">'+gettext("删除开门人员")+'</a></li>')
             $("#id_OpDelEmpOfFCOpen a").click(function(){
                 var emps = new Array()
@@ -105,7 +105,7 @@
                 $.ajax({
                     type: "POST",
                     dataType: "json",
-                    url: "/{{ request.surl }}iaccess/FCOpenEmpOp/?data="+ left_data +"&emps="+ emps,
+                    url: "/&#123;&#123; request.surl &#125;&#125;iaccess/FCOpenEmpOp/?data="+ left_data +"&emps="+ emps,
                     async: false,
                     success: function(data)
                     {
@@ -127,7 +127,7 @@
                     }            
                 });
             });
-            {% endif %}<!--opdelempfromfcopen_accfirstopen-->
+            {# endif #}<!--opdelempfromfcopen_accfirstopen-->
             
             $("#id_datalist").on_row_click(function(grid, key, row_data){ //单击
                 left_data = row_data;
@@ -179,7 +179,7 @@
         }        
     });
     
-{% endblock %}
+{# endblock #}
 
 
 

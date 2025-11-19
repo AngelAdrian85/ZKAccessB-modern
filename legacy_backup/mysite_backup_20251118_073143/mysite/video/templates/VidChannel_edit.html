@@ -1,0 +1,92 @@
+{% extends "data_edit.html" %}
+{% load i18n %}
+
+{% block form %}
+	{% if request.user|HasPerm:"video.change_vidchannel" %}
+	{% autoescape off %}
+	<tr>
+		<td>
+			<div class="vidchannel_edit_table_title">
+				<table id="vidchannel_edit_table" cellpadding="3px">
+					<tr>
+						{{ form.device|field_as_td_h }}
+					</tr>
+					<tr>
+						{{ form.channel_name|field_as_td_h }}
+					</tr>
+					<tr>
+						{{ form.channel_no|field_as_td_h }}
+					</tr>
+					<tr>
+						{{ form.enabled|field_as_td_h }}
+					</tr>
+					<tr>
+						{{ form.map|field_as_td_h }}
+					</tr>
+					<tr id="reader_no">
+						{{ form.reader|field_as_td_h }}
+					</tr>
+				</table>
+			</div>
+			{% if form.non_field_errors %}
+				<tr><td>{{ form.non_field_errors }}</td></tr>
+			{% endif %}
+		</td>
+	</tr>
+	{% endautoescape %}
+	{% endif %}<!--change_vidchannel-->
+{% endblock %}
+
+{% block addjs%}
+	{% if request.user|HasPerm:"video.change_vidchannel" %}
+	$("#id_device").attr("disabled", true);
+	$("#id_channel_no").attr("disabled", true);
+//	$("#id_map").attr("disabled", true);
+	var before_submit = function()
+	{	
+		$("#id_device").attr("disabled",false);
+		$("#id_channel_no").attr("disabled", false);
+//		$("#id_map").attr("disabled", false);
+		return true;
+	}
+	
+	disable_option("#id_map");
+	disable_option("#id_reader");
+	//select option分层级ie不兼容问题,以及ie6不支持option的disabled的问题
+	function disable_option(obj)
+	{
+	    if($.browser.msie) 
+	    {
+	        $(obj+" .level_1").each(function(){
+	            $(this).text("         "+$(this).text());
+	        });
+	
+	        $(obj+" .level_0").each(function(){
+	            $(this).attr("style", "color:#999999");
+	        });
+	
+	        $(obj).change(function(){
+	            var options = $(obj+" option");   
+	            var len = options.length; 
+	            for(var i = 0; i < len; i++){   
+	                if(options[i].disabled && options[i].selected) {  
+	                    options[0].selected = "selected";   
+	                    break;   
+	                }   
+	            }   
+	        });
+	      }
+	}
+	{% else %}
+	    alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
+	    window.location.href = "/{{ request.surl }}accounts/login/";
+	{% endif %}<!--add/change_accdoor-->
+{% endblock %}
+
+{% block inputfocus %}
+	{% if request.user|HasPerm:"video.change_vidchannel" %}
+	{% else %}
+	    alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
+	    window.location.href = "/{{ request.surl }}accounts/login/";
+	{% endif %}<!--add/change_accdoor-->
+{% endblock %}

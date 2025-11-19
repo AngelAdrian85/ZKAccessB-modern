@@ -1,0 +1,184 @@
+{% extends "VisVisitor_edit.html" %}
+{% load i18n %}
+{% block form_enter_info %}
+	<tr>
+		<td width="380px">
+			<table>
+				<tr>
+					<th height="20"><label class="required">{%trans '姓名' %}:</label></th>
+        			<td><input id="id_visitor_firstname" class="wZBaseCharField required" type="text" maxlength="24" name="visitor_firstname" /></td>
+				</tr>
+				<tr>
+					<th height="20"><label>{%trans '姓氏' %}:</label></th>
+        			<td><input id="id_visitor_lastname" class="wZBaseCharField" type="text" maxlength="24" name="visitor_lastname" /></td>
+				</tr>
+				<tr>
+					<th>{% trans '性别' %}:</th>
+			        <td>
+			            <select name="gender" class="wZBaseCharField" id="id_gender">
+			                <option selected="selected" value="">---------</option>
+			                <option value="M">{% trans '男' %}</option>
+			                <option value="F">{% trans '女' %}</option>
+			            </select>                    
+			        </td>
+				</tr>
+				<tr>
+			        {{ form.visited_emp|field_as_td_h }}
+			    </tr>
+			    <tr>
+			        <th>{% trans '被访部门' %}:</th>
+			        <td><input id="id_visited_dept" type="text" name="dept" class="wZBaseCharField" readonly /></td>
+			    </tr>
+			    <tr>
+			    	<th>{% trans '被访人电话' %}:</th>
+			        <td><input id="id_ophone" class="wZBaseCharField" type="text" name="ophone" readonly /></td>
+			    </tr>				
+			</table>
+		</td>
+		<td>
+			<table border="0">
+				<tr>
+					<th><label for="id_card" id="id_label_card">{%trans '卡号' %}:</label></th>
+			        <td>
+			            <input type="text" name="card" class="wZBaseCharField" id="id_card" maxlength="10" />
+			        </td>
+				</tr>
+				<tr>
+					{{ form.visitor_company|field_as_td_h }}
+				</tr>
+				<tr>
+			        {{ form.visitor_number|field_as_td_h }}
+			    </tr>
+				<tr>
+					{{ form.visit_reason|field_as_td_h }}
+				</tr>
+				<tr>
+					{{ form.car_number|field_as_td_h }}
+				</tr>
+				<tr>
+					{{ form.park_number|field_as_td_h }}
+				</tr>
+
+				<!-- 暂时屏蔽另一种加卡方式 -->
+				<!-- 
+				<tr>
+                    <th height="23"><label id="id_label_card_number_type">{% trans "卡号格式" %}:</label></th>
+                    <td align="left">
+                    	<ul>
+							<li><label><input type="radio" class="wZBaseSmallIntegerField required" id="id_card_number_type_0" name="card_number_type" value="1" checked="checked">{% trans "物理卡号" %}</label></li>
+							<li><label><input type="radio" class="wZBaseSmallIntegerField required" id="id_card_number_type_1" name="card_number_type" value="2">{% trans "卡 号" %}</label></li>
+						</ul>
+					</td>
+                </tr>
+				<tr id="id_card_active_1">
+                    <th height="23"><label for="id_card_number">{% trans "物理卡号" %}:</label></th>
+                    <td><input type="text" maxlength="20" name="card_number" class="wZBaseCharField" id="id_card_number"></td>
+                </tr>
+                <tr id="id_card_active_2">
+                    <th height="23"><label for="id_site_code">{% trans "区位码" %}:</label></th>
+                    <td><input type="text" maxlength="4" name="site_code" class="wZBaseCharField" id="id_site_code"></td>
+                </tr>
+				<tr id="id_card_active_3">
+			        <th><label for="id_card" id="id_label_card">{%trans '卡号' %}:</label></th>
+			        <td>
+			            <input type="text" name="card" class="wZBaseCharField" id="id_card" maxlength="10" />
+			        </td>
+			        <td class="displayN"><a href="javascript:void(0)" id="id_read_card">{% trans '读取' %}</a></td>
+			    </tr>
+			    <tr id="id_card_active_4">
+			    	<td colspan="3">&nbsp;</td>
+			    </tr>
+			     -->
+			</table>
+		</td>
+		<td width="180px" align="right">
+			<table>
+				<tr>
+					<td>
+						<div class="div_img floatL">
+	                        <div class="ar_r_t">
+	                            <div class="ar_l_t">
+	                                <div class="ar_r_b">
+	                                    <div class="ar_l_b">
+	                                        <img id="id_img_capture_photo" width="120px" height="140px" src="{% if instance.capture_photo %}/{{request.surl}}file/{{ instance.capture_photo }}{% else %}{{ MEDIA_URL }}/images/userImage.gif{% endif %}" onerror="this.src='{{ MEDIA_URL }}/images/userImage.gif'"  alt="capture_photo" />
+	                                    	<div class="displayN">{{ form.capture_photo }}</div>
+	                                    </div>
+	                                </div>
+	                            </div>
+	                        </div>
+	                    </div>
+					</td>
+				</tr>
+			</table>
+		</td>
+	</tr>
+{% endblock %}
+
+{% block special_js_en %}
+	//切换加卡方式
+	$("input[id^='id_card_number_type_']").each(function(){
+	    if($(this).attr("checked"))
+	    {
+	        process_card_number_input($(this).val());    
+	    }
+	});
+	
+	//切换方式
+	$("input[id^='id_card_number_type_']").each(function(){
+	    $(this).click(function(){
+	        process_card_number_input($(this).val());
+	    });
+	});
+	
+	function process_card_number_input(card_number_type)
+	{
+		if(card_number_type == 1)//物理卡号
+		{
+			$("#id_card_active_3").attr("class", "displayN");
+			$("#id_card_active_4").attr("class", "displayN");
+			$("#id_card_active_1").removeAttr("class");
+			$("#id_card_active_2").removeAttr("class");
+		}
+		else//直接加卡号
+		{
+			$("#id_card_active_3").removeAttr("class");
+			$("#id_card_active_4").removeAttr("class");
+			$("#id_card_active_1").attr("class", "displayN");
+			$("#id_card_active_2").attr("class", "displayN");
+		}
+	}
+	
+	process_tab();
+	
+	function process_tab()
+    {   
+	    //控制访客新增时的tab键---英文下
+	    $("#id_visitor_firstname").attr("tabindex", "1");
+	    $("#id_visitor_lastname").attr("tabindex", 2);
+	    $("#id_gender").attr("tabindex", 3);
+	    
+	    $("#id_pop_emp").attr("tabindex", 5);
+	    $("#id_visited_dept").attr("tabindex", 9);
+	    $("#id_ophone").attr("tabindex", 10);
+	    
+	    $("#id_card").attr("tabindex", 14);
+	    $("#id_visitor_company").attr("tabindex", 15);
+	    $("#id_visitor_number").attr("tabindex", 16);
+	    $("#id_visit_reason").attr("tabindex", 17);
+	    $("#id_car_number").attr("tabindex", 18);
+	    $("#id_park_number").attr("tabindex", 19);
+	    $("#id_home_address").attr("tabindex", 20);
+		//$("#id_fp_register").attr("tabindex", 21);
+		
+	    $("#id_entrance").attr("tabindex", 25);
+	    $("#id_enter_time").attr("tabindex", 26);
+	    $("#id_carried_goods").attr("tabindex", 27);
+	    
+	    $("#level_name").attr("tabindex", 30);
+	    //$("#id_set_valid_time").attr("tabindex", 31);
+	    $("#id_acc_startdate").attr("tabindex", 32);
+	    $("#id_acc_enddate").attr("tabindex", 33);
+    }
+{% endblock %}
+
+

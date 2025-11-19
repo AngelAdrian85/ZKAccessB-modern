@@ -1,0 +1,3 @@
+user_id,badge,name,lastname,cardno,site_code,email,idcard,accstartdate,accenddate,deptname
+3001,3001,AlphaX,One,0003001,003,alpha.onex@example.local,ID3001,2020-01-01,2025-01-01,Sales
+3003,3003,Gamma,Three,0003003,003,gamma.three@example.local,ID3003,2022-03-03,2027-03-03,Support

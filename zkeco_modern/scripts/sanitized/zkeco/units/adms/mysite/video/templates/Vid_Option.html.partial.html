@@ -1,0 +1,107 @@
+{% extends "data_list.html" %}
+{% load i18n %}
+{% block model_extend %}{% endblock %}
+{% block content %}
+    <div style="margin-left:10px;">
+        <form method="post" onkeydown="if(event.keyCode==13){return false;}"  id="id_edit_form" enctype="multipart/form-data">
+        <div>        
+            <div class="div_box1"><h2>{% trans "视频弹出窗口大小" %}</h2>
+                <table style="">
+                    <tr>
+                        <th><label>{% trans "宽度" %}:</label></th>
+                        <td><input type="text" name="vid_window_width" id="id_vid_window_width" size="3"></input>px</td>
+                        
+                        <th><label>{% trans "高度" %}:</label></th>
+                        <td><input type="text" name="vid_window_height" id="id_vid_window_height" size="3"></input>px</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+        <div class="div_box1"><h2>{% trans "设置是否继续录像" %}</h2>
+            <span>
+                {% trans "硬盘空间小于1G时" %}:
+                <select id="id_record_auto_covered" name="record_auto_covered" style="width:190px">
+                    <option value="1" selected="selected">{% trans "自动覆盖" %}</option>
+                    <option value="0">{% trans "停止录像" %}</option>
+                </select><br/>
+            </span>
+        </div>
+
+        <span id="id_error" style="display:none;"></span>
+        <div class="editformbtn">
+            <div class="lineH22 img_padding">
+                <span class="action_OK"></span>
+                <a id="OK" href="javascript:void(0)" class="Link_blue1">{% trans "确定" %}</a>
+            </div>
+        </div>
+        <input type="hidden" name="down_event_hours" id="id_down_event_hours" value=""/>
+        </form>
+    </div>
+    
+{% endblock %}
+{% block extend_js %}
+    <script>        
+        //发送请求从后端获取上次设置的内容
+        $.ajax({
+            type: "GET",
+            url: "/&#123;&#123; request.surl }}video/GetData/?func=init_vid_option",
+            dataType: "json",
+            async: false,
+            success: function(data)
+            {
+                //初始化视频弹出框大小
+                $("#id_vid_window_width").val(data.popup_window_width);
+                $("#id_vid_window_height").val(data.popup_window_height);
+                $("#id_record_auto_covered").val(data.record_auto_covered);
+            },
+            error: function (XMLHttpRequest, textStatus, errorThrown)
+            {
+                alert(gettext("服务器处理数据失败，请重试！错误码：")+"-624");
+            }
+        });
+
+        $("#id_vid_window_width").change(function(){
+            if(!CheckNumber(this.value))
+            {
+                alert(gettext("视频弹出窗口宽度必须为整数！"));
+            } 
+        });
+        $("#id_vid_window_height").change(function(){
+            if(!CheckNumber(this.value))
+            {
+                alert(gettext("视频弹出窗口高度必须为整数！"));
+            } 
+        });
+            
+        $("#OK").click(function(){
+            var vid_window_width = $("#id_vid_window_width").val();
+            var vid_window_height = $("#id_vid_window_height").val();
+            if(vid_window_width=="" || !CheckNumber(vid_window_width))
+            {
+                alert(gettext("视频弹出窗口宽度必须为整数！"));
+                return;
+            }
+            if(vid_window_height=="" || !CheckNumber(vid_window_height))
+            {
+                alert(gettext("视频弹出窗口高度必须为整数！"));
+                return;
+            }
+            $("#id_edit_form").ajaxSubmit({
+                url:"/video/set_vid_option/", 
+                dataType:"json",
+                success:function(msgback)
+                {
+                    $("#id_error").attr("style", "display:block");
+                    if (msgback.ret == 'ok')
+                    {
+                        $("#id_error").html('<ul class="successlist"><li>'+gettext("设置成功，重启服务后生效！")+'</li></ul>');
+                    }else
+                    {
+                        $("#id_error").html('<ul class="errorlist"><li>'+msgback.ret+'</li></ul>');
+                    }
+                }
+            })
+        });
+        
+    </script>
+{% endblock %}

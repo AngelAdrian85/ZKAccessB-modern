@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Devices (ORM-backed)</h1>
+
+{% if devices %}
+  <table class="table">
+    <thead>
+      <tr><th>ID</th><th>Name</th><th>SN</th></tr>
+    </thead>
+    <tbody>
+    {% for d in devices %}
+      <tr>
+        <td>{{ d.id }}</td>
+        <td>{{ d.device_name }}</td>
+        <td>{{ d.sn }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+{% else %}
+  <p>No device data available via ORM. This is a placeholder page for the migrated device list.</p>
+  <ul>
+    <li>Load sample data: <code>python manage.py import_legacy --devices zkeco_modern/etl/fixtures/device_sample.csv --commit</code></li>
+  </ul>
+{% endif %}
+
+{% endblock %}

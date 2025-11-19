@@ -1,11 +1,11 @@
-{% extends "special_menu.html" %}
-{% load i18n %}
+{# extends "special_menu.html" #}
+{# load i18n #}
 
-{% block content %}
-<div id="id_monitor_events" class="div_box acc_monitor_280" style="{% block monitor_events_style %}min-height: 20em;{% endblock %}">
-    <h1>{% trans "事件监控" %}</h1>
+{# block content #}
+<div id="id_monitor_events" class="div_box acc_monitor_280" style="{# block monitor_events_style #}min-height: 20em;{# endblock #}">
+    <h1>{# trans "事件监控" #}</h1>
     <div id="id_show_alarm" class="link_alarm_unsure displayN">
-            <a>{% trans '发现访客来访超时事件' %}</a>
+            <a>{# trans '发现访客来访超时事件' #}</a>
     </div>
     <div id="id_showTbl">
         <table border="0" cellpadding="0" cellspacing="0">
@@ -15,18 +15,18 @@
                         <table class="table">
                             <thead>
                                 <tr>
-                                    <th>{% trans '被访人编号' %}</th>
-                                    <th>{% trans '被访人' %}</th>
-                                    <th>{% trans '部门' %}</th>
-                                    <th>{% trans '职务' %}</th>
-                                    <th>{% trans '访客' %}</th>
-                                    <th>{% trans '访客编号' %}</th>
-                                    <th>{% trans '卡号' %}</th>
-                                    <th>{% trans '来访单位' %}</th>
-                                    <th>{% trans '来访事由' %}</th>
-                                    <th>{% trans '来访人数' %}</th>
-                                    <th>{% trans '进入地点' %}</th>
-                                    <th>{% trans '进入时间' %}</th>
+                                    <th>{# trans '被访人编号' #}</th>
+                                    <th>{# trans '被访人' #}</th>
+                                    <th>{# trans '部门' #}</th>
+                                    <th>{# trans '职务' #}</th>
+                                    <th>{# trans '访客' #}</th>
+                                    <th>{# trans '访客编号' #}</th>
+                                    <th>{# trans '卡号' #}</th>
+                                    <th>{# trans '来访单位' #}</th>
+                                    <th>{# trans '来访事由' #}</th>
+                                    <th>{# trans '来访人数' #}</th>
+                                    <th>{# trans '进入地点' #}</th>
+                                    <th>{# trans '进入时间' #}</th>
                                 </tr>
                             </thead>
                             <tbody id="rt_content">
@@ -42,17 +42,17 @@
     </div>
 </div>
 
-{% endblock %}
+{# endblock #}
 
-{% block getdatalist %}{% endblock %}
+{# block getdatalist #} {# endblock #}
 
-{% block show_tip_info %}{% endblock %}
-{% block base_variables %}{% endblock %}
-{% block monitor_log %}{% endblock %}
-{% block addjs_base %}
-    {% if request.user|HasPerm:"contenttypes.can_VisitorPreviewPage" %}
+{# block show_tip_info #} {# endblock #}
+{# block base_variables #} {# endblock #}
+{# block monitor_log #} {# endblock #}
+{# block addjs_base #}
+    {# if request.user|HasPerm:"contenttypes.can_VisitorPreviewPage" #}
     //用于向服务器端获取访客来访超时数据
-    //logid = {% if logid %}{{ logid }}{% else %}-1{% endif %};//-1为初始值
+    //logid = {# if logid #} &#123;&#123; logid &#125;&#125; {# else #}-1{# endif #};//-1为初始值
     var row = "row0";//第一次加载页面时初始化该值
     function OnRefresh() 
     { 
@@ -61,7 +61,7 @@
             $("#id_monitor_events").find("#rt_content").find("tr:gt(100)").remove(); 
         } 
 
-        getUrl = '/{{ request.surl }}visitor/VisitorMonitor/?type=alarm'; 
+        getUrl = '/&#123;&#123; request.surl &#125;&#125;visitor/VisitorMonitor/?type=alarm'; 
         $.ajax({ 
             type: "GET", 
             url: getUrl, 
@@ -114,10 +114,10 @@
     
     window.setTimeout('OnRefresh()', 1000)//第一次等1秒执行刷新函数   
     $("#id_page_load").remove();//去掉刷新图标
-    {% else %}
+    {# else #}
         alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
-        window.location.href = "/{{ request.surl }}accounts/login/";
-    {% endif %}<!--can_MonitorAlarmPage-->
+        window.location.href = "/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+    {# endif #}<!--can_MonitorAlarmPage-->
    
-{% endblock %}
+{# endblock #}
 

@@ -1,0 +1,1749 @@
+<OBJECT classid="clsid:285A9058-12DF-4B1D-AEA1-0FD2412CC761" width="20" height="20" id="zkissonlinex" class="displayN">
+</OBJECT>
+<COMMENT style="display:None">
+    <EMBED type="application/x-eskerplus"
+        classid="clsid:285A9058-12DF-4B1D-AEA1-0FD2412CC761"
+        codebase="ZKISSOnlineX.ocx"                
+        width=20 height=20>
+    </EMBED>
+</COMMENT>
+
+<OBJECT classid="clsid:A318A9AC-E75F-424C-9364-6B40A848FC6B" width=0 height=0 id=zkonline >
+</OBJECT>
+
+<COMMENT style="display:None">
+    <EMBED type="application/x-eskerplus"
+        classid="clsid:A318A9AC-E75F-424C-9364-6B40A848FC6B"
+        codebase="ZKOnline.ocx">
+    </EMBED>
+</COMMENT>
+
+<!-- 精伦电子身份证读写器 -->
+<!-- <object classid="clsid:5EB842AE-5C49-4FD8-8CE9-77D4AF9FD4FF" id="IdrControl" width="100" height="100" class="displayN">
+</object> -->
+
+<!-- 新中新身份证读写器 -->
+<object classid="clsid:4B3CB088-9A00-4D24-87AA-F65C58531039" id="SynCardOcx" codeBase="../cabs/SynCardOcx.CAB#version=1,0,0,1" width="102" height="126" class="displayN">
+</object>
+
+{% extends "data_edit.html" %}
+{% load i18n %}
+
+{% block form %}
+    {% autoescape off %}
+    {% if "mysite.visitor"|hasApp %}  
+    <tr>
+        <td>
+        <div id="id_emp_info" class="div_box1 floatL">
+            <h2>{% trans '访客资料' %}</h2>
+            <table id="ic_visitor_info_tbl" border="0" cellspacing="0" cellpadding="0" class="displayB">
+            	{% block form_enter_info %}
+                <tr>
+                    {{ form.cert_type|field_as_td_h }}
+                    <td>&nbsp;</td>
+                    <td rowspan="7">
+                        <div class="div_img floatL">
+                            <div class="ar_r_t">
+                                <div class="ar_l_t">
+                                    <div class="ar_r_b">
+                                        <div class="ar_l_b">
+                                        	<img id='id_img_visitor_certificate' width="120px" height="140px" src="{% if instance.cert_photo %}/{{request.surl}}file/{{ instance.cert_photo }}{% else %}{{ MEDIA_URL }}/images/userImage.gif{% endif %}" onerror="this.src='{{ MEDIA_URL }}/images/userImage.gif'"  alt="certificate photo"/>
+                                        	<div class="displayN">{{ form.cert_photo }}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                    {{ form.visitor_number|field_as_td_h }}
+                    <!-- <td><input type="text" name="visitor_number" maxlength="4" class="wZBaseIntegerField" id="id_visitor_number"></td> -->
+                	<td rowspan="8" width="185px" align="center">
+                		<div class="div_img floatL">
+	                        <div class="div_r_t">
+	                            <div class="div_l_t">
+	                                <div class="div_r_b">
+	                                    <div class="div_l_b">
+	                                        <img id="id_img_capture_photo" width="136px" height="160px" src="{% if instance.capture_photo %}/{{request.surl}}file/{{ instance.capture_photo }}{% else %}{{ MEDIA_URL }}/images/userImage.gif{% endif %}" onerror="this.src='{{ MEDIA_URL }}/images/userImage.gif'"  alt="capture_photo" />
+	                                    	<div class="displayN">{{ form.capture_photo }}</div>
+	                                    </div>
+	                                </div>
+	                            </div>
+	                        </div>
+	                        {% trans "抓拍照片" %}
+	                    </div>
+                	</td>
+                </tr>
+                <tr>
+                    {{ form.cert_number|field_as_td_h }}
+                    <!-- 
+                    <td><a href="javascript:void(0)" id="id_read_certificate" title={% trans '使用射频卡读写器' %} onclick="submit_IdrControl()">{% trans '读取' %}</a>&nbsp;<a href="javascript:void(0)" id="id_scan_certificate" title={% trans '使用证件扫描仪' %}>{% trans '扫描' %}</a></td>
+                     -->
+                    <td><a href="javascript:void(0)" id="id_read_certificate" title={% trans '使用身份证阅读器' %} >{% trans '读取' %}</a>&nbsp;<a href="javascript:void(0)" id="id_scan_certificate" title={% trans '使用证件扫描仪' %}>{% trans '扫描' %}</a></td>
+                    {{ form.park_number|field_as_td_h }}
+                </tr>
+                <tr id="tr_visit_reason">
+                    <th height="20"><label class="required" for="id_PIN">{%trans '姓名' %}:</label></th>
+                    <td><input id="id_visitor_firstname" class="wZBaseCharField required" type="text" maxlength="24" name="visitor_firstname" /></td>
+                    <td>&nbsp;</td>
+                    {{ form.visit_reason|field_as_td_h }}
+                </tr>
+                <tr>
+                    <th>{% trans '性别' %}:</th>
+                    <td>
+                        <select name="gender" class="wZBaseCharField" id="id_gender">
+                            <option selected="selected" value="">---------</option>
+                            <option value="M">{% trans '男' %}</option>
+                            <option value="F">{% trans '女' %}</option>
+                        </select>                    
+                    </td>
+                    <td>&nbsp;</td>
+                    {{ form.car_number|field_as_td_h }}
+                </tr>
+                <tr>
+                    <th>{% trans '家庭地址' %}:</th>
+                    <td><input id="id_home_address" class="wZBaseCharField" type="text" maxlength="50" name="home_address" /></td>
+                    <td>&nbsp;</td>
+                    {{ form.visited_emp|field_as_td_h }}
+                    
+                </tr>
+                <tr>
+                    {{ form.visitor_company|field_as_td_h }}
+                    <td>&nbsp;</td>
+                    
+                    <th>{% trans '被访部门' %}:</th>
+                    <td><input id="id_visited_dept" type="text" name="dept" class="wZBaseCharField" readonly /></td>
+                    <!--
+                    <th>{% trans '被访人' %}:</th>
+                    <td><input id="id_visited_name" class="wZBaseCharField" type="text" maxlength="9" name="visited_name" /><input type="button" id="id_query_emp" class="select_EmpSubmit" title={% trans '查找被访人' %}></input></td>
+                	-->
+                </tr>
+                <tr>
+                    <th><label for="id_card" id="id_label_card">{%trans '卡号' %}:</label></th>
+                    <td>
+                        <input type="text" name="card" class="wZBaseCharField" id="id_card" maxlength="10" />
+                    </td>
+                    <td class="displayN"><a href="javascript:void(0)" id="id_read_card">{% trans '读取' %}</a></td>
+                    <td>&nbsp;</td>
+                    <th>{% trans '被访人电话' %}:</th>
+                    <td><input id="id_ophone" class="wZBaseCharField" type="text" name="ophone" readonly /></td>
+                </tr>
+                {% endblock %}
+                
+                <!-- 需要的隐藏字段 -->
+                <tr class="displayN">
+                    <td>{{ form.emp }}</td>
+                    <td>{{ form.install_language }}</td>
+                    {{ form.visit_state|field_as_td_h }}
+                    {{ form.has_visited|field_as_td_h }}
+                    {{ form.visitor_form|field_as_td_h }}
+                    <td><input type="hidden" name="visited_emp" id="id_visited_emp" /></td>
+                    <td><input type="checkbox" id="id_level_changed" name="level_changed"></td>
+                </tr>
+                
+                {% if "mysite.iaccess&mysite.att"|hasApp and "mysite"|is_zkaccess_att and "mysite"|is_zkaccess_5to4 %}
+                {% else %}
+                <tr>
+                    <td colspan="3">
+                        <table>
+                            <tr>
+                            	<th height="20">{% trans '登记指纹'%}:</th>    
+                                <td>
+                                    <div class="floatL Link_blue1" style="">
+                                        <a href="javascript:void(0)" id="id_fp_register" onclick="submitRegister()">{% trans '登记'%}</a>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div id="id_fp_help" style="margin: 0 0 0 8px">
+                                        <a title="{% trans '无法登记指纹？' %}" target="_blank" >{% trans '无法登记指纹？' %}</a>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div id="div_id_finngerT" class="floatL"></div>
+                                </td>
+                            </tr>
+                        </table>
+                        <input type="hidden" id="id_finnger" name="finnger" alt="" value="" />
+                        <input type="hidden" id="id_template"  value="" name="template" alt="" />
+                        <input type="hidden" id="id_finnger10" name="finnger10" alt="" value="" />
+                        <input type="hidden" id="id_template10"  value="" name="template10" alt="" />
+                        <input type="hidden" id="id_delfinger"  value="" name="delfinger" alt="" />
+                        <input type="hidden" id="id_fptype"  value="" name="fptype" alt="" />
+                        <input type="hidden" id="id_durfinger"  value="" name="durfinger" alt="" />
+                        <input type="hidden" id="id_durfpid"  value="" name="durfpid" alt="" />
+                        <input type="hidden" id="id_delflag"  value="" name="delflag" alt="delete" />
+                    </td> 
+                    <td>
+                        <div class="displayN">
+                            <table>
+                                <tr> 
+                                    {{form.lng}}
+                                </tr>
+                                <tr>
+                                    {{form.tcount}}
+                                </tr>
+                                <tr>
+                                    {{form.tfids}}
+                                </tr>
+                                <tr>
+                                    {{form.fpcode}}
+                                </tr>
+                                <tr>
+                                    {{form.tcount10}}
+                                </tr>
+                                <tr>
+                                    {{form.tfids10}}
+                                </tr>
+                                <tr>
+                                 {{form.pin_width}}
+                                </tr>
+                            </table>
+                        </div>
+                    </td>                    
+                </tr>
+                <tr>
+                    <th></th>
+                    <td><a href="/worktable/download_fingerprint_driver" id="id_fingerprint_download" >{% trans '驱动下载'%}</a></td>
+                </tr>
+                {% endif %}
+            </table>
+        </div>
+        
+        </td>
+    </tr>
+    <tr>
+        <td>
+            <div id="id_Att_info" class="div_box1 floatL">
+                <h2>{% trans '进入资料' %}</h2>
+                <table id="id_Att_info_tbl" border="0" cellspacing="0" cellpadding="0">
+                    <tr>
+                        <td>
+                            <table>
+                                <tr id="tr_entrance">
+                                    {{ form.entrance|field_as_td_h_asterisk }}
+                                </tr>
+                                <tr>
+                                    <th>{{ form.enter_time|field_as_label_tag }}</th>
+                                    <td>{{ form.enter_time.as_widget }}{{form.enter_time.errors }}</td>
+                                    <!--  
+                                    <th><label for="id_enter_time">{% trans "进入时间" %}:</label></th>
+                                    <td>{{ form.enter_time }}</td>
+                                    -->
+                                </tr>
+                                <tr>
+                                    {{ form.carried_goods|field_as_td_h }}
+                                </tr>
+                            </table>
+                        </td>
+                        <td width="200px" align="center">
+                            <div id="id_cap_div" style="width:171px; height:200px; border: 1px solid #CAE2F9;">
+                                <object classid="clsid:d27cdb6e-ae6d-11cf-96b8-444553540000" id="myFlash" width="171" height="201" codebase="http://fpdownload.macromedia.com/pub/shockwave/cabs/flash/swflash.cab#version=8,0,0,0" id="video" align="middle">
+                                    <param name="allowScriptAccess" value="sameDomain" />
+                                    <param name="movie" value="{{ MEDIA_URL }}/swf/capture.swf" />
+                                    <param name="quality" value="high" />
+                                    <param name="bgcolor" value="#ffffff" />
+                                    <param name="wmode" value="transparent" />
+                                    <embed wmode="transparent" src="{{ MEDIA_URL }}/swf/capture.swf" width="170" height="200" quality="high" bgcolor="#ffffff" align="middle" allowScriptAccess="sameDomain" type="application/x-shockwave-flash" name="myFlash" swLiveConnect="true" pluginspage="http://www.macromedia.com/go/getflashplayer" />
+                                </object>
+                            </div>
+                        </td>
+                        {% if "mysite.iaccess"|hasApp %}
+                        <td>
+                            <table height="100px" border="0">
+                                <tr>
+                                    <td style="text-align:right;">{% trans "权限组" %}:</td>
+                                    <td align="left" width="300px">
+                                        <div>
+                                            <input type="text" id="level_name" name="level_name"></input>
+                                            <input type="button" id="id_query_level" class="select_EmpSubmit" title={% trans "查询" %}></input>
+                                            <input type="checkbox" id="id_select_all" name="level_name" size="1"></input>
+                                            <label>{% trans "全选" %}</label>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>&nbsp;</td>
+                                    <td>
+                                        <div id="id_level" style="border:1px solid #71A8D8"></div>
+                                    </td>
+                                </tr>
+                                <tr id="set_valid_time" height="50px">
+                                    <th><label for="id_set_valid_time">{% trans "设置有效时间" %}:</label></th>
+                                    <td>
+                                        <table border="0">
+                                            <tr>
+                                                <td width="20px">{{ form.set_valid_time }}</td>
+                                                <td class="select_valid_time"><label for="id_acc_enddate" class="required">{% trans "启用门禁日期" %}:</label></td>
+                                                <td class="select_valid_time">{{ form.acc_startdate }}</td>
+                                                
+                                            </tr>
+                                            <tr class="select_valid_time">
+                                                <td></td>
+                                                <td><label for="id_acc_enddate" class="required">{% trans "结束门禁日期" %}:</label></td>
+                                                <td>{{ form.acc_enddate }}</td>
+                                            </tr>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </table>
+                        </td>
+                        {% endif %}
+                    </tr>
+                </table>
+            </div>
+        </td>
+    	<td valign="middle" align="right">
+            <div id="id_warning">
+            	
+            </div>
+        </td>
+    </tr>
+    {% endif %}
+    {% if form.non_field_errors %}
+        <tr><td>{{ form.non_field_errors }}</td></tr>
+    {% endif %}    
+    {% endautoescape %}
+{% endblock %}
+
+{% block addjs %}
+    {% if "mysite.visitor"|hasApp %}
+    $("#id_help").parent().remove();//去掉帮助
+    $("#id_fingerprint_download").hide();//隐藏指纹驱动下载
+    $("#id_carried_goods").attr({rows: "5", cols: "27", maxlength: "200"});//改变携带物品的行数
+    //$("#id_entrance").parent().parent().find("th").attr("width", "80px");//调整距离
+    var install_language = $("#id_install_language").val();
+    var photo_type = 1;//头像类型：抓拍或者证件头像
+    var is_print = 0;//是否打印访客单
+    var leave_type = 1;
+    var is_add_mode = 1;//用于判断当前是新增还是编辑
+    $("#id_pop_emp").removeAttr("class");//被访人不是必选项，去掉限制
+    $("#id_visitor_number").attr("maxlength","4");//限制来访人数输入框的位数
+    var emp_id = $("#id_emp").val();//使用全局变量，减少查询次数
+    
+    //下拉框显示的字符串长度问题
+    $(function(){
+		adjust_dropdown_list($("#id_visit_reason"));
+		adjust_dropdown_list($("#id_entrance"));
+	});
+    
+    //获取配置参数
+    $.ajax({
+        url: "/{{ request.surl }}visitor/GetData/?func=get_option",
+        type: "GET",
+        dataType: "json",
+        async: false,
+        success: function(datas){
+            photo_type = datas.photo_type;
+            is_print = datas.is_print;
+            leave_type = datas.leave_type;
+            if(leave_type == 1)//证件登记
+            {
+            	$("#id_cert_number").attr("class", "wZBaseCharField required");
+            	$("#id_cert_number").parent().parent().find("label:first").attr("class", "required");
+            }
+            else if(leave_type == 2)//卡号登记
+            {	
+            	//if(install_language == 'zh-cn')//中文
+            	//{
+            		$("#id_card").attr("class", "wZBaseCharField required");
+	            	$("#id_label_card").attr("class", "required");
+            	//}
+            	//else
+            	//{
+	           		//$("#id_label_card_number_type").attr("class", "required");
+	            //}
+            }
+            datas = null;
+        }
+    });
+
+    //摄像头拍照功能-darcy20120322
+    function myFlash_DoFSCommand(command, args){
+        //var myFlashObj = InternetExplorer ? myFlash : document.myFlash;
+        //alert (command+args);
+        //英文下图片直接覆盖中文下身份证图片的位置。
+        if(command === "send_pic")//发送的是base64的图片
+        {
+        	//alert(args.length);
+			var photo_byte = "data:image/gif;base64,"+args;
+			$("#id_img_capture_photo")[0].src = photo_byte;
+            $("#id_capture_photo").val(args);
+            if(install_language == 'zh-cn')//中文
+            {
+	            if(photo_type == 2)//证件头像是抓拍头像
+	            {
+		            $("#id_img_visitor_certificate")[0].src = photo_byte;
+		            $("#id_cert_photo").val(args);
+		    	}
+		    	else
+		    	{
+		    		if($("#id_cert_photo").val() == "")
+		    		{
+		    			$("#id_img_visitor_certificate")[0].src = photo_byte;
+		            	$("#id_cert_photo").val(args);
+		    		}
+		    	}
+		    }
+	    	photo_byte = null;
+        }
+    }
+	
+	//编辑时
+	if(emp_id != "")
+    {
+        is_add_mode = 0;//编辑
+        $.ajax({
+            url: "/{{ request.surl }}visitor/GetData/?func=get_visitor_by_edit&emp_id="+emp_id,
+            type: "GET",
+            dataType: "json",
+            success:function(datas) {
+                $("#id_gender").val(datas.gender);
+                $("#id_home_address").val(datas.home_address);
+                $("#id_visitor_firstname").val(datas.firstname);
+                $("#id_visitor_lastname").val(datas.lastname);
+                if(datas.card_number_type == 1)
+                {
+                	$("#id_card_number_type_0").click();
+                }
+                else
+                {
+                	$("#id_card_number_type_1").click();
+                }
+                $("#id_card").val(datas.card);
+                $("#id_card_number").val(datas.card_number);
+                $("#id_site_code").val(datas.site_code);
+                if($("#id_set_valid_time").attr("checked"))
+                {
+                    set_valid_time_show();//显示开始和结束日期
+                }
+                else
+                {
+                	set_valid_time_hide();//隐藏有效日期
+                }
+                $("#id_has_visited").attr("checked", "true");//编辑，访客已经来访过
+                $("#id_visited_dept").val(datas.dept);
+                $("#id_ophone").val(datas.tele);
+                $("#id_visited_emp").val(datas.visited_emp_id);
+				datas = null;                
+            }
+        }); 
+    }
+    
+    //新增访客时，按条件查询访客信息
+    function get_visitor_by_check(check_type, value)
+    {
+    	//查看是否有来访过
+        $.ajax({
+            url: "/{{ request.surl }}visitor/GetData/?func=get_visitor_by_check&state=enter&type="+check_type+"&param_value="+value,
+            type: "GET",
+            dataType: "json",
+            success:function(datas) {
+                if(datas.emp_id != undefined )
+                {
+                    $("#id_emp").val(datas.emp_id);
+                    $("#id_visitor_company").val(datas.company);
+                    $("#id_car_number").val(datas.car_number);
+                    $("#id_has_visited").attr("checked", "true");
+	                $("#id_visitor_firstname").val(datas.firstname);
+	                $("#id_visitor_lastname").val(datas.lastname);
+	                $("#id_gender").val(datas.gender);
+	                $("#id_home_address").val(datas.address);
+	                $("#id_cert_number").val(datas.c_number);
+	                if(datas.card_number_type == 1)
+		            {
+		            	$("#id_card_number_type_0").click();
+		            }
+		            else
+		            {
+		            	$("#id_card_number_type_1").click();
+		            }
+		            $("#id_card").val(datas.card);
+		            $("#id_card_number").val(datas.card_number);
+		            $("#id_site_code").val(datas.site_code);
+	                //门禁有效期还没过的常访客，重新进入登记还是用原来的日期，其他的采用当天日期
+	                if(datas.acc_date == 1)//有效期没过期
+	                {
+	                	$("#id_acc_startdate").val(datas.acc_startdate);
+	                	$("#id_acc_enddate").val(datas.acc_enddate);
+	                }
+	                else if(datas.acc_date == 3)//没有设置有效期
+	                {
+	                	$("#id_set_valid_time").attr("checked", false);
+	                	set_valid_time_hide();//隐藏有效日期
+	                }
+	                
+	                //指纹
+	                $("#id_tfids").val(datas.finnger10);
+	                $("#id_fpcode").val(datas.fptype);
+	                $("#div_id_finngerT").html("{% trans '已登记指纹 ' %}" + datas.tcount10 );
+	                
+		            var photo = datas.photo;
+		            if(photo != "")
+		            {
+		            	if(install_language == 'zh-cn')//中文
+		            	{
+		            		if(($("#id_cert_photo").val() == "") || ($("#id_cert_photo").val() != "" && check_type == "card") )//为空时、使用卡登记时 才需要以前的头像
+		            		{
+			            		$("#id_img_visitor_certificate")[0].src = "/file//"+photo;
+		            			$("#id_cert_photo").val(photo);
+		            		}
+		            	}
+		            	else
+		            	{
+		            		$("#id_img_capture_photo")[0].src = "/file//"+photo;
+	            			$("#id_capture_photo").val(photo);
+		            	}
+		            }
+		            photo = null;
+	            	
+                    if(datas.exit_registered == 0 && datas.is_warning == 1)
+                    {
+                        $("#id_warning").html("").append('<div class="warning" onblur="$(this).hide();" onclick="$(this).hide();" style="right: 0px; bottom: 30px;"><table border="0"><tr>'
+                            +'<td valign="middle" style="word-break:keep-all;word-wrap:break-word;white-space:normal;text-align:left;width:200px;height:100px;">{% trans "该访客上次离开时没有登记" %}</td></tr></table></div>');
+                    }
+                }
+            	datas = null;
+            	check_type = null;
+            }
+        });
+		value = null;
+    }
+
+    //卡号文本框离开时检查
+    $("#id_card").change(function(){
+    	var card = $("#id_card").val();
+    	if(card != "")
+    	{
+    		into_check(card);
+    	}
+    	card = null;
+	});
+	
+	//手动输入证件号码时检查
+	$("#id_cert_number").change(function(){
+		var c_number = $("#id_cert_number").val();
+		if(is_add_mode == 1 && c_number != "")//新增时
+		{
+			get_visitor_by_check("c_number", c_number);
+		}
+		c_number = null;
+	});
+    
+    //检查判断、卡信息是否已经登记
+    var card_has_use = false;//记录卡号是否已被使用，前端页面判断
+    function into_check(value)
+    {
+    	if(!/^[0-9]*$/.test(value))
+		{
+		    alert(gettext("卡号不正确！"));
+		    $("#id_card").focus();
+		    return false;
+		}
+    	if(is_add_mode == 0)//编辑，可能重新发卡，需要判断卡号是否被人使用
+    	{
+    		$.ajax({
+		        url: "/{{ request.surl }}visitor/GetData/?func=check_card&card="+value+"&emp_id="+emp_id,
+		        type: "GET",
+		        dataType: "json",
+		        async: false,
+		        success:function(datas) {
+		        	if(datas.check_ret)
+		        	{
+		        		card_has_use = true;
+		        		alert(gettext("卡号已存在，如果确认将重新发卡，请先清除该卡原持卡人"));//+"  "+datas.emp
+		        	}
+		        	else
+		        	{
+		        		card_has_use = false;
+		        	}
+		        	datas = null;
+		        }
+			});
+    	}
+    	else//新增，常访客登记，读取访客最近的来访信息
+    	{
+    		$.ajax({
+	            url: "/{{ request.surl }}visitor/GetData/?func=check_card_by_add&card="+value,
+	            type: "GET",
+	            dataType: "json",
+	            async: false,
+	            success:function(datas) {
+	                if(datas.is_use_card == true)//卡号已被内部人员使用
+	                {
+	                    card_has_use = true;
+		        		alert(gettext("卡号已存在，如果确认将重新发卡，请先清除该卡原持卡人"));//+"  "+datas.emp
+	                }
+	                else
+	                {	
+	                	card_has_use = false;
+	                	get_visitor_by_check("card", value)//查询访客信息
+	                }
+	            	datas = null;
+	            }
+	        });	
+    	}
+    	value = null;
+    }      
+    
+    //各控件不在IE浏览器下的处理
+    if(!$.browser.msie){
+        //指纹仪
+        $("#id_fp_register").attr({disabled:"true", title: "{% trans '登记指纹功能只支持IE浏览器' %}"}).css({cursor:"default",color:"#888888"}).unbind().click(function(){
+            $(".messageBox").html("{% trans '登记指纹功能只支持IE浏览器' %}").show();
+            alert(gettext("登记指纹功能只支持IE浏览器"));
+            return false;
+        });
+        //读写器
+        $("#id_read_certificate").attr({disabled:"true", title: "{% trans '目前该功能仅支持IE系列及IE内核的浏览器，请更换！' %}"}).css({cursor:"default",color:"#888888"}).unbind().click(function(){
+            alert(gettext("目前该功能仅支持IE系列及IE内核的浏览器，请更换！"));
+            return false;
+        });
+        //扫描仪
+        $("#id_scan_certificate").attr({disabled:"true", title: "{% trans '目前该功能仅支持IE系列及IE内核的浏览器，请更换！' %}"}).css({cursor:"default",color:"#888888"}).unbind().click(function(){
+            alert(gettext("目前该功能仅支持IE系列及IE内核的浏览器，请更换！"));
+            return false;
+        });
+    }
+    else
+    {
+        //IE下判断各控件是否需要安装驱动
+        var zkonline_flag = false;
+//        var IdrControl_flag = false;
+        var IdrControl_flag = false;
+        var synjones_flag = false;
+        var zkissonlinex_flag = false;
+        //指纹仪            
+        for(var i in zkonline)
+        {
+            if(i == "FPEngineVersion")
+            {
+                //alert("zkonline have installed")
+                zkonline_flag = true;
+            }
+        } 
+        if(!zkonline_flag)
+        {
+            //alert("did not install")
+            $("#id_fp_register").attr({title: "{% trans '请安装指纹仪驱动' %}"}).css({cursor:"default",color:"#888888"}).unbind().click(function()
+            {
+                alert(gettext("请安装指纹仪驱动"));
+                return false;
+            });                     
+        }
+        
+//        //精伦身份证读写器
+//        for(var i in IdrControl)
+//        {
+//            if(i == "isSuccess")
+//            {
+//                //alert("IdrControl have installed")
+//                IdrControl_flag = true;
+//            }
+//        }
+//        if(!IdrControl_flag)
+//        {
+//            //alert("IdrControl did not install")
+//			$("#id_read_certificate").attr({title: "{% trans '请注册读写器控件' %}"}).css({cursor:"default",color:"#888888"}).unbind().click(function(){
+//	            if(confirm(gettext("没有注册读写器控件，是否下载控件？")))
+//	            {
+//	            	window.location.href = "/data/system/help/?p=/file/"+$("#id_lng").val()+"/help/visitorDriverInstall.html";
+//	            	return false;
+//	            }
+//	        });                   
+//        }
+        //新中新身份证阅读器
+        for(var i in SynCardOcx)
+        {
+            if(i == "CardNo")
+            {
+                synjones_flag = true;
+            }
+        }
+        if(!synjones_flag)
+        {
+            $("#id_read_certificate").attr({title: "{% trans '请注册读写器控件' %}"}).css({cursor:"default",color:"#888888"}).unbind().click(function(){
+                if(confirm(gettext("没有注册读写器控件，是否下载控件？")))
+                {
+                    window.location.href = "/data/system/help/?p=/file/"+$("#id_lng").val()+"/help/visitorDriverInstall.html";
+                    return false;
+                }
+            });                   
+        }
+        
+        
+        //扫描仪
+        for(var i in zkissonlinex)
+        {
+            if(i == "ZKISSOnlineXVersion")
+            {
+                //alert("have installed")
+                zkissonlinex_flag = true;
+            }
+        } 
+        if(!zkissonlinex_flag)
+        {
+            //alert("did not install")
+            $("#id_scan_certificate").attr({title: "{% trans '请注册扫描仪控件' %}"}).css({cursor:"default",color:"#888888"}).unbind().click(function()
+            {
+            	if(confirm(gettext("没有注册扫描仪控件，是否下载控件？")))
+	            {
+	            	window.location.href = "/data/system/help/?p=/file/"+$("#id_lng").val()+"/help/visitorDriverInstall.html";
+	            	return false;
+	            }
+			});                     
+        }
+    }
+
+    
+//    //精伦身份证读卡器，渲染
+//    function submit_IdrControl()
+//    {
+//        if(!$.browser.msie)
+//        {
+//            return false;
+//        }
+//        var flag = false;
+//        for(var i in IdrControl)
+//        {
+//            if(i == "isSuccess")
+//            {
+//                flag = true;
+//            }
+//        }
+//        if(!flag)
+//        {
+//            //$("#id_fingerprint_download").show();
+//            return false;
+//        }
+//        flag = null;
+//        if($("#id_cert_type").val() == 2)//第二代身份证
+//        {
+//            //注意：第一个参数为对应的设备端口，USB型为1001，串口型为1至16
+//            //将读取后的图片放在C盘，只需要一张图片即可
+//            var result = IdrControl.ReadCard("1001", "c:\\visitor_photo\\read.bmp");
+//            if(result == 1)
+//            {
+//                $("#id_visitor_firstname").val(IdrControl.GetName());
+//                $("#id_gender").val(IdrControl.GetSex());
+//                $("#id_cert_number").val(IdrControl.GetCode());
+//                $("#id_home_address").val(IdrControl.GetAddress());
+//                
+//                var photo_byte = "data:image/gif;base64,"+IdrControl.GetJPGPhotobuf();//64位图像字符流
+//                $("#id_img_visitor_certificate")[0].src = photo_byte;
+//                $("#id_cert_photo").val(photo_byte);
+//                
+//                var c_number = $("#id_cert_number").val();//证件号码
+//                if(is_add_mode == 1 && c_number != "")//新增时才需要查找访客
+//                {
+//                    get_visitor_by_check("c_number", c_number)//查询访客信息
+//	        	}
+//	        	photo_byte = null;
+//	        	c_number = null;
+//            }
+//            else
+//            {
+//                if(result == -1)
+//                {
+//                    alert(gettext("端口初始化失败！"));
+//                }
+//                if(result == -2)
+//                {
+//                    alert(gettext("请重新将卡片放到读卡器上！"));
+//                }
+//                if(result == -3)
+//                {
+//                    alert(gettext("读取数据失败！"));
+//                }
+//                if(result == -4)
+//                {
+//                    alert(gettext("生成照片文件失败，请检查设定路径和磁盘空间！"));
+//                }
+//            }
+//            result = null;     
+//        }
+//        else
+//        {
+//            alert(gettext("目前该功能仅支持二代身份证！"));
+//        }
+//    };
+    
+    
+    //扫描证件
+    $("#id_scan_certificate").click(function(){
+        if(!$.browser.msie)
+        {
+            return false;
+        }
+        var flag = false;
+        for(var i in zkissonlinex)
+        {
+            if(i == "ZKISSOnlineXVersion")
+            {
+                flag = true;
+            }
+        }
+        if(!flag)
+        {
+            //$("#id_fingerprint_download").show();
+            return false;
+        }
+        flag = null;
+        var result = zkissonlinex.InitExternalLibrary();
+        if(result == 0)
+        {
+            result = zkissonlinex.LoadIdcardLibrary();
+            if(result == 0) 
+            {
+            	var c_type = $("#id_cert_type").val();
+                var certificate_info = "";
+                if(c_type == 1)//一代身份证
+                {
+                    certificate_info = zkissonlinex.RecogIdcardExALL("c://visitor_photo/all.jpg", true, 0, 0x7f, "c://visitor_photo/head.jpg", 1);
+                }
+                else if(c_type == 2)//二代身份证
+                {
+                    certificate_info = zkissonlinex.RecogNewIdcardALL("c://visitor_photo/all.jpg", true, 0x7f, "c://visitor_photo/head.jpg");
+                }
+                else if(c_type == 3)//防伪身份证
+                {
+                    certificate_info = zkissonlinex.RecogIdcardExALL("c://visitor_photo/all.jpg", true, 0, 0x7f, "c://visitor_photo/head.jpg", 3);
+                }
+                else if(c_type == 4)//驾照
+                {
+                    certificate_info = zkissonlinex.RecogDPALL("c://visitor_photo/all.jpg", true, 0x7f, "c://visitor_photo/head.jpg");
+                }
+                else if(c_type == 5)//护照
+                {
+                    certificate_info = zkissonlinex.RecogPassPortALL("c://visitor_photo/all.jpg", true, 0x7f, "c://visitor_photo/head.jpg");
+                }
+                else
+                {
+                    alert(gettext("暂时不支持该证件类型！"));
+                }
+                
+                if(certificate_info == "" || certificate_info == null)
+                {
+                    alert(gettext("请选择正确的证件类型或调整证件的位置！"));
+                }
+                else
+                {
+                    //result的返回结果格式 "name:张三,sex:男,number:11223344,other:"
+                    var visitor = certificate_info.split(",");
+                    $("#id_visitor_firstname").val(visitor[0].split(":")[1]);
+                    $("#id_gender").val(visitor[1].split(":")[1]);
+                    $("#id_cert_number").val(visitor[7].split(":")[1]);
+                    $("#id_home_address").val(visitor[4].split(":")[1]);
+                    
+                    var photo_byte = visitor[9].split(":")[1];
+                    $("#id_img_visitor_certificate")[0].src = "data:image/gif;base64,"+photo_byte
+                    $("#id_cert_photo").val(photo_byte);
+                    
+                    var c_number = $("#id_cert_number").val();
+                    if(is_add_mode == 1 && c_number != "")//新增时才需要查找访客
+                	{
+                    	get_visitor_by_check("c_number", c_number)//查询访客信息
+                    }
+                    visitor = null;
+                    photo_byte = null;
+                    value = null;
+                }
+                certificate_info = null;
+                c_type = null;
+            }
+            else
+            {
+                alert(gettext("加载扫描仪失败，请检查设备是否连接正常，关闭浏览器后重试！"));
+            }
+        }
+        else
+        {
+            alert(gettext("初始化设备失败，请检测扫描仪驱动是否已安装！"));
+        }
+        result = null;
+    });
+    
+    
+    //调用新中新身份证读卡器
+    $("#id_read_certificate").click(function(){
+    	if(!$.browser.msie)
+        {
+            return false;
+        }
+        var flag = false;
+        for(var i in SynCardOcx)
+        {
+            if(i == "CardNo")
+            {
+                flag = true;
+            }
+        }
+        if(!flag)
+        {
+            return false;
+        }
+        flag = null;
+        if($("#id_cert_type").val() == 2)//第二代身份证
+        {
+            var str = SynCardOcx.FindReader();//查找身份证阅读器
+            if(str > 0)
+            {
+                SynCardOcx.SetPhotoPath(2,"");
+                SynCardOcx.SetReadType(0);//手动读卡
+                var nRet = SynCardOcx.ReadCardMsg();//读取结果
+                if(nRet == 0)
+                {
+                    var sex = SynCardOcx.Sex == "1" ? "M" : "F";//性别
+                    $("#id_gender").val(sex);
+                    $("#id_visitor_firstname").val(SynCardOcx.NameA);
+                    $("#id_cert_number").val(SynCardOcx.CardNo);
+                    $("#id_home_address").val(SynCardOcx.Address);
+                    
+                    var c_number = $("#id_cert_number").val();//证件号码
+                    if(is_add_mode == 1 && c_number != "")//新增时才需要查找访客
+                    {
+                        get_visitor_by_check("c_number", c_number)//查询访客信息
+                    }
+                    
+                    //64位图像字符流，首次打开浏览器，第一次使用时，如果生成的字符流有问题，重新操作一次即可（出现问题需要给加个判断提示用户）
+                    SynCardOcx.SetPhotoType(2);//设置图片类型为base64
+                    var photo_byte = SynCardOcx.Base64Photo;//正常的图片大小是3000多个字符
+                    if(photo_byte == "" || photo_byte.length < 3000)
+                    {
+                        for(var i = 0; i < 10; i++)
+                        {
+                            SynCardOcx.SetPhotoPath(2,"");
+                            SynCardOcx.SetReadType(0);//手动读卡
+                            SynCardOcx.ReadCardMsg();//读取结果
+                            SynCardOcx.SetPhotoType(2);//设置图片类型为base64
+                            photo_byte = SynCardOcx.Base64Photo;
+                            //alert("---"+photo_byte.length);
+                            if(photo_byte != "" && photo_byte.length > 3000)
+                            {
+                                $("#id_img_visitor_certificate")[0].src = "data:image/gif;base64,"+photo_byte;
+                                $("#id_cert_photo").val(photo_byte);
+                                photo_byte = null;
+                                SynCardOcx = null;
+                                return;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        $("#id_img_visitor_certificate")[0].src = "data:image/gif;base64,"+photo_byte;
+                        $("#id_cert_photo").val(photo_byte);
+                        photo_byte = null;
+                        SynCardOcx = null;
+                    }
+                }
+                else
+                {
+                    alert(gettext("请放好身份证！"));
+                }
+            }
+            else
+            {
+                alert(gettext("没有检测到身份证阅读器！"));
+            }
+        }
+        else
+        {
+            alert(gettext("目前该功能仅支持二代身份证！"));
+        }    
+    });
+
+    $("#id_read_card").click(function(){
+        
+    });
+
+	//被访人信息
+	$("#id_pop_emp").change(function(){
+		if($(this).attr("data") == "")//去掉被访人
+		{
+			$("#id_visited_emp").val("");
+            $("#id_visited_dept").val("");
+            $("#id_ophone").val("");
+		}
+		else
+		{
+	        $.ajax({
+	            url: "/{{ request.surl }}visitor/GetData/?func=get_visited_emp&emp_id="+$(this).attr("data"),
+	            type: "GET",
+	            dataType: "json",
+	            success:function(datas) 
+	            {
+	                $("#id_visited_emp").val(datas.emp_id);
+	                $("#id_visited_dept").val(datas.dept);
+	                $("#id_ophone").val(datas.ophone);
+	                datas = null;
+	            }
+	        });
+		}
+	});
+    
+    {% if "mysite.iaccess"|hasApp %}
+    var old_levels = new Array();//访客旧的权限
+    var new_levels = new Array();//访客新的权限
+    //初始化权限组
+    $.ajax({ 
+        type: "POST",
+        url:"/{{ request.surl }}visitor/GetData/?func=level&is_visitor=1&level_type=all",
+        dataType:"json",
+        async:false,
+        success:function(json){
+            var level_list="<ul id='levelSingleBrowser' class='level_list'>";
+            if(json.length>0)
+            {   
+                for(index in json)
+                {
+                    level_list+='<li><input type="checkbox" name="level" value="'+json[index][0]+'"/><p>'+json[index][1]+'</p></li>';
+                }
+                level_list+='</ul>';
+            }
+            else
+            {
+                level_list+='<label class="none_selected">'+gettext("没有可选的权限组！")+'</label>';
+                }
+                $("#id_level").append(level_list);
+                
+                if(emp_id != "")
+                {
+                    //查询访客所拥有的权限
+                    $.ajax({ 
+                        type: "POST",
+                        url:"/{{ request.surl }}visitor/GetData/?func=selected_level&emp_id="+emp_id,
+                        dataType:"json",
+                        async:false,
+                        success:function(json){
+                            $("#levelSingleBrowser input").each(function(){
+                                var value = $(this).attr("value");
+                                for(var j in json)
+                                {
+                                    if(value == json[j])
+                                    {
+                                        $(this).attr("checked","checked");
+                                        old_levels.push(value);
+                                    }
+                                }
+                                value = null;
+                            });
+                            json = null;
+                        }
+                    });
+                }
+                json = null;
+            }
+        });
+        
+        //隐藏 选择有效时间
+        function set_valid_time_hide()
+        {
+            $(".select_valid_time").hide();
+        }
+        
+        //显示 选择有效时间
+        function set_valid_time_show()
+        {
+            $(".select_valid_time").show();
+        }
+
+        
+        $("#id_set_valid_time").click(function(){
+            if( $("#id_set_valid_time").attr("checked")==true)
+            {
+                set_valid_time_show();
+                //$("#id_acc_startdate").val(get_date(1));
+                //$("#id_acc_enddate").val(get_date(1));                
+            }
+            else
+            {
+                set_valid_time_hide();
+                //$("#id_acc_startdate").val("");
+                //$("#id_acc_enddate").val("");
+            }
+        });
+        
+        
+        //按回车键直接查询
+        $("#level_name").keydown(function(event){
+            if(event.keyCode==13)
+            {
+                $("#id_query_level").click();
+            }
+        });    
+        
+        //查询权限组
+        $("#id_query_level").click(function(){
+            $.ajax({ 
+                type: "POST",
+                url:"/{{ request.surl }}visitor/GetData/?func=level&is_visitor=1&level_name="+$("#level_name").val(),
+                dataType:"json",
+                async:false,
+                success:function(json){
+                    var level_list = "<ul id='levelSingleBrowser' class='level_list'>";
+                if(json.length>0)
+                {   
+                    for(index in json)
+                    {
+                        level_list += '<li><input type="checkbox" name="level" value="'+json[index][0]+'"/><p>'+json[index][1]+'</p></li>';
+                    }
+                    level_list += '</ul>';
+                }
+                else
+                {
+                    level_list += '<label class="none_selected">'+gettext("没有可选的权限组！")+'</label>';
+                }
+                $("#id_level").empty();
+                $("#id_level").append(level_list);
+                
+                if(emp_id != "")
+                {
+                    $.ajax({ 
+                        type: "POST",
+                        url:"/{{ request.surl }}visitor/GetData/?func=selected_level&emp_id="+emp_id,
+                        dataType:"json",
+                        async:false,
+                        success:function(json){
+                            $("#levelSingleBrowser input").each(function(){
+                                value = $(this).attr("value");
+                                for(var j in json)
+                                {
+                                    if(value == json[j])
+                                    {
+                                        $(this).attr("checked","checked");
+                                        old_levels.push(value);
+                                    }
+                                }
+                            });
+                            json = null;
+                        }
+                    });
+                }
+                json = null;
+            }
+        });
+    });
+      
+    //权限组全选按钮
+    $("#id_select_all").click(function(){
+        var select_all = $("#id_select_all").attr("checked");
+        $("#id_level input").each(function(){
+            
+            if(select_all)
+            {
+                $(this).attr("checked", "checked");
+            }
+            else
+            {
+                $(this).attr("checked", "");
+            }
+        });
+    });
+    {% endif %}
+    
+    $("#id_fp_help a").attr("href", "/data/system/help/?p=/file/"+$("#id_lng").val()+"/help/fingerprintDriverInstall.html");
+    $("#div_id_finngerT").html("{% trans '已登记指纹 ' %}"+ $("#id_tcount").val());
+    //登记指纹功能
+    function submitRegister()
+    {
+        if(!$.browser.msie)
+        {
+            return false;
+        }
+        var flag = false;
+        for(var i in zkonline)
+        {
+            if(i == "FPEngineVersion")
+            {
+                flag = true;
+            }
+        } 
+      
+        if(!flag)
+        {
+            //alert("here")
+            $("#id_fingerprint_download").show();
+            return false;
+        }
+        flag = null;
+        var tmpadd = ""
+        var tfids = $("#id_tfids"+tmpadd).val();
+        var fp = $("#id_finnger"+tmpadd).val();
+        var fpcode = $("#id_fpcode").val();
+        var durfp = $('#id_durfinger').val();    //获取指纹是普通指纹还是胁迫指纹的标记
+        var fpcount = $("#id_tcount").val()     //从数据库传递过来的正常指纹数量
+        //var durfpcount = $("#id_durtcount").val()    //从数据库传递过来的胁迫指纹数量
+        //alert(tfids+";"+fp+";"+fpcode+";"+durfp+";"+fpcount)
+        var tmp = 0
+        var oldidscount = 0
+        //var icount = 0;
+        $("#id_delflag").val("delete");
+        if(tfids != "")     //将普通指纹和胁迫指纹区分后组成一个字符串
+        {
+            var durtfids = tfids.split(",");
+            fpcode = fpcode.split(",");
+            if(durfp == "")
+            {
+                durfp = "000000000";
+            }
+            for(var i = 0; i < fpcode.length; i++)
+            { 
+                var durfp1 = "";
+                var durfp2 = "";
+                if(i == 8) //
+                {
+                    durfp1 = durfp.substr(0, durtfids[i]);
+                    //alert("durfp1"+durfp1)
+                }
+                else
+                {
+                    durfp1 = durfp.substr(0, durtfids[i]);
+                    durfp2 = durfp.substr(parseInt(durtfids[i])+1, durfp.length-1);//
+                }
+                if( fpcode[i] == "3" )
+                {
+                    durfp = durfp1 + "3" + durfp2;     
+                }
+                else
+                {
+                    durfp = durfp1 + "1" + durfp2;     
+                }
+            }
+        }
+        
+        if(tfids != "" || fp != "")
+        {
+            var te = tfids+","+fp;
+                  
+            if(te.substr(0,1) == ",")
+            {
+              te = te.substr(1);//tfids为空，fp不为空
+            }    
+            if(te.substr(te.length-1,1) == ",")
+            {
+              te = te.substr(0,te.length-1);//fp 为空，tfids不为空
+            }   
+
+            tmp = te.split(",");
+            oldidscount = tmp.length
+            if(fp != "")     //同一登记指针，第二次以上打开登记窗口
+            {
+                var tt = fp.split(",")
+                oldidscount = oldidscount-tt.length
+            }
+
+            var ids = ""
+            for(var i = 0;i<10;i++)
+            {
+                var bln = false
+                for(var j = 0;j < tmp.length;j++)
+                {
+                    if(i == tmp[j])
+                    {
+                        bln = true;
+                        break;
+                    }
+                }
+                if(bln)
+                {
+                    if(durfp.substr(i,1) == "3")
+                    {
+                        ids += "3";
+                    }
+                    else
+                    {
+                        ids += "1";
+                    }
+                }
+                else
+                {
+                    ids += "0";
+                }
+            }
+            zkonline.CheckFinger = ids;
+        }
+        else
+        {
+            zkonline.CheckFinger = "0000000000"
+        }
+
+        zkonline.IsSupportDuress = false//设置胁迫指纹无效
+
+        
+        if($("#id_lng").val()=='zh-cn')
+        {
+            zkonline.SetLanguageFile("zkonline.chs")  
+        }
+        else if($("#id_lng").val() == 'es')
+        {
+            zkonline.SetLanguageFile("zkonline.es")  
+        }
+        else if($("#id_lng").val() == 'zh-tw')
+        {
+            zkonline.SetLanguageFile("zkonline.cht")  
+        }
+        else
+        {
+            zkonline.SetLanguageFile("zkonline.en")  
+        }
+
+        if(zkonline.Register())
+        {
+            var fingerids=[];
+            var template=[];
+            var fingertype=[];                
+            var durfingerid = "";
+            
+            if($("#id_finnger"+tmpadd).val()!="")
+            {
+                var f=$("#id_finnger"+tmpadd).val().split(",");
+                var t=$("#id_template"+tmpadd).val().split(",");
+                var ft=$("#id_fptype").val().split(",");    //ft区分是普通指纹还是胁迫指纹
+                for(var i=0;i<f.length;i++)
+                {
+                    fingerids.push(f[i]);
+                    template.push(t[i]);
+                    fingertype.push(ft[i])
+                    //zkonlinetest1=zkonlinetest1+1
+                    //alert(zkonlinetest1+"zkonlinetest1")
+                }
+            }
+            for(i=1;i<=10;i++)
+            {
+                if(zkonline.GetRegFingerTemplateEx('9',i).length>2)
+                {
+                    durfingerid = zkonline.CheckFinger;
+                    fingerids.push(i-1);
+                    fingertype.push(durfingerid.substr(i-1,1));
+                    var t=zkonline.ConvertTemplateToEmStr( zkonline.GetRegFingerTemplateEx('9',i));
+                    template.push(t);
+                }
+            }
+       
+            $("#id_durfinger").val(durfingerid.toString());
+            $("#id_finnger"+tmpadd).val(fingerids.toString());
+            $("#id_template"+tmpadd).val(template.toString());
+            $("#id_fptype").val(fingertype.toString());
+            
+            tmpadd = "10";
+            var fingerids10=[];
+            var template10=[];
+            
+            if($("#id_finnger"+tmpadd).val()!="")
+            {
+                var f=$("#id_finnger"+tmpadd).val().split(",");
+                var t=$("#id_template"+tmpadd).val().split(",");
+                for(var i=0;i<f.length;i++)
+                {
+                    fingerids10.push(f[i]);
+                    template10.push(t[i]);
+                }
+            }
+            var template10_error = false;
+            for(i=1;i<=10;i++)
+            {
+                if(zkonline.GetRegFingerTemplateEx('10',i).length>2)
+                {
+                    fingerids10.push(i-1);
+                    var t = zkonline.GetRegFingerTemplateEx('10',i);
+                    if(t.length < 800)   //验证预防zkonline的10.0模板取到9.0指纹模板
+                    {
+                        alert(gettext("指纹模板错误，请立即联系开发人员！"));
+                        template10_error = true;
+                        break;
+                    }
+                    template10.push(t);
+                }
+            }
+            
+            var max_i=template.length;
+            for(i=0;i < max_i;i++)  //验证预防9.0和10.0模板值相同的异常情况
+            {
+                if(template[i].length == template10[i].length)
+                {
+                    alert(gettext("指纹模板错误，请立即联系开发人员！"));
+                    template10_error = true;
+                    break;
+                }
+            }
+            
+            if(template10_error)
+            {
+                template10 = null;
+                return false;
+            }
+            
+            $("#id_finnger"+tmpadd).val(fingerids10.toString());
+            $("#id_template"+tmpadd).val(template10.toString());
+            $("#id_fptype").val(fingertype.toString());
+        }  
+        if(tfids != "" )             //删除已存在数据库中指纹
+        {
+            tmp = tfids.split(",");   //数据库存有的指纹id
+//            var dbfpid = "";   //数据库存有指纹id颜色标记
+            var del_id = [];//记录要删除的指纹
+            var index = 0;
+            var fpid = zkonline.CheckFinger   //删除指纹后，检测zkonline当前指纹标记信息
+            
+            for(var i=0; i<10;i++)
+            {
+                if(fpid.substr(i,1)=="0")
+                {
+                    for(var j=0;j<tmp.length;j++)
+                    {
+                        if(tmp[j]==i)
+                        del_id[index++] = i;
+                    }
+                }
+            }
+            
+            $("#id_delfinger").val(del_id.toString());
+            var count = fpid.replace(/0/g, "").length;
+            //alert("count.."+fpid.replace(/0/g, "").length)
+            $("#div_id_finngerT").html("{% trans '已登记指纹 ' %}" + count );
+            
+        }
+        else //新增人员指纹二次登陆删除时的处理
+        {  
+            var count = 10;//指纹数变量
+            var tmpadd = "";
+            var durfingerid = zkonline.checkfinger;
+            var fingerids = $("#id_finnger"+tmpadd).val().split(",");//手指编号
+            var template = $("#id_template"+tmpadd).val().split(",");//9.0指纹模板
+            var fptype = $("#id_fptype").val().split(","); //指纹类别1为普通指纹，3为胁迫指纹
+           
+            //以下for循环， 以当前zkonline状态为准，去掉已被删除的指纹及信息
+            for(var i = 0;i < 10;i++)
+            {   
+                if(durfingerid.substr(i,1)=="0")
+                { 
+                    count = count-1;
+                    for(var j = 0;j < fingerids.length;j++)
+                    {
+                        if(fingerids[j] == i)
+                        {
+                            template.splice(j,1);
+                            fptype.splice(j,1);
+                            fingerids.splice(j,1);
+                        }
+                    }
+                }
+            }
+           
+            $("#id_durfinger").val(durfingerid.toString());
+            $("#id_finnger" + tmpadd).val(fingerids.toString());
+            $("#id_template" + tmpadd).val(template.toString());
+            $("#id_fptype").val(fptype.toString()); 
+           
+           
+            tmpadd = "10";
+           
+            var fingerids10 = $("#id_finnger" + tmpadd).val().split(",");
+            var template10 = $("#id_template" + tmpadd).val().split(",");
+            
+            for(i = 0;i < 10;i++)
+            {
+                if(durfingerid.substr(i,1) == "0")
+                {
+                    for(j = 0;j < fingerids;j++)
+                    {
+                        if(fingerids[j] == i)
+                        {
+                            template10.splice(j,1);
+                            fingerids10.splice(j,1);
+                            //alert("remove template10 index is" + j);
+                        }
+                    }
+                }
+            }
+            $("#id_finnger"+tmpadd).val(fingerids10.toString());
+            $("#id_template"+tmpadd).val(template10.toString());
+            //alert("count"+count);
+            $("#div_id_finngerT").html("{% trans '已登记指纹 ' %}"+ count );
+        }
+    }
+
+    //获取下拉列表的文本
+    function get_reason_text()
+    {
+        var obj = document.getElementById("id_visit_reason");
+        //for(var i = 0; i < obj.length; i++){
+        //    if(obj[i].selected == true){   
+        //        return obj[i].innerHTML;
+        //    }
+        //}
+        return obj.options[obj.selectedIndex].text;
+    }
+	
+	{% block special_js_en %}{% endblock %}<!--英文下使用-->
+    
+    // 系统日期格式
+    var date_format = null;
+    var format_array = null;
+    var split_str = "";
+    get_date_format();
+    function get_date_format()
+    {
+        $.ajax({ 
+             type: "GET",
+             url: "/{{ request.surl }}visitor/GetData/?func=get_date_format",
+             dataType: "json",
+             async: false,//必须用同步
+             success:function(datas)
+             {
+                date_format = datas.date_format;
+                if(date_format != null && date_format != "")
+                {
+                    date_format = date_format.replace(/%/g, "");
+                    split_str = date_format.indexOf("/") >=0 ? "/" : "-";
+                    format_array = date_format.split(split_str);
+                }
+             	datas = null;
+             }
+         });        
+    }
+    
+    // 验证设置的访客有效期：门禁、梯控
+    function convert_vis_time(vis_time)
+    {
+        vis_time = vis_time.split(split_str);
+        var temp_array = new Array();
+        for(var i = 0; i < 3; i++)
+        {
+            if(format_array[i] == "Y")
+            {
+                temp_array[0] = vis_time[i];
+            }
+            if(format_array[i] == "m")
+            {
+                temp_array[1] = vis_time[i];
+            }
+            if(format_array[i] == "d")
+            {
+                temp_array[2] = vis_time[i];
+            }
+        }
+        return temp_array[0]+temp_array[1]+temp_array[2];
+    }
+    
+    
+    //提交前创建访客单，创建成功 打印
+    var before_submit = function()
+    {
+    	//alert("id_template10="+$("#id_template10").val());
+		//前端验证表单信息，避免后台验证不通过而前端打印了访客单  
+		var card = $("#id_card").val();
+		if($("#id_visit_state").val() == 2 && $("#id_has_visited").attr("checked"))
+		{
+			$("#id_info").html("").append('<ul class="errorlist"><li>{% trans "已经离开的访客不能再编辑信息！" %}</li></ul>');
+			return false;
+		}
+    	else if($("#id_visitor_firstname").val() == "")
+		{
+			$("#id_visitor_firstname").attr("class", "wZBaseCharField required error");
+			$("#id_info").html("").append('<ul class="errorlist"><li>{% trans "姓名不能为空！" %}</li></ul>');
+			return false;
+		}
+        else if(!/^[0-9]*$/.test(card))
+        {
+            $("#id_info").html("").append('<ul class="errorlist"><li>{% trans "卡号不正确" %}</li></ul>');
+            return false;
+        }
+        else if(leave_type == 2 && card == "")
+        {
+            $("#id_info").html("").append('<ul class="errorlist"><li>{% trans "离开登记方式为卡登记，卡号不能为空！" %}</li></ul>');
+            return false;
+        }        
+		else if(card_has_use)
+		{
+			$("#id_info").html("").append('<ul class="errorlist"><li>{% trans "卡号已存在，如果确认将重新发卡，请先清除该卡原持卡人！" %}</li></ul>');
+			return false;
+		}
+		else if($("#id_entrance").val() == "")
+		{
+			$("#id_entrance").attr("class", "wZBaseForeignKey required zd_VisPlace error");
+			$("#id_info").html("").append('<ul class="errorlist"><li>{% trans "进入地点不能为空！" %}</li></ul>');
+			return false;
+		}
+    	else if($("#id_set_valid_time").attr("checked"))
+    	{
+            var start_time = $("#id_acc_startdate").val();
+            var end_time = $("#id_acc_enddate").val();
+            if(start_time == "")
+            {
+                $("#id_info").html("").append('<ul class="errorlist"><li>{% trans "开始日期不能为空！" %}</li></ul>');
+                return false;
+            }
+            if(end_time == "")
+            {
+                $("#id_info").html("").append('<ul class="errorlist"><li>{% trans "结束日期不能为空！" %}</li></ul>');
+                return false;
+            }
+	        if(convert_vis_time(start_time) > convert_vis_time(end_time))
+	        {
+	            $("#id_info").html("").append('<ul class="errorlist"><li>{% trans "开始日期不能大于结束日期！" %}</li></ul>');
+	            return false;
+	        }
+	    }
+		else if(install_language == 'zh-cn')
+		{
+            if(!/^[0-9a-za-z]*$/.test($("#id_cert_number").val()))
+            {
+                $("#id_info").html("").append('<ul class="errorlist"><li>{% trans "证件号码不正确！" %}</li></ul>');
+                return false;
+            }
+            else if(leave_type == 1 && $("#id_cert_number").val() == "")
+            {
+            	$("#id_cert_number").attr("class", "wZBaseCharField required error");
+            	$("#id_info").html("").append('<ul class="errorlist"><li>{% trans "离开登记方式为证件登记，证件号码不能为空！" %}</li></ul>');
+            	return false;
+            }			
+		}
+//		else
+//		{
+//			$("input[id^='id_card_number_type_']").each(function(){
+//			    if($(this).attr("checked"))
+//			    {
+//			        if($(this).val() == 1)//物理卡号+区位码
+//			        {
+//			        	if(!/^[0-9]*$/.test(card_number))
+//						{
+//							$("#id_info").html("").append('<ul class="errorlist"><li>{% trans "物理卡号不正确" %}</li></ul>');
+//						    return false;
+//						}
+//						else if(!/^[0-9]*$/.test(site_code))
+//						{
+//							$("#id_info").html("").append('<ul class="errorlist"><li>{% trans "区位码不正确" %}</li></ul>');
+//						    return false;
+//						}
+//						else if((card_number != "" && site_code == "") || (site_code != "" && card_number == ""))
+//						{
+//				            $("#id_info").html("").append('<ul class="errorlist"><li>{% trans "物理卡号和区位码必须同时填写" %}</li></ul>');
+//						    return false;
+//				        }
+//				        else if(leave_type == 2 && card_number == "" && site_code == "")
+//						{
+//							$("#id_info").html("").append('<ul class="errorlist"><li>{% trans "离开登记方式为卡登记，卡号不能为空！" %}</li></ul>');
+//							return false;
+//						}
+//			        }
+//			        else
+//			        {
+//			        	validate_card(card);
+//			        }   
+//				}
+//			});
+//		}
+
+        $("#levelSingleBrowser input").each(function(){
+            if($(this).attr("checked")==true)
+            {
+                new_levels.push($(this).attr("value"));
+            }
+        });            
+        
+        //判断权限是否改变
+        if(new_levels.sort().toString()!=old_levels.sort().toString())
+        {
+            $("#id_level_changed").attr("checked",true);
+        }
+        
+        if($.browser.msie){
+            if(is_print == 1)
+            {
+                if(is_add_mode == 1)
+                {
+                    print_visitor_form();//新增时直接打印访客单
+                }
+                else//编辑操作时，加个提示是否打印访客单
+                {
+                    if(confirm(gettext("是否重新打印访客单？")))
+                    {
+                    	print_visitor_form();
+                    }
+                }
+            }
+	    }                
+		return true;     
+    }
+    
+    //打印访客单
+    function print_visitor_form()
+    {
+    	if(install_language == 'zh-cn')//中文
+    	{
+    		var photo_byte = $("#id_cert_photo").val();
+    		var ID = $("#id_cert_number").val();//证件号码
+    	}
+    	else
+    	{
+    		var photo_byte = $("#id_capture_photo").val();
+    		var ID = "";
+    	}
+        var visitor_firstname = $("#id_visitor_firstname").val();//访客姓名
+        var visitor_lastname = $("#id_visitor_lastname").val();
+        var number = $("#id_visitor_number").val();//人数
+        var company = $("#id_visitor_company").val();//来访单位
+        var reason = get_reason_text();//事由
+        var dept = $("#id_visited_dept").val();//被访部门
+        //var visited_name = $("#id_visited_name").val();//被访人员
+        var visited_name = "";
+        var pop_emp = $("#id_pop_emp").val();
+        if(pop_emp.length >= 11)
+        {
+            visited_name = pop_emp.substring(10);
+        }
+        var enter_time = $("#id_enter_time").val();//进入时间 
+        var produce = $("#id_carried_goods").val();//携带物品
+        var data = {
+            "photo_byte": photo_byte,
+            "visitor_firstname": visitor_firstname,
+            "visitor_lastname": visitor_lastname,
+            "number": number,
+            "company": company != "" ? company : "&nbsp;",
+            "reason": reason != "" ? reason : "&nbsp;",
+            "dept": dept != "" ? dept : "&nbsp;",
+            "visited_name": visited_name,
+            "enter_time": enter_time,
+            "produce": produce != "" ? produce : "&nbsp;",
+            "ID": ID != "" ? ID : "&nbsp;"
+        };
+        
+        $.ajax({ 
+            type: "POST",
+            url: "/{{ request.surl }}visitor/create_visitor_form/",
+            dataType: "json",
+            data: data,
+            async: false,//必须用同步
+            success:function(datas){
+                if(datas.ret == 0)
+                {
+                    $("#id_visitor_form").val(datas.form_code);
+                    var form_url = (window.location.href).split("data")[0]+'visitor/VisitorFormPage/?form_code='+datas.form_code;
+                    $.jBox("iframe:"+form_url, {
+                        id: "visitorFormBox",
+                        title: "访客单预览",
+                        width: 264,
+                        height: 460,
+                        buttons: {}
+                    });
+                }
+            	datas = null;
+            }
+        });
+        photo_byte = null;
+        visitor_firstname = null;
+        visitor_lastname = null;
+        number = null;
+        company = null;
+        reason = null;
+        dept = null;
+        visited_name = null;
+        enter_time = null;
+        produce = null;
+        ID = null;
+        pop_emp = null;
+    }
+
+    {% endif %}
+    
+{% endblock %}
+

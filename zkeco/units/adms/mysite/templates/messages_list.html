@@ -1,12 +1,12 @@
-{% extends "data_list.html" %}
+{# extends "data_list.html" #}
 
-{% block tblHeader %}
-fieldHeaders=["{{ cl.FieldName.MsgType }}","{{ cl.FieldName.StartTime }}","{{ cl.FieldName.EndTime }}","{{ cl.FieldName.MsgContent }}","{{ cl.FieldName.MsgParam }}","{{ cl.FieldName.DeptID }}"
+{# block tblHeader #}
+fieldHeaders=["&#123;&#123; cl.FieldName.MsgType &#125;&#125;","&#123;&#123; cl.FieldName.StartTime &#125;&#125;","&#123;&#123; cl.FieldName.EndTime &#125;&#125;","&#123;&#123; cl.FieldName.MsgContent &#125;&#125;","&#123;&#123; cl.FieldName.MsgParam &#125;&#125;","&#123;&#123; cl.FieldName.DeptID &#125;&#125;"
 ];
 options.disableCols=[0];
 
-{% endblock %}
-{% block rowdata %}
-{% for item in latest_item_list %}
-["{{ item.id }}","{{ item.get_MsgType_display }}","{{ item.StartTime }}","{{ item.EndTime }}","<pre>{{ item.MsgContent|lescape }}</pre>", "{{ item.MsgParam }}", "{{ item.DeptID }}"]{%if not forloop.last%},{%endif%}{% endfor %}
-{% endblock %}
+{# endblock #}
+{# block rowdata #}
+{# for item in latest_item_list #}
+["&#123;&#123; item.id &#125;&#125;","&#123;&#123; item.get_MsgType_display &#125;&#125;","&#123;&#123; item.StartTime &#125;&#125;","&#123;&#123; item.EndTime &#125;&#125;","<pre>&#123;&#123; item.MsgContent|lescape &#125;&#125;</pre>", "&#123;&#123; item.MsgParam &#125;&#125;", "&#123;&#123; item.DeptID &#125;&#125;"]{# if not forloop.last #},{# endif #} {# endfor #}
+{# endblock #}

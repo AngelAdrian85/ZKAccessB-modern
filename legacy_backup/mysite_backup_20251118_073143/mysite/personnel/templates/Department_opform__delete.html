@@ -1,0 +1,22 @@
+{% extends "data_opform.html" %}
+{% load i18n %}
+
+{% block addjs %}
+function before_submit()
+{
+    {% if has_branch %}
+    if(confirm(gettext("是否立即将删除的部门信息从主控同步到分控？")))
+    {
+        $("#id_sync_to_branch").attr("checked", true);
+    }
+    else
+    {
+        alert(gettext("您选择了不立即同步该部门信息到分控，请稍后手动同步到分控，以保持主控和分控数据一致性！"));            
+        $("#id_sync_to_branch").attr("checked", false);
+    }
+    {% endif %}
+    return true;
+}
+{% endblock %}
+
+

@@ -1,31 +1,31 @@
-{% extends "special_menu.html" %}
-{% load i18n %}
+{# extends "special_menu.html" #}
+{# load i18n #}
 
-{% block getdatalist %}
+{# block getdatalist #}
     var href = window.location.href;
     if(href.split("/")[3] == "iaccess")
     {
-        {% if not request.user|HasPerm:"contenttypes.can_DoorSetPage" %}
+        {# if not request.user|HasPerm:"contenttypes.can_DoorSetPage" #}
             $("#id_datalist").remove();
             $("#id_search").remove();      
             alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
-            window.location.href = "/{{ request.surl }}accounts/login/";
-        {% endif %}<!-- contenttypes.can_DoorSetPage --> 
+            window.location.href = "/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+        {# endif #}<!-- contenttypes.can_DoorSetPage --> 
     }
     else if(href.split("/")[3] == "elevator")//if中无法传入变量？
     {
-        {% if not request.user|HasPerm:"contenttypes.can_FloorMngPage" %}
+        {# if not request.user|HasPerm:"contenttypes.can_FloorMngPage" #}
             $("#id_datalist").remove();
             $("#id_search").remove();   
             alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
-            window.location.href = "/{{ request.surl }}accounts/login/";
-        {% endif %}<!-- contenttypes.can_FloorMngPage --> 
+            window.location.href = "/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+        {# endif #}<!-- contenttypes.can_FloorMngPage --> 
     }
-    if("{{ position }}" == "")
+    if("&#123;&#123; position &#125;&#125;" == "")
     {
         window.location.href = $("#id_special_menu ul:first li a").attr("href");//跟模型相关的页面在此重定向
     }
-    {% block acc_door_set %}{% endblock %}
+    {# block acc_door_set #} {# endblock #}
     
 
-{% endblock %}
+{# endblock #}

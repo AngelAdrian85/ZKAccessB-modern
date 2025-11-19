@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>iAccess (test)</title>
+</head>
+<body>
+  <div id="content">
+    <nav>
+      <a href="/iaccess/employees/">Employees</a> |
+      <a href="/iaccess/devices/">Devices</a> |
+      <a href="/iaccess/doors/">Doors</a> |
+      {% if show_logs_link %}
+        <a href="/iaccess/logs/">Access Logs</a>
+      {% endif %}
+    </nav>
+    {% block content %}{% endblock %}
+  </div>
+</body>
+</html>
