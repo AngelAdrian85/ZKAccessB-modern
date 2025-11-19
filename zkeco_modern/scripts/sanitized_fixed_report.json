@@ -1,0 +1,56 @@
+{
+  "fixed": [
+    {
+      "file": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\templates\\AppOption_list.html",
+      "partial": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\sanitized\\zkeco\\units\\adms\\mysite\\templates\\AppOption_list.html.partial.html",
+      "fixed_partial": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\sanitized_fixed\\zkeco\\units\\adms\\mysite\\templates\\AppOption_list.html.partial.html"
+    },
+    {
+      "file": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\templates\\BaseCode_list.html",
+      "partial": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\sanitized\\zkeco\\units\\adms\\mysite\\templates\\BaseCode_list.html.partial.html",
+      "fixed_partial": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\sanitized_fixed\\zkeco\\units\\adms\\mysite\\templates\\BaseCode_list.html.partial.html"
+    },
+    {
+      "file": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\templates\\data_list.html",
+      "partial": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\sanitized\\zkeco\\units\\adms\\mysite\\templates\\data_list.html.partial.html",
+      "fixed_partial": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\sanitized_fixed\\zkeco\\units\\adms\\mysite\\templates\\data_list.html.partial.html"
+    },
+    {
+      "file": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\templates\\DbBackupLog_list.html",
+      "partial": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\sanitized\\zkeco\\units\\adms\\mysite\\templates\\DbBackupLog_list.html.partial.html",
+      "fixed_partial": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\sanitized_fixed\\zkeco\\units\\adms\\mysite\\templates\\DbBackupLog_list.html.partial.html"
+    },
+    {
+      "file": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\templates\\Group_list.html",
+      "partial": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\sanitized\\zkeco\\units\\adms\\mysite\\iaccess\\templates\\AccMoreCardEmpGroup_list.html.partial.html",
+      "fixed_partial": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\sanitized_fixed\\zkeco\\units\\adms\\mysite\\iaccess\\templates\\AccMoreCardEmpGroup_list.html.partial.html"
+    },
+    {
+      "file": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\templates\\LogEntry_list.html",
+      "partial": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\sanitized\\zkeco\\units\\adms\\mysite\\templates\\LogEntry_list.html.partial.html",
+      "fixed_partial": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\sanitized_fixed\\zkeco\\units\\adms\\mysite\\templates\\LogEntry_list.html.partial.html"
+    },
+    {
+      "file": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\templates\\messages_list.html",
+      "partial": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\sanitized\\zkeco\\units\\adms\\mysite\\templates\\messages_list.html.partial.html",
+      "fixed_partial": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\sanitized_fixed\\zkeco\\units\\adms\\mysite\\templates\\messages_list.html.partial.html"
+    },
+    {
+      "file": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\templates\\oplog_list.html",
+      "partial": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\sanitized\\zkeco\\units\\adms\\mysite\\templates\\oplog_list.html.partial.html",
+      "fixed_partial": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\sanitized_fixed\\zkeco\\units\\adms\\mysite\\templates\\oplog_list.html.partial.html"
+    },
+    {
+      "file": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\templates\\rtmonitor.html",
+      "partial": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\sanitized\\zkeco\\units\\adms\\mysite\\templates\\rtmonitor.html.partial.html",
+      "fixed_partial": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\sanitized_fixed\\zkeco\\units\\adms\\mysite\\templates\\rtmonitor.html.partial.html"
+    },
+    {
+      "file": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\templates\\setoption.html",
+      "partial": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\sanitized\\zkeco\\units\\adms\\mysite\\templates\\setoption.html.partial.html",
+      "fixed_partial": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\sanitized_fixed\\zkeco\\units\\adms\\mysite\\templates\\setoption.html.partial.html"
+    }
+  ],
+  "skipped": [],
+  "errors": {}
+}
