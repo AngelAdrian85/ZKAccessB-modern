@@ -1,0 +1,164 @@
+
+
+<!--<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">-->
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-us" xml:lang="en-us" >
+<head>
+	<title> 
+	 
+		&rsaquo;
+		
+			EN: 详情
+		
+	
+	</title>
+	
+<link rel="stylesheet" type="text/css" href="/media//css/menu.css" media="screen" />
+<link rel="stylesheet" type="text/css" href="/media//css/base.css" />
+
+<link rel="stylesheet" type="text/css" href="/media//css/jquery.clockpick.css" />
+<link rel="stylesheet" type="text/css" href="/media//css/sf.css" media="screen" />
+<link href="/media//css/css.css" rel="stylesheet" />
+<link href="/media//css/tabs.css" rel="stylesheet" />
+<link rel="stylesheet" type="text/css" href="/media//css/jquery.treeview.css" />
+<link rel="stylesheet" type="text/css" href="/media//css/datepiker.css" media="screen" />
+<link rel="stylesheet" type="text/css" href="/media//themes//css/skin.css" media="screen" />
+
+
+
+	
+<script src="/media//jslib/appconfig.js"> </script>
+<script src="/media//jslib/i18n.js"></script>
+<script src="/media//jslib/jquery.js"></script>
+<script src="/media//jslib/jquery.validate.js"></script>
+<script src="/media//jslib/i18n_en-us.js"></script>
+
+
+
+
+
+<script src="/media//jslib/jquery.plus.js"></script>
+<script src="/media//jslib/jquery.zcommon.js"></script>
+<script src="/media//jslib/widgets.js"></script>
+<script src="/media//jslib/jquery.tools.min.js"></script>
+
+<script src="/media//jslib/jquery.zgrid.js"></script>
+<script src="/media//jslib/datalist.js"></script>
+<script src="/media//jslib/datalistadd.js"></script>
+<script src="/media//jslib/report_design.js"></script>
+
+
+	
+	
+</head>
+<body>
+<!-- request.is_ajax-->
+
+	<div style="margin:0px;padding:0px;">
+	
+		<form method="post" onkeydown="if(event.keyCode==13){return false;}"  id="id_edit_form" enctype="multipart/form-data">
+			<input type="hidden" id="id_model_pk" name="pk" value="" />
+			<input type="hidden" id="id_model_info"  app_label=""  model_name=""/>
+			 <!-- title -->
+
+			<!-- help_panel -->
+
+			
+			
+			<div class="form_operation">
+			</div>
+			
+			<!--operation_panel-->
+
+			<table cellpadding="3" style="margin:0px 10px 0px 10px; position:relative;" class="tbl_data_edit">
+			<tr><td clospan="6">
+			<div id="id_tabs">
+			
+
+			
+			</div>
+			</td></tr>
+
+			<tr id="pre_addition_fields"></tr>
+
+			
+			
+			<!-- form -->
+
+			<tr id="addition_fields"></tr>
+			</table>
+
+			
+			
+			
+
+
+		</form>
+
+		<input type="hidden" id="id_query_str" value=""/>
+
+		<div id="id_info"><div>
+		<script>
+			
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+    //如果只有一个语言选项，直接不显示-darcy20110328
+    if($("select[id*='language'] option").length == 1) 
+    {
+       $("select[id*='language']").parent().parent().remove();
+    }
+    else
+    {
+        var temp_str = "";
+        $("select[id*='language']").find("option").each(function(){
+            if($(this).val() == temp_str)
+            {
+                $("select[id*='language']").find("option[value='" + $(this).val() + "']").eq(0).remove();
+            }
+            else
+            {
+                temp_str = $(this).val();
+            }
+        });
+    }  
+    $("input[id=id_base.shortdatetime_format]").parent().parent().hide();
+    $("input[id=id_base.datetime_format]").parent().parent().hide();
+    $("input[id=id_base.date_format]").parent().parent().hide();
+    $("input[id=id_base.shortdate_format]").parent().parent().hide();
+    $("input[id=id_base.time_format]").parent().parent().hide();
+    
+    $("input[id=id_dbapp.max_photo_width]").parent().parent().hide();
+    $("input[id=id_dbapp.theme]").parent().parent().hide();//之前的换肤功能
+    var obj_theme=$("input[id=id_dbapp.theme]");
+    var obj_theme_select=obj_theme.val();
+    
+
+
+			var $form=$("#id_edit_form");
+			render_widgets($form);
+			
+			
+			after_process=function()
+			{
+				$("#id_edit_form input[id^='id_']:first").focus();
+			}
+			
+		</script>
+		
+	</div>
+	<!-- content ???-->
+
+</body></html>
+
+

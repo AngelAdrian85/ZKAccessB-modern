@@ -1,7 +1,7 @@
 {% load i18n %}
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" lang="{{ LANGUAGE_CODE }}" xml:lang="{{ LANGUAGE_CODE }}" {% if LANGUAGE_BIDI %}dir="rtl"{% endif %}><head>
-	<title>{% block title %}{% trans '载入中' %}...{% endblock %}</title>
+	<title>{% block title %}{% trans 'EN: 载入中' %}...{% endblock %}</title>
 	{% block blockbots %}
 	
 	<meta http-equiv="X-UA-Compatible" content="IE=EmulateIE7" /><!--解决IE8链接下划线贴得太近-->
@@ -16,7 +16,7 @@
 			<div style="float: left; height: 40px;margin-right:6px">
 				<img src="{{ MEDIA_URL }}/img/loadpage.gif">
 			</div>
-			<div style="line-height: 40px; height: 40px; display: block;text-align:left; float: left; color:#32598A; font-size:14px;">{% trans "正在处理，请稍候..." %}</div>
+			<div style="line-height: 40px; height: 40px; display: block;text-align:left; float: left; color:#32598A; font-size:14px;">{% trans "EN: 正在处理，请稍候..." %}</div>
 			<div class="clear displayN"></div>
 		</div>
 		<div class="clear displayN"></div>
@@ -44,7 +44,7 @@
                 	<div class="headTopRight">
                         <div class="headTopLeft">
                             <ul id="id_true_app"  class="Link_hui font12 noUnderl">
-								{% block worktable %} <li class="borderR {% ifequal current_app 'worktable' %} app_focus {% endifequal %}"  name="worktable"><a id="id_worktable" href="#">{% trans "我的工作面板" %}</a></li> {% endblock %}
+								{% block worktable %} <li class="borderR {% ifequal current_app 'worktable' %} app_focus {% endifequal %}"  name="worktable"><a id="id_worktable" href="#">{% trans "EN: 我的工作面板" %}</a></li> {% endblock %}
 								{% for label, app in apps %}
 									{% if "mysite.iaccess"|hasApp %}
 										{% if "mysite"|is_zkaccess_att and not "mysite"|is_contain_att %}
@@ -62,17 +62,17 @@
                         </div>
                     	<div class="headTopRight_t">
                             <ul class="Link_hui font12 noUnderl">
-                                <li class="head_welcome_info">{% trans '欢迎，' %}{{ login_username }}.</li>
-                                {% block option_settings %}<li><span class="btn_option"></span><a id="id_btn_option" href="javascript:void(0);" ref="{{ request.dbapp_url }}option">{% trans "个性设置" %}</a></li>{% endblock %}
+                                <li class="head_welcome_info">{% trans 'EN: 欢迎，' %}{{ login_username }}.</li>
+                                {% block option_settings %}<li><span class="btn_option"></span><a id="id_btn_option" href="javascript:void(0);" ref="{{ request.dbapp_url }}option">{% trans "EN: 个性设置" %}</a></li>{% endblock %}
                                 <li>
 									<span class="btn_help"></span>
 									<div class='floatL btn_help_box' style='position:relative\9;z-index:10\9;'>
 										<ul id="id_help_more" class='nav font12 noUnderl floatL help_more'>
 											<li style="margin-right:0px;">
-												<a class="" href='javascript:void(0)'>{% trans '帮助' %}</a>
+												<a class="" href='javascript:void(0)'>{% trans 'EN: 帮助' %}</a>
 												<ul class="help_more_list clearL">
-													<li><a id="id_btn_help" href="" target="_blank">{% trans '系统手册' %}</a></li>
-													<li><a id="id_copy_right" href="javascript:void(0);">{% trans '关于' %} {% if "mysite.att&mysite.iaccess"|hasApp %}{% if "mysite"|is_zkaccess_att %}{% if "mysite"|is_oem %}Access{% else %}ZKAccess{% endif %}{% else %}{% if "mysite"|is_oem %}ECO{% else %}ZKECO{% endif %}{% endif %}{% else %}{% if "mysite.att"|hasApp %}{% if "mysite"|is_oem %}Attendance{% else %}ZKTime{% endif %}{% else %}{% if "mysite"|is_oem %}Access{% else %}ZKAccess{% endif %}{% endif %}{% endif %}</a></li>
+													<li><a id="id_btn_help" href="" target="_blank">{% trans 'EN: 系统手册' %}</a></li>
+													<li><a id="id_copy_right" href="javascript:void(0);">{% trans 'EN: 关于' %} {% if "mysite.att&mysite.iaccess"|hasApp %}{% if "mysite"|is_zkaccess_att %}{% if "mysite"|is_oem %}Access{% else %}ZKAccess{% endif %}{% else %}{% if "mysite"|is_oem %}ECO{% else %}ZKECO{% endif %}{% endif %}{% else %}{% if "mysite.att"|hasApp %}{% if "mysite"|is_oem %}Attendance{% else %}ZKTime{% endif %}{% else %}{% if "mysite"|is_oem %}Access{% else %}ZKAccess{% endif %}{% endif %}{% endif %}</a></li>
 												</ul>
 											</li>
 										</ul>
@@ -80,11 +80,11 @@
 								</li>
 								<li>
 									<span class="btn_changePW"></span>
-									{% block change_pwd %}<a id="id_btn_changePW" href='javascript:void(0);' ref="/{{request.surl }}accounts/password_change/">{% trans '修改密码' %}</a> {% endblock %}
+									{% block change_pwd %}<a id="id_btn_changePW" href='javascript:void(0);' ref="/{{request.surl }}accounts/password_change/">{% trans 'EN: 修改密码' %}</a> {% endblock %}
 								</li>
                                 <li>
 									<span class="btn_logout"></span>
-									<a id="id_btn_logout" href="javascript:void(0);" ref="/{{request.surl }}accounts/logout/">{% trans '注销' %}</a>
+									<a id="id_btn_logout" href="javascript:void(0);" ref="/{{request.surl }}accounts/logout/">{% trans 'EN: 注销' %}</a>
 								</li>
                             </ul>
                         </div>
@@ -113,12 +113,12 @@
 				</ul>
 				<div class="tabBodyR">
 					<ul id="nav"  class="nav Link_tabs font12 noUnderl" style="display:none;">
-						<li class="NavMore">{% trans '更多' %}...<br /><ul class="menu_more"></ul></li>
+						<li class="NavMore">{% trans 'More' %}...<br /><ul class="menu_more"></ul></li>
 					</ul>
 				</div>
 			</div>
 			<!--<div id="id_loading"  class="displayN tabBodyR_loading nowrap">
-				<img src="{{ MEDIA_URL }}/images/loading.gif" align="top" /> {% trans "正在处理中..." %}
+				<img src="{{ MEDIA_URL }}/images/loading.gif" align="top" /> {% trans "EN: 正在处理中..." %}
 			</div>-->
 				<div class="spacerT"><img src="/media/images/spacer.gif" width="887px" height="0px" /></div>
 			</div>
@@ -140,7 +140,7 @@
 	<div id="error_tooltip" style="display:none"> </div>
 	<div class="sys_Message" style="display:none">
 		<div class="sys_Message_l"></div>
-		<div class="sys_Message_m">{% trans "设置成功!" %}</div>
+		<div class="sys_Message_m">{% trans "EN: 设置成功!" %}</div>
 		<div class="sys_Message_r"></div>
 	</div>
 	<input type="hidden" id="id_sys_type" value='{% if "mysite.att&mysite.iaccess"|hasApp %}zkeco{% else %}{% if "mysite.att"|hasApp %}zktime{% else %}zkaccess{% endif %}{% endif %}'/>

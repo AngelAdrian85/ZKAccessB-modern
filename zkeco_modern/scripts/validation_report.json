@@ -39,18 +39,18 @@
       "file": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\templates\\rtmonitor.html",
       "partial": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\sanitized_fixed\\zkeco\\units\\adms\\mysite\\templates\\rtmonitor.html.partial.html",
       "patch": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\patches\\zkeco\\units\\adms\\mysite\\templates\\rtmonitor.html.partial.html"
+    },
+    {
+      "file": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\templates\\setoption.html",
+      "partial": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\sanitized_fixed\\zkeco\\units\\adms\\mysite\\templates\\setoption.html.partial.html",
+      "patch": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\patches\\zkeco\\units\\adms\\mysite\\templates\\setoption.html.partial.html"
     }
   ],
   "failed": [
     {
       "file": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\templates\\data_list.html",
       "partial": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\sanitized_fixed\\zkeco\\units\\adms\\mysite\\templates\\data_list.html.partial.html",
-      "error": "'dbapp_tags' is not a registered tag library. Must be one of:\n"
-    },
-    {
-      "file": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\templates\\setoption.html",
-      "partial": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\sanitized_fixed\\zkeco\\units\\adms\\mysite\\templates\\setoption.html.partial.html",
-      "error": "Invalid block tag on line 45: 'trans', expected 'endblock'. Did you forget to register or load this tag?"
+      "error": "The translation infrastructure cannot be initialized before the apps registry is ready. Check that you don't make non-lazy gettext calls at import time."
     }
   ]
 }

@@ -1,0 +1,147 @@
+
+
+<!--<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">-->
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-us" xml:lang="en-us" >
+<head>
+	<title> 
+	 
+		&rsaquo;
+		
+			EN: 详情
+		
+	
+	</title>
+	
+<link rel="stylesheet" type="text/css" href="/media//css/menu.css" media="screen" />
+<link rel="stylesheet" type="text/css" href="/media//css/base.css" />
+
+<link rel="stylesheet" type="text/css" href="/media//css/jquery.clockpick.css" />
+<link rel="stylesheet" type="text/css" href="/media//css/sf.css" media="screen" />
+<link href="/media//css/css.css" rel="stylesheet" />
+<link href="/media//css/tabs.css" rel="stylesheet" />
+<link rel="stylesheet" type="text/css" href="/media//css/jquery.treeview.css" />
+<link rel="stylesheet" type="text/css" href="/media//css/datepiker.css" media="screen" />
+<link rel="stylesheet" type="text/css" href="/media//themes//css/skin.css" media="screen" />
+
+
+
+	
+<script src="/media//jslib/appconfig.js"> </script>
+<script src="/media//jslib/i18n.js"></script>
+<script src="/media//jslib/jquery.js"></script>
+<script src="/media//jslib/jquery.validate.js"></script>
+<script src="/media//jslib/i18n_en-us.js"></script>
+
+
+
+
+
+<script src="/media//jslib/jquery.plus.js"></script>
+<script src="/media//jslib/jquery.zcommon.js"></script>
+<script src="/media//jslib/widgets.js"></script>
+<script src="/media//jslib/jquery.tools.min.js"></script>
+
+<script src="/media//jslib/jquery.zgrid.js"></script>
+<script src="/media//jslib/datalist.js"></script>
+<script src="/media//jslib/datalistadd.js"></script>
+<script src="/media//jslib/report_design.js"></script>
+
+
+	
+	
+</head>
+<body>
+<!-- request.is_ajax-->
+
+	<div style="margin:0px;padding:0px;">
+	
+		<form method="post" onkeydown="if(event.keyCode==13){return false;}"  id="id_edit_form" enctype="multipart/form-data">
+			<input type="hidden" id="id_model_pk" name="pk" value="" />
+			<input type="hidden" id="id_model_info"  app_label=""  model_name=""/>
+			 
+			<div id="id_span_title" class="portlet-header sfActive">
+				<span title="EN: 关闭" class="ui-icon ui-icon-closethick cursorP"></span>
+				<span title="EN: 临时保存" class="ui-icon ui-icon-circle-arrow-s cursorP"></span>
+				<!--<span class="floatR"><a href="/system/help/?p=/file/en-us/help/.html" target="_blank" title="EN: 当前页帮助" class="icon_help_current"></a></span>-->
+				<span class='icon_SiteMap'>&nbsp;</span>EN: 当前位置：
+					 
+						<span id="id_rel_log">
+						-> ->
+					
+
+					
+						EN: 详情
+					
+						</span>
+			</div>
+			<!-- title -->
+
+			
+			<div class="form_help">
+			
+			<div id="id_help" style="text-align: right;">
+				
+				<a href='javascript:void(0);' ref="/media//help/en-us//#detail"  ></a>
+				
+			</div>
+			<div class="clear"></div>
+			</div>
+			<!-- help_panel -->
+
+			
+			
+			<div class="form_operation">
+			</div>
+			
+			<!--operation_panel-->
+
+			<table cellpadding="3" style="margin:0px 10px 0px 10px; position:relative;" class="tbl_data_edit">
+			<tr><td clospan="6">
+			<div id="id_tabs">
+			
+
+			
+			</div>
+			</td></tr>
+
+			<tr id="pre_addition_fields"></tr>
+
+			
+			
+			<!-- form -->
+
+			<tr id="addition_fields"></tr>
+			</table>
+
+			
+			
+			
+
+
+		</form>
+
+		<input type="hidden" id="id_query_str" value=""/>
+
+		<div id="id_info"><div>
+		<script>
+			
+    
+
+			var $form=$("#id_edit_form");
+			render_widgets($form);
+			
+			
+			after_process=function()
+			{
+				$("#id_edit_form input[id^='id_']:first").focus();
+			}
+			
+		</script>
+		
+	</div>
+	<!-- content ???-->
+
+</body></html>
+
+

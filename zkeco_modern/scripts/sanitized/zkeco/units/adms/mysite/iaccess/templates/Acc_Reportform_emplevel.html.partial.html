@@ -1,35 +1,35 @@
-{% extends "Acc_Reportform.html" %}
-{% load i18n %}
+{# extends "Acc_Reportform.html" #}
+{# load i18n #}
 
-{% block search_div %}
+{# block search_div #}
     <div id="id_search" class="div_box" style="margin-bottom:0px !important; padding-bottom:2px;">
-        <h1 style="margin-bottom:5px;">{% trans "查询" %}</h1>
+        <h1 style="margin-bottom:5px;">{# trans "查询" #}</h1>
         <table style="width:99%;">
         <tr>
             <td>
                 <div id="id_div_query_acclevelset">
-                   {{ searchform_AccLevelSet }}
+                   &#123;&#123; searchform_AccLevelSet &#125;&#125;
                 </div> 
                 <div id="id_div_query_accdoor" style="display:None;">
-                   {{ searchform_AccDoor }}
+                   &#123;&#123; searchform_AccDoor &#125;&#125;
                 </div>
                 <div id="id_div_query_employee" style="display:None;">
-                   {{ searchform_Employee }}
+                   &#123;&#123; searchform_Employee &#125;&#125;
                 </div>
             </td>
             <td width="160" valign="bottom">  
                 <div style="text-align:right;width:160px;" class="topSearchBtn"><!--height:20px;-->
                    
                     <span class="Link_blue1">
-                        <span class="action_topSearch floatL"></span><a href="javascript:void(0)" id="id_header_search" class="floatL">{% trans "查询" %}</a>
+                        <span class="action_topSearch floatL"></span><a href="javascript:void(0)" id="id_header_search" class="floatL">{# trans "查询" #}</a>
                     </span>
-                   <!-- {% block advance_search %}
+                   <!-- {# block advance_search #}
                     <span class="Link_blue1" id="id_advanced_search" >
-                        <span class="action_advancedSearch floatL"></span><a href="javascript:void(0)" class="floatL">{% trans "高级" %}</a>
+                        <span class="action_advancedSearch floatL"></span><a href="javascript:void(0)" class="floatL">{# trans "高级" #}</a>
                     </span> 
-                    {% endblock %}--> 
+                    {# endblock #}--> 
                     <span class="Link_blue1">
-                        <span class="action_topClear floatL"></span><a href="javascript:void(0)" id="id_header_clear" class="floatL">{% trans "清除" %}</a>
+                        <span class="action_topClear floatL"></span><a href="javascript:void(0)" id="id_header_clear" class="floatL">{# trans "清除" #}</a>
                     </span>
                     <div class="clear"></div>
                 </div>
@@ -37,10 +37,10 @@
         </tr>
         </table>
     </div>
- {% endblock %}
+ {# endblock #}
 
-{% block id_main_div %}
-    {% if request.user|HasPerm:"contenttypes.can_EmpLevelByLevelPage" %}
+{# block id_main_div #}
+    {# if request.user|HasPerm:"contenttypes.can_EmpLevelByLevelPage" #}
     <div><li id="id_model_export" style="display:none"><a class="action_Model_Export" href="javascript:void(0)" alt="export"></a></li></div>
 	<li id="id_radio" style="margin:10px 10px 10px 10px;">
         	<input type="radio" Checked="true" name="name_radio1" id="id_radio_level" value="0"/> <label id="lab_radio_level"></label>
@@ -53,14 +53,14 @@
 		</div>
 		<!-- 对应人员列表 -->
         
-		<div id="id_extend" class="div_box" style="float:right; width:48%; margin:0px 10px 0px 0px;_margin:0px 5px 0px 0px;"><h1 style="width:80%">{% trans "浏览指定权限组的人员" %}</h1>
+		<div id="id_extend" class="div_box" style="float:right; width:48%; margin:0px 10px 0px 0px;_margin:0px 5px 0px 0px;"><h1 style="width:80%">{# trans "浏览指定权限组的人员" #}</h1>
 		</div>
     </div>
-    {% endif %}<!--contenttypes.can_EmpLevelByLevelPage-->
-{% endblock %}
+    {# endif #}<!--contenttypes.can_EmpLevelByLevelPage-->
+{# endblock #}
 
-{% block getdatalist %}
-    {% if request.user|HasPerm:"contenttypes.can_EmpLevelByLevelPage" %}
+{# block getdatalist #}
+    {# if request.user|HasPerm:"contenttypes.can_EmpLevelByLevelPage" #}
     $("#id_datalist h1").text(gettext("权限组列表"));
     
     $("#lab_radio_level").text(gettext("以权限组查询"))
@@ -135,7 +135,7 @@
     
     
     $("#id_datalist").model_grid({
-        "model_url": "{{ dbapp_url }}iaccess/AccLevelSet/",
+        "model_url": "&#123;&#123; dbapp_url &#125;&#125;iaccess/AccLevelSet/",
         "model_actions": false,
         "object_actions": true,
         "fields_show": ['level_name','level_timeseg','emp_count'],
@@ -172,7 +172,7 @@
             }
             
             $("#id_extend").model_grid({
-                "model_url": "{{ dbapp_url }}personnel/Employee/",
+                "model_url": "&#123;&#123; dbapp_url &#125;&#125;personnel/Employee/",
                 "init_query": init_query,
                 "need_plus_sign": false,
                 "model_actions": false,
@@ -223,7 +223,7 @@
             	$("#id_div_query_accdoor").css("display","none");
             	$("#id_div_query_employee").css("display","none");
             	var datalist_grid = $('#id_datalist').get(0).g;
-            	datalist_grid.model_url = "{{ dbapp_url }}iaccess/AccLevelSet/";
+            	datalist_grid.model_url = "&#123;&#123; dbapp_url &#125;&#125;iaccess/AccLevelSet/";
             	datalist_grid.init_query = [];
             	datalist_grid.base_query = [];
             	datalist_grid.sort_fields = [];
@@ -232,7 +232,7 @@
             	datalist_grid.fields_show = ['level_name','level_timeseg','emp_count'];
             	
             	var extend_grid = $('#id_extend').get(0).g;
-            	extend_grid.model_url = "{{ dbapp_url }}personnel/Employee/";
+            	extend_grid.model_url = "&#123;&#123; dbapp_url &#125;&#125;personnel/Employee/";
                	extend_grid.fields_show = ['PIN','EName','lastname','DeptID.name','Card'];
                	extend_grid.sort_fields = ["PIN"];
                	extend_grid.init_query = [];
@@ -253,7 +253,7 @@
         		$("#id_div_query_employee").css("display","none");
             	$("#id_div_query_accdoor").css("display","");
             	var datalist_grid = $('#id_datalist').get(0).g;
-            	datalist_grid.model_url = "{{ dbapp_url }}iaccess/AccDoor/";
+            	datalist_grid.model_url = "&#123;&#123; dbapp_url &#125;&#125;iaccess/AccDoor/";
             	datalist_grid.init_query = [];
             	datalist_grid.base_query = [];
             	datalist_grid.fields_show = ['device.alias','door_name','door_no'];
@@ -262,7 +262,7 @@
             	datalist_grid.row_operations = [];
             	
             	var extend_grid = $('#id_extend').get(0).g;
-            	extend_grid.model_url = "{{ dbapp_url }}personnel/Employee/";
+            	extend_grid.model_url = "&#123;&#123; dbapp_url &#125;&#125;personnel/Employee/";
                	extend_grid.fields_show = ['PIN','EName','lastname','DeptID.name','Card'];
                	extend_grid.sort_fields = ["PIN"];
                	extend_grid.init_query = [];
@@ -280,7 +280,7 @@
             	$("#id_div_query_accdoor").css("display","none");
             	
             	var datalist_grid = $('#id_datalist').get(0).g;
-            	datalist_grid.model_url = "{{ dbapp_url }}personnel/Employee/";
+            	datalist_grid.model_url = "&#123;&#123; dbapp_url &#125;&#125;personnel/Employee/";
             	datalist_grid.sort_fields = ["PIN"],
                 datalist_grid.init_query = [];
             	datalist_grid.fields_show = ['PIN','EName','lastname','DeptID.name','Card'];
@@ -288,7 +288,7 @@
             	datalist_grid.row_operations = [];
                 
             	var extend_grid = $('#id_extend').get(0).g;
-            	extend_grid.model_url = "{{ dbapp_url }}iaccess/AccDoor/";
+            	extend_grid.model_url = "&#123;&#123; dbapp_url &#125;&#125;iaccess/AccDoor/";
                 extend_grid.fields_show = ['device.alias','door_name','door_no'];
                 extend_grid.sort_fields = ["door_no"];
                 extend_grid.init_query = [];
@@ -306,13 +306,13 @@
             onclick_left();
         }
     });
-    {% else %}
+    {# else #}
         $("#id_search").remove();
         alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
-        window.location.href="/{{ request.surl }}accounts/login/";
-    {% endif %}<!--contenttypes.can_EmpLevelByLevelPage-->
-{% endblock %}
+        window.location.href="/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+    {# endif #}<!--contenttypes.can_EmpLevelByLevelPage-->
+{# endblock #}
 
-{% block addjs %}
+{# block addjs #}
 //不需要视频相关
-{% endblock %}
+{# endblock #}

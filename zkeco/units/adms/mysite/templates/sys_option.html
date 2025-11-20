@@ -16,8 +16,8 @@
                 msg_dialog.append("<div id='id_ret_info' class='ret_info'></div>"); 
             }
             
-            var btns='<button class="btn" id="id_Cancel" type="button">{% trans "取消" %}</button>'
-                    +'<button class="btn" id="id_OK" type="button">{% trans "确定" %}</button>'
+            var btns='<button class="btn" id="id_Cancel" type="button">{% trans "EN: 取消" %}</button>'
+                    +'<button class="btn" id="id_OK" type="button">{% trans "EN: 确定" %}</button>'
             var $form=msg_dialog.find("form");
             $form.append(btns);
             $("#id_span_title",msg_dialog).find("span:not(.icon_SiteMap)").remove();

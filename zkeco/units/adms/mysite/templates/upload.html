@@ -3,10 +3,10 @@
 {% load i18n %}
 {% block breadcrumbs %}
 <div class="breadcrumbs">
-	<a href="/">{%trans "首页"%}</a> &rsaquo;
-	{%trans "上传导出到U盘的数据"%}
+	<a href="/">{%trans "EN: 首页"%}</a> &rsaquo;
+	{%trans "EN: 上传导出到U盘的数据"%}
 </div>
-<br/><br/><h1>&nbsp;&nbsp;&nbsp;{%trans "上传导出到U盘的数据"%}</h1>
+<br/><br/><h1>&nbsp;&nbsp;&nbsp;{%trans "EN: 上传导出到U盘的数据"%}</h1>
 {% endblock %}
 
 {% block extrahead %}
@@ -20,13 +20,13 @@ function setSN() {
 }
 $(function(){
 	$("#aGetSN").click(function(){
-		createDialog(setSN, setSN, "../data/iclock/miniData?key=SN", "{%trans "请选择考勤机"%}", "{%trans '设备'%}", 350);
+		createDialog(setSN, setSN, "../data/iclock/miniData?key=SN", "{%trans "EN: 请选择考勤机"%}", "{%trans 'EN: 设备'%}", 350);
 	});
 });
 
 function checkform() {
 	if (document.getElementById("txtSN").value == "") {
-		alert("{%trans "请选择考勤机"%}");
+		alert("{%trans "EN: 请选择考勤机"%}");
 		return false;
 	}
 	if (document.getElementById("fileUser").value == ""
@@ -36,7 +36,7 @@ function checkform() {
 			return false;
 	}
 	if (document.getElementById("fileUser").value == "" && document.getElementById("fileFptemp").value != "") {
-		alert("{%trans '如果您打算上传指纹模版，请同时上传用户信息'%}");
+		alert("{%trans 'EN: 如果您打算上传指纹模版，请同时上传用户信息'%}");
 		return false;
 	}
 }
@@ -48,31 +48,31 @@ function checkform() {
 <form id="form1" action="" method="POST" enctype="multipart/form-data">
 <table width="800px" border="1">
 	<tr>
-		<th width="220px">{%trans "设备管理"%}</th><th width="100px">{%trans "文件类型"%}</th><th>{%trans "选择文件"%}</th>
+		<th width="220px">{%trans "EN: 设备管理"%}</th><th width="100px">{%trans "EN: 文件类型"%}</th><th>{%trans "EN: 选择文件"%}</th>
 	</tr>
 	<tr class="row1">
 		<td rowspan="3">
 			<input type="text" name="SN" id="txtSN" value="" readonly /> <br />
-			&nbsp;&nbsp;<a href="javascript:void(0)"" id="aGetSN">[{%trans "选择考勤机"%}]</a><br />
+			&nbsp;&nbsp;<a href="javascript:void(0)"" id="aGetSN">[{%trans "EN: 选择考勤机"%}]</a><br />
 			&nbsp;&nbsp;
-      {%trans '这里设定要上传的数据文件是从哪个考勤机下载到U盘的'%}
+      {%trans 'EN: 这里设定要上传的数据文件是从哪个考勤机下载到U盘的'%}
 		</td>
-		<td>{%trans "考勤记录文件"%}</td>
+		<td>{%trans "EN: 考勤记录文件"%}</td>
 		<td><input type="file" name="file_transaction"" id="fileTransaction" />&nbsp;&nbsp;1_attlog.dat</td>
 	</tr>
 	<tr class="row2">
-		<td>{%trans "用户信息文件"%}</td>
+		<td>{%trans "EN: 用户信息文件"%}</td>
 		<td><input type="file" name="file_user" id="fileUser" />&nbsp;&nbsp;user.dat</td>
 	</tr>
 	<tr class="row1">
-		<td>{%trans "指纹模版文件"%}</td>
+		<td>{%trans "EN: 指纹模版文件"%}</td>
 		<td>
 			<input type="file" name="file_fptemp" id="fileFptemp" />&nbsp;&nbsp;template.dat
-			<br />{%trans "如果上传指纹模版，必须同时上传相关的用户信息文件" %}
+			<br />{%trans "EN: 如果上传指纹模版，必须同时上传相关的用户信息文件" %}
 		</td>
 	</tr>
 	<tr class="row2">
-		<td colspan="3">&nbsp;&nbsp;&nbsp;<input type="submit" name="submit" value="{%trans "上传文件"%}" onclick="return checkform();"/></td>
+		<td colspan="3">&nbsp;&nbsp;&nbsp;<input type="submit" name="submit" value="{%trans "EN: 上传文件"%}" onclick="return checkform();"/></td>
 	</tr>
 </table>
 </form>

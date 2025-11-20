@@ -22,7 +22,7 @@ background-color: #ade;
 {% block content %}
 <h3><img src="/media/img/folderclose.gif">&nbsp;&nbsp;<a href="../">[ .. ]</a></h3>
 <div class='catabar'>
-<h3>{%trans "成功的验证"%}</h3>
+<h3>{%trans "EN: 成功的验证"%}</h3>
 {% for file in files %}
 {% if file.0.1 %}
 <div class="pic"><a href="{{ file.2 }}"><img src="{{ file.1 }}"><br>{{ file.0.1 }}<br/>{{ file.0.0 }}</a></div>
@@ -30,7 +30,7 @@ background-color: #ade;
 {% endfor %}
 </div>
 <div class='catabar'>
-<h3>{%trans "失败的验证"%}</h3>
+<h3>{%trans "EN: 失败的验证"%}</h3>
 {% for file in files %}
 {% if not file.0.1 %}
 <div class="pic"><a href="{{ file.2 }}"><img src="{{ file.1 }}"><br>{{ file.0.0 }}</a></div>
@@ -41,5 +41,5 @@ background-color: #ade;
 <br />
 <p style="clear: left;">&nbsp;</p>
 
-<input type="submit" value="{% trans '返回' %}" onclick="window.history.back(); return false;">
+<input type="submit" value="{% trans 'EN: 返回' %}" onclick="window.history.back(); return false;">
 {% endblock %}

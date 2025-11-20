@@ -1,30 +1,30 @@
-{% extends "data_list.html" %}
-{% load i18n %}
-{% block headjs %}
+{# extends "data_list.html" #}
+{# load i18n #}
+{# block headjs #}
 <script></script>
-{% endblock %}
-{% block getdatalist %}
-{% endblock %}
+{# endblock #}
+{# block getdatalist #}
+{# endblock #}
 
 
-{% block export %}
-	{% if request.user|HasPerm:"att.dataexport_attreport" %}
+{# block export #}
+	{# if request.user|HasPerm:"att.dataexport_attreport" #}
 		<li id="id_li_export">
-			<div id="id_model_export"><a href="javascript:void(0)"><span class="action_export"></span>{% trans "导出" %}</a></div>
+			<div id="id_model_export"><a href="javascript:void(0)"><span class="action_export"></span>{# trans "导出" #}</a></div>
 			<div class='div_leftBottomLine'></div>
 		</li>    
-   {% endif %} 
-{% endblock %}
+   {# endif #} 
+{# endblock #}
 
 
-{% block addjs %}
-var dbapp_url="{{ dbapp_url }}";
+{# block addjs #}
+var dbapp_url="&#123;&#123; dbapp_url &#125;&#125;";
 
 function getPubOpt(app,model,where)
 {
 	var pubopt={
-		dbapp_url:"{{ dbapp_url }}", 
-		model_url:"{{ dbapp_url }}"+app+"/"+model+"/",                      //根目录地址
+		dbapp_url:"&#123;&#123; dbapp_url &#125;&#125;", 
+		model_url:"&#123;&#123; dbapp_url &#125;&#125;"+app+"/"+model+"/",                      //根目录地址
 		record_per_page: 15,                 //每页记录数
 		max_no_page: 50,                 //记录数少于该数据时，不分页显示
 		row_operations: false,               //对象操作true表示全部显示(默认)，false表示全部不显示，对象表示操作["New","Delete",["Leave",...]]
@@ -181,25 +181,25 @@ function getDataOpt2(datajson,url)
 }
 
 
-{% endblock %}
+{# endblock #}
 
 
-{% block op_for_tab %}
+{# block op_for_tab #}
 	<ul>
-		{% if request.user|HasPerm:"att.opaddmanycheckexact_checkexact" %}
-		<li id="id_checkforget"><a href="javascript:void(0)"><span class="action_OpAddCheckExact"></span>{% trans '补签卡' %}</a><div class='div_leftBottomLine'></div></li>
-		{% endif %}
-		{% if request.user|HasPerm:"att.opaddmanyuserid_empspecday" %}
-		<li id="id_leave"><a href="javascript:void(0)"><span class="action_leave"></span>{% trans '补请假' %}</a><div class='div_leftBottomLine'></div></li>
-		{% endif %}
-		{% if request.user|HasPerm:"att.opaddtempshifts_user_of_run" %}
-		<li id="id_tmpshifts"><a href="javascript:void(0)"><span class="action_OpAddTempShifts"></span>{% trans '临时排班' %}</a><div class='div_leftBottomLine'></div></li>
-		{% endif %}
-		{% if request.user|HasPerm:"att.opadduserofrun_user_of_run" %}
-		<li id="id_li_shifts"><a href="javascript:void(0)"><span class="action_AddUserOfRun"></span>{% trans '新增排班' %}</a><div class='div_leftBottomLine'></div></li>
-		{% endif %}
+		{# if request.user|HasPerm:"att.opaddmanycheckexact_checkexact" #}
+		<li id="id_checkforget"><a href="javascript:void(0)"><span class="action_OpAddCheckExact"></span>{# trans '补签卡' #}</a><div class='div_leftBottomLine'></div></li>
+		{# endif #}
+		{# if request.user|HasPerm:"att.opaddmanyuserid_empspecday" #}
+		<li id="id_leave"><a href="javascript:void(0)"><span class="action_leave"></span>{# trans '补请假' #}</a><div class='div_leftBottomLine'></div></li>
+		{# endif #}
+		{# if request.user|HasPerm:"att.opaddtempshifts_user_of_run" #}
+		<li id="id_tmpshifts"><a href="javascript:void(0)"><span class="action_OpAddTempShifts"></span>{# trans '临时排班' #}</a><div class='div_leftBottomLine'></div></li>
+		{# endif #}
+		{# if request.user|HasPerm:"att.opadduserofrun_user_of_run" #}
+		<li id="id_li_shifts"><a href="javascript:void(0)"><span class="action_AddUserOfRun"></span>{# trans '新增排班' #}</a><div class='div_leftBottomLine'></div></li>
+		{# endif #}
 	</ul>
-{% endblock %}
+{# endblock #}
 
 <style>
 .calculatediv{
@@ -209,7 +209,7 @@ function getDataOpt2(datajson,url)
 
 
 </style>
-{% block content %}
+{# block content #}
 <div style="margin:0px 10px 10px 10px;">
 <input type="hidden" id="id_current_report" value="1" />
 <div id="id_divsearch" class="calculate_divsearch">
@@ -218,12 +218,12 @@ function getDataOpt2(datajson,url)
     <form id="id_calculateform" method="post">
     	<table>
     	<tr>
-		{% if request.user|HasPerm:"att.calculate_attreport" %}
-			<td>{% trans '开始日期' %}</td><td><input type="text" class="wZBaseDateField dp-applied" readonly="True" name="ComeTime" id="id_cometime"/></td>
-			<td>{% trans '结束日期' %}</td><td><input type="text" class="wZBaseDateField dp-applied" readonly="True" name="EndTime" id="id_endtime"/></td>
-			<td><div style="margin:-3px 0px 0px 5px;"><span class="action_Search">&nbsp;</span><a id="id_query" href="#" class="Link_blue1" >{% trans '查询' %}</a></div></td>
-			<td><div style="margin:-3px 0px 0px 5px;"><span class="action_calculate">&nbsp;</span><a id="id_calculate" href="javascript:void(0)" class="Link_blue1">{% trans '统计' %}</a></div></td>
-        {% endif %}
+		{# if request.user|HasPerm:"att.calculate_attreport" #}
+			<td>{# trans '开始日期' #}</td><td><input type="text" class="wZBaseDateField dp-applied" readonly="True" name="ComeTime" id="id_cometime"/></td>
+			<td>{# trans '结束日期' #}</td><td><input type="text" class="wZBaseDateField dp-applied" readonly="True" name="EndTime" id="id_endtime"/></td>
+			<td><div style="margin:-3px 0px 0px 5px;"><span class="action_Search">&nbsp;</span><a id="id_query" href="#" class="Link_blue1" >{# trans '查询' #}</a></div></td>
+			<td><div style="margin:-3px 0px 0px 5px;"><span class="action_calculate">&nbsp;</span><a id="id_calculate" href="javascript:void(0)" class="Link_blue1">{# trans '统计' #}</a></div></td>
+        {# endif #}
         
 		</tr>
 		<tr><td colspan="3">
@@ -239,34 +239,34 @@ function getDataOpt2(datajson,url)
 <div id="calculatetabs" style="width:860px;"><!--height:440px;overflower:auto-->
 
 	    <ul class="tabs">
-	     {% if request.user|HasPerm:"att.calcresultdetail_attreport" %}
-          <li><a href="#caltabs-1" onClick="AttRecAbnormite('')">{% trans '统计结果详情' %}</a></li>
-         {% endif %}
-         {% if request.user|HasPerm:"att.earchdayattreport_attreport" %}
-          <li><a href="#caltabs-2" onClick="DailyReport('')">{% trans '每日考勤统计表' %}</a></li>
-         {% endif %}
-         {% if request.user|HasPerm:"att.exceptionreport_attreport" %}
-          <li><a href="#caltabs-3" onClick="AttShifts('')">{% trans '考勤明细表' %}</a></li>
-          {% endif %}
-         {% if request.user|HasPerm:"att.otherexceptionreport_attreport" %}
-          <li><a href="#caltabs-4" onClick="AttException('')">{% trans '请假明细表' %}</a></li>
-          {% endif %}
-         {% if request.user|HasPerm:"att.calctotalreport_attreport" %}
-          <li><a href="#caltabs-5" onClick="CalculateReport('')">{% trans '考勤汇总表' %}</a></li>
-          {% endif %}
-         {% if request.user|HasPerm:"att.orgbrushrecord_attreport" %}
-		  <li><a href="#caltabs-6" onClick="OrignalRecord('')">{% trans '原始记录表' %}</a></li>
-		  {% endif %}
-         {% if request.user|HasPerm:"att.checkexact_attreport" %}
-		  <li><a href="#caltabs-7" onClick="CheckForget('')">{% trans '补签卡表' %}</a></li>
-		  {% endif %}
-         {% if request.user|HasPerm:"att.leavetotalreport_attreport" %}
-		  <li><a href="#caltabs-8" onClick="LeaveReport('')">{% trans '请假汇总表' %}</a></li>
-		  {% endif %}
+	     {# if request.user|HasPerm:"att.calcresultdetail_attreport" #}
+          <li><a href="#caltabs-1" onClick="AttRecAbnormite('')">{# trans '统计结果详情' #}</a></li>
+         {# endif #}
+         {# if request.user|HasPerm:"att.earchdayattreport_attreport" #}
+          <li><a href="#caltabs-2" onClick="DailyReport('')">{# trans '每日考勤统计表' #}</a></li>
+         {# endif #}
+         {# if request.user|HasPerm:"att.exceptionreport_attreport" #}
+          <li><a href="#caltabs-3" onClick="AttShifts('')">{# trans '考勤明细表' #}</a></li>
+          {# endif #}
+         {# if request.user|HasPerm:"att.otherexceptionreport_attreport" #}
+          <li><a href="#caltabs-4" onClick="AttException('')">{# trans '请假明细表' #}</a></li>
+          {# endif #}
+         {# if request.user|HasPerm:"att.calctotalreport_attreport" #}
+          <li><a href="#caltabs-5" onClick="CalculateReport('')">{# trans '考勤汇总表' #}</a></li>
+          {# endif #}
+         {# if request.user|HasPerm:"att.orgbrushrecord_attreport" #}
+		  <li><a href="#caltabs-6" onClick="OrignalRecord('')">{# trans '原始记录表' #}</a></li>
+		  {# endif #}
+         {# if request.user|HasPerm:"att.checkexact_attreport" #}
+		  <li><a href="#caltabs-7" onClick="CheckForget('')">{# trans '补签卡表' #}</a></li>
+		  {# endif #}
+         {# if request.user|HasPerm:"att.leavetotalreport_attreport" #}
+		  <li><a href="#caltabs-8" onClick="LeaveReport('')">{# trans '请假汇总表' #}</a></li>
+		  {# endif #}
 		
-		{% if request.user|HasPerm:"att.calctotalreport_attreport" %}
-			<li><a href="#caltabs-9" onClick="LEReport('')">{% trans '汇总最早与最晚' %}</a></li>
-		{% endif %}
+		{# if request.user|HasPerm:"att.calctotalreport_attreport" #}
+			<li><a href="#caltabs-9" onClick="LEReport('')">{# trans '汇总最早与最晚' #}</a></li>
+		{# endif #}
 		
 		
 	    </ul>
@@ -319,4 +319,4 @@ function getDataOpt2(datajson,url)
 </div>
 </div>
 <div id="id_attexcept_desc"></div>
-{% endblock %}
+{# endblock #}

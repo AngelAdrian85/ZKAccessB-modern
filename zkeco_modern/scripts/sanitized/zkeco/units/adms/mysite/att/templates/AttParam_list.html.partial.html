@@ -1,17 +1,17 @@
-{% extends "data_list.html" %}
-{% load i18n %}
-{% block content %}
+{# extends "data_list.html" #}
+{# load i18n #}
+{# block content #}
 <div id="content" ></div>
 
-{% endblock %}
-{% block getdatalist %}
-{% endblock %}
+{# endblock #}
+{# block getdatalist #}
+{# endblock #}
 
-{% block op_for_tab %}
-{% endblock %}
-{% block export %}
-{% endblock %}
-{% block addjs %}
+{# block op_for_tab #}
+{# endblock #}
+{# block export #}
+{# endblock #}
+{# block addjs #}
 
 var lClass;
 $(function(){
@@ -25,7 +25,7 @@ function fun_attparam(){
 	$("#content").html("");
 	$.ajax({ 
 	        type: "POST",
-	        url:"{{ dbapp_url }}../att/AttParamSetting/",
+	        url:"&#123;&#123; dbapp_url &#125;&#125;../att/AttParamSetting/",
 	        dataType:"json",
 	        success:function(json){
 	            var arr=json
@@ -46,98 +46,98 @@ function fun_attparam(){
 	
 	            $("#content").html(""
 	            +"<form id='id_edit_form' method='post'><table class='content_tbl attParam' align='left' style='width:97%; margin-left:5px;'><tbody><tr><td>"
-	            +"<div class='div_box1 floatL' style='width:98%'><h2>{% trans '基础设置' %}</h2><table id='tbl1'><tbody>"
+	            +"<div class='div_box1 floatL' style='width:98%'><h2>{# trans '基础设置' #}</h2><table id='tbl1'><tbody>"
 
 	          
 	            +"<tr>"
-                    +"<th><label for='id_MinShiftInterval' class='required'>{% trans '最短的考勤时段应大于:' %}</label></th>"
-                    +"<td><input type='text' maxlength='30' name='MinShiftInterval' id='id_MinShiftInterval' value='"+(arr.MinShiftInterval)+"'/>{% trans '分钟' %}</td>"
+                    +"<th><label for='id_MinShiftInterval' class='required'>{# trans '最短的考勤时段应大于:' #}</label></th>"
+                    +"<td><input type='text' maxlength='30' name='MinShiftInterval' id='id_MinShiftInterval' value='"+(arr.MinShiftInterval)+"'/>{# trans '分钟' #}</td>"
                 +"</tr>"
                 +"<tr>"
                 
-	                +"<th><label for='id_MaxShiftInterval' class='required'>{% trans '最长的考勤时段不超过:' %}</label></th>"
-	                +"<td><input type='text' maxlength='30' name='MaxShiftInterval' id='id_MaxShiftInterval' value='"+(arr.MaxShiftInterval)+"'/>{% trans '分钟' %}</td>"
+	                +"<th><label for='id_MaxShiftInterval' class='required'>{# trans '最长的考勤时段不超过:' #}</label></th>"
+	                +"<td><input type='text' maxlength='30' name='MaxShiftInterval' id='id_MaxShiftInterval' value='"+(arr.MaxShiftInterval)+"'/>{# trans '分钟' #}</td>"
 	            +"</tr>"
 	            +"<tr>"
-	                +"<th><label for='id_MinRecordInterval' class='required'>{% trans '有效考勤记录时间间隔应大于:' %}</label></th>"
-	                +"<td><input type='text' maxlength='30' name='MinRecordInterval' id='id_MinRecordInterval' value='"+(arr.MinRecordInterval)+"'/>{% trans '分钟' %}</td>"
-                    +"<!--<th ><label for='id_TwoDay' class='required'>{% trans '班次时段跨两日时:' %}</label></th>"
-                    +"<td><input  type='radio'  name='TwoDay' id='id_TwoDay0' value='0'/>{% trans '记为第一日' %}<br />"
-                    +"<input  type='radio' name='TwoDay' id='id_TwoDay1' value='1'/>{% trans '记为第二日' %}</td>-->"
+	                +"<th><label for='id_MinRecordInterval' class='required'>{# trans '有效考勤记录时间间隔应大于:' #}</label></th>"
+	                +"<td><input type='text' maxlength='30' name='MinRecordInterval' id='id_MinRecordInterval' value='"+(arr.MinRecordInterval)+"'/>{# trans '分钟' #}</td>"
+                    +"<!--<th ><label for='id_TwoDay' class='required'>{# trans '班次时段跨两日时:' #}</label></th>"
+                    +"<td><input  type='radio'  name='TwoDay' id='id_TwoDay0' value='0'/>{# trans '记为第一日' #}<br />"
+                    +"<input  type='radio' name='TwoDay' id='id_TwoDay1' value='1'/>{# trans '记为第二日' #}</td>-->"
 	                
 	            +"</tr>"
 				
                 +"<tr>"
-					+"<th><label for='id_MaxShiftInterval' class='required'>{% trans '上班签到取卡规则:' %}</label></th>"
+					+"<th><label for='id_MaxShiftInterval' class='required'>{# trans '上班签到取卡规则:' #}</label></th>"
 	                +"<td><select id='TakeCardIn'  name='TakeCardIn' style='*width:136px !important;'>"
-	                +"<option value='1'>{% trans '就近原则' %}</option>"
-	                +"<option value='2'>{% trans '最早原则' %}</option></select>&nbsp;&nbsp;</td>"
+	                +"<option value='1'>{# trans '就近原则' #}</option>"
+	                +"<option value='2'>{# trans '最早原则' #}</option></select>&nbsp;&nbsp;</td>"
 	            +"</tr>"
 
                 +"<tr>"
-	                +"<th><label for='id_MaxShiftInterval' class='required'>{% trans '下班签到取卡规则:' %}</label></th>"
+	                +"<th><label for='id_MaxShiftInterval' class='required'>{# trans '下班签到取卡规则:' #}</label></th>"
 	                +"<td><select id='TakeCardOut'  name='TakeCardOut' style='*width:136px !important;'>"
-	                +"<option value='1'>{% trans '就近原则' %}</option>"
-	                +"<option value='2'>{% trans '最晚原则' %}</option></select>&nbsp;&nbsp;</td>"
+	                +"<option value='1'>{# trans '就近原则' #}</option>"
+	                +"<option value='2'>{# trans '最晚原则' #}</option></select>&nbsp;&nbsp;</td>"
 	            +"</tr>"
 				
 	            +"<!-- <tr>"
-	              +"<th><label for='id_WorkWeekStartDay' class='required'>{% trans '每周从:' %}</label></th>"
-	              +"<td><select id='id_WorkWeekStartDay' name='WorkWeekStartDay'>"+getWeek(arr.WorkWeekStartDay)+"</select>{% trans '开始' %}</td>"
-	              +"<th><label for='id_WorkMonthStartDay' class='required'>{% trans '每月从:' %}</label></th>"
-	              +"<td><select name='WorkMonthStartDay' id='id_WorkMonthStartDay'>"+getDay(arr.WorkMonthStartDay)+"</select>{% trans '开始' %}</td>"
+	              +"<th><label for='id_WorkWeekStartDay' class='required'>{# trans '每周从:' #}</label></th>"
+	              +"<td><select id='id_WorkWeekStartDay' name='WorkWeekStartDay'>"+getWeek(arr.WorkWeekStartDay)+"</select>{# trans '开始' #}</td>"
+	              +"<th><label for='id_WorkMonthStartDay' class='required'>{# trans '每月从:' #}</label></th>"
+	              +"<td><select name='WorkMonthStartDay' id='id_WorkMonthStartDay'>"+getDay(arr.WorkMonthStartDay)+"</select>{# trans '开始' #}</td>"
 	          +"</tr>"
 	            
 	            +"<tr>"
-	                +"<th><label for='id_Out' class='required'>{% trans '外出状态:' %}</label></th>"
-	                +"<td><input  type='radio'  name='OutCheckRecType' id='id_Out0' value='0'/>{% trans '忽略该考勤状态' %}<br />"
-	                +"<input  type='radio'  name='OutCheckRecType' id='id_Out1' value='1' />{% trans '表示为一般外出' %}<br />"
-	                +"<input  type='radio'  name='OutCheckRecType' id='id_Out2' value='2'/>{% trans '表示为因公外出' %}<br />"
-	                +"<input  type='radio'  name='OutCheckRecType' id='id_Out3' value='3' />{% trans '进行审核' %}</td>"
+	                +"<th><label for='id_Out' class='required'>{# trans '外出状态:' #}</label></th>"
+	                +"<td><input  type='radio'  name='OutCheckRecType' id='id_Out0' value='0'/>{# trans '忽略该考勤状态' #}<br />"
+	                +"<input  type='radio'  name='OutCheckRecType' id='id_Out1' value='1' />{# trans '表示为一般外出' #}<br />"
+	                +"<input  type='radio'  name='OutCheckRecType' id='id_Out2' value='2'/>{# trans '表示为因公外出' #}<br />"
+	                +"<input  type='radio'  name='OutCheckRecType' id='id_Out3' value='3' />{# trans '进行审核' #}</td>"
 	
-	                +"<th><label for='id_OT' class='required'>{% trans '加班状态:' %}</label></th>"
-	                +"<td><input type='radio' name='OTCheckRecType' id='id_OT0' value='0'/>{% trans '忽略该考勤状态' %}<br />"
-	                +"<input type='radio' name='OTCheckRecType' id='id_OT1' value='1'/>{% trans '直接记为加班' %}<br />"
-	                +"<input  type='radio'  name='OTCheckRecType' id='id_OT2' value='2' />{% trans '进行审核' %}</td>"
+	                +"<th><label for='id_OT' class='required'>{# trans '加班状态:' #}</label></th>"
+	                +"<td><input type='radio' name='OTCheckRecType' id='id_OT0' value='0'/>{# trans '忽略该考勤状态' #}<br />"
+	                +"<input type='radio' name='OTCheckRecType' id='id_OT1' value='1'/>{# trans '直接记为加班' #}<br />"
+	                +"<input  type='radio'  name='OTCheckRecType' id='id_OT2' value='2' />{# trans '进行审核' #}</td>"
 	            +"</tr> -->"
 	            +"</tbody></table></div></td></tr>"
 	
 	
-	            +"<tr><td><div class='div_box1 floatL' style='width:98%'><h2>{% trans '考勤计算' %}</h2><table id='tbl2'><tbody>"
+	            +"<tr><td><div class='div_box1 floatL' style='width:98%'><h2>{# trans '考勤计算' #}</h2><table id='tbl2'><tbody>"
 	             +"<tr>"
                
-	                +" <!-- <th width='240px' style='display:none'><label for='id_MinsWorkDay' class='required'>{% trans '一个工作日记为:' %}</label></th>"
-	                +"<td width='230px' style='display:none'><input type='text' maxlength='30' name='MinsWorkDay' class='wZBaseCharField' id='id_MinsWorkDay' value='"+(arr.MinsWorkDay)+"'/>{% trans '分钟' %}</td> -->"
+	                +" <!-- <th width='240px' style='display:none'><label for='id_MinsWorkDay' class='required'>{# trans '一个工作日记为:' #}</label></th>"
+	                +"<td width='230px' style='display:none'><input type='text' maxlength='30' name='MinsWorkDay' class='wZBaseCharField' id='id_MinsWorkDay' value='"+(arr.MinsWorkDay)+"'/>{# trans '分钟' #}</td> -->"
 	
-                    +"<th><input class='displayN' type='checkbox' maxlength='30' name='LateAbsent' id='id_LateAbsent' checked='checked'/><label>{% trans '一次迟到大于:' %}</label></th>"
-                    +"<td><input type='text' maxlength='30' name='MinsLateAbsent' id='id_MinsLateAbsent' value='"+(arr.MinsLateAbsent)+"'/>{% trans '分钟时记为旷工.' %}</td>"
+                    +"<th><input class='displayN' type='checkbox' maxlength='30' name='LateAbsent' id='id_LateAbsent' checked='checked'/><label>{# trans '一次迟到大于:' #}</label></th>"
+                    +"<td><input type='text' maxlength='30' name='MinsLateAbsent' id='id_MinsLateAbsent' value='"+(arr.MinsLateAbsent)+"'/>{# trans '分钟时记为旷工.' #}</td>"
              +"</tr>"
              +"<tr>"
              
-                    +"<th><input class='displayN' type='checkbox' maxlength='30' name='EarlyAbsent' id='id_EarlyAbsent' checked='checked'/><label>{% trans '一次早退大于:' %}</label></th>"
-                    +"<td><input type='text' maxlength='30' name='MinsEarlyAbsent' id='id_MinsEarlyAbsent' value='"+(arr.MinsEarlyAbsent)+"'/>{% trans '分钟时记为旷工.' %}</td>"
+                    +"<th><input class='displayN' type='checkbox' maxlength='30' name='EarlyAbsent' id='id_EarlyAbsent' checked='checked'/><label>{# trans '一次早退大于:' #}</label></th>"
+                    +"<td><input type='text' maxlength='30' name='MinsEarlyAbsent' id='id_MinsEarlyAbsent' value='"+(arr.MinsEarlyAbsent)+"'/>{# trans '分钟时记为旷工.' #}</td>"
                   
 	              
 	            +"</tr>"
 	
 	            +"<tr>"
-	                +"<th><input class='displayN'  type='checkbox' maxlength='30' id='id_NoInAbsent' /><label>{% trans '上班无签到记录时记:' %}</label></th>"
+	                +"<th><input class='displayN'  type='checkbox' maxlength='30' id='id_NoInAbsent' /><label>{# trans '上班无签到记录时记:' #}</label></th>"
 	                +"<td><select id='id_type_in' onchange='remove_MinsNoIn(this)'  name='NoInAbsent' style='*width:136px !important;'>"
-	                +"<!--<option value='0'>{% trans ' ' %}</option>--><option value='1'>{% trans '迟到' %}</option>"
-	                +"<option value='2'>{% trans '旷工' %}</option></select>&nbsp;&nbsp;"
-	                +"<span id='is_show_in' style='display:none;'><input type='text' id='id_MinsNoIn' size='4' name='MinsNoIn' value='"+(arr.MinsNoIn)+"'></input>{% trans '分钟' %}</span></td>"
+	                +"<!--<option value='0'>{# trans ' ' #}</option>--><option value='1'>{# trans '迟到' #}</option>"
+	                +"<option value='2'>{# trans '旷工' #}</option></select>&nbsp;&nbsp;"
+	                +"<span id='is_show_in' style='display:none;'><input type='text' id='id_MinsNoIn' size='4' name='MinsNoIn' value='"+(arr.MinsNoIn)+"'></input>{# trans '分钟' #}</span></td>"
                   +"</tr>"
 
 	            +"<tr>"
-	                +"<th><input class='displayN' type='checkbox' maxlength='30'  id='id_NoOutAbsent' /><label>{% trans '下班无签退记录时记:' %}</label></th>"
-	                +"<td><select id='id_type_Out' onchange='remove_MinsNoOut(this)' name='NoOutAbsent' style='*width:136px !important;'><!--<option value='0'>{% trans ' ' %}</option>--><option  value='1'>{% trans '早退' %}</option><option value='2'>{% trans '旷工' %}</option></select>"
-	                +"&nbsp;&nbsp;<span id='is_show_out' style='display:none;'><input type='text' id='id_MinsNoOut' size='4' name='MinsNoOut' value='"+(arr.MinsNoOut)+"'></input>{% trans '分钟' %}</span></td>"
+	                +"<th><input class='displayN' type='checkbox' maxlength='30'  id='id_NoOutAbsent' /><label>{# trans '下班无签退记录时记:' #}</label></th>"
+	                +"<td><select id='id_type_Out' onchange='remove_MinsNoOut(this)' name='NoOutAbsent' style='*width:136px !important;'><!--<option value='0'>{# trans ' ' #}</option>--><option  value='1'>{# trans '早退' #}</option><option value='2'>{# trans '旷工' #}</option></select>"
+	                +"&nbsp;&nbsp;<span id='is_show_out' style='display:none;'><input type='text' id='id_MinsNoOut' size='4' name='MinsNoOut' value='"+(arr.MinsNoOut)+"'></input>{# trans '分钟' #}</span></td>"
   
 	            +"</tr>"
                   +"<tr>"
                   
-                    +"<th><input class='displayN' type='checkbox' maxlength='30' name='OutOverTime' id='id_OutOverTime' checked='checked' /><label>{% trans '下班:' %}</label></th>"
-                    +"<td><input type='text' maxlength='30' name='MinsOutOverTime' id='id_MinsOutOverTime' value='"+(arr.MinsOutOverTime)+"'/>{% trans '分钟后签退记加班' %}</td>"
+                    +"<th><input class='displayN' type='checkbox' maxlength='30' name='OutOverTime' id='id_OutOverTime' checked='checked' /><label>{# trans '下班:' #}</label></th>"
+                    +"<td><input type='text' maxlength='30' name='MinsOutOverTime' id='id_MinsOutOverTime' value='"+(arr.MinsOutOverTime)+"'/>{# trans '分钟后签退记加班' #}</td>"
                  
                  
 	              
@@ -145,26 +145,26 @@ function fun_attparam(){
 
 	            +"</tbody></table></div></td></tr>"
 	
-	            +"<tr><td><div class='div_box1 floatL' style='width:98%'><h2>{% trans '计算项目' %}</h2><table style='margin-left:100px;'><tbody>"
+	            +"<tr><td><div class='div_box1 floatL' style='width:98%'><h2>{# trans '计算项目' #}</h2><table style='margin-left:100px;'><tbody>"
 	            +"<tr>"
 	                +"<td><select id='id_items' size='8' style='width:150px;'>"
 	                +getItems(lClass)+"</select></td>"
 	                +"<td width='500px' style='vertical-align:top;'><span id='show_item'>"
-	                +"<span class='fontB'>{% trans '最小单位:' %}</span><br /><input type='text' size='4px' id='id_MinUnit' name='MinUnit' value='' />&nbsp;&nbsp;"
+	                +"<span class='fontB'>{# trans '最小单位:' #}</span><br /><input type='text' size='4px' id='id_MinUnit' name='MinUnit' value='' />&nbsp;&nbsp;"
 	                +"<select id='id_Unit' name='Unit' width='100px'>"+get_Unit()+"</select><span id='id_validate_Min' class='error'></span><br />"
 	               
-	                +"<div style='height:5px; overflow:hidden;'></div><div ><span class='fontB'>{% trans '舍入控制:' %}</span><br /><input type='radio' id='id_RemaindProc0' name='RemaindProc' value='0'>{% trans '向下(舍弃) ' %}&nbsp;&nbsp;"
-	                +"<input type='radio' id='id_RemaindProc1' name='RemaindProc' value='1'>{% trans '四舍五入' %}&nbsp;&nbsp;"
-	                +"<input type='radio' id='id_RemaindProc2' name='RemaindProc' value='2'>{% trans '向上(进位)' %} "
-	                +"<div class='displayN'><input type='checkbox' id='id_Round_byTime' name='Round_byTime' >{% trans '按次计算' %}&nbsp;&nbsp;"
-	                +"<input type='checkbox' id='id_RemaindCount' name='RemaindCount'>{% trans '累计后再进行舍入' %}<br /></div></div></span></span>"
-	                +"<div style='height:5px; overflow:hidden;'></div><span class='fontB'>{% trans '报表中的表示符号:' %}</span><br /><input type='text' size='5px' value='' id='id_ReportSymbol' name='ReportSymbol'>"
+	                +"<div style='height:5px; overflow:hidden;'></div><div ><span class='fontB'>{# trans '舍入控制:' #}</span><br /><input type='radio' id='id_RemaindProc0' name='RemaindProc' value='0'>{# trans '向下(舍弃) ' #}&nbsp;&nbsp;"
+	                +"<input type='radio' id='id_RemaindProc1' name='RemaindProc' value='1'>{# trans '四舍五入' #}&nbsp;&nbsp;"
+	                +"<input type='radio' id='id_RemaindProc2' name='RemaindProc' value='2'>{# trans '向上(进位)' #} "
+	                +"<div class='displayN'><input type='checkbox' id='id_Round_byTime' name='Round_byTime' >{# trans '按次计算' #}&nbsp;&nbsp;"
+	                +"<input type='checkbox' id='id_RemaindCount' name='RemaindCount'>{# trans '累计后再进行舍入' #}<br /></div></div></span></span>"
+	                +"<div style='height:5px; overflow:hidden;'></div><span class='fontB'>{# trans '报表中的表示符号:' #}</span><br /><input type='text' size='5px' value='' id='id_ReportSymbol' name='ReportSymbol'>"
 	                +"</td>"
 	            +"</tr>"
 	            +"</tbody></table></div></td></tr>"
 	            +'<tr><td colspan="2"><span id="id_error" style="display:none;"></span></td></tr>'
 	            +"<tr><td>"			
-	            +"<div class='editformbtn'><div class='lineH22'><span class='action_SaveandContinue'>&nbsp;</span><a id='id_submit'class='Link_blue1' href='javascript:void(0)' >{% trans '确定' %}</a><div class='clear'></div></div><div class='lineH22'><span class='action_Cancel'>&nbsp;</span><a class=' Link_blue1' onclick='window.history.back(); return false;' href='javascript:void(0)'>{% trans '取消' %}</a></div></div>"
+	            +"<div class='editformbtn'><div class='lineH22'><span class='action_SaveandContinue'>&nbsp;</span><a id='id_submit'class='Link_blue1' href='javascript:void(0)' >{# trans '确定' #}</a><div class='clear'></div></div><div class='lineH22'><span class='action_Cancel'>&nbsp;</span><a class=' Link_blue1' onclick='window.history.back(); return false;' href='javascript:void(0)'>{# trans '取消' #}</a></div></div>"
 	            +"<input type='hidden' id='id_LeaveClass' value='"+get_lClass_String(getChange_lClass(lClass))+"' name='LeaveClass'/>"
 	            +"<input type='hidden' id='hidden_LeaveId' value='' name='Leave'/>"
 	            +"</td></tr>"
@@ -262,7 +262,7 @@ function fun_attparam(){
 	                 }
 	                 else{
 	                    is_by_times(0);
-	                    $("#id_validate_Min").html("<font size='2' color='#ff6600'>{% trans ' 请选择单位' %} </font>");
+	                    $("#id_validate_Min").html("<font size='2' color='#ff6600'>{# trans ' 请选择单位' #} </font>");
 	                    $("#id_validate_Min").css("visibility","visible");
 	                    
 	                    }
@@ -317,13 +317,13 @@ function fun_attparam(){
                             var queryStr=$("#id_edit_form").formSerialize();
                             $.ajax({ 
                                 type: "POST",
-                                url:"{{ dbapp_url }}../att/SaveAttParamSetting/",
+                                url:"&#123;&#123; dbapp_url &#125;&#125;../att/SaveAttParamSetting/",
                                 data:queryStr,
                                 dataType:"text",
                                 success:function(retdata){
                                     if(retdata.indexOf("result=0")==0){
                                         $("#id_error").css("display","block");
-                                        $("#id_error").html("<ul class='successlist'><li>{% trans '保存参数成功' %}</li></ul>");
+                                        $("#id_error").html("<ul class='successlist'><li>{# trans '保存参数成功' #}</li></ul>");
                                     }
                                     }
                                 }); 
@@ -332,19 +332,19 @@ function fun_attparam(){
 
 	var w=$("#tbl1>tbody>tr>th").eq(2).width();
 	$("#tbl2>tbody>tr>th").eq(0).css({width:w});
-	}});
+	&#125;&#125;);
 
 	
 }
 
 var week=[
-	     "{% trans '星期日' %}",
-	     "{% trans '星期一' %}",
-	     "{% trans '星期二' %}",
-	     "{% trans '星期三' %}",
-	     "{% trans '星期四' %}",
-	     "{% trans '星期五' %}",
-	     "{% trans '星期六' %}"
+	     "{# trans '星期日' #}",
+	     "{# trans '星期一' #}",
+	     "{# trans '星期二' #}",
+	     "{# trans '星期三' #}",
+	     "{# trans '星期四' #}",
+	     "{# trans '星期五' #}",
+	     "{# trans '星期六' #}"
 ];
 function getLastLclass(lClass){  //取得最后一个页面的最新值并更新lClass为最新
     lClass=getChange_lClass(lClass);
@@ -502,9 +502,9 @@ function getDay(selected_id)
     return options_html;
  }
  var unit=[ 
-			"{% trans '小时' %}",
-			 "{% trans '分钟' %}",
-            "{% trans '工作日' %}"
+			"{# trans '小时' #}",
+			 "{# trans '分钟' #}",
+            "{# trans '工作日' #}"
  ];
  function get_Unit()
  {
@@ -515,7 +515,7 @@ function getDay(selected_id)
     return options_html;
  }
 
-{% endblock %}
+{# endblock #}
 
 
 

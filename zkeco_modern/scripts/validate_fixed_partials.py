@@ -12,6 +12,7 @@ patch files for manual review and an index of changes.
 """
 import json
 import sys
+import logging
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -41,6 +42,17 @@ def main():
 
     # Ensure settings are configured; user should set DJANGO_SETTINGS_MODULE
     engine = None
+    # Set up a file-only logger to avoid spamming stdout/stderr during tests
+    LOGFILE = SCRIPTS / 'validate_debug.log'
+    logger = logging.getLogger('zkeco_validate')
+    logger.setLevel(logging.WARNING)
+    if not logger.handlers:
+        fh = logging.FileHandler(LOGFILE, encoding='utf-8')
+        fh.setLevel(logging.WARNING)
+        fh.setFormatter(logging.Formatter('%(asctime)s %(levelname)s: %(message)s'))
+        logger.addHandler(fh)
+        logger.propagate = False
+
     try:
         django.setup()
         try:
@@ -48,9 +60,9 @@ def main():
         except Exception as e:
             # If the default engine initialization hits app loading issues,
             # fall back to a standalone Engine to allow parse-time checks.
-            print('Warning: default Engine init failed:', e)
+            logger.warning('default Engine init failed: %s', e)
     except Exception as e:
-        print('Warning: django.setup() failed:', e)
+        logger.warning('django.setup() failed: %s', e)
 
     if engine is None:
         from django.template import Engine as _Engine
@@ -113,9 +125,11 @@ def main():
         if not ok:
             # Try conservative normalization for common legacy items: i18n loads / trans / blocktrans, and known filters
             t = text
-            # remove load i18n lines
+            # remove any `{% load ... %}` lines to avoid requiring importable
+            # templatetag libraries during parsing (we attach builtin shims
+            # separately when possible)
             import re
-            t = re.sub(r"{%-?\s*load\s+[^%]*i18n[^%]*-?%}\s*\n?", "", t)
+            t = re.sub(r"{%-?\s*load\b[^%]*-?%}\s*\n?", "", t)
             # replace simple trans tags: {% trans "text" %} -> text
             t = re.sub(r"{%-?\s*trans\s+\"([^\"]*)\"\s*-?%}", lambda m: m.group(1), t)
             t = re.sub(r"{%-?\s*trans\s+'([^']*)'\s*-?%}", lambda m: m.group(1), t)

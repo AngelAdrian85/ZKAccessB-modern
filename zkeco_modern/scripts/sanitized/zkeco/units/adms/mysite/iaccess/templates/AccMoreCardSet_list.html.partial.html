@@ -1,23 +1,23 @@
-{% extends "Acc_Door_Set.html" %}
-{% load i18n %}
+{# extends "Acc_Door_Set.html" #}
+{# load i18n #}
 
-{% block datalist_before %}
+{# block datalist_before #}
 <div id="id_current_door"></div>
 <div id="id_datalist" class="div_box clearB"><h1>&nbsp;</h1>
 </div>
-{% endblock %}<!--endblock of datalist_before-add by darcy-->
+{# endblock #}<!--endblock of datalist_before-add by darcy-->
 
 
-{% block acc_door_set %}
-{% if request.user|HasPerm:"iaccess.browse_accdoor" %}
-{% if request.user|HasPerm:"iaccess.browse_accmorecardset" %}
+{# block acc_door_set #}
+{# if request.user|HasPerm:"iaccess.browse_accdoor" #}
+{# if request.user|HasPerm:"iaccess.browse_accmorecardset" #}
     var url_search = window.location.search;//?_lock=1&door__id=1
     var door_id = url_search.split("=")[2];
     var door_name = '';
 
     $.ajax({
         type: "POST",
-        url: "/{{ request.surl }}iaccess/GetData/?func=get_doorname&door_id="+ door_id,
+        url: "/&#123;&#123; request.surl &#125;&#125;iaccess/GetData/?func=get_doorname&door_id="+ door_id,
         dataType: "json",
         async: true,
         success: function(json){
@@ -25,7 +25,7 @@
             $("#id_current_door").append('<label class="current_doorname"  name="'+door_name+'" value="'+door_id+'" style="margin: 2px 2px 3px 10px;">'+gettext("当前门:")+door_name+'</label>');
         
             $("#id_datalist").model_grid({
-                   "model_url": "{{ model_url }}",
+                   "model_url": "&#123;&#123; model_url &#125;&#125;",
                    "base_query": ["door__id__exact="+door_id],
                    "disabled_actions": ["_change"],
                    "do_action_masker_div": [$("#id_current_door")],
@@ -37,16 +37,16 @@
             alert(gettext("服务器处理数据失败，请重试！错误码：")+"-609");
         }        
     });
-{% else %}<!--iaccess.browse_accmorecardset-->
+{# else #}<!--iaccess.browse_accmorecardset-->
     alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
-    window.location.href = "/{{ request.surl }}accounts/login/";
-{% endif %}<!--iaccess.browse_accfirstopen-->
-{% else %}<!--iaccess.browse_accdoor-->
+    window.location.href = "/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+{# endif #}<!--iaccess.browse_accfirstopen-->
+{# else #}<!--iaccess.browse_accdoor-->
     alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
-    window.location.href = "/{{ request.surl }}accounts/login/";
-{% endif %}<!--iaccess.browse_accdoor-->
+    window.location.href = "/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+{# endif #}<!--iaccess.browse_accdoor-->
 
-{% endblock %}
+{# endblock #}
 
 
 

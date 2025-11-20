@@ -1,24 +1,24 @@
-{% extends "data_list.html" %}
-{% load i18n %}
+{# extends "data_list.html" #}
+{# load i18n #}
 
-{% block getdatalist %}
-    {% if request.user|HasPerm:"visitor.browse_visreport" %}
+{# block getdatalist #}
+    {# if request.user|HasPerm:"visitor.browse_visreport" #}
         $("#id_datalist").model_grid({
-            "model_url": "{{ model_url }}",
+            "model_url": "&#123;&#123; model_url &#125;&#125;",
             "disabled_actions": ["_change"],
             "init_after_get_jdata": function(){
                 $("a[alt='op_edit']").each(function(){
-                    $(this).text(gettext("{% trans '详情' %}"));
+                    $(this).text(gettext("{# trans '详情' #}"));
                 });
             },
             "reload_after_get_jdata":function(){
             	$("a[alt='op_edit']").each(function(){
-                    $(this).text(gettext("{% trans '详情' %}"));
+                    $(this).text(gettext("{# trans '详情' #}"));
                 });
             }
         });
-    {% else %}
+    {# else #}
         alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
-        window.location.href = "/{{ request.surl }}accounts/login/";
-    {% endif %}
-{% endblock %}
+        window.location.href = "/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+    {# endif #}
+{# endblock #}

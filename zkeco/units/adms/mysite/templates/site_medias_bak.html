@@ -1,10 +1,27 @@
 {% block extracss %}{% endblock %}
 <link rel="stylesheet" type="text/css" href="{{ MEDIA_URL }}/css/menu.css" media="screen" />
-<link rel="stylesheet" type="text/css" href="{{ MEDIA_URL }}/css/base.css+sf.css" />
+{# Split concatenated css file names into individual link tags #}
+<link rel="stylesheet" type="text/css" href="{{ MEDIA_URL }}/css/base.css" />
+<link rel="stylesheet" type="text/css" href="{{ MEDIA_URL }}/css/sf.css" />
 {% if LANGUAGE_BIDI %}
 <link rel="stylesheet" type="text/css" href="{% block stylesheet_rtl %}{{ MEDIA_URL }}/css/rtl.css{% endblock %}" />
 {% endif %}
-<link href="{{ MEDIA_URL }}/css/css.css+corner.css+tabs.css+jquery.clockpick.css+jquery.treeview.css+datepiker.css" rel="stylesheet" />
+<link href="{{ MEDIA_URL }}/css/css.css" rel="stylesheet" />
+<link href="{{ MEDIA_URL }}/css/corner.css" rel="stylesheet" />
+<link href="{{ MEDIA_URL }}/css/tabs.css" rel="stylesheet" />
+<link href="{{ MEDIA_URL }}/css/jquery.clockpick.css" rel="stylesheet" />
+<link href="{{ MEDIA_URL }}/css/jquery.treeview.css" rel="stylesheet" />
+<link href="{{ MEDIA_URL }}/css/datepiker.css" rel="stylesheet" />
 
-<script src="{{ MEDIA_URL }}/jslib/appconfig.js+i18n.js+jquery.js+jquery.plus.js+jquery.zcommon.js+i18n_{{ LANGUAGE_CODE }}.js+jquery.zgrid.js+datalist.js+datalistadd.js+widgets.js+jquery.tools.min.js"></script>
+<script src="{{ MEDIA_URL }}/jslib/appconfig.js"></script>
+<script src="{{ MEDIA_URL }}/jslib/i18n.js"></script>
+<script src="{{ MEDIA_URL }}/jslib/jquery.js"></script>
+<script src="{{ MEDIA_URL }}/jslib/jquery.plus.js"></script>
+<script src="{{ MEDIA_URL }}/jslib/jquery.zcommon.js"></script>
+<script src="{{ MEDIA_URL }}/jslib/i18n_{{ LANGUAGE_CODE }}.js"></script>
+<script src="{{ MEDIA_URL }}/jslib/jquery.zgrid.js"></script>
+<script src="{{ MEDIA_URL }}/jslib/datalist.js"></script>
+<script src="{{ MEDIA_URL }}/jslib/datalistadd.js"></script>
+<script src="{{ MEDIA_URL }}/jslib/widgets.js"></script>
+<script src="{{ MEDIA_URL }}/jslib/jquery.tools.min.js"></script>
 {% block extrajs %}{% endblock %}

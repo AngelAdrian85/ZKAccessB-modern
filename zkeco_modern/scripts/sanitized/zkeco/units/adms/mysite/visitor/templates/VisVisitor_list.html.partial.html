@@ -1,27 +1,27 @@
-{% extends "data_list.html" %}
-{% load i18n %}
+{# extends "data_list.html" #}
+{# load i18n #}
 
-{% block headjs %}
-    <link id="skin" rel="stylesheet" href="{{ MEDIA_URL }}/jBox/Skins2/Blue/jbox.css" />
+{# block headjs #}
+    <link id="skin" rel="stylesheet" href="&#123;&#123; MEDIA_URL &#125;&#125;/jBox/Skins2/Blue/jbox.css" />
     <script></script>
     <script></script>    
-{% endblock %}
+{# endblock #}
 
-{% block extrajs %}	
+{# block extrajs #}	
     $("#id_OpLeaveRegister").parent().append($("#id_OpLeaveRegister"));
     $("#id_OpLeaveRegister").after($("#id_op_for_tab").find(".div_leftBottomLine").eq(0));
-{% endblock %}
+{# endblock #}
 
-{% block addjs %}
-	{% if request.user|HasPerm:"visitor.browse_visvisitor" %}
+{# block addjs #}
+	{# if request.user|HasPerm:"visitor.browse_visvisitor" #}
     $(function(){
     	$("label[for^='id_entrance__name']").text(gettext("进入地点")+":");
         $("label[for^='id_exit_place__name']").text(gettext("离开地点")+":");
-        $("label[for^='id_visitor__PIN']").text('{% trans "访客编号" %}:');
-        $("label[for^='id_visitor__EName']").text('{% trans "访客姓名" %}:');
-        $("label[for^='id_visitor__lastname']").text('{% trans "访客姓氏" %}:');
-        $("label[for^='id_visited_emp__EName']").text('{% trans "被访人姓名" %}:');
-        $("label[for^='id_visited_emp__lastname']").text('{% trans "被访人姓氏" %}:');
+        $("label[for^='id_visitor__PIN']").text('{# trans "访客编号" #}:');
+        $("label[for^='id_visitor__EName']").text('{# trans "访客姓名" #}:');
+        $("label[for^='id_visitor__lastname']").text('{# trans "访客姓氏" #}:');
+        $("label[for^='id_visited_emp__EName']").text('{# trans "被访人姓名" #}:');
+        $("label[for^='id_visited_emp__lastname']").text('{# trans "被访人姓氏" #}:');
         
 		get_total_info();
     });
@@ -37,7 +37,7 @@
     	}
     	
     	 $.ajax({
-            url: "/{{ request.surl }}visitor/GetData/?func=get_total_info",
+            url: "/&#123;&#123; request.surl &#125;&#125;visitor/GetData/?func=get_total_info",
             type: "GET",
             dataType: "json",
             async: false,
@@ -66,10 +66,10 @@
     }
     
     window.setTimeout('get_total_info()', 1000);
-    {% else %}
+    {# else #}
         $("#id_search").remove();
         alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
-        window.location.href = "/{{ request.surl }}accounts/login/";
-    {% endif %}
-{% endblock %}
+        window.location.href = "/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+    {# endif #}
+{# endblock #}
 

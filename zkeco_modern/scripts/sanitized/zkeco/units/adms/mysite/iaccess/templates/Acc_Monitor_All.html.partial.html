@@ -1,89 +1,89 @@
-{% extends "Acc_RTMonitor.html" %}
-{% load i18n %}
+{# extends "Acc_RTMonitor.html" #}
+{# load i18n #}
 
-{% block headjs %}
-    {% if request.user|HasPerm:"contenttypes.can_MonitorAllPage" %}
+{# block headjs #}
+    {# if request.user|HasPerm:"contenttypes.can_MonitorAllPage" #}
     <script></script>
     <script></script>
     <script></script>
     <script></script>
-    <link rel="stylesheet" type="text/css" href="{{ MEDIA_URL }}/css/jquery.windows-engine.css" media="screen" />
-        {% block add_headjs %}
-        {% endblock %}
-    {% endif %}
-{% endblock %}
+    <link rel="stylesheet" type="text/css" href="&#123;&#123; MEDIA_URL &#125;&#125;/css/jquery.windows-engine.css" media="screen" />
+        {# block add_headjs #}
+        {# endblock #}
+    {# endif #}
+{# endblock #}
 
-{% block content %}
-    {% if request.user|HasPerm:"contenttypes.can_MonitorAllPage" %}
-    {% block monitor_doors_maps %}
-    <div id="id_monitor_doors" class="div_box"><h1>{% trans "门状态监控" %}</h1>
+{# block content #}
+    {# if request.user|HasPerm:"contenttypes.can_MonitorAllPage" #}
+    {# block monitor_doors_maps #}
+    <div id="id_monitor_doors" class="div_box"><h1>{# trans "门状态监控" #}</h1>
         <div id="id_door_ops" class="grid Link_blue1">
 			<div class="floatL">
-				<div id="monitor_area"><label>{% trans "区域" %}</label><select><option value="0">{% trans "全部" %}</option></select></div>
-				<div id="monitor_device"><label>{% trans "控制器" %}</label><select style="width:165px"><option value="0">-----------------</option></select></div>
-				<div id="monitor_door"><label>{% trans "门" %}</label><select><option value="0">-----------------</option></select></div>
+				<div id="monitor_area"><label>{# trans "区域" #}</label><select><option value="0">{# trans "全部" #}</option></select></div>
+				<div id="monitor_device"><label>{# trans "控制器" #}</label><select style="width:165px"><option value="0">-----------------</option></select></div>
+				<div id="monitor_door"><label>{# trans "门" #}</label><select><option value="0">-----------------</option></select></div>
 			</div>
             <div class="floatL">
 				<table><tr>
 					<td>
                         <div class="action openalldoor nowrap">
-                            <a id="openpart_all" onclick="show_opendoor(this.id)" href="javascript:void(0)">{% trans "开当前所有门" %}</a>
+                            <a id="openpart_all" onclick="show_opendoor(this.id)" href="javascript:void(0)">{# trans "开当前所有门" #}</a>
                         </div>
                     </td>
 					<td>
                         <div class="action nowrap">
-                            <a id="closepart_all" onclick="show_closedoor(this.id)" href="javascript:void(0)">{% trans "关当前所有门" %}</a>
+                            <a id="closepart_all" onclick="show_closedoor(this.id)" href="javascript:void(0)">{# trans "关当前所有门" #}</a>
                         </div>
                     </td>
 				</tr></table>
 			</div>
-			<div class="action nowrap displayN"><a id="cancelall" href="javascript:void(0)">{% trans "取消全部报警" %}</a></div>
+			<div class="action nowrap displayN"><a id="cancelall" href="javascript:void(0)">{# trans "取消全部报警" #}</a></div>
 			<div class="clear"></div>
         </div>
-        <div id="id_door_loading">{% trans "正在获取系统内用户授权范围内的所有门......" %}</div>
+        <div id="id_door_loading">{# trans "正在获取系统内用户授权范围内的所有门......" #}</div>
         <div id="id_door_state"></div>
 		<div class="clearB"></div>
     </div>
-	{% endblock %}<!--end of monitor_doors_maps-->
+	{# endblock #}<!--end of monitor_doors_maps-->
 
-    {% block alarm_sound %}
+    {# block alarm_sound #}
     <div id="id_alarm_sound"></div><!--警报声-->
-    {% endblock %}<!--end of alarm_sound-->
+    {# endblock #}<!--end of alarm_sound-->
     
-    {% block right_click_menu %}
+    {# block right_click_menu #}
         <div class="contextMenu displayN" id="add_card_menu">
           <ul>
-            <li id="add_card" class="displayN">{% trans '新增卡' %}</li>
+            <li id="add_card" class="displayN">{# trans '新增卡' #}</li>
           </ul>
         </div>
         <div id ="id_add_card" class ="displayN">
             <div>
-                <a href="javascript:void(0)" relgo="{{ request.dbapp_url }}personnel/Employee/_new_/?_lock=1">{% trans '新增卡' %}</a>
+                <a href="javascript:void(0)" relgo="&#123;&#123; request.dbapp_url &#125;&#125;personnel/Employee/_new_/?_lock=1">{# trans '新增卡' #}</a>
             </div>
         </div>
-    {% endblock %}
+    {# endblock #}
 
-    {% block addmiddiv %}
+    {# block addmiddiv #}
     <div id="id_tip" style="display:none" class="div_tip ui-corner-all"></div>
-    {% endblock %}<!--end of addmiddiv-->
+    {# endblock #}<!--end of addmiddiv-->
     
-	{% block add_door_state %}
+	{# block add_door_state #}
 	<div class="displayN"><table id="id_door_state_value"></table></div><!-- 门状态信息，电子地图共用 -->
-	{% endblock %}
+	{# endblock #}
 	
-	{% block monitor_events %}
+	{# block monitor_events #}
     <!-- video linkage -->
     <div id="id_show_video" class="displayN">
         <div id="id_show_video_1" class="displayN"></div>  
     </div>
-	{% block remove_monitor_events_title %} <!--begin of remove_monitor_events_title-->
-    <div id="id_monitor_events" class="div_box acc_monitor_280" style="{% block monitor_events_style %}min-height: 20em;{% endblock %}">
-        <h1>{% trans "事件监控" %}</h1>
-    {% endblock %} <!--end of remove_monitor_events_title-->
+	{# block remove_monitor_events_title #} <!--begin of remove_monitor_events_title-->
+    <div id="id_monitor_events" class="div_box acc_monitor_280" style="{# block monitor_events_style #}min-height: 20em;{# endblock #}">
+        <h1>{# trans "事件监控" #}</h1>
+    {# endblock #} <!--end of remove_monitor_events_title-->
         <div id="id_show_alarm" class="link_alarm_unsure displayN">
-                <a>{% trans '发现报警事件' %}</a>
+                <a>{# trans '发现报警事件' #}</a>
         </div>
-        <div id="id_showTbl"  {% block change_showTb1_style %}style="overflow-x:scroll;"{% endblock %}>
+        <div id="id_showTbl"  {# block change_showTb1_style #}style="overflow-x:scroll;"{# endblock #}>
             <table border="0" cellpadding="0" cellspacing="0">
                 <tr>
                     <td style="vertical-align:top;border:0px;">
@@ -91,16 +91,16 @@
                             <table class="table">
                                 <thead>
                                     <tr>
-                                        {% block table_head %}
-                                        <th width="15%">{% trans '时间' %}</th>
-                                        <th width="12%">{% trans '设备' %}</th>
-                                        <th width="15%">{% trans '事件点' %}</th>
-                                        <th width="15%">{% trans '事件描述' %}</th>
-                                        <th width="9%">{% trans '卡号' %}</th>
-                                        <th width="13%">{% trans '人员编号(姓名)' %}</th>
-                                        <th width="8%">{% trans '状态' %}</th>
-                                        <th width="10%">{% trans '验证方式' %}</th>
-                                        {% endblock %}
+                                        {# block table_head #}
+                                        <th width="15%">{# trans '时间' #}</th>
+                                        <th width="12%">{# trans '设备' #}</th>
+                                        <th width="15%">{# trans '事件点' #}</th>
+                                        <th width="15%">{# trans '事件描述' #}</th>
+                                        <th width="9%">{# trans '卡号' #}</th>
+                                        <th width="13%">{# trans '人员编号(姓名)' #}</th>
+                                        <th width="8%">{# trans '状态' #}</th>
+                                        <th width="10%">{# trans '验证方式' #}</th>
+                                        {# endblock #}
                                     </tr>
                                 </thead>
                                 <tbody id="rt_content">
@@ -108,24 +108,24 @@
                             </table>
                         </div>
                     </td>
-                    {% block remove_td %}<!-- begin of remove_td 用于全屏电子地图显示实时记录的样式，即高度-->
+                    {# block remove_td #}<!-- begin of remove_td 用于全屏电子地图显示实时记录的样式，即高度-->
                     <td style="vertical-align:top;border:0px;width:1px;overflow:hidden;">
                         <div style="height:260px;width:0px; overflow:hidden"></div>
                     </td>
-                    {% endblock %} <!--end of remove_td-->
+                    {# endblock #} <!--end of remove_td-->
                 </tr>
             </table>
         </div>
-    {% block remove_div %}</div>{% endblock %} <!--电子地图全屏时，消去该结束标签-->
-    {% endblock %}<!-- end of monitor_events -->
+    {# block remove_div #}</div>{# endblock #} <!--电子地图全屏时，消去该结束标签-->
+    {# endblock #}<!-- end of monitor_events -->
 
-    {% endif %}<!--can_MonitorAllPage-->
-{% endblock %}<!--end of content-->
+    {# endif #}<!--can_MonitorAllPage-->
+{# endblock #}<!--end of content-->
 
-{% block addjs %}
-    {% if request.user|HasPerm:"contenttypes.can_RTMonitorPage" %}
+{# block addjs #}
+    {# if request.user|HasPerm:"contenttypes.can_RTMonitorPage" #}
 
-    {% block base_variables %}
+    {# block base_variables #}
         //$("#id_show_alarm").hide();//默认此div不显示
         var gdata = null;//global variable
         var g_aux_in_data = null;// global 
@@ -174,9 +174,9 @@
 		var aux_in_off = "/media/images/iaccess/aux_in_off.jpg";
 		var aux_in_on = "/media/images/iaccess/aux_in_on.jpg";
 		
-    {% endblock %}
+    {# endblock #}
 
-    {% block show_tip_info %}
+    {# block show_tip_info #}
         //光标移动到门图标上时显示的信息
         function getMoreInfo(index, img_type)
         {
@@ -185,17 +185,17 @@
 	        	return '<iframe class="maskIframe"></iframe>'
 	                      +'<div>'
 	                          +'<table>'
-	                              +'<tr><th>{% trans "所属设备" %}:</th><td>'+gdata[index][1]+'</td></tr>'
-	                              +'<tr><th>{% trans "门编号" %}:</th><td>'+gdata[index][2]+'</td></tr>'
-	                              +'<tr><th>{% trans "门名称" %}:</th><td>'+gdata[index][3]+'</td></tr>'
-	                              +'<tr id="tr_door_state_status_'+gdata[index][0]+'"><th>{% trans "门状态" %}:</th><td>'+$("#td_image_door_"+gdata[index][0]+"_status").text()+'</td></tr>'
-	                              +'<tr><th>{% trans "继电器状态" %}:</th><td>'+$("#td_image_door_"+gdata[index][0]+"_relay").text()+'</td></tr>'
-	                              +'<tr id="id_door'+gdata[index][0]+'_alarm_type"><th>{% trans "报警类型" %}:</th><td>'+$("#td_image_door_"+gdata[index][0]+"_alarm").text()+'</td></tr>'
+	                              +'<tr><th>{# trans "所属设备" #}:</th><td>'+gdata[index][1]+'</td></tr>'
+	                              +'<tr><th>{# trans "门编号" #}:</th><td>'+gdata[index][2]+'</td></tr>'
+	                              +'<tr><th>{# trans "门名称" #}:</th><td>'+gdata[index][3]+'</td></tr>'
+	                              +'<tr id="tr_door_state_status_'+gdata[index][0]+'"><th>{# trans "门状态" #}:</th><td>'+$("#td_image_door_"+gdata[index][0]+"_status").text()+'</td></tr>'
+	                              +'<tr><th>{# trans "继电器状态" #}:</th><td>'+$("#td_image_door_"+gdata[index][0]+"_relay").text()+'</td></tr>'
+	                              +'<tr id="id_door'+gdata[index][0]+'_alarm_type"><th>{# trans "报警类型" #}:</th><td>'+$("#td_image_door_"+gdata[index][0]+"_alarm").text()+'</td></tr>'
 	                              +'<tr><td colspan="2">'
 	                              +'<table class="Link_blue1">'
-	                              +'<tr><td><a id="opendoor_img" class="" href="javascript:void(0)" onclick="show_opendoor(this.id,'+gdata[index][0]+')">{% trans "远程开门" %}</a></td>'
-	                                  +'<td><a id="closedoor_img" class="" href="javascript:void(0)" onclick="show_closedoor(this.id, '+gdata[index][0]+')">{% trans "远程关门" %}</a></td>'
-	                                  +'<td><a id="cancelalarm" class="" href="javascript:void(0)" onclick="control_door(this.id, '+gdata[index][0]+')">{% trans "取消报警" %}</a></td></tr>'
+	                              +'<tr><td><a id="opendoor_img" class="" href="javascript:void(0)" onclick="show_opendoor(this.id,'+gdata[index][0]+')">{# trans "远程开门" #}</a></td>'
+	                                  +'<td><a id="closedoor_img" class="" href="javascript:void(0)" onclick="show_closedoor(this.id, '+gdata[index][0]+')">{# trans "远程关门" #}</a></td>'
+	                                  +'<td><a id="cancelalarm" class="" href="javascript:void(0)" onclick="control_door(this.id, '+gdata[index][0]+')">{# trans "取消报警" #}</a></td></tr>'
 	                              +'</table>'
 	                              +'</td></tr>'
 	                          +'</table>'
@@ -206,10 +206,10 @@
         		return '<iframe class="maskIframe"></iframe>'
 	                      +'<div>'
 	                          +'<table>'
-	                              +'<tr><th>{% trans "所属设备" %}:</th><td>'+g_aux_in_data[index][1]+'</td></tr>'
-	                              +'<tr><th>{% trans "辅助输入编号" %}:</th><td>'+g_aux_in_data[index][2]+'</td></tr>'
-	                              +'<tr><th>{% trans "辅助输入名称" %}:</th><td>'+g_aux_in_data[index][3]+'</td></tr>'
-	                              +'<tr id="tr_aux_in_state_status_'+g_aux_in_data[index][0]+'"><th>{% trans "辅助输入状态" %}:</th><td>'+$("#td_image_aux_in_"+g_aux_in_data[index][0]+"_status").text()+'</td></tr>'
+	                              +'<tr><th>{# trans "所属设备" #}:</th><td>'+g_aux_in_data[index][1]+'</td></tr>'
+	                              +'<tr><th>{# trans "辅助输入编号" #}:</th><td>'+g_aux_in_data[index][2]+'</td></tr>'
+	                              +'<tr><th>{# trans "辅助输入名称" #}:</th><td>'+g_aux_in_data[index][3]+'</td></tr>'
+	                              +'<tr id="tr_aux_in_state_status_'+g_aux_in_data[index][0]+'"><th>{# trans "辅助输入状态" #}:</th><td>'+$("#td_image_aux_in_"+g_aux_in_data[index][0]+"_status").text()+'</td></tr>'
 	                          +'</table>'
 	                      +'</div>';
         	}
@@ -231,10 +231,10 @@
             if($("#id_tip").css("display") == "none")
             {
             	var left_y = img_type == 0 ? 50 : 25;
-                $("#id_tip").css({"z-index": 16, "display": "block", "position": "absolute", {% block change_tip_info_1 %}"top": (offset.top-left_y), "left": (offset.left-left_x){% endblock %}})//电子全屏时，需要tips坐标值，否则鼠标无法点击到该tips
+                $("#id_tip").css({"z-index": 16, "display": "block", "position": "absolute", {# block change_tip_info_1 #}"top": (offset.top-left_y), "left": (offset.left-left_x){# endblock #&#125;&#125;)//电子全屏时，需要tips坐标值，否则鼠标无法点击到该tips
                 $("#id_tip").mouseover(function()
                 {
-                    $(this).css({"z-index": 16, "display": "block", "position": "absolute", {% block change_tip_info_2 %}"top": (offset.top-left_y), "left": (offset.left-left_x){% endblock %}})
+                    $(this).css({"z-index": 16, "display": "block", "position": "absolute", {# block change_tip_info_2 #}"top": (offset.top-left_y), "left": (offset.left-left_x){# endblock #&#125;&#125;)
                 }).mouseout(function()
                 {
                   $("#id_tip").css("display", "none");
@@ -382,11 +382,11 @@
 
                     if(mode == "openpart")
                     {
-                        getUrl = "/{{ request.surl }}iaccess/SendDoorData/?func="+ mode +"&type=part&data="+ current_doors +"&open_interval="+open_interval+"&enable_no_tzs="+enable_no_tzs+"&stamp="+ stamp5;
+                        getUrl = "/&#123;&#123; request.surl &#125;&#125;iaccess/SendDoorData/?func="+ mode +"&type=part&data="+ current_doors +"&open_interval="+open_interval+"&enable_no_tzs="+enable_no_tzs+"&stamp="+ stamp5;
                     }
                     else
                     {
-                        getUrl = "/{{ request.surl }}iaccess/SendDoorData/?func="+ mode +"&type=part&data="+ current_door +"&open_interval="+open_interval+"&enable_no_tzs="+enable_no_tzs+"&stamp="+ stamp5;
+                        getUrl = "/&#123;&#123; request.surl &#125;&#125;iaccess/SendDoorData/?func="+ mode +"&type=part&data="+ current_door +"&open_interval="+open_interval+"&enable_no_tzs="+enable_no_tzs+"&stamp="+ stamp5;
                     }
                     open_interval = null;
                     enable_no_tzs = null;
@@ -400,11 +400,11 @@
                     }
                     if(mode == "closepart")
                     {
-                        getUrl = "/{{ request.surl }}iaccess/SendDoorData/?func="+ mode +"&type=part&data="+ current_doors +"&disable_no_tzs="+disable_no_tzs+"&stamp="+ stamp5;
+                        getUrl = "/&#123;&#123; request.surl &#125;&#125;iaccess/SendDoorData/?func="+ mode +"&type=part&data="+ current_doors +"&disable_no_tzs="+disable_no_tzs+"&stamp="+ stamp5;
                     }
                     else
                     {
-                        getUrl = "/{{ request.surl }}iaccess/SendDoorData/?func="+ mode +"&type=part&data="+ current_door +"&disable_no_tzs="+disable_no_tzs+"&stamp="+ stamp5;
+                        getUrl = "/&#123;&#123; request.surl &#125;&#125;iaccess/SendDoorData/?func="+ mode +"&type=part&data="+ current_door +"&disable_no_tzs="+disable_no_tzs+"&stamp="+ stamp5;
                     }
                     disable_no_tzs = null;
                 }
@@ -414,12 +414,12 @@
 
         }
 
-    {% endblock %}//end of block show_tip_info
+    {# endblock #}//end of block show_tip_info
 
-    {% block electro_map %} {% endblock %}
+    {# block electro_map #} {# endblock #}
 
-    {% block monitor_log %}
-        {% if request.user|HasPerm:"contenttypes.can_MonitorAllPage" %}
+    {# block monitor_log #}
+        {# if request.user|HasPerm:"contenttypes.can_MonitorAllPage" #}
         var card_no = 0;
         function show_door(data)
         {
@@ -478,9 +478,9 @@
             
             if(door_total > 0)
             {
-                {% block init_image_mode %}
+                {# block init_image_mode #}
                     var const_door_count = 200;
-                {% endblock %}
+                {# endblock #}
                 // 门的状态
                 if((door_total + aux_in_total) <= const_door_count)//图标方式64
                 {
@@ -542,19 +542,19 @@
                 else//列表方式
                 {
                     image_mode = 1;
-                    html += '<table id="id_datalist_view_table" class="Link_blue1 table" width="100%"><thead><tr><th>{% trans "门名称" %}</th><th>{% trans "所属设备" %}</th><th>{% trans "门编号" %}</th>'
-                    		+ '<th>{% trans "门状态" %}</th><th>{% trans "继电器状态" %}</th><th>{% trans "报警类型" %}</th><th width="20%">{% trans "操作" %}</th></tr></thead><tbody>';
+                    html += '<table id="id_datalist_view_table" class="Link_blue1 table" width="100%"><thead><tr><th>{# trans "门名称" #}</th><th>{# trans "所属设备" #}</th><th>{# trans "门编号" #}</th>'
+                    		+ '<th>{# trans "门状态" #}</th><th>{# trans "继电器状态" #}</th><th>{# trans "报警类型" #}</th><th width="20%">{# trans "操作" #}</th></tr></thead><tbody>';
                     for(var index in doors)
                     {
                         //input中data为门的id
                         var door_id_value = doors[index][0];
                         html += '<tr id="door_'+door_id_value+'" data="'+door_id_value+'" class=""><td>'+doors[index][3]+'</td><td>'+doors[index][1]+'</td><td>'+doors[index][2]+'</td>'
                         	   + '<td class="displayN" id="list_door_'+door_id_value+'_state_value"></td>'
-                        	   + '<td id="td_list_door_'+door_id_value+'_status">{% trans "读取中......" %}</td><td id="td_list_door_'+door_id_value+'_relay">{% trans "读取中......" %}</td>'
-                               + '<td id="td_list_door_'+door_id_value+'_alarm">{% trans "读取中......" %}</td><td><label id="reading_list" href="javascript:void(0)" >{% trans "读取中......" %}</label><label id="no_ops_list" class="door_ops" href="javascript:void(0)" >{% trans "无操作" %}</label>'
-                               + '<a id="opendoor_list" class="door_ops opendoor_list" onclick="show_opendoor(this.id, '+door_id_value+');" href="javascript:void(0)">{% trans "远程开门" %}</a>'
-                               + '<a id="closedoor_list" class="door_ops closedoor_list" onclick="show_closedoor(this.id, '+door_id_value+');" href="javascript:void(0)">{% trans "远程关门" %}</a>'
-                               + '<a id="cancelalarm" class="door_ops cancelalarm_list" onclick="control_door(this.id, '+door_id_value+')" href="javascript:void(0)">{% trans "取消报警" %}</a></td></tr>';
+                        	   + '<td id="td_list_door_'+door_id_value+'_status">{# trans "读取中......" #}</td><td id="td_list_door_'+door_id_value+'_relay">{# trans "读取中......" #}</td>'
+                               + '<td id="td_list_door_'+door_id_value+'_alarm">{# trans "读取中......" #}</td><td><label id="reading_list" href="javascript:void(0)" >{# trans "读取中......" #}</label><label id="no_ops_list" class="door_ops" href="javascript:void(0)" >{# trans "无操作" #}</label>'
+                               + '<a id="opendoor_list" class="door_ops opendoor_list" onclick="show_opendoor(this.id, '+door_id_value+');" href="javascript:void(0)">{# trans "远程开门" #}</a>'
+                               + '<a id="closedoor_list" class="door_ops closedoor_list" onclick="show_closedoor(this.id, '+door_id_value+');" href="javascript:void(0)">{# trans "远程关门" #}</a>'
+                               + '<a id="cancelalarm" class="door_ops cancelalarm_list" onclick="control_door(this.id, '+door_id_value+')" href="javascript:void(0)">{# trans "取消报警" #}</a></td></tr>';
                         door_id_value = null;
                     }
                     html += "</tbody></table>";
@@ -630,19 +630,19 @@
                    else//列表方式
                    {
                        image_mode = 1;
-                       html += '<table id="id_datalist_view_table" class="Link_blue1 table" width="100%"><thead><tr><th>{% trans "门名称" %}</th><th>{% trans "所属设备" %}</th><th>{% trans "门编号" %}</th>'
-                            + '<th>{% trans "门状态" %}</th><th>{% trans "继电器状态" %}</th><th>{% trans "报警类型" %}</th><th width="20%">{% trans "操作" %}</th></tr></thead><tbody>';
+                       html += '<table id="id_datalist_view_table" class="Link_blue1 table" width="100%"><thead><tr><th>{# trans "门名称" #}</th><th>{# trans "所属设备" #}</th><th>{# trans "门编号" #}</th>'
+                            + '<th>{# trans "门状态" #}</th><th>{# trans "继电器状态" #}</th><th>{# trans "报警类型" #}</th><th width="20%">{# trans "操作" #}</th></tr></thead><tbody>';
                        for(var index in doors)
                        {
                            //input中data为门的id
                            var door_id_value = doors[index][0];
                            html += '<tr id="door_'+door_id_value+'" data="'+door_id_value+'" class=""><td>'+doors[index][3]+'</td><td>'+doors[index][1]+'</td><td>'+doors[index][2]+'</td>'
                                + '<td class="displayN" id="list_door_'+door_id_value+'_state_value"></td>'
-                               + '<td id="td_list_door_'+door_id_value+'_status">{% trans "读取中......" %}</td><td id="td_list_door_'+door_id_value+'_relay">{% trans "读取中......" %}</td>'
-                                  + '<td id="td_list_door_'+door_id_value+'_alarm">{% trans "读取中......" %}</td><td><label id="reading_list" href="javascript:void(0)" >{% trans "读取中......" %}</label><label id="no_ops_list" class="door_ops" href="javascript:void(0)" >{% trans "无操作" %}</label>'
-                                  + '<a id="opendoor_list" class="door_ops opendoor_list" onclick="show_opendoor(this.id, '+door_id_value+');" href="javascript:void(0)">{% trans "远程开门" %}</a>'
-                                  + '<a id="closedoor_list" class="door_ops closedoor_list" onclick="show_closedoor(this.id, '+door_id_value+');" href="javascript:void(0)">{% trans "远程关门" %}</a>'
-                                  + '<a id="cancelalarm" class="door_ops cancelalarm_list" onclick="control_door(this.id, '+door_id_value+')" href="javascript:void(0)">{% trans "取消报警" %}</a></td></tr>';
+                               + '<td id="td_list_door_'+door_id_value+'_status">{# trans "读取中......" #}</td><td id="td_list_door_'+door_id_value+'_relay">{# trans "读取中......" #}</td>'
+                                  + '<td id="td_list_door_'+door_id_value+'_alarm">{# trans "读取中......" #}</td><td><label id="reading_list" href="javascript:void(0)" >{# trans "读取中......" #}</label><label id="no_ops_list" class="door_ops" href="javascript:void(0)" >{# trans "无操作" #}</label>'
+                                  + '<a id="opendoor_list" class="door_ops opendoor_list" onclick="show_opendoor(this.id, '+door_id_value+');" href="javascript:void(0)">{# trans "远程开门" #}</a>'
+                                  + '<a id="closedoor_list" class="door_ops closedoor_list" onclick="show_closedoor(this.id, '+door_id_value+');" href="javascript:void(0)">{# trans "远程关门" #}</a>'
+                                  + '<a id="cancelalarm" class="door_ops cancelalarm_list" onclick="control_door(this.id, '+door_id_value+')" href="javascript:void(0)">{# trans "取消报警" #}</a></td></tr>';
                            door_id_value = null;
                        }
                        html += "</tbody></table>";
@@ -651,7 +651,7 @@
             }
             else
             {
-                html += "<div id='id_datalist_view' class='NoDoor' style='margin:8px 2px 2px 2px;color:red;'>{% trans "当前系统中没有添加门或者没有查询到符合您需要的门!" %}</div>"
+                html += "<div id='id_datalist_view' class='NoDoor' style='margin:8px 2px 2px 2px;color:red;'>{# trans "当前系统中没有添加门或者没有查询到符合您需要的门!" #}</div>"
             }
 
             $("#id_door_loading").hide();
@@ -661,14 +661,14 @@
             {
                 $(".door_ops").hide();
             }
-            {% block door_state_height %}
+            {# block door_state_height #}
 			//alert($("#id_door_state").height());
             if($("#id_door_state").height() > 150)
             {
             	//alert("大于150");
                 $("#id_door_state").height(150);//最大150px
             }
-            {% endblock %}
+            {# endblock #}
         }
 
         function send_doors_data(mode, getUrl)
@@ -743,7 +743,7 @@
                                     if(confirm(gettext("当前门处于常开状态，是否禁用当天常开时间段后关门？")))
                                     {
                                         var stamp6 = new Date().getTime();;
-                                        getUrl = "/{{ request.surl }}iaccess/SendDoorData/?func=closepart&type=part&data="+ current_door +"&disable_and_close=true&stamp="+ stamp6;
+                                        getUrl = "/&#123;&#123; request.surl &#125;&#125;iaccess/SendDoorData/?func=closepart&type=part&data="+ current_door +"&disable_and_close=true&stamp="+ stamp6;
                                         send_doors_data(mode,getUrl);
                                     }
                                     need_break = true;
@@ -791,7 +791,7 @@
                     return false;
                 }
             }
-            getUrl = "/{{ request.surl }}iaccess/SendDoorData/?func="+ mode +"&type=part&data="+ door_id;
+            getUrl = "/&#123;&#123; request.surl &#125;&#125;iaccess/SendDoorData/?func="+ mode +"&type=part&data="+ door_id;
             send_doors_data(mode, getUrl);
         }
 
@@ -850,7 +850,7 @@
 
             //var stamp = new Date().getTime();
             //alert("gdev_filter"+gdev_filter);
-            getUrl = '/{{ request.surl }}iaccess/GetRTLog/?type=all&logid='+ logid +'&step=100'+ gdev_filter;
+            getUrl = '/&#123;&#123; request.surl &#125;&#125;iaccess/GetRTLog/?type=all&logid='+ logid +'&step=100'+ gdev_filter;
             //alert("getUrl"+getUrl);
             $.ajax({
                 type: "GET",
@@ -881,7 +881,7 @@
                         $("#monitor_area select").change(function(){
                         	$("#id_door_state_value").html("");
                             //$("#id_datalist_view").remove();
-                            var url = "/{{ request.surl }}iaccess/GetData/?func=doors&type=area&area_id="+$(this).val();
+                            var url = "/&#123;&#123; request.surl &#125;&#125;iaccess/GetData/?func=doors&type=area&area_id="+$(this).val();
                             //alert("getUrl1"+url);
                             gdev_filter = "&change=area_id_"+$(this).val()+"&area_id="+$(this).val();
                             get_doors_area_device(url);
@@ -897,7 +897,7 @@
                                 var area = $("#monitor_area select").val();
                                 if(area != 0)
                                 {
-                                    var url = "/{{ request.surl }}iaccess/GetData/?func=doors&type=area&area_id="+ area;
+                                    var url = "/&#123;&#123; request.surl &#125;&#125;iaccess/GetData/?func=doors&type=area&area_id="+ area;
                                     //alert("getUrl2"+url);
                                     gdev_filter = "&change=area_id_"+$(this).val()+"&area_id="+ area;
                                     get_doors_area_device(url);
@@ -906,7 +906,7 @@
                                 }
                                 area = null;
                             }
-                            var url = "/{{ request.surl }}iaccess/GetData/?func=doors&type=device&device_id="+ val;
+                            var url = "/&#123;&#123; request.surl &#125;&#125;iaccess/GetData/?func=doors&type=device&device_id="+ val;
                             //alert("getUrl3"+url);
                             gdev_filter = "&change=device_id_"+ val +"&device_id="+ val;
                             get_doors_area_device(url);
@@ -923,7 +923,7 @@
                                 var dev = $("#monitor_device select").val();
                                 if(dev != 0)
                                 {
-                                    var url = "/{{ request.surl }}iaccess/GetData/?func=doors&type=device&device_id="+ dev;
+                                    var url = "/&#123;&#123; request.surl &#125;&#125;iaccess/GetData/?func=doors&type=device&device_id="+ dev;
                                     //alert("getUrl4"+url);
                                     gdev_filter = "&change=device_id_"+dev+"&device_id="+ dev;
                                     get_doors_area_device(url);
@@ -935,7 +935,7 @@
                                     var area = $("#monitor_area select").val();
                                     if(area != 0)
                                     {
-                                        var url = "/{{ request.surl }}iaccess/GetData/?func=doors&type=area&area_id="+ area;
+                                        var url = "/&#123;&#123; request.surl &#125;&#125;iaccess/GetData/?func=doors&type=area&area_id="+ area;
                                         //alert("getUrl6"+url);
                                         gdev_filter = "&change=area_id_"+ area_id +"&area_id="+ area_id;
                                         get_doors_area_device(url);
@@ -948,7 +948,7 @@
                                 dev = null;
                             }
 
-                            var url = "/{{ request.surl }}iaccess/GetData/?func=doors&type=door&door_id="+ val;
+                            var url = "/&#123;&#123; request.surl &#125;&#125;iaccess/GetData/?func=doors&type=door&door_id="+ val;
                             //alert("getUrl7"+url);
                             gdev_filter = "&change=door_id_"+ val +"&door_id="+ val;
                             get_doors_area_device(url);
@@ -959,7 +959,7 @@
                         has_doors = true;
                     }
                     
-					{% block aux_event_monitor %} {% endblock %}//电子地图中辅助输入输出的图标监控 ---by liangm 20120724
+					{# block aux_event_monitor #} {# endblock #}//电子地图中辅助输入输出的图标监控 ---by liangm 20120724
                     var has_alarms = false;//单次请求中是否有报警事件（对应图标）
                     //报警状态： 1 门被意外打开， 2 防拆， 4 胁迫密码开门， 8胁迫指纹开门
                     //门状态：0 无门磁， 1 门开， 2门关
@@ -1349,7 +1349,7 @@
                                         });
                                     }
                                     var mode = $(this).attr("id");
-                                    getUrl = "/{{ request.surl }}iaccess/SendDoorData/?func="+ mode +"&type=part&data="+ alarm_doors;//所有报警的门非所有门，故type=part而非all
+                                    getUrl = "/&#123;&#123; request.surl &#125;&#125;iaccess/SendDoorData/?func="+ mode +"&type=part&data="+ alarm_doors;//所有报警的门非所有门，故type=part而非all
                                     send_doors_data(mode,getUrl);
                                     mode = null;
                                     alarm_doors = null;
@@ -1463,7 +1463,7 @@
                                 rtlisthtml = '<tr class="CommonLog '+row+'">';
                             }
                             
-                            {% if request.user|HasPerm:"contenttypes.can_ShowVideoWhileMonitoring" %}
+                            {# if request.user|HasPerm:"contenttypes.can_ShowVideoWhileMonitoring" #}
                             if(datas.link_video != "")  //视频联动
                             {
                                 if($.browser.msie)
@@ -1481,9 +1481,9 @@
                                         if(last_vid_brand ==0 || last_vid_brand != video_brand || (video_brand == 101 && last_vid_id != vid_id))
                                         {
                                             var win_content = '<div id="id_vid_hkocx_1"></div><div id="win_content">'+datas.event_point+' '+datas.content+' '+datas.emp+'</div>';
-                                            var window_width = {{ popup_window_width }};
-                                            var window_height = {{ popup_window_height }};
-                                            {% block vid_new_window_settings %}var posy = $(document).scrollTop()+$(window).height()-window_height-10;{% endblock %}
+                                            var window_width = &#123;&#123; popup_window_width &#125;&#125;;
+                                            var window_height = &#123;&#123; popup_window_height &#125;&#125;;
+                                            {# block vid_new_window_settings #}var posy = $(document).scrollTop()+$(window).height()-window_height-10;{# endblock #}
                                             try
                                             {
                                                 if(last_vid_brand == 101 && document.getElementById("Netocx1").object != null)
@@ -1585,9 +1585,9 @@
                                     }
                                 }                                                                 
                             }
-                            {% endif %}//end of can_ShowVideoWhileMonitoring
+                            {# endif #}//end of can_ShowVideoWhileMonitoring
 
-                            {% block worktable_map_js %}
+                            {# block worktable_map_js #}
                             rtlisthtml += '<td width="15%">'+datas.time+'</td>'
                             			+ '<td width="12%">'+datas.device+'</td>'
                             			+ '<td width="15%">'+datas.event_point+'</td>'
@@ -1597,10 +1597,10 @@
                                      	+ '<td width="8%">'+datas.state+'</td>'
                                      	+ '<td width="10%">'+datas.verified+'</td>'
 										+ '<td class = "displayN">'+type+'</td></tr>';
-                            {% endblock %}
-                            {% block show_monitor_events %}
+                            {# endblock #}
+                            {# block show_monitor_events #}
                             $("#id_monitor_events").find("#rt_content").prepend(rtlisthtml);
-                            {% endblock %}
+                            {# endblock #}
                             if(row == "row0")
                             {
                                 row = "row1";
@@ -1653,7 +1653,7 @@
                                 $(document.body).prepend('<div id="cap_message" style="border:#b9c9ef 1px solid;z-index:100;width:230px;height:200px;position:absolute; display:none;background:#cfdef4; bottom:0;left:0;">'
                                                         +'<div id="alarm_message_up" style="border:1px solid #fff;border-bottom:none;width:100%;font-size:12px;color:#1f336b;">'
                                                             +'<span id="alarm_message_close" style="float:right;padding:5px 0 5px 0;width:16px;line-height:auto;color:red;font-size:12px;font-weight:bold;text-align:center;cursor:pointer;">X</span>'
-                                                            +'<div id="alarm_message_title" style="padding:2px 0 5px 5px;width:100px;line-height:18px;text-align:left;">{% trans "抓拍照片" %}</div><div style="clear:both;"></div>'
+                                                            +'<div id="alarm_message_title" style="padding:2px 0 5px 5px;width:100px;line-height:18px;text-align:left;">{# trans "抓拍照片" #}</div><div style="clear:both;"></div>'
                                                             +'<img id="id_photo_img" width="210px" height="160px" src="'+datas.cap_photo+'"/>'
                                                         +'</div>'
                                                     +'</div>');
@@ -1679,9 +1679,9 @@
 //                                $(document.body).prepend('<div id="alarm_message" style="border:#b9c9ef 1px solid;z-index:100;width:400px;height:200px;position:absolute; display:none;background:#cfdef4; bottom:0; right:1;">'
 //                                                        +'<div id="alarm_message_up" style="border:1px solid #fff;border-bottom:none;width:100%;font-size:12px;color:#1f336b;">'
 //                                                            +'<span id="alarm_message_close" style="float:right;padding:5px 0 5px 0;width:16px;line-height:auto;color:red;font-size:12px;font-weight:bold;text-align:center;cursor:pointer;">X</span>'
-//                                                            +'<div id="alarm_message_title" style="padding:2px 0 5px 5px;width:100px;line-height:18px;text-align:left;">{% trans "报警事件" %}</div><div style="clear:both;"></div>'
+//                                                            +'<div id="alarm_message_title" style="padding:2px 0 5px 5px;width:100px;line-height:18px;text-align:left;">{# trans "报警事件" #}</div><div style="clear:both;"></div>'
 //                                                            +'<div style="clear:both;"></div>'
-//                                                            +'<table border="1" width="400px"><tr align="center"><td>{% trans "时间" %}</td><td>{% trans "事件点" %}</td><td>{% trans "事件描述" %}</td></tr>'
+//                                                            +'<table border="1" width="400px"><tr align="center"><td>{# trans "时间" #}</td><td>{# trans "事件点" #}</td><td>{# trans "事件描述" #}</td></tr>'
 //                                                            +'<tr><td>'+datas.time+'</td><td>'+datas.event_point+'</td><td>'+datas.content+'</td></tr></table>'
 //                                                        +'</div>'
 //                                                    +'</div>');
@@ -1731,17 +1731,17 @@
             });
         }
         //intervalID=window.setInterval('OnRefresh()', 3000);//每三秒执行刷新函数
-        //window.showModalDialog("/{{ request.surl }}video/VideoMonitorPage/?vodid=7&ch=0" , "", "location=no;directories=no;scrollbars=no;toolbar=no;center=yes;status=0;dialogWidth=420px;dialogHeight=360px");
+        //window.showModalDialog("/&#123;&#123; request.surl &#125;&#125;video/VideoMonitorPage/?vodid=7&ch=0" , "", "location=no;directories=no;scrollbars=no;toolbar=no;center=yes;status=0;dialogWidth=420px;dialogHeight=360px");
         //取所有门或者符合条件的门
         var stamp = new Date().getTime();
-        var url = "/{{ request.surl }}iaccess/GetData/?func=doors&type=all&stamp="+ stamp;
+        var url = "/&#123;&#123; request.surl &#125;&#125;iaccess/GetData/?func=doors&type=all&stamp="+ stamp;
         stamp = null
         get_doors_area_device(url);
         url = null;
 
         window.setTimeout('OnRefresh()', 1000)//第一次刷新等1s执行刷新函数
 
-        {% block dialog %}
+        {# block dialog #}
         /**卡未注册新增卡***/
         function fun_submit(href, div_dialog, msg, btn_trans){
             $("#id_span_title",div_dialog).find("span:not(.icon_SiteMap)").remove();
@@ -1867,17 +1867,17 @@
             date = null;
             return false;
         }); 
-        {% endblock %}
+        {# endblock #}
         
-        {% else %}<!--can_MonitorAllPage-->
+        {# else #}<!--can_MonitorAllPage-->
             alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
-            window.location.href = "/{{ request.surl }}accounts/login/";
-        {% endif %}<!--can_MonitorAllPage-->
-    {% endblock %}<!--end of monitor_log-->
+            window.location.href = "/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+        {# endif #}<!--can_MonitorAllPage-->
+    {# endblock #}<!--end of monitor_log-->
 
-    {% else %}<!--can_RTMonitorPage-->
+    {# else #}<!--can_RTMonitorPage-->
         alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
-        window.location.href = "/{{ request.surl }}accounts/login/";
-    {% endif %}<!--can_RTMonitorPage-->
+        window.location.href = "/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+    {# endif #}<!--can_RTMonitorPage-->
     
-{% endblock %}<!--end of addjs-->
+{# endblock #}<!--end of addjs-->

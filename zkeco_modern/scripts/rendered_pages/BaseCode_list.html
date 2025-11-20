@@ -1,0 +1,400 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-us" xml:lang="en-us" ><head>
+	<title>EN: 载入中...</title>
+	
+	
+	<meta http-equiv="X-UA-Compatible" content="IE=EmulateIE7" /><!--解决IE8链接下划线贴得太近-->
+	<meta name="robots" content="NONE,NOARCHIVE" />
+	<link rel="shortcut icon" href="/media//images/ZKECO16.ico" type="image/x-icon" ></link>
+	
+    
+<link rel="stylesheet" type="text/css" href="/media//css/menu.css" media="screen" />
+<link rel="stylesheet" type="text/css" href="/media//css/base.css" />
+
+<link rel="stylesheet" type="text/css" href="/media//css/jquery.clockpick.css" />
+<link rel="stylesheet" type="text/css" href="/media//css/sf.css" media="screen" />
+<link href="/media//css/css.css" rel="stylesheet" />
+<link href="/media//css/tabs.css" rel="stylesheet" />
+<link rel="stylesheet" type="text/css" href="/media//css/jquery.treeview.css" />
+<link rel="stylesheet" type="text/css" href="/media//css/datepiker.css" media="screen" />
+<link rel="stylesheet" type="text/css" href="/media//themes//css/skin.css" media="screen" />
+
+
+
+</head>
+<body  class="indexBody" >
+	<div id="id_page_load">
+		<div class="div_page_load">
+			<div style="float: left; height: 40px;margin-right:6px">
+				<img src="/media//img/loadpage.gif">
+			</div>
+			<div style="line-height: 40px; height: 40px; display: block;text-align:left; float: left; color:#32598A; font-size:14px;">EN: 正在处理，请稍候...</div>
+			<div class="clear displayN"></div>
+		</div>
+		<div class="clear displayN"></div>
+	</div>
+    <div id="id_gz" style="position:absolute;z-index:26;display:none;"></div>
+	<input type="hidden" id="id_user" value="" />
+    <div class='com_tooltip_class' id="obj_tooltip"> </div>
+	<div class="container">
+		
+    	<div class="headBox">
+        	<div class="headRight">
+				
+					
+						<div class="headLogo_oem">
+					
+				
+                	<div class="headTopRight">
+                        <div class="headTopLeft">
+                            <ul id="id_true_app"  class="Link_hui font12 noUnderl">
+								 <li class="borderR "  name="worktable"><a id="id_worktable" href="#">EN: 我的工作面板</a></li> 
+								
+                            </ul>
+                        </div>
+                    	<div class="headTopRight_t">
+                            <ul class="Link_hui font12 noUnderl">
+                                <li class="head_welcome_info">EN: 欢迎，.</li>
+                                <li><span class="btn_option"></span><a id="id_btn_option" href="javascript:void(0);" ref="/option">EN: 个性设置</a></li>
+                                <li>
+									<span class="btn_help"></span>
+									<div class='floatL btn_help_box' style='position:relative\9;z-index:10\9;'>
+										<ul id="id_help_more" class='nav font12 noUnderl floatL help_more'>
+											<li style="margin-right:0px;">
+												<a class="" href='javascript:void(0)'>EN: 帮助</a>
+												<ul class="help_more_list clearL">
+													<li><a id="id_btn_help" href="" target="_blank">EN: 系统手册</a></li>
+													<li><a id="id_copy_right" href="javascript:void(0);">EN: 关于 ECO</a></li>
+												</ul>
+											</li>
+										</ul>
+									</div>
+								</li>
+								<li>
+									<span class="btn_changePW"></span>
+									<a id="id_btn_changePW" href='javascript:void(0);' ref="/accounts/password_change/">EN: 修改密码</a> 
+								</li>
+                                <li>
+									<span class="btn_logout"></span>
+									<a id="id_btn_logout" href="javascript:void(0);" ref="/accounts/logout/">EN: 注销</a>
+								</li>
+                            </ul>
+                        </div>
+						
+						
+
+						
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tabBody">
+			<div class="tabs_outBox">
+				<ul id="id_app_menu" class="Link_tabs font12 noUnderl">
+					
+				</ul>
+				<div class="tabBodyR">
+					<ul id="nav"  class="nav Link_tabs font12 noUnderl" style="display:none;">
+						<li class="NavMore">More...<br /><ul class="menu_more"></ul></li>
+					</ul>
+				</div>
+			</div>
+			<!--<div id="id_loading"  class="displayN tabBodyR_loading nowrap">
+				<img src="/media//images/loading.gif" align="top" /> EN: 正在处理中...
+			</div>-->
+				<div class="spacerT"><img src="/media/images/spacer.gif" width="887px" height="0px" /></div>
+			</div>
+		
+				<div class="spacerT"><img src="/media/images/spacer.gif" width="887px" height="0px" /></div>
+            <div class="leftBox">        
+            	<div class="leftTop">
+                </div>
+			</div>
+        <div class="rightBox">				
+			<div id="id_first_content" class="hide">
+            
+			</div>
+		</div>      
+		    
+	    <div id="id_main_content">
+<input type="hidden" id="id_sys_cur_app" value="" /><!-- 当前应用名称 -->
+<input type="hidden" id="id_sys_cur_model" value="" /><!-- 当前页面模型名称 -->
+<input type="hidden" id="id_sys_cur_appurl" value="" /><!-- APP的URL -->
+<input type="hidden" id="id_sys_cur_grid" value="#id_datalist" /><!-- 基于模型的grid的DIV -->
+<input type="hidden" id="id_sys_cur_exportfields" value="" /><!-- 导出时的报表字段-->
+<input type="hidden" id="id_sys_cur_exporttitle" value="" /><!-- 导出PDF时上的报表头 -->
+<input type="hidden" id="id_sys_isModelExport" value="true" /><!-- 设置当前是数据计算模型，还是实例模型 -->
+<input type="hidden" id="id_sys_virtual_app" value="" /><!-- 当前应用名称 -->
+
+
+<div class="leftBox" style="top: 115px;">
+    
+    <div id="id_model_extend" class="noUnderl">
+            <!--  记录编辑  新增 日志操作-->
+            <div class="leftBoxTop">
+                <ul class="Link_blue2 img_padding">
+                    
+                    <!--endblock of for_special_menu-add by darcy-->
+                    <div id="id_op_for_tab">
+                    
+                    <!--endblock of op_for_tab-add by darcy-->
+                    </div>
+                </ul>
+            </div>
+            <!-- 关联操作 -->
+            
+            <div class="leftBoxMiddle">
+                <ul class="Link_blue2 img_padding">
+                    
+                        
+                    
+                    
+                             
+                    
+                	
+                    <li style="background:none !important;">
+                         <div id="id_line">
+                        <!-- 
+                              <div id="id_searchbar">
+                                  
+                                   <span class="Link_blue1 displayB" id="id_advanced_search" ><a href="javascript:void(0)" class="action_advancedSearch">高级查询</a></span>
+                                  
+                                  <span class="Link_blue1 displayB"><a href="javascript:void(0)" class="action_topClear" id="id_clear_advance">清除查询</a></span>
+                              </div>
+                            -->
+                        	
+                        </div>
+                    </li>
+                </ul>
+            </div>
+            <!--end of block leftBoxMiddle-->
+            <!-- 联系我们 -->
+             <div class="Link_blue1 lineH22 img_padding leftBoxBottom">            
+                 <ul>
+                   <!-- <li><a href="javascript:void(0)">Ver. 0.5.0</a></li>-->
+                 <!--    <li><a href="javascript:void(0)" class="btn_helpOnline">相关帮助</a></li>-->
+                    <!--<li><img src="/media/images/icon_r_r2.gif" align="absmiddle"></img> <a href="javascript:void(0)">在线客服</a></li>-->
+                    <!--<li><a href="javascript:void(0)"class="btn_contact">联系我们</a></li>-->
+                 </ul>
+             </div>
+        <!-- end Right -->
+    </div>
+    <!--endblock of model_extend-add by darcy-->
+</div>
+
+<!-- TOP -->
+ <div class="rightBox">
+ 		
+        <div id="id_tab" >
+            <div class="portlet-header sfActive">
+                
+                <ul>
+                    <li class="floatL">
+                        <span class='icon_SiteMap'>&nbsp;</span>当前位置：
+                        
+                            <span id="id_rel_log"></span>
+                            
+                        
+                    </li>
+                </ul>
+                <!-- help link was intentionally left commented out -->
+                <!--<ul><li  class="floatR"><a target="_blank" title="当前页帮助" class="icon_help_current" href="/media/help.chm"></a></ul>-->
+                <ul class="floatR set_index Link_blue1">
+                   <!-- <li class="floatL"><a name="._default_page" rel="" href="javascript:void(0);">设为本子系统首页</a></li>
+                     <li class="floatL"><a name="base.site_default_page" rel="" href="">设为整个系统首页</a></li> -->
+                </ul>
+				<!-- 屏蔽加入我的工作台快捷键 <ul class="nav Link_white font12 noUnderl floatL ul_action_more">
+					<li>加入我的工作台<br />
+						<ul>
+							<li><a href="">a区域</a></li>
+							<li><a href="">b区域</a></li>
+						</ul>
+					</li>
+				</ul>
+                -->
+            </div>
+        </div>
+        
+        
+            
+                
+            
+            
+           
+           <div class="portlet floatL" id="id_main_div">
+                <div id="id_result">
+                </div>
+                <div class="div_inline" id="id_datalist_main">
+                    <div class="div_ListAndFilter">
+                    
+                    <div id="id_datalist" class="div_box clearB"><h1>&nbsp;</h1><!--<div class="dt_hdiv_right"></div>-->
+                      <!--endblock of addminddiv-add by darcy-->
+                    </div>
+                    <!--endblock of datalist_before-add by darcy-->
+                    
+                     </div>
+                    
+                    <div id="id_extend">
+                    
+    <div class ="div_box" id="id_bascode_catagory_div" style="float:left;width:20%; margin-right:0px !important;"><h1>&nbsp;</h1>
+     <div style="overflow: auto; height: 323px; *height: 321px;_height:322px;"><ul id='id_base_category'></ul></div>
+     
+    </div>
+<!--endblock of AddDiv-add by darcy-->
+                    </div>
+                    <!--endblock of extend_before-add by darcy-->
+                </div>
+           </div>
+        <!--endblock of id_main_div-add by darcy-->
+    <!--endblock of content-add by darcy-->
+
+</div>
+</div>
+         
+    </div>
+	<div id="error_tooltip" style="display:none"> </div>
+	<div class="sys_Message" style="display:none">
+		<div class="sys_Message_l"></div>
+		<div class="sys_Message_m">EN: 设置成功!</div>
+		<div class="sys_Message_r"></div>
+	</div>
+	<input type="hidden" id="id_sys_type" value='zkeco'/>
+	<input type="hidden" id="id_oem" value='mysite'/>
+	<input type="hidden" id="id_zkaccess_att" value='False'/>
+	<input type="hidden" id="id_zkaccess_5to4" value='False'/>
+	<input type="hidden" id="id_surl" value=''/>
+	<input type="hidden" id="id_dbapp_url" value='/'/>
+	<input type="hidden" id="id_browse_title" value=''/>
+	<input type="hidden" id="id_current_year" value='2025'/>
+    
+<script src="/media//jslib/appconfig.js"> </script>
+<script src="/media//jslib/i18n.js"></script>
+<script src="/media//jslib/jquery.js"></script>
+<script src="/media//jslib/jquery.validate.js"></script>
+<script src="/media//jslib/i18n_en-us.js"></script>
+
+
+
+
+
+<script src="/media//jslib/jquery.plus.js"></script>
+<script src="/media//jslib/jquery.zcommon.js"></script>
+<script src="/media//jslib/widgets.js"></script>
+<script src="/media//jslib/jquery.tools.min.js"></script>
+
+<script src="/media//jslib/jquery.zgrid.js"></script>
+<script src="/media//jslib/datalist.js"></script>
+<script src="/media//jslib/datalistadd.js"></script>
+<script src="/media//jslib/report_design.js"></script>
+
+
+    
+	<script src="/media//jslib/init_base_frame.js"></script>
+    <script>
+	init_page();
+	var lang = $("html").attr("lang");
+	if(lang == "zh-cn" || lang == "zh-tw")
+	{	
+		$("#id_btn_help").attr("href","/file/help/help.html");
+	}
+	else
+	{
+		$("#id_btn_help").attr("href","/file/help_en/help_en.html");
+	}
+	//skin_creat_link();
+	//skin_add_event();
+	
+		
+		
+	
+	
+	</script>
+    
+<script>
+        $(function(){
+            //日志
+            init_log($("#id_log_dialog"),"&#123;&#123; dataOpt.verbose_name|translate_str|cap }} "+gettext("日志"));
+            search_init($("#id_search"),$("#id_datalist"));//查找
+            render_widgets($("#id_search"));//添加验证
+            /***首页设置开始 
+            $("#id_tab").find("a").click(function(e){
+                var surl="/&#123;&#123;surl}}";
+                var value=$(e.target).attr("rel");
+                value=value.substring(value.indexOf(surl)+surl.length,value.length);
+                var name=e.target.name;
+                $.ajax({
+                    url:"&#123;&#123;dbapp_url}}set_option",
+                    dataType:"json",
+                    data:{q:name+"___"+value},
+                    type:"POST",
+                    success:function(msg){
+                        if(msg.Info=="OK"){
+                            $.zk.sys_message($(".sys_Message"),"设置成功!",4000);
+                        }else{
+                            $.zk.sys_message($(".sys_Message"),"设置失败!",4000);
+                        }
+                    },
+                    error:function (XMLHttpRequest, textStatus, errorThrown) {
+                            alert(textStatus+" "+errorThrown);
+                    }
+                });
+                return false;
+            });
+            首页设置结束****/
+        });
+        
+        
+        &#123;% block getdatalist %}
+            var str_query="&#123;% autoescape off %}&#123;&#123;query}}&#123;% endautoescape %}";
+            $("#id_datalist").model_grid({
+                    base_query:str_query.split("&"),
+                    model_action_container:$("#id_op_for_tab"),
+                    dbapp_url:"&#123;&#123; dbapp_url }}",
+                    model_url:"&#123;&#123; model_url }}",
+                    layout_types: [],//不显示图片模式
+                    &#123;% block row_operations %}
+                        row_operations:["op_edit","_delete","View_detail"&#123;% block extend_row_operations %}&#123;% endblock %}],
+                    &#123;% endblock %} 
+                    init_after_get_jdata:function(){
+                        $("#id_datalist").get(0).g.a_div.after("<div class='floatL' style='_position:relative;_z-index:10;'><ul id='id_action_more' class='nav Link_blue2 font12 noUnderl floatL ul_action_more'><li><a href='javascript:void(0)' class='action_more'>&#123;% trans '更多' %}...</a><ul class='action_more_list'></ul></li></ul></div>");
+                        var $app_menu=$("#id_datalist").get(0).g.a_div;
+                        var $menu_more=$(".action_more_list");
+                        var min_width=380;
+                        resize_menu($app_menu,$menu_more,min_width,"id_action_more");
+                        $('.nav li').sfHover();						
+						
+                        &#123;% block extrajs %}&#123;% endblock %}
+                    },
+                    &#123;% block extend_model_grid %}&#123;% endblock %}
+
+                    &#123;% block disabled_actions %}
+                        disabled_actions:["_change"&#123;% block extend_disabled_actions %}&#123;% endblock %}],
+                    &#123;% endblock %} 
+                    cached_data: &#123;&#123; datalist }}//保证最后一个配置不以','结尾
+            });
+        &#123;% endblock %} 
+        &#123;% autoescape off %}
+            &#123;% block addjs %}&#123;% endblock %} 
+            
+//            function show_help()
+//            {
+//                var ua = navigator.userAgent.toLowerCase();
+//                if (ua.indexOf('MSIE'))
+//                {
+//                    var chm = new ActiveXObject("wscript.shell")
+//                    chm.run("http://192.168.8.47:80/media/help_en.chm")
+//                }
+//                else if (ua.indexOf('firefox'))
+//                {
+//
+//                }
+//            }
+        &#123;% endautoescape %}
+    </script>
+
+
+</body>
+</html>
+

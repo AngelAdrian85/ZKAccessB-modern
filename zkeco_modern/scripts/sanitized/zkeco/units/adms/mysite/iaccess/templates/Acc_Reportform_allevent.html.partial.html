@@ -1,22 +1,22 @@
-{% extends "Acc_Reportform.html" %}
-{% load i18n %}
+{# extends "Acc_Reportform.html" #}
+{# load i18n #}
 
-{% block id_main_div_report %}
-    {% if request.user|HasPerm:"contenttypes.can_AllEventReportPage" %}
+{# block id_main_div_report #}
+    {# if request.user|HasPerm:"contenttypes.can_AllEventReportPage" #}
 
-    {% if request.user|HasPerm:"iaccess.browse_accrtmonitor" %}
+    {# if request.user|HasPerm:"iaccess.browse_accrtmonitor" #}
     
     <div ><li id="id_model_export" style="display:none"><a class="action_Model_Export" href="javascript:void(0)" alt="export"></a></li></div>
 
-    <div id="id_datalist" style="z-index:-1" class="div_box h280"><h1>{% trans "所有事件" %}</h1>
+    <div id="id_datalist" style="z-index:-1" class="div_box h280"><h1>{# trans "所有事件" #}</h1>
     </div>
-    {% endif %}<!--browse_accrtmonitor-->
-    {% endif %}<!--contenttypes.can_AllEventReportPage-->
-{% endblock %}
+    {# endif #}<!--browse_accrtmonitor-->
+    {# endif #}<!--contenttypes.can_AllEventReportPage-->
+{# endblock #}
 
-{% block acc_reportform %}
-    {% if request.user|HasPerm:"contenttypes.can_AllEventReportPage" %}
-    {% if request.user|HasPerm:"iaccess.browse_accrtmonitor" %}
+{# block acc_reportform #}
+    {# if request.user|HasPerm:"contenttypes.can_AllEventReportPage" #}
+    {# if request.user|HasPerm:"iaccess.browse_accrtmonitor" #}
     
     // 获取服务器的时间
     var month_range = 3;// 查询记录的时间范围，单位：月，必须大于0
@@ -36,7 +36,7 @@
     {
         $.ajax({
             type: "POST",
-            url: "/{{ request.surl }}iaccess/GetData/?func=init_search_time&month_range="+init_search_month,
+            url: "/&#123;&#123; request.surl &#125;&#125;iaccess/GetData/?func=init_search_time&month_range="+init_search_month,
             dataType: "json",
             async: false,
             success: function(datas)
@@ -104,8 +104,8 @@
     // 自定义查询条件
     $("#id_header_search").hide();
     $("#id_header_clear").hide();
-    $("#id_header_search").parent().append('<a id="id_custom_header_search" class="floatL" href="javascript:void(0)">{% trans "查询" %}</a>');
-    $("#id_header_clear").parent().append('<a id="id_custom_header_clear" class="floatL" href="javascript:void(0)">{% trans "清除" %}</a>');
+    $("#id_header_search").parent().append('<a id="id_custom_header_search" class="floatL" href="javascript:void(0)">{# trans "查询" #}</a>');
+    $("#id_header_clear").parent().append('<a id="id_custom_header_clear" class="floatL" href="javascript:void(0)">{# trans "清除" #}</a>');
     
     // 自定义查询按钮事件
     $("#id_custom_header_search").click(function(){
@@ -147,7 +147,7 @@
     });
     
     $("#id_datalist").model_grid({
-        "model_url": "{{ dbapp_url }}iaccess/AccRTMonitor/",
+        "model_url": "&#123;&#123; dbapp_url &#125;&#125;iaccess/AccRTMonitor/",
         "model_actions": true,
         "object_actions": false,
         "obj_edit": false,
@@ -164,7 +164,7 @@
         "init_after_get_jdata": function(){
             $("#search_id_time__gte").val(start_time);
             $("#search_id_time__lte").val(end_time);
-            $("#id_sys_cur_exporttitle").val('{% trans "全部门禁事件" %}'); 
+            $("#id_sys_cur_exporttitle").val('{# trans "全部门禁事件" #}'); 
             $("#id_datalist div.action").append('<li id="id_export"><a alt="export" href="javascript:void(0)" class="action_Model_Export">'+gettext("导出报表")+'</a></li>')
             $("#id_export").click(function(){
                 $("#id_model_export").click();
@@ -187,7 +187,7 @@
                     var operate_obj = $(this);
                     $.ajax({
                         type: "POST",
-                        url: "/{{ request.surl }}iaccess/GetData/?func=get_search_option",
+                        url: "/&#123;&#123; request.surl &#125;&#125;iaccess/GetData/?func=get_search_option",
                         dataType: "json",
                         data: {"start_time": $("#search_id_time__gte").val(), "end_time": $("#search_id_time__lte").val(), "field_name": field_name},
                         async: false,
@@ -212,10 +212,10 @@
     });
 
         
-    {% endif %}<!--browse_accrtmonitor-->
-    {% else %}
+    {# endif #}<!--browse_accrtmonitor-->
+    {# else #}
         $("#id_search").remove();
         alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
-        window.location.href = "/{{ request.surl }}accounts/login/";
-    {% endif %}<!--contenttypes.can_AllEventReportPage-->
-{% endblock %}
+        window.location.href = "/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+    {# endif #}<!--contenttypes.can_AllEventReportPage-->
+{# endblock #}

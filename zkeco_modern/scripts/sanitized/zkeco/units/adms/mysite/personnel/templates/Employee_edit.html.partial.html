@@ -7,179 +7,179 @@
        </EMBED>
    </COMMENT>
 
-{% extends "data_edit.html" %}
-{% load i18n %}
+{# extends "data_edit.html" #}
+{# load i18n #}
 
-{% block form %}
-    {% if request.user|HasPerm:"personnel.add_employee" or request.user|HasPerm:"personnel.change_employee" %}
-    {% autoescape off %} 
+{# block form #}
+    {# if request.user|HasPerm:"personnel.add_employee" or request.user|HasPerm:"personnel.change_employee" #}
+    {# autoescape off #} 
     <tr>
         <td>
             <div class="displayN">
                 <table>
                     <tr>
-                        {{ form.lng }}
+                        &#123;&#123; form.lng &#125;&#125;
                     </tr>
                     <tr>
-                        {{ form.tcount }}
+                        &#123;&#123; form.tcount &#125;&#125;
                     </tr>
                     <tr>
-                        {{ form.tfids }}
+                        &#123;&#123; form.tfids &#125;&#125;
                     </tr>
                     <tr>
-                        {{ form.fpcode }}
+                        &#123;&#123; form.fpcode &#125;&#125;
                     </tr>
                     <tr>
-                        {{ form.tcount10 }}
+                        &#123;&#123; form.tcount10 &#125;&#125;
                     </tr>
                     <tr>
-                        {{ form.tfids10 }}
+                        &#123;&#123; form.tfids10 &#125;&#125;
                     </tr>
                     <tr>
-                     {{ form.pin_width }}
+                     &#123;&#123; form.pin_width &#125;&#125;
                     </tr>
                 </table>
             </div>
             <div id="id_emp_info" class="div_box1 floatL">
-                <h2>{% trans '人员基础资料' %}</h2>
+                <h2>{# trans '人员基础资料' #}</h2>
                 <table id="ic_emp_info_tbl" border="0" cellspacing="0" cellpadding="0" class="displayB">
                     <tr>
-                        <th height="20">{{ form.PIN|field_as_label_tag }}</th>
-                        <td>{{ form.PIN.as_widget }}</td>
+                        <th height="20">&#123;&#123; form.PIN|field_as_label_tag &#125;&#125;</th>
+                        <td>&#123;&#123; form.PIN.as_widget &#125;&#125;</td>
                         <td width="180">
                             <div  class="floatL lineH22" >
-                                <a id ="id_checkNo" class="Link_blue1" href="javascript:void(0)" onclick="javascript:check_PIN(this)">{% trans '验证' %}</a>
+                                <a id ="id_checkNo" class="Link_blue1" href="javascript:void(0)" onclick="javascript:check_PIN(this)">{# trans '验证' #}</a>
                             </div>
                             <div id='div_id_pin'  class="floatL color_orange lineH22"></div>
                         </td>
 
-                        <th>{{ form.City|field_as_label_tag }}</th>
-                        <td width="210">{{ form.City.as_widget }}</td>
-                        <td width="80" class="displayN">{{ form.City.errors }}</td>
+                        <th>&#123;&#123; form.City|field_as_label_tag &#125;&#125;</th>
+                        <td width="210">&#123;&#123; form.City.as_widget &#125;&#125;</td>
+                        <td width="80" class="displayN">&#123;&#123; form.City.errors &#125;&#125;</td>
                         <td rowspan="7" >
                             <div class="div_img floatL">
-                            <div class="displayN">{{ form.chkph }}</div>
-                            <div class="displayN">{{ form.install_language }}</div>
-                            <div class="ar_r_t"><div class="ar_l_t"><div class="ar_r_b"><div class="ar_l_b"><img id='id_img_personnel' width="120px" height="140px" src="{% if instance.photo %}/{{ request.surl }}file/{{ instance.photo.url }} {% else %}error.jpg{% endif %}" onerror="this.src='{{ MEDIA_URL }}/images/userImage.gif'"  alt="personnel photo" /></div></div></div></div></div>
+                            <div class="displayN">&#123;&#123; form.chkph &#125;&#125;</div>
+                            <div class="displayN">&#123;&#123; form.install_language &#125;&#125;</div>
+                            <div class="ar_r_t"><div class="ar_l_t"><div class="ar_r_b"><div class="ar_l_b"><img id='id_img_personnel' width="120px" height="140px" src="{# if instance.photo #}/&#123;&#123; request.surl &#125;&#125;file/&#123;&#123; instance.photo.url &#125;&#125; {# else #}error.jpg{# endif #}" onerror="this.src='&#123;&#123; MEDIA_URL &#125;&#125;/images/userImage.gif'"  alt="personnel photo" /></div></div></div></div></div>
                             <div class="clear"></div>
                             <div>
                                 <div style="position:absolute;">
-                                    {% trans '上传个人照片' %}<br /><span class="color_orange" style="padding-right:10px;">{% trans '(最佳尺寸为120×140像素)' %}</span>
-                                    <br />{{ form.photo.as_widget }}
+                                    {# trans '上传个人照片' #}<br /><span class="color_orange" style="padding-right:10px;">{# trans '(最佳尺寸为120×140像素)' #}</span>
+                                    <br />&#123;&#123; form.photo.as_widget &#125;&#125;
                                 </div>
                             </div>
                         </td>
                     </tr>
                     <tr>
-                        <th height="20">{{ form.EName|field_as_label_tag }}</th>
-                        <td>{{ form.EName.as_widget }}</td>
-                        <td>{{ form.EName.errors }}</td>
+                        <th height="20">&#123;&#123; form.EName|field_as_label_tag &#125;&#125;</th>
+                        <td>&#123;&#123; form.EName.as_widget &#125;&#125;</td>
+                        <td>&#123;&#123; form.EName.errors &#125;&#125;</td>
 
-                        {{ form.identitycard|field_as_td_h }}
+                        &#123;&#123; form.identitycard|field_as_td_h &#125;&#125;
                     </tr>
                     <tr class="cn_hide_lastname">
-                        <th height="20">{{ form.lastname|field_as_label_tag }}</th>
-                        <td>{{ form.lastname.as_widget }}</td>
-                        <td>{{ form.lastname.errors }}</td>
+                        <th height="20">&#123;&#123; form.lastname|field_as_label_tag &#125;&#125;</th>
+                        <td>&#123;&#123; form.lastname.as_widget &#125;&#125;</td>
+                        <td>&#123;&#123; form.lastname.errors &#125;&#125;</td>
 
-                        {{ form.Tele|field_as_td_h }}
+                        &#123;&#123; form.Tele|field_as_td_h &#125;&#125;
                     </tr>
                     <tr>
-                        <th height="20">{{ form.Gender|field_as_label_tag }}</th>
-                        <td>{{ form.Gender.as_widget }}</td>
-                        <td>{{ form.Gender.errors }}</td>
+                        <th height="20">&#123;&#123; form.Gender|field_as_label_tag &#125;&#125;</th>
+                        <td>&#123;&#123; form.Gender.as_widget &#125;&#125;</td>
+                        <td>&#123;&#123; form.Gender.errors &#125;&#125;</td>
 
-                        {{ form.hiretype|field_as_td_h }}
+                        &#123;&#123; form.hiretype|field_as_td_h &#125;&#125;
                     </tr>
                     <tr>
-                        <th height="20">{{ form.card_number_type|field_as_label_tag_no_asterisk }}</th>
-                        <td>{{ form.card_number_type.as_widget }}</td>
+                        <th height="20">&#123;&#123; form.card_number_type|field_as_label_tag_no_asterisk &#125;&#125;</th>
+                        <td>&#123;&#123; form.card_number_type.as_widget &#125;&#125;</td>
                         <td></td>
 
-                        {{ form.emptype|field_as_td_h }}
+                        &#123;&#123; form.emptype|field_as_td_h &#125;&#125;
                     </tr>
 
                     <tr>
                         <th height="20"></th>
                         <td>
-                            <span id="id_card_active_1" >{{ form.site_code.as_widget }}-{{ form.card_number.as_widget }}</span>
-                            <span id="id_card_active_2" class="displayN">{{ form.Card.as_widget }}</span>
+                            <span id="id_card_active_1" >&#123;&#123; form.site_code.as_widget &#125;&#125;-&#123;&#123; form.card_number.as_widget &#125;&#125;</span>
+                            <span id="id_card_active_2" class="displayN">&#123;&#123; form.Card.as_widget &#125;&#125;</span>
                         </td>
                         <td></td>
                         
-                        {{ form.FPHONE|field_as_td_h }}
+                        &#123;&#123; form.FPHONE|field_as_td_h &#125;&#125;
                     </tr>
                     <tr>
-                        <th height="20">{{ form.Password|field_as_label_tag }}</th>
-                        <td>{{ form.Password.as_widget }}<br/>{{ form.Password.help_text }}</td>
-                        <td>{{ form.Password.errors }}</td>
+                        <th height="20">&#123;&#123; form.Password|field_as_label_tag &#125;&#125;</th>
+                        <td>&#123;&#123; form.Password.as_widget &#125;&#125;<br/>&#123;&#123; form.Password.help_text &#125;&#125;</td>
+                        <td>&#123;&#123; form.Password.errors &#125;&#125;</td>
                         
-                        {{ form.Mobile|field_as_td_h }}
+                        &#123;&#123; form.Mobile|field_as_td_h &#125;&#125;
                     </tr>
                     <tr>
-                        <th height="20">{{ form.DeptID|field_as_label_tag }}</th>
-                        <td>{{ form.DeptID.as_widget }}</td>
-                        <td>{{ form.DeptID.errors }}</td>
+                        <th height="20">&#123;&#123; form.DeptID|field_as_label_tag &#125;&#125;</th>
+                        <td>&#123;&#123; form.DeptID.as_widget &#125;&#125;</td>
+                        <td>&#123;&#123; form.DeptID.errors &#125;&#125;</td>
                         
-                        {{ form.Birthday|field_as_td_h }}
+                        &#123;&#123; form.Birthday|field_as_td_h &#125;&#125;
                     </tr>
                     
                     <tr>
-                        {{ form.delayed_door_open|field_as_td_h }}
+                        &#123;&#123; form.delayed_door_open|field_as_td_h &#125;&#125;
                         <td></td>
-                        {{ form.email|field_as_td_h }}
+                        &#123;&#123; form.email|field_as_td_h &#125;&#125;
                     </tr>
                     <tr id="tr_extend_time">
-                        {{ form.extend_time|field_as_td_h }}
+                        &#123;&#123; form.extend_time|field_as_td_h &#125;&#125;
                         <td></td>
-                        {{ form.Hiredday|field_as_td_h }}
+                        &#123;&#123; form.Hiredday|field_as_td_h &#125;&#125;
                     </tr>
                     <tr id="en_displayN">
-                        <th height="20">{{ form.Education|field_as_label_tag }}</th>
-                        <td>{{ form.Education.as_widget }} {{ form.Education.errors }}</td>
+                        <th height="20">&#123;&#123; form.Education|field_as_label_tag &#125;&#125;</th>
+                        <td>&#123;&#123; form.Education.as_widget &#125;&#125; &#123;&#123; form.Education.errors &#125;&#125;</td>
                         <td></td>
-                        {{ form.Title|field_as_td_h }}
+                        &#123;&#123; form.Title|field_as_td_h &#125;&#125;
                     </tr>
                     <tr class="cn_show_political">
-                        <!-- <th height="20">{{ form.emptype|field_as_label_tag }}</th>
-                        <td>{{ form.emptype.as_widget }}</td>
-                        <td>{{ form.emptype.errors }}</td> -->
+                        <!-- <th height="20">&#123;&#123; form.emptype|field_as_label_tag &#125;&#125;</th>
+                        <td>&#123;&#123; form.emptype.as_widget &#125;&#125;</td>
+                        <td>&#123;&#123; form.emptype.errors &#125;&#125;</td> -->
                         
-                        {{ form.birthplace|field_as_td_h }}
-                        <!-- {{ form.Political|field_as_td_h }} -->
-                        <!--<td  >{{ form.homeaddress.errors }}</td>-->
+                        &#123;&#123; form.birthplace|field_as_td_h &#125;&#125;
+                        <!-- &#123;&#123; form.Political|field_as_td_h &#125;&#125; -->
+                        <!--<td  >&#123;&#123; form.homeaddress.errors &#125;&#125;</td>-->
                     </tr>
                     <tr>
-                        <th height="20">{{ form.Privilege|field_as_label_tag }}</th>
-                        <td>{{ form.Privilege.as_widget }}</td>
-                        <td>{{ form.Privilege.errors }}</td>
+                        <th height="20">&#123;&#123; form.Privilege|field_as_label_tag &#125;&#125;</th>
+                        <td>&#123;&#123; form.Privilege.as_widget &#125;&#125;</td>
+                        <td>&#123;&#123; form.Privilege.errors &#125;&#125;</td>
                         
-                        <th>{{ form.homeaddress|field_as_label_tag }}</th>
-                        <td colspan="3">{{ form.homeaddress.as_widget }}</td>
+                        <th>&#123;&#123; form.homeaddress|field_as_label_tag &#125;&#125;</th>
+                        <td colspan="3">&#123;&#123; form.homeaddress.as_widget &#125;&#125;</td>
                     </tr>
                     <tr>
-                        <th height="20">{{ form.selfpassword|field_as_label_tag }}</th>
-                        <td>{{ form.selfpassword.as_widget }}</td>
-                        <td>{{ form.selfpassword.errors }}</td>
+                        <th height="20">&#123;&#123; form.selfpassword|field_as_label_tag &#125;&#125;</th>
+                        <td>&#123;&#123; form.selfpassword.as_widget &#125;&#125;</td>
+                        <td>&#123;&#123; form.selfpassword.errors &#125;&#125;</td>
                     
-                        <th>{{ form.Address|field_as_label_tag }}</th>
-                        <td colspan="3">{{ form.Address.as_widget }}</td>
+                        <th>&#123;&#123; form.Address|field_as_label_tag &#125;&#125;</th>
+                        <td colspan="3">&#123;&#123; form.Address.as_widget &#125;&#125;</td>
                    </tr>
                     
-                    {% if "mysite.iaccess&mysite.att"|hasApp:'and' "mysite"|is_zkaccess_att:'and' "mysite"|is_zkaccess_5to4:'%' {% else %}
+                    {# if "mysite.iaccess&mysite.att"|hasApp:'and' "mysite"|is_zkaccess_att:'and' "mysite"|is_zkaccess_5to4:'%' {# else #}
                     <tr>
-                        <th height="20">{% trans '登记指纹' %}:</th>
+                        <th height="20">{# trans '登记指纹' #}:</th>
                         <td colspan="2">
                             <table>
                                 <tr>
                                     <td>
                                         <div class="floatL Link_blue1" style="">
-                                            <a href="javascript:void(0)" id="id_fp_register" onclick="submitRegister()">{% trans '登记' %}</a>
+                                            <a href="javascript:void(0)" id="id_fp_register" onclick="submitRegister()">{# trans '登记' #}</a>
                                         </div>
                                     </td>
                                     <td>
                                         <div id="id_fp_help" style="margin: 0 0 0 8px">
-                                           <a title="{% trans '无法登记指纹？' %}" target="_blank" >{% trans '无法登记指纹？' %}</a>
+                                           <a title="{# trans '无法登记指纹？' #}" target="_blank" >{# trans '无法登记指纹？' #}</a>
                                         </div>
                                     </td>
                                 </tr>
@@ -194,15 +194,15 @@
                             <input type="hidden" id="id_durfinger"  value="" name="durfinger" alt=""> </input>
                             <input type="hidden" id="id_durfpid"  value="" name="durfpid" alt=""> </input>
                             <input type="hidden" id="id_delflag"  value="" name="delflag" alt="delete"> </input>
-                            {% if "mysite.iaccess"|hasApp:'%' <input type="hidden" id="id_forceavalidflag"  value="1" name="delflag" alt="delete"> </input>
-                            {% else %}
+                            {# if "mysite.iaccess"|hasApp:'%' <input type="hidden" id="id_forceavalidflag"  value="1" name="delflag" alt="delete"> </input>
+                            {# else #}
                                 <input type="hidden" id="id_forceavalidflag"  value="0" name="delflag" alt="delete"> </input>
-                            {% endif %}
+                            {# endif #}
                         </td> 
                     </tr>
                     <tr id="tr_fingerprint_driver" class="displayN">
 			            <th></th>
-                        <td><a href="/worktable/download_fingerprint_driver" id="id_fingerprint_download" >{% trans '驱动下载' %}</a></td>
+                        <td><a href="/worktable/download_fingerprint_driver" id="id_fingerprint_download" >{# trans '驱动下载' #}</a></td>
                     </tr>
                    
                     <script>
@@ -214,8 +214,8 @@
                             $("#id_fp_help a").attr("href", "/data/system/help/?p=/file/"+$("#id_lng").val()+"/help/fingerprintDriverInstall.html");
                             
                             if(!$.browser.msie){
-                                $("#id_fp_register").attr({disabled:"true", title: "&#123;% trans '登记指纹功能只支持IE浏览器' %}"}).css({cursor:"default",color:"#888888"}).unbind().click(function(){
-                                    $(".messageBox").html("&#123;% trans '登记指纹功能只支持IE浏览器' %}").show();
+                                $("#id_fp_register").attr({disabled:"true", title: "&#123;% trans '登记指纹功能只支持IE浏览器' #}"}).css({cursor:"default",color:"#888888"}).unbind().click(function(){
+                                    $(".messageBox").html("&#123;% trans '登记指纹功能只支持IE浏览器' #}").show();
                                     alert(gettext("登记指纹功能只支持IE浏览器"));
                                     return false;
                                 });
@@ -234,7 +234,7 @@
                                 if(!flag)
                                 {
                                      //alert("did not install")
-                                     $("#id_fp_register").attr({disabled:"true", title: "&#123;% trans '请安装指纹仪驱动' %}"}).css({cursor:"default",color:"#888888"}).unbind().click(function()
+                                     $("#id_fp_register").attr({disabled:"true", title: "&#123;% trans '请安装指纹仪驱动' #}"}).css({cursor:"default",color:"#888888"}).unbind().click(function()
                                      {
                                         alert(gettext("请安装指纹仪驱动"))
                                         return false;
@@ -243,100 +243,100 @@
                             }
                         </script>
                     
-                    {% endif %}
-                    {% if "mysite.att"|hasApp:'and' not "mysite"|is_zkaccess_att:'%' <tr style="display:None">
+                    {# endif #}
+                    {# if "mysite.att"|hasApp:'and' not "mysite"|is_zkaccess_att:'%' <tr style="display:None">
                         <td height="20">&nbsp;</td>
-                        <td colspan="2"  ><a href="javascript:void(0)" onclick="submitRemoteIdentification()">{% trans '指纹机登记' %}</a>          <div id="div_id_finngerM"></div></td>
+                        <td colspan="2"  ><a href="javascript:void(0)" onclick="submitRemoteIdentification()">{# trans '指纹机登记' #}</a>          <div id="div_id_finngerM"></div></td>
                         <td>&nbsp;</td>
                         <td>&nbsp;</td>
                         <td>&nbsp;</td>
                         <td>&nbsp;</td>
                     </tr>
-                    {% endif %}
+                    {# endif #}
                 </table>
             </div>
         </td>
     </tr>
 
-    {% if "mysite.att"|hasApp:'and' not "mysite"|is_zkaccess_att:'%' <tr>
+    {# if "mysite.att"|hasApp:'and' not "mysite"|is_zkaccess_att:'%' <tr>
             <td>
                 <div id="id_Att_info" class="div_box1 floatL">
-                    <h2>{% trans '考勤设置' %}</h2>
+                    <h2>{# trans '考勤设置' #}</h2>
                         <table id="id_Att_info_tbl" border="0" cellspacing="0" cellpadding="0">
                             <tr>
-                              <th rowspan="5" width="65" style="vertical-align:top">{{ form.attarea|field_as_label_tag }}</th>
-                              <td rowspan="5">{{ form.attarea.as_widget }}</td>
+                              <th rowspan="5" width="65" style="vertical-align:top">&#123;&#123; form.attarea|field_as_label_tag &#125;&#125;</th>
+                              <td rowspan="5">&#123;&#123; form.attarea.as_widget &#125;&#125;</td>
                               <td   height="20" width="55">&nbsp;</td>
 
                               <td width="55" rowspan="7" valign="top">
                                   <table border="0" cellpadding="3" cellspacing="0">
                                     <tr style="display:none;">
-                                      <th height="20">{{ form.INLATE|field_as_label_tag }}</th>
-                                      <td>{{ form.INLATE.as_widget }}</td>
-                                      <td>{{ form.INLATE.errors }}</td>
+                                      <th height="20">&#123;&#123; form.INLATE|field_as_label_tag &#125;&#125;</th>
+                                      <td>&#123;&#123; form.INLATE.as_widget &#125;&#125;</td>
+                                      <td>&#123;&#123; form.INLATE.errors &#125;&#125;</td>
                                     </tr>
                                     <tr style="display:none;">
-                                      <th height="20">{{ form.OutEarly|field_as_label_tag }}</th>
-                                      <td>{{ form.OutEarly.as_widget }}</td>
-                                      <td>{{ form.OutEarly.errors }}</td>
+                                      <th height="20">&#123;&#123; form.OutEarly|field_as_label_tag &#125;&#125;</th>
+                                      <td>&#123;&#123; form.OutEarly.as_widget &#125;&#125;</td>
+                                      <td>&#123;&#123; form.OutEarly.errors &#125;&#125;</td>
                                     </tr>
                                     <tr>
-                                        {{ form.isatt|field_as_td_h }}
+                                        &#123;&#123; form.isatt|field_as_td_h &#125;&#125;
                                     </tr>
                                     <tr>
                                     </tr>
                                     
                                     <tr style="display:none;">
-                                        {{ form.AutoSchPlan|field_as_td_h }}
+                                        &#123;&#123; form.AutoSchPlan|field_as_td_h &#125;&#125;
                                     </tr>
                                   </table></td>
                               </tr>
                             <tr>
-                              <td height="20">{{ form.attarea.errors }}</td>
+                              <td height="20">&#123;&#123; form.attarea.errors &#125;&#125;</td>
                             </tr>
                         </table>
                 </div>
             </td>
         </tr>
-    {% else %}
-        {% if "mysite.iaccess"|hasApp:'and' "mysite.att"|hasApp:'and' "mysite"|is_contain_att:'and' 'zh-cn'|is_english %}  
+    {# else #}
+        {# if "mysite.iaccess"|hasApp:'and' "mysite.att"|hasApp:'and' "mysite"|is_contain_att:'and' 'zh-cn'|is_english #}  
             <tr>
                 <td>
                     <div id="id_Att_info" class="div_box1 floatL">
-                        <h2>{% trans '考勤设置' %}</h2>
+                        <h2>{# trans '考勤设置' #}</h2>
                         <table id="id_Att_info_tbl" border="0" cellspacing="0" cellpadding="0">
                             <tr>            
-                                {{ form.isatt|field_as_td_h }}</td>
+                                &#123;&#123; form.isatt|field_as_td_h &#125;&#125;</td>
                             </tr>
                         </table>
                     </div>
                 </td>
             </tr>
-        {% endif %}
-    {% endif %}
+        {# endif #}
+    {# endif #}
     
-    {% if "mysite.iaccess"|hasApp:'%' <tr>
+    {# if "mysite.iaccess"|hasApp:'%' <tr>
         <td>
             <div id="id_access_info" class="div_box1 floatL">
-                {% if request.user|has_elevator:'%' <h2>{% trans '门禁梯控设置' %}</h2>
-                {% else %}
-                    <h2>{% trans '门禁设置' %}</h2>
-                {% endif %}
+                {# if request.user|has_elevator:'%' <h2>{# trans '门禁梯控设置' #}</h2>
+                {# else #}
+                    <h2>{# trans '门禁设置' #}</h2>
+                {# endif #}
                 
                 <table id="id_access_info_tbl" border="0" cellspacing="0" cellpadding="0">
                      <tr>
-                        <!--   {{ form.acc_super_auth|field_as_label_tag }} -->
-                        {% if "mysite.iaccess"|hasApp:'%' <td align="right">{% trans '门禁超级用户' %}:</td><td>{{ form.acc_super_auth|field_as_td_h_no_td }}</td>
-                        {% endif %}
-                        {% if request.user|has_elevator:'%' <td align="right">{% trans '梯控超级用户' %}:</td><td>{{ form.ele_super_auth|field_as_td_h_no_td }}</td>
-                        {% endif %}
+                        <!--   &#123;&#123; form.acc_super_auth|field_as_label_tag &#125;&#125; -->
+                        {# if "mysite.iaccess"|hasApp:'%' <td align="right">{# trans '门禁超级用户' #}:</td><td>&#123;&#123; form.acc_super_auth|field_as_td_h_no_td &#125;&#125;</td>
+                        {# endif #}
+                        {# if request.user|has_elevator:'%' <td align="right">{# trans '梯控超级用户' #}:</td><td>&#123;&#123; form.ele_super_auth|field_as_td_h_no_td &#125;&#125;</td>
+                        {# endif #}
                      </tr>
                     
                     <!--权限组添加-->
                     <!--中央党校zhangy20110719-->
                     <tr>
                         <td align="right">
-                            {% trans "门禁权限组" %}:
+                            {# trans "门禁权限组" #}:
                         </td>
                         <td width="310">
                             <table id="id_access_info">
@@ -344,9 +344,9 @@
                                     <td align="left">
                                         <div>
                                             <input type="text" id="level_name" name="level_name" size="20"></input>
-                                            <input type="button" id="id_query_level" class="select_EmpSubmit" title={% trans "查询" %} value=""></input>
+                                            <input type="button" id="id_query_level" class="select_EmpSubmit" title={# trans "查询" #} value=""></input>
                                             <input type="checkbox" id="id_select_all" name="level_name" size="1"></input>
-                                            <label>{% trans "全选" %}</label>
+                                            <label>{# trans "全选" #}</label>
                                         </div>
                                     </td>
                                 </tr>
@@ -357,8 +357,8 @@
                                 </tr>
                             </table>
                         </td>
-                        {% if request.user|has_elevator:'%' <td align="right">
-                            {% trans "梯控权限组" %}:
+                        {# if request.user|has_elevator:'%' <td align="right">
+                            {# trans "梯控权限组" #}:
                         </td>
                         <td align="">
                             <table id="id_ele_info_tbl">
@@ -366,9 +366,9 @@
                                     <td align="left">
                                         <div>
                                             <input type="text" id="ele_level_name" name="level_name" size="20"></input>
-                                            <input type="button" id="ele_id_query_level" class="select_EmpSubmit" title={% trans "查询" %} value=""></input>
+                                            <input type="button" id="ele_id_query_level" class="select_EmpSubmit" title={# trans "查询" #} value=""></input>
                                             <input type="checkbox" id="ele_id_select_all" name="level_name" size="1"></input>
-                                            <label>{% trans "全选" %}</label>
+                                            <label>{# trans "全选" #}</label>
                                         </div>
                                     </td>
                                 </tr>
@@ -379,21 +379,21 @@
                                 </tr>
                             </table>
                         </td>
-                        {% else %}
+                        {# else #}
                         <td></td>
-                        {% endif %}
+                        {# endif #}
                     </tr>
                     
                  <tr>
                     <td align="right"><table>
                         <tr id="set_valid_time" height="25" valign="top">
-                            {{ form.set_valid_time|field_as_td_h }}
+                            &#123;&#123; form.set_valid_time|field_as_td_h &#125;&#125;
                         </tr>
                     </table></td>
                         
                     <td colspan="3"><table>
                         <tr class="select_valid_time">
-                            {{ form.acc_startdate|field_as_td_h }} {{ form.acc_enddate|field_as_td_h }}
+                            &#123;&#123; form.acc_startdate|field_as_td_h &#125;&#125; &#123;&#123; form.acc_enddate|field_as_td_h &#125;&#125;
                         </tr>
                     </table></td>
                     </tr>
@@ -402,7 +402,7 @@
                     <td colspan="3">
                         <table>
                             <tr>
-                                {{ form.morecard_group|field_as_td_h }}
+                                &#123;&#123; form.morecard_group|field_as_td_h &#125;&#125;
                             </tr>
                         </table>
                     </td>
@@ -413,17 +413,17 @@
             </div>
         </td>
     </tr>
-    {% endif %}
-    {% if form.non_field_errors %}
-        <tr><td>{{ form.non_field_errors }}</td></tr>
-    {% endif %}
+    {# endif #}
+    {# if form.non_field_errors #}
+        <tr><td>&#123;&#123; form.non_field_errors &#125;&#125;</td></tr>
+    {# endif #}
 
-    {% endautoescape %}
-    {% endif %}<!--add/change_employee-->
+    {# endautoescape #}
+    {# endif #}<!--add/change_employee-->
     
-{% endblock %}
+{# endblock #}
 
-{% block addjs %}
+{# block addjs #}
     
     $("#id_Birthday,#id_Hiredday,#id_acc_startdate,#id_acc_enddate").attr("readonly","true");
     $("#id_Birthday,#id_Hiredday,#id_acc_startdate,#id_acc_enddate").click(function(){
@@ -539,7 +539,7 @@
                 return;
             }
         }	
-        wgCheckNo('identitycard','div_id_identitycard',obj,'{{ dbapp_url }}','personnel','Employee');
+        wgCheckNo('identitycard','div_id_identitycard',obj,'&#123;&#123; dbapp_url &#125;&#125;','personnel','Employee');
     }
     
     //人员编号验证
@@ -555,11 +555,11 @@
             div.html("&times;"+"<font color='red'>"+gettext("不合法")+"</font>");
             return;
         }
-        wgCheckNo('PIN','div_id_pin',obj,'{{ dbapp_url }}','personnel','Employee'); 
+        wgCheckNo('PIN','div_id_pin',obj,'&#123;&#123; dbapp_url &#125;&#125;','personnel','Employee'); 
     }
   
     
-    {% if request.user|HasPerm:"personnel.add_employee" or request.user|HasPerm:"personnel.change_employee" %}
+    {# if request.user|HasPerm:"personnel.add_employee" or request.user|HasPerm:"personnel.change_employee" #}
     var old_levels = new Array();
     var new_levels = new Array();
     
@@ -576,19 +576,19 @@
                 new_levels.push($(this).attr("value"));
             }
         });
-        {% if "mysite.elevator"|hasApp:'%' $("#ele_levelSingleBrowser input").each(function(){
+        {# if "mysite.elevator"|hasApp:'%' $("#ele_levelSingleBrowser input").each(function(){
             if($(this).attr("checked")==true)
             {
                 new_levels.push($(this).attr("value"));
               );
-        {% endif %}
+        {# endif #}
         
         if(new_levels.sort().toString()!=old_levels.sort().toString())
         {
             $("#id_level_changed").val(1);
         }
         
-        {% if has_branch %}
+        {# if has_branch #}
         //温州定制---需要更改变化时的条件。-darcy20120716
         if(confirm(gettext("是否立即将人员信息从主控下发到分控？")))
         {
@@ -599,7 +599,7 @@
             alert(gettext("您选择了不立即同步该人员到分控，请稍后手动同步到分控，以保持主控和分控数据一致性！"));            
             $("#id_sync_to_branch").attr("checked", false);
         }
-        {% endif %}
+        {# endif #}
         return true;
     }
     
@@ -710,7 +710,7 @@
         {
             $("input[name='PIN']").attr("readonly","readonly");
             //if($("input[name='chkph']").attr("checked")){
-            //divedit.find("#id_img_personnel").attr("src",'{% if instance.photo %}/{{ request.surl }}file/{{ instance.photo.url }} {% endif %} ');
+            //divedit.find("#id_img_personnel").attr("src",'{# if instance.photo #}/&#123;&#123; request.surl &#125;&#125;file/&#123;&#123; instance.photo.url &#125;&#125; {# endif #} ');
             //}
         }
         divedit.find("#id_PIN").attr("maxlength",divedit.find("#id_pin_width").val());
@@ -786,7 +786,7 @@
         });
         
         $.ajax({
-            url:"{{ dbapp_url }}../personnel/getmodeldata/base/BaseCode/?fields=content,value,display&content__exact=IDENTITY",
+            url:"&#123;&#123; dbapp_url &#125;&#125;../personnel/getmodeldata/base/BaseCode/?fields=content,value,display&content__exact=IDENTITY",
             dataType:"json",
             type:"POST",
             success:function(data){
@@ -830,7 +830,7 @@
         
         if(divedit.find("#id_PIN").val()!="")
         {
-            $("#div_id_finngerT").html("{% trans '已登记指纹 ' %}"+ divedit.find("#id_tcount").val() );
+            $("#div_id_finngerT").html("{# trans '已登记指纹 ' #}"+ divedit.find("#id_tcount").val() );
         }
     });
     
@@ -1263,7 +1263,7 @@
             $("#id_delfinger").val(delid.toString());
             var count=fpid.replace(/0/g, "").length;
             //alert("count.."+fpid.replace(/0/g, "").length)
-            $("#div_id_finngerT").html("{% trans '已登记指纹 ' %}"+ count );
+            $("#div_id_finngerT").html("{# trans '已登记指纹 ' #}"+ count );
             
         }
         else //新增人员指纹二次登陆删除时的处理
@@ -1322,7 +1322,7 @@
           $("#id_finnger"+tmpadd).val(fingerids10.toString());
           $("#id_template"+tmpadd).val(template10.toString());
           //alert("count"+count);
-          $("#div_id_finngerT").html("{% trans '已登记指纹 ' %}"+ count );
+          $("#div_id_finngerT").html("{# trans '已登记指纹 ' #}"+ count );
         }
         
         
@@ -1336,12 +1336,12 @@
         }   
 
     if(zkonline.Register()){
-    fingerids=[];template=[];for(i=1;i<=10;i++){if(zkonline.GetRegFingerTemplate(i).length>2){fingerids.push(i);template.push(zkonline.GetRegFingerTemplate(i));}this.alt1=fingerids;this.alt=template;}}
+    fingerids=[];template=[];for(i=1;i<=10;i++){if(zkonline.GetRegFingerTemplate(i).length>2){fingerids.push(i);template.push(zkonline.GetRegFingerTemplate(i));}this.alt1=fingerids;this.alt=template;&#125;&#125;
     */
     }
 
 
-    {% if "mysite.iaccess"|hasApp:'%' $(function(){
+    {# if "mysite.iaccess"|hasApp:'%' $(function(){
             //一旦单击了设置有效时间,其后两个选项均为必填
             $(".select_valid_time th label").each(function(){
                 $(this).attr('class','required');
@@ -1350,7 +1350,7 @@
             $("#elevator_SuperUser").hide();
             $.ajax({  //获取门禁权限组
                 type: "POST",
-                url:"/{{ request.surl   iaccess/GetData/?func=level&level_type=1",
+                url:"/&#123;&#123; request.surl   iaccess/GetData/?func=level&level_type=1",
                 dataType:"json",
                 async:false,
                 success:function(json){
@@ -1379,7 +1379,7 @@
                 level_name = encodeURI(level_name);
                 $.ajax({ 
                     type: "POST",
-                    url:"/{{ request.surl   iaccess/GetData/?func=level&level_type=1&level_name="+encodeURI(level_name),
+                    url:"/&#123;&#123; request.surl   iaccess/GetData/?func=level&level_type=1&level_name="+encodeURI(level_name),
                     dataType:"json",
                     async:false,
                     success:function(json){
@@ -1402,7 +1402,7 @@
                         {
                             $.ajax({ 
                                 type: "POST",
-                                url:"/{{ request.surl   iaccess/GetData/?func=selected_level&key="+pin,
+                                url:"/&#123;&#123; request.surl   iaccess/GetData/?func=selected_level&key="+pin,
                                 dataType:"json",
                                 async:false,
                                 success:function(json){
@@ -1464,11 +1464,11 @@
                     $("#id_extend_time").val("");
                   );
          );
-    {% endif % {% if "mysite.elevator"|hasApp:'%' $(function(){
+    {# endif % {# if "mysite.elevator"|hasApp:'%' $(function(){
             $("#id_ele_info_tbl").show();
             $.ajax({ 
                     type: "POST",
-                    url:"/{{ request.surl   iaccess/GetData/?func=level&level_type=2",
+                    url:"/&#123;&#123; request.surl   iaccess/GetData/?func=level&level_type=2",
                     dataType:"json",
                     async:false,
                     success:function(json){
@@ -1495,7 +1495,7 @@
                 ele_level_name = encodeURI(ele_level_name);
                 $.ajax({ 
                     type: "POST",
-                    url:"/{{ request.surl   iaccess/GetData/?func=level&level_type=2&level_name="+ele_level_name,
+                    url:"/&#123;&#123; request.surl   iaccess/GetData/?func=level&level_type=2&level_name="+ele_level_name,
                     dataType:"json",
                     async:false,
                     success:function(json){
@@ -1515,7 +1515,7 @@
                         var pin = $("#id_PIN").val();
                         $.ajax({ 
                             type: "POST",
-                            url:"/{{ request.surl   iaccess/GetData/?func=selected_level&key="+pin,
+                            url:"/&#123;&#123; request.surl   iaccess/GetData/?func=selected_level&key="+pin,
                             dataType:"json",
                             async:false,
                             success:function(json){
@@ -1545,7 +1545,7 @@
                       );
              );
          );
-    {% endif % //编辑
+    {# endif % //编辑
     if($("#id_edit_form").find("#id_PIN").val()!="")
     {
         $("#id_checkNo").parent().hide();
@@ -1555,7 +1555,7 @@
             var key = $("#id_PIN").val();
             $.ajax({ 
                 type: "POST",
-                url:"/{{ request.surl }}iaccess/GetData/?func=selected_level&key="+key,
+                url:"/&#123;&#123; request.surl &#125;&#125;iaccess/GetData/?func=selected_level&key="+key,
                 dataType:"json",
                 async:false,
                 success:function(json){
@@ -1592,15 +1592,15 @@
         }  
     }
     
-    {% if "mysite.visitor"|hasApp:'%' $("#id_dept").find("p").each(function(){
+    {# if "mysite.visitor"|hasApp:'%' $("#id_dept").find("p").each(function(){
 	    if(($(this).html()).indexOf("123456") == 0 )
 	    {
 	        $(this).parent().remove();
 	      );
-	{% endif %}
-    {% else %}      
+	{# endif #}
+    {# else #}      
         alert(gettext("对不起,您没有访问该页面的权限,不能浏览更多信息！"));
-        window.location.href="/{{ request.surl }}accounts/login/";
-    {% endif %}<!--add/change_employee-->
-{% endblock %}
+        window.location.href="/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+    {# endif #}<!--add/change_employee-->
+{# endblock #}
 

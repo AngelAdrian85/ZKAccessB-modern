@@ -4,28 +4,28 @@
 {% block operation_panel %}
 {% autoescape off %}
     <div class="div_backup_db">
-        <input type="radio" name="backuptype" checked="checked" value='1' id="id_chk_backupNow" >{% trans '立即备份' %}</input>
+        <input type="radio" name="backuptype" checked="checked" value='1' id="id_chk_backupNow" >{% trans 'EN: 立即备份' %}</input>
         <br />
-		<input type="radio" name="backuptype" value='2' id="id_chk_backupPlan" >{% trans '计划备份' %}</input>
+		<input type="radio" name="backuptype" value='2' id="id_chk_backupPlan" >{% trans 'EN: 计划备份' %}</input>
         <br />
-        <input type="radio" name="backuptype" value='3' id="id_chk_cancelPlan" >{% trans '取消计划备份' %}</input>
+        <input type="radio" name="backuptype" value='3' id="id_chk_cancelPlan" >{% trans 'EN: 取消计划备份' %}</input>
 	</div>
 
 	<div class ="div_box" id="id_div_backupPlan" style="display:none;width:550px;height:60px;">
-		<h1>{% trans '计划备份' %}</h1>
+		<h1>{% trans 'EN: 计划备份' %}</h1>
 		<div class="floatL">
-		  	{% trans '从' %}</div>
+		  	{% trans 'EN: 从' %}</div>
 			<div class="floatL">
 				<div id ="since_first_date">
 					<input type="text" size="19" id="id_start" class="wZBaseDateTimeField required" name="start" style="margin-top:2px;_margin-top:0px;">
 					<span class="pop_time"> 
-						| <a id="clocklink" style="cursor:pointer;"><img alt={% trans "时间" %}  src="/media/img/icon_clock.gif" style="_padding-top:2px;margin-right:3px;"></a>
+						| <a id="clocklink" style="cursor:pointer;"><img alt={% trans "Time" %}  src="/media/img/icon_clock.gif" style="_padding-top:2px;margin-right:3px;"></a>
 					</span>
 			  	</div>
 			</div>
-			<div class="floatL lineH22">{% trans '开始,' %}</div>
+			<div class="floatL lineH22">{% trans 'EN: 开始,' %}</div>
 			<div class="floatL" style="margin-left:10px;">
-				{% trans '每隔' %}<input type='text' onkeydown="check_number(this,event)" value='2' id="id_intervaltime" name="intervaltime" style="width:100px" />{% trans '天' %}
+				{% trans 'EN: 每隔' %}<input type='text' onkeydown="check_number(this,event)" value='2' id="id_intervaltime" name="intervaltime" style="width:100px" />{% trans 'EN: 天' %}
             </div> 
     </div>
     

@@ -1,49 +1,49 @@
-{% extends "data_list.html" %}
+{# extends "data_list.html" #}
 
-{% load i18n %}
+{# load i18n #}
 
-{% block extend_model_grid %}
-	{% if request.user|HasPerm:"personnel.browse_employee" %}
-		{% if "mysite.iaccess&mysite.att"|hasApp:'%' {% if "mysite"|is_zkaccess_att:'%' disable_cols:['attarea','photo','level_count','Tele',{% if "mysite"|is_zkaccess_5to4:'%' 'get_template',{% endif %}'identitycard','Education'],
-			{% else %}
+{# block extend_model_grid #}
+	{# if request.user|HasPerm:"personnel.browse_employee" #}
+		{# if "mysite.iaccess&mysite.att"|hasApp:'%' {# if "mysite"|is_zkaccess_att:'%' disable_cols:['attarea','photo','level_count','Tele',{# if "mysite"|is_zkaccess_5to4:'%' 'get_template',{# endif #}'identitycard','Education'],
+			{# else #}
 				disable_cols:['photo','level_count','Tele'],
-			{% endif %}
-		{% else %}
-			{% if "mysite.iaccess"|hasApp:'%' disable_cols:['attarea','photo','level_count','Tele','identitycard','Education'],
-			{% else %}
+			{# endif #}
+		{# else #}
+			{# if "mysite.iaccess"|hasApp:'%' disable_cols:['attarea','photo','level_count','Tele','identitycard','Education'],
+			{# else #}
 				disable_cols:['level_count','photo','Tele'],
-			{% endif %}
-		{% endif %}
-	{% else %}
+			{# endif #}
+		{# endif #}
+	{# else #}
 	    $("#id_search").remove();
 	    alert(gettext("对不起,您没有访问该页面的权限,不能浏览更多信息！"));
-	    window.location.href="/{{ request.surl }}accounts/login/";
-	{% endif %}<!--personnel.browse_employee-->
-{% endblock %}
+	    window.location.href="/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+	{# endif #}<!--personnel.browse_employee-->
+{# endblock #}
 
-{% block extend_disabled_actions %}
-	{% if request.user|HasPerm:"personnel.browse_employee" %}
-		{% if "mysite.iaccess&mysite.att"|hasApp:'%' {% if "mysite"|is_zkaccess_att:'%' {% if "en"|has_language:'%' ,'OpAdjustArea','OpEmpType','OpLeave','OpRegisterFinger','OpTitileChange','OpAddLevelToEmp','OpDelLevelFromEmp','OpSyncToDevice'
-				{% else %}
+{# block extend_disabled_actions #}
+	{# if request.user|HasPerm:"personnel.browse_employee" #}
+		{# if "mysite.iaccess&mysite.att"|hasApp:'%' {# if "mysite"|is_zkaccess_att:'%' {# if "en"|has_language:'%' ,'OpAdjustArea','OpEmpType','OpLeave','OpRegisterFinger','OpTitileChange','OpAddLevelToEmp','OpDelLevelFromEmp','OpSyncToDevice'
+				{# else #}
 					,'OpAdjustArea','OpRegisterFinger','OpAddLevelToEmp','OpDelLevelFromEmp','OpSyncToDevice'
-				{% endif %}
-			{% else %}
+				{# endif #}
+			{# else #}
 				,'OpAddLevelToEmp','OpDelLevelFromEmp'
-			{% endif %}
-		{% else %}
-			{% if "mysite.iaccess"|hasApp:'%' ,'OpAdjustArea','OpEmpType','OpLeave','OpRegisterFinger','OpTitileChange','OpAddLevelToEmp','OpDelLevelFromEmp','OpSyncToDevice'
-			{% else %}
+			{# endif #}
+		{# else #}
+			{# if "mysite.iaccess"|hasApp:'%' ,'OpAdjustArea','OpEmpType','OpLeave','OpRegisterFinger','OpTitileChange','OpAddLevelToEmp','OpDelLevelFromEmp','OpSyncToDevice'
+			{# else #}
 				,'OpAddLevelToEmp','OpDelLevelFromEmp'
-			{% endif %}
-		{% endif %}
-	{% else %}
+			{# endif #}
+		{# endif #}
+	{# else #}
 	    $("#id_search").remove();
 	    alert(gettext("对不起,您没有访问该页面的权限,不能浏览更多信息！"));
-	    window.location.href="/{{ request.surl }}accounts/login/";
-	{% endif %}<!--personnel.browse_employee-->
-{% endblock %}
+	    window.location.href="/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+	{# endif #}<!--personnel.browse_employee-->
+{# endblock #}
 
-{% block addjs %}
+{# block addjs #}
 //var current_lang = $("html").attr("lang");
 //if(current_lang == "zh-cn" || current_lang == "zh-tw")
 //{
@@ -65,4 +65,4 @@
 //        }
 //    }
 //}
-{% endblock %} 
+{# endblock #} 

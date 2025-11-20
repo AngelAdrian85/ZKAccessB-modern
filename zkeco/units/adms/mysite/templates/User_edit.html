@@ -19,8 +19,8 @@
     {% if "mysite.iaccess&mysite.att"|hasApp and "mysite"|is_zkaccess_att and "mysite"|is_zkaccess_5to4 %}
     {% else %}
         <tr>
-            <th><lable class="required">{% trans "用户指纹登记:" %}</label></th>
-            <td class="floatL Link_blue1" style="width:150px"><a href="javascript:void(0)" id="id_fp_register" onclick="userRegsFp()">{% trans '指纹登记'%}</a></td>
+            <th><lable class="required">{% trans "EN: 用户指纹登记:" %}</label></th>
+            <td class="floatL Link_blue1" style="width:150px"><a href="javascript:void(0)" id="id_fp_register" onclick="userRegsFp()">{% trans 'EN: 指纹登记'%}</a></td>
             <td id="div_id_finngerT" class="floatL" ></td>
         </tr>
         <tr>
@@ -34,7 +34,7 @@
     {% endif %}
     <script type="text/javascript">
         if(!$.browser.msie){
-            $("#id_fp_register").attr({disabled:"true", title: "{% trans '登记指纹功能只支持IE浏览器' %}"}).css({cursor:"default",color:"#888888"}).unbind().click(function(){
+            $("#id_fp_register").attr({disabled:"true", title: "{% trans 'EN: 登记指纹功能只支持IE浏览器' %}"}).css({cursor:"default",color:"#888888"}).unbind().click(function(){
             });
         }
         else
@@ -49,7 +49,7 @@
             } 
             if(!flag)
             {
-                 $("#id_fp_register").attr({disabled:"true", title: "{% trans '请安装指纹仪驱动' %}"}).css({cursor:"default",color:"#888888"}).unbind().click(function()
+                 $("#id_fp_register").attr({disabled:"true", title: "{% trans 'EN: 请安装指纹仪驱动' %}"}).css({cursor:"default",color:"#888888"}).unbind().click(function()
                  {
                  });      
             }
@@ -246,7 +246,7 @@ function userRegsFp()
         };
         $("#id_finnger"+tmpadd).val(fingerids.toString());
         $("#id_template"+tmpadd).val(template.toString());
-        $("#div_id_finngerT"+tmpadd).html("{% trans '已登记指纹 ' %}"+count );
+        $("#div_id_finngerT"+tmpadd).html("{% trans 'EN: 已登记指纹 ' %}"+count );
         $("#id_actflag").val('register')
         
         //登记10.0模板
@@ -341,7 +341,7 @@ function userRegsFp()
         }
         fpidcount = fpidcount - delid.length;
         $("#id_delfp").val(delid.toString());
-        $("#div_id_finngerT"+tmpadd).html("{% trans '已登记指纹 ' %}"+fpidcount );            
+        $("#div_id_finngerT"+tmpadd).html("{% trans 'EN: 已登记指纹 ' %}"+fpidcount );            
     }
 }
 
@@ -352,8 +352,8 @@ $(function(){
     var divedit=$("#id_edit_form")
 	$(".btn_showDeptTree").eq(0).css({"z-index":"2"})
 	$(".btn_showDeptTree").eq(1).css({"z-index":"1"})
-	$("#id_Password").addClass("required").after("<br/><span class='color_gray'>{%trans '长度必须大于4位，小于18位，默认密码为111111'%}</span>")
-	$("#id_ResetPassword").addClass("required").after("<br/><span class='color_gray'>{%trans '长度必须大于4位，小于18位，默认密码为111111'%}</span>")
+	$("#id_Password").addClass("required").after("<br/><span class='color_gray'>{%trans 'EN: 长度必须大于4位，小于18位，默认密码为111111'%}</span>")
+	$("#id_ResetPassword").addClass("required").after("<br/><span class='color_gray'>{%trans 'EN: 长度必须大于4位，小于18位，默认密码为111111'%}</span>")
 
 
 	if(!flag)
@@ -372,7 +372,7 @@ $(function(){
     
 	if(divedit.find("#id_username").val()!="")
 	{
-		$("#div_id_finngerT").html("{% trans '已登记指纹' %}" + divedit.find("#id_fpcount").val());
+		$("#div_id_finngerT").html("{% trans 'EN: 已登记指纹' %}" + divedit.find("#id_fpcount").val());
 	}
 
 {% if isAdd %}

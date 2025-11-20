@@ -1,28 +1,28 @@
-{% extends "data_list.html" %}
-{% load i18n %}
-{% block model_extend %}{% endblock %}
-{% block content %}
+{# extends "data_list.html" #}
+{# load i18n #}
+{# block model_extend #}{# endblock #}
+{# block content #}
     <div style="margin-left:10px;">
         <form method="post" onkeydown="if(event.keyCode==13){return false;}"  id="id_edit_form" enctype="multipart/form-data">
         <div>        
-            <div class="div_box1"><h2>{% trans "视频弹出窗口大小" %}</h2>
+            <div class="div_box1"><h2>{# trans "视频弹出窗口大小" #}</h2>
                 <table style="">
                     <tr>
-                        <th><label>{% trans "宽度" %}:</label></th>
+                        <th><label>{# trans "宽度" #}:</label></th>
                         <td><input type="text" name="vid_window_width" id="id_vid_window_width" size="3"></input>px</td>
                         
-                        <th><label>{% trans "高度" %}:</label></th>
+                        <th><label>{# trans "高度" #}:</label></th>
                         <td><input type="text" name="vid_window_height" id="id_vid_window_height" size="3"></input>px</td>
                     </tr>
                 </table>
             </div>
         </div>
-        <div class="div_box1"><h2>{% trans "设置是否继续录像" %}</h2>
+        <div class="div_box1"><h2>{# trans "设置是否继续录像" #}</h2>
             <span>
-                {% trans "硬盘空间小于1G时" %}:
+                {# trans "硬盘空间小于1G时" #}:
                 <select id="id_record_auto_covered" name="record_auto_covered" style="width:190px">
-                    <option value="1" selected="selected">{% trans "自动覆盖" %}</option>
-                    <option value="0">{% trans "停止录像" %}</option>
+                    <option value="1" selected="selected">{# trans "自动覆盖" #}</option>
+                    <option value="0">{# trans "停止录像" #}</option>
                 </select><br/>
             </span>
         </div>
@@ -31,20 +31,20 @@
         <div class="editformbtn">
             <div class="lineH22 img_padding">
                 <span class="action_OK"></span>
-                <a id="OK" href="javascript:void(0)" class="Link_blue1">{% trans "确定" %}</a>
+                <a id="OK" href="javascript:void(0)" class="Link_blue1">{# trans "确定" #}</a>
             </div>
         </div>
         <input type="hidden" name="down_event_hours" id="id_down_event_hours" value=""/>
         </form>
     </div>
     
-{% endblock %}
-{% block extend_js %}
+{# endblock #}
+{# block extend_js #}
     <script>        
         //发送请求从后端获取上次设置的内容
         $.ajax({
             type: "GET",
-            url: "/&#123;&#123; request.surl }}video/GetData/?func=init_vid_option",
+            url: "/&#123;&#123; request.surl &#125;&#125;video/GetData/?func=init_vid_option",
             dataType: "json",
             async: false,
             success: function(data)
@@ -104,4 +104,4 @@
         });
         
     </script>
-{% endblock %}
+{# endblock #}

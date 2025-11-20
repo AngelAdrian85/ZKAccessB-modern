@@ -1,22 +1,22 @@
-{% extends "data_list.html" %}
-{% load i18n %}
-{% block model_extend %}{% endblock %}
-{% block content %}
+{# extends "data_list.html" #}
+{# load i18n #}
+{# block model_extend #}{# endblock #}
+{# block content #}
     <div style="margin-left:10px;">
         <form method="post" onkeydown="if(event.keyCode==13){return false;}"  id="id_edit_form" enctype="multipart/form-data">
         <div>
-            <div class="div_box1"><h2>{% trans "访客权限设置" %}</h2>
+            <div class="div_box1"><h2>{# trans "访客权限设置" #}</h2>
                 <table id="id_access_info_tbl" border="0" cellspacing="0" cellpadding="0">
                     <tr>
                         <td style="text-align:right;">
-                            {% trans "门禁权限" %}:
+                            {# trans "门禁权限" #}:
                         </td>
                         <td align="left">
                             <div>
                                 <input type="text" id="level_name" name="level_name" size="1"></input>
-                                <input type="button" id="id_query_level" class="select_EmpSubmit" title={% trans "查询" %} value=""></input>
+                                <input type="button" id="id_query_level" class="select_EmpSubmit" title={# trans "查询" #} value=""></input>
                                 <input type="checkbox" id="id_select_all" name="level_name" size="1"></input>
-                                <label>{% trans "全选" %}</label>
+                                <label>{# trans "全选" #}</label>
                             </div>
                         </td>
                     </tr>
@@ -31,9 +31,9 @@
                 <div>
                     <span class="icon_note">&nbsp;</span>
                     <font color="#FF6600">
-                        {% trans "访客权限设置是过滤掉一些重要场所的权限，勾选后的权限为可以让所有的访客通过，" %}
+                        {# trans "访客权限设置是过滤掉一些重要场所的权限，勾选后的权限为可以让所有的访客通过，" #}
                         <br/>
-                        <span style="margin-left:25px;"></span>{% trans "避免登记人员在给访客分配权限时选了重要场所的权限。" %}
+                        <span style="margin-left:25px;"></span>{# trans "避免登记人员在给访客分配权限时选了重要场所的权限。" #}
                     </font>
                 </div>
             </div>
@@ -42,16 +42,16 @@
         <div class="editformbtn">
             <div class="lineH22 img_padding">
                 <span class="action_OK"></span>
-                <a id="OK" href="javascript:void(0)" class="Link_blue1">{% trans "确定" %}</a>
+                <a id="OK" href="javascript:void(0)" class="Link_blue1">{# trans "确定" #}</a>
             </div>
         </div>
         <input type="hidden" name="down_event_hours" id="id_down_event_hours" value=""/>
         </form>
     </div>
     
-{% endblock %}
-{% block extend_js %}
-    {% if "mysite.iaccess"|hasApp:'%' <script>
+{# endblock #}
+{# block extend_js #}
+    {# if "mysite.iaccess"|hasApp:'%' <script>
     $(function(){
         $.ajax({ 
             type: "POST",
@@ -150,5 +150,5 @@
                    )
      );    
     </script>
-    {% endif %}
-{% endblock %}
+    {# endif #}
+{# endblock #}

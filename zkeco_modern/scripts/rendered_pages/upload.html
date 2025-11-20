@@ -1,0 +1,45 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Legacy Base</title>
+    
+</head>
+<body>
+    <div id="content">
+<br />
+<form id="form1" action="" method="POST" enctype="multipart/form-data">
+<table width="800px" border="1">
+	<tr>
+		<th width="220px">EN: 设备管理</th><th width="100px">EN: 文件类型</th><th>EN: 选择文件</th>
+	</tr>
+	<tr class="row1">
+		<td rowspan="3">
+			<input type="text" name="SN" id="txtSN" value="" readonly /> <br />
+			&nbsp;&nbsp;<a href="javascript:void(0)"" id="aGetSN">[EN: 选择考勤机]</a><br />
+			&nbsp;&nbsp;
+      EN: 这里设定要上传的数据文件是从哪个考勤机下载到U盘的
+		</td>
+		<td>EN: 考勤记录文件</td>
+		<td><input type="file" name="file_transaction"" id="fileTransaction" />&nbsp;&nbsp;1_attlog.dat</td>
+	</tr>
+	<tr class="row2">
+		<td>EN: 用户信息文件</td>
+		<td><input type="file" name="file_user" id="fileUser" />&nbsp;&nbsp;user.dat</td>
+	</tr>
+	<tr class="row1">
+		<td>EN: 指纹模版文件</td>
+		<td>
+			<input type="file" name="file_fptemp" id="fileFptemp" />&nbsp;&nbsp;template.dat
+			<br />EN: 如果上传指纹模版，必须同时上传相关的用户信息文件
+		</td>
+	</tr>
+	<tr class="row2">
+		<td colspan="3">&nbsp;&nbsp;&nbsp;<input type="submit" name="submit" value="EN: 上传文件" onclick="return checkform();"/></td>
+	</tr>
+</table>
+</form>
+</div>
+</body>
+</html>

@@ -9,6 +9,7 @@ from django.views.generic import RedirectView
 import os
 import sys
 from pathlib import Path
+from django.conf.urls.static import static
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -28,6 +29,13 @@ except Exception:
 
 if settings.DEBUG:
     urlpatterns.append(path("__debug__/", include("debug_toolbar.urls")))
+    # Provide Django auth views under `/registration/` during development so
+    # legacy templates that expect `/registration/login/` resolve for testing.
+    urlpatterns.append(path('registration/', include('django.contrib.auth.urls')))
+
+# Serve MEDIA files in development when MEDIA_URL/MEDIA_ROOT are configured.
+if settings.DEBUG and getattr(settings, 'MEDIA_URL', None) and getattr(settings, 'MEDIA_ROOT', None):
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 
 # Optionally include legacy 'zkeco' unit URLConfs when enabled for local exploration.
 # Set environment variable INCLUDE_LEGACY=1 to attempt to import legacy URLs from

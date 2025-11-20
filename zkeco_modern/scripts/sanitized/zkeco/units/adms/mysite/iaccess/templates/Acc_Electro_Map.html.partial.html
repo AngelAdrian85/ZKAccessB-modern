@@ -1,85 +1,85 @@
-{% extends "Acc_Monitor_All.html" %}
-{% load i18n %}
+{# extends "Acc_Monitor_All.html" #}
+{# load i18n #}
 
-{% block add_headjs %}
-    {% if request.user|HasPerm:"contenttypes.can_ElectroMapPage" %}
+{# block add_headjs #}
+    {# if request.user|HasPerm:"contenttypes.can_ElectroMapPage" #}
     <script></script>
-    {% endif %}
-{% endblock %}
+    {# endif #}
+{# endblock #}
 
-{% block monitor_doors_maps %}
-    {% if request.user|HasPerm:"contenttypes.can_ElectroMapPage" %}
-    {% block remove_map_title %} <!--begin of remove_map_title-->
-    <div id="id_electro_map" class="div_box" style={% block init_height %}"height: 80px;"{% endblock %}><h1>{% trans "电子地图" %}</h1>
-    {% endblock %} <!--end of remove_map_title-->
+{# block monitor_doors_maps #}
+    {# if request.user|HasPerm:"contenttypes.can_ElectroMapPage" #}
+    {# block remove_map_title #} <!--begin of remove_map_title-->
+    <div id="id_electro_map" class="div_box" style={# block init_height #}"height: 80px;"{# endblock #}><h1>{# trans "电子地图" #}</h1>
+    {# endblock #} <!--end of remove_map_title-->
         <!--操作-start-->
         <div id="id_map_ops" class="grid Link_blue1">
             <div class="floatL">
             	<table>
-                    <div id="id_map_loading">{% trans "正在获取系统内用户授权范围内的所有地图......" %}</div>
-                    {% block remove_menu %} <!--begin of remove_menu-->
+                    <div id="id_map_loading">{# trans "正在获取系统内用户授权范围内的所有地图......" #}</div>
+                    {# block remove_menu #} <!--begin of remove_menu-->
                     <tr>
-                        {% if request.user|HasPerm:"iaccess.add_accmap" %}<td><div class="action nowrap displayN anymap"><a id="id_add_map" relgo="{{ request.dbapp_url }}iaccess/AccMap/_new_/" href="javascript:void(0)">{% trans "添加地图" %}</a></div></td>{% endif %}
-                        {% if request.user|HasPerm:"iaccess.delete_accmap" %}<td><div class="action nowrap displayN nomap"><a id="id_del_map" href="javascript:void(0)">{% trans "删除地图" %}</a></div></td>{% endif %}
-                        {% if request.user|HasPerm:"iaccess.change_accmap" %}<td><div class="action nowrap displayN nomap"><a id="id_edit_map" relgo="{{ request.dbapp_url }}iaccess/AccMap/" href="javascript:void(0)">{% trans "编辑地图" %}</a></div></td>{% endif %}
-                        {% if request.user|HasPerm:"iaccess.opadddoorsontomap_accmap" %}<td><div class="action nowrap displayN nomap"><a id="id_add_door" href="javascript:void(0)">{% trans "添加门" %}</a></div></td>{% endif %}
-                        {% if "mysite.video"|hasApp:'%' <td><div class="action nowrap displayN nomap"><a id="id_add_channel" href="javascript:void(0)">{% trans "添加摄像头" %}</a></div></td>{% endif %}
-                        {% if request.user|HasPerm:"iaccess.opsavemapdoorpos_accmap" %}<td><div class="action nowrap displayN nomap"><a id="id_save_pos" href="javascript:void(0)">{% trans "保存位置信息" %}</a></div></td>{% endif %}
-                        {% if request.user|HasPerm:"iaccess.openlargemapdoor_accmap" %}<td><div class="action nowrap displayN nomap"><a id="id_bigger" href="javascript:void(0)">{% trans "放大" %}</a></div></td>{% endif %}
-                        {% if request.user|HasPerm:"iaccess.opreducemapdoor_accmap" %}<td><div class="action nowrap displayN nomap"><a id="id_smaller" href="javascript:void(0)">{% trans "缩小" %}</a></div></td>{% endif %}
-                        {% if request.user|HasPerm:"iaccess.opreducemapdoor_accmap" %}<td><div class="action nowrap displayN nomap"><a id="id_screenfull" href="javascript:void(0)">{% trans "全屏" %}</a></div></td>{% endif %}
+                        {# if request.user|HasPerm:"iaccess.add_accmap" #}<td><div class="action nowrap displayN anymap"><a id="id_add_map" relgo="&#123;&#123; request.dbapp_url &#125;&#125;iaccess/AccMap/_new_/" href="javascript:void(0)">{# trans "添加地图" #}</a></div></td>{# endif #}
+                        {# if request.user|HasPerm:"iaccess.delete_accmap" #}<td><div class="action nowrap displayN nomap"><a id="id_del_map" href="javascript:void(0)">{# trans "删除地图" #}</a></div></td>{# endif #}
+                        {# if request.user|HasPerm:"iaccess.change_accmap" #}<td><div class="action nowrap displayN nomap"><a id="id_edit_map" relgo="&#123;&#123; request.dbapp_url &#125;&#125;iaccess/AccMap/" href="javascript:void(0)">{# trans "编辑地图" #}</a></div></td>{# endif #}
+                        {# if request.user|HasPerm:"iaccess.opadddoorsontomap_accmap" #}<td><div class="action nowrap displayN nomap"><a id="id_add_door" href="javascript:void(0)">{# trans "添加门" #}</a></div></td>{# endif #}
+                        {# if "mysite.video"|hasApp:'%' <td><div class="action nowrap displayN nomap"><a id="id_add_channel" href="javascript:void(0)">{# trans "添加摄像头" #}</a></div></td>{# endif #}
+                        {# if request.user|HasPerm:"iaccess.opsavemapdoorpos_accmap" #}<td><div class="action nowrap displayN nomap"><a id="id_save_pos" href="javascript:void(0)">{# trans "保存位置信息" #}</a></div></td>{# endif #}
+                        {# if request.user|HasPerm:"iaccess.openlargemapdoor_accmap" #}<td><div class="action nowrap displayN nomap"><a id="id_bigger" href="javascript:void(0)">{# trans "放大" #}</a></div></td>{# endif #}
+                        {# if request.user|HasPerm:"iaccess.opreducemapdoor_accmap" #}<td><div class="action nowrap displayN nomap"><a id="id_smaller" href="javascript:void(0)">{# trans "缩小" #}</a></div></td>{# endif #}
+                        {# if request.user|HasPerm:"iaccess.opreducemapdoor_accmap" #}<td><div class="action nowrap displayN nomap"><a id="id_screenfull" href="javascript:void(0)">{# trans "全屏" #}</a></div></td>{# endif #}
                     </tr>
-                    {% endblock %} <!--end of remove_menu -->
+                    {# endblock #} <!--end of remove_menu -->
                 </table>
             </div>
         </div>
         <!--操作-end-->
         <!--判空-start-->
-        <div id="id_map_judge">{% trans "当前系统中没有添加地图或者您没有权限查看已有地图！" %}</div>
+        <div id="id_map_judge">{# trans "当前系统中没有添加地图或者您没有权限查看已有地图！" #}</div>
         <!--判空-end-->
         <!--地图显示-start-->
-        <div id="id_map_show" {% block remove_map_class %}class="map_show"{% endblock %}>
+        <div id="id_map_show" {# block remove_map_class #}class="map_show"{# endblock #}>
             <ul class="tabs">
             </ul>
         </div>
         <!--地图显示-end-->
     </div>
-    {% endif %}<!--can_ElectroMapPage-->
-{% endblock %}<!--end of monitor_doors_maps-->
+    {# endif #}<!--can_ElectroMapPage-->
+{# endblock #}<!--end of monitor_doors_maps-->
 
-{% block monitor_events_style %}height: 30em;{% endblock %}
-{% block monitor_datalist_style %}height:300px;{% endblock %}
+{# block monitor_events_style #}height: 30em;{# endblock #}
+{# block monitor_datalist_style #}height:300px;{# endblock #}
 
-{% block right_click_menu %}
+{# block right_click_menu #}
 <!--右键菜单的源-start-->
     <div class="contextMenu displayN" id="id_mapdoor_menu">
         <ul>
-            <li id="id_del_door_or_channel" class="door_ops"><img src="/media/img/icon_deletelink.gif" />{% trans "移除" %}</li>
+            <li id="id_del_door_or_channel" class="door_ops"><img src="/media/img/icon_deletelink.gif" />{# trans "移除" #}</li>
         </ul>
     </div>
     <div class="contextMenu" id="add_card_menu">
       <ul>
-        <li id="add_card" class="displayN">{% trans '新增卡' %}</li>
+        <li id="add_card" class="displayN">{# trans '新增卡' #}</li>
       </ul>
     </div>
     <div id="id_add_card" class="displayN">
         <div>
-            <a href="javascript:void(0)" relgo="{{ request.dbapp_url }}personnel/Employee/_new_/?_lock=1">{% trans '新增卡' %}</a>
+            <a href="javascript:void(0)" relgo="&#123;&#123; request.dbapp_url &#125;&#125;personnel/Employee/_new_/?_lock=1">{# trans '新增卡' #}</a>
         </div>
     </div>
 <!--右键菜单的源-end-->
-{% endblock %}
+{# endblock #}
 
-{% block addjs_base %}
-{% endblock %}
+{# block addjs_base #}
+{# endblock #}
 
-{% block getdatalist %} {% endblock %}
+{# block getdatalist #} {# endblock #}
 
-    {% if request.user|HasPerm:"contenttypes.can_ElectroMapPage" %}
-    {% block electro_map %}
+    {# if request.user|HasPerm:"contenttypes.can_ElectroMapPage" #}
+    {# block electro_map #}
 
-    {% if request.user|HasPerm:"iaccess.opsavemapdoorpos_accmap" %}
-        {% block move_map %}
+    {# if request.user|HasPerm:"iaccess.opsavemapdoorpos_accmap" #}
+        {# block move_map #}
         //门图标的拖动---start
         var ie = document.all;//只有ie支持document.all
         var ff = document.getElementById&&!document.all;//非ie浏览器，如 ff等
@@ -131,11 +131,11 @@
         document.onmouseup = onmouseup;
         //document.onmouseup = new Function("isdrag=false; check_top_left_zero(document.onmouseup)");//离开光标时还原全局变量的值
         //门图标的拖动---end
-        {% endblock %}<!-- end of block move_map -->
-    {% endif %}
-    {% block init_image_mode %}
+        {# endblock #}<!-- end of block move_map -->
+    {# endif #}
+    {# block init_image_mode #}
         var const_door_count = 2000;
-    {% endblock %}
+    {# endblock #}
     
     //视频预览
     function preview(data)
@@ -149,14 +149,14 @@
         var stamp5 = new Date().getTime();
         $.ajax({
             type: "POST",
-            url: "/{{ request.surl }}video/Preview/?func=preview&channel_name="+channel_name+"&stamp5="+stamp5,
+            url: "/&#123;&#123; request.surl &#125;&#125;video/Preview/?func=preview&channel_name="+channel_name+"&stamp5="+stamp5,
             dataType: "json",
             async: true,
             success: function(datas)
             {
                 if(datas != "")  
                 {  
-	                video_url = "/{{ request.surl }}video/VideoMonitorPage/?vid_type="+ datas.channel[0]
+	                video_url = "/&#123;&#123; request.surl &#125;&#125;video/VideoMonitorPage/?vid_type="+ datas.channel[0]
 	                                                            + "&vid_ip=" + datas.channel[1]
 	                                                            + "&vid_port=" + datas.channel[2]
 	                                                            + "&vid_login=" + datas.channel[3]
@@ -180,7 +180,7 @@
         var stamp0 = new Date().getTime();
         $.ajax({
             type: "POST",
-            url: "/{{ request.surl }}iaccess/ElectroMap/?func=init_maps&stamp="+stamp0,
+            url: "/&#123;&#123; request.surl &#125;&#125;iaccess/ElectroMap/?func=init_maps&stamp="+stamp0,
             dataType: "json",
             async: true,
             success: function(init_data)
@@ -214,11 +214,11 @@
                         {
                             img_style = 'style="width:'+maps[a][2]+'px;height:'+maps[a][3]+'px"';
                         }
-                        {% block map_fullscreen_style %}//主要用于电子地图全屏
+                        {# block map_fullscreen_style #}//主要用于电子地图全屏
                         $("#id_map_show").append('<div id="id_map_'+maps[a][0]+'" data="'+maps[a][0]+'" class="map_div" name="'+maps[a][1]+'" style="overflow: scroll; width:1020px; height: 400px; position: absolute;">'
                                                 + '<img class="map" src="../../../file/map/'+maps[a][0]+'.jpg?'+stamp0+'" '+img_style+' />'
                                                 + '</div>');
-                        {% endblock %}
+                        {# endblock #}
                         map_name = maps[a][1];
                         if (map_name.length >= map_tab_width/12-3)//地图名称字数不能超过最大平均宽度除以12再减去3的最终结果，其中12表示每个字符的宽度（样式决定的），3为了在中文下能够正确显示所有地图。
                         {
@@ -233,25 +233,25 @@
                     for(p in gdata)
                     {
                         //all_doors_id.push(gdata[p][0]);
-                        {% block doors_info %}
+                        {# block doors_info #}
                         $("#id_map_"+gdata[p][5]+" .map").before('<div id="door_'+gdata[p][0]+'"  device_type="'+gdata[p][9]+'" data="'+gdata[p][0]+'" style="float: left; position: absolute;">'
                                                                 + '<img id="id_img_row_'+p+'"  index="'+p+'" name="'+gdata[p][4]+'-'+gdata[p][0]+'-'+gdata[p][5]+'" '
                                                                 + 'src="/media/images/iaccess/door_default.jpg" onmouseout="tip_info_exit(this);" onmouseover="index_tip_info(this, 0);"'
                                                                 + ' style="left:'+gdata[p][7]+'px; top:'+gdata[p][8]+'px; width:'+gdata[p][6]+'px; position: opposite;" class="can_drag">'
                                                                 + '</div>');//name 记录id+门id+地图id，扩展用
-                        {% endblock %}
+                        {# endblock #}
                     }
                     
                     channeldata = init_data.channels_pos;//位置信息(含视频通道信息）
                     for(p in channeldata)
                     {   
-                    	{% block channels_info %}
+                    	{# block channels_info #}
                         $("#id_map_"+channeldata[p][5]+" .map").before('<div id="channel_'+channeldata[p][0]+'" device_type="'+channeldata[p][9]+'" data="'+channeldata[p][0]+'" style="float: left; position: absolute;">'
                                                                 + '<img id="id_img_row_'+p+'"  index="'+p+'" name="'+channeldata[p][4]+'-'+channeldata[p][0]+'-'+channeldata[p][5]+'" '
                                                                 + 'src="/media/images/lchannel.jpg" onDblClick=preview(this) title="'+channeldata[p][3]+'"' 
                                                                 + ' style="left:'+channeldata[p][7]+'px; top:'+channeldata[p][8]+'px; width:'+channeldata[p][6]+'px; position: opposite; cursor:hand;" class="can_drag">'
                                                                 + '</div>');//name 记录id+视频通道id+地图id，扩展用
-                    	{% endblock %}
+                    	{# endblock #}
                     }
                     
                     //gdev_filter = "&door_id=" + all_doors_id;
@@ -269,9 +269,9 @@
                         }
                     });
                     $("#id_map_show").tabs("#id_map_show > div");//tab--此行代码不能放到ajax后
-                    {% block worktable_mapsize %}
+                    {# block worktable_mapsize #}
                     tabs_width = $(".tabs").width();
-                    {% endblock %}
+                    {# endblock #}
                     $(".map_div").each(function(){$(this).width(tabs_width)});//滚动条的宽度自适应
 
                     //获取地图上当前tab页上的门用于实时监控
@@ -328,10 +328,10 @@
         {
             action = "del_channel"
         }
-        //alert("/{{ request.surl }}iaccess/ElectroMap/?func="+action+"&map_pk="+map_pk+"&del_id="+del_id+"&stamp="+ stamp3)
+        //alert("/&#123;&#123; request.surl &#125;&#125;iaccess/ElectroMap/?func="+action+"&map_pk="+map_pk+"&del_id="+del_id+"&stamp="+ stamp3)
         $.ajax({
             type: "POST",
-            url: "/{{ request.surl }}iaccess/ElectroMap/?func="+action+"&map_pk="+map_pk+"&del_id="+del_id+"&stamp="+ stamp3,
+            url: "/&#123;&#123; request.surl &#125;&#125;iaccess/ElectroMap/?func="+action+"&map_pk="+map_pk+"&del_id="+del_id+"&stamp="+ stamp3,
             dataType: "json",
             async: true,
             success: function(data3)
@@ -354,14 +354,14 @@
         });
     }
     //删除当前地图上的门或者视频通道-end
-    {% block edit_maps %} <!--begin of edit_maps-->
+    {# block edit_maps #} <!--begin of edit_maps-->
     //向当前地图添加门-start
     $("#id_add_door").click(function(){
         var map_pk = $("#id_map_show .tabs .current").attr("pk");//需要改变
         var stamp2 = new Date().getTime();
         $.ajax({
             type: "POST",
-            url: "/{{ request.surl }}iaccess/ElectroMap/?func=get_doors&map_pk="+map_pk+"&stamp="+stamp2,
+            url: "/&#123;&#123; request.surl &#125;&#125;iaccess/ElectroMap/?func=get_doors&map_pk="+map_pk+"&stamp="+stamp2,
             dataType: "html",
             async: true,
             success: function(doors_left_html)
@@ -410,7 +410,7 @@
                     }
                     $.ajax({
                         type: "POST",
-                        url: "/{{ request.surl }}iaccess/ElectroMap/?func=add_doors&map_pk="+map_pk+"&doors_add_id="+doors_add_id+"&stamp="+ stamp2,
+                        url: "/&#123;&#123; request.surl &#125;&#125;iaccess/ElectroMap/?func=add_doors&map_pk="+map_pk+"&doors_add_id="+doors_add_id+"&stamp="+ stamp2,
                         dataType: "json",
                         async: true,
                         success: function(data2)
@@ -448,7 +448,7 @@
         var stamp2 = new Date().getTime();
         $.ajax({
             type: "POST",
-            url: "/{{ request.surl }}iaccess/ElectroMap/?func=get_channels&map_pk="+map_pk+"&stamp="+stamp2,
+            url: "/&#123;&#123; request.surl &#125;&#125;iaccess/ElectroMap/?func=get_channels&map_pk="+map_pk+"&stamp="+stamp2,
             dataType: "html",
             async: true,
             success: function(channels_left_html)
@@ -497,7 +497,7 @@
                     }
                     $.ajax({
                         type: "POST",
-                        url: "/{{ request.surl }}iaccess/ElectroMap/?func=add_channels&map_pk="+map_pk+"&channels_add_id="+channels_add_id+"&stamp="+ stamp2,
+                        url: "/&#123;&#123; request.surl &#125;&#125;iaccess/ElectroMap/?func=add_channels&map_pk="+map_pk+"&channels_add_id="+channels_add_id+"&stamp="+ stamp2,
                         dataType: "json",
                         async: true,
                         success: function(data2)
@@ -626,8 +626,8 @@
 			div_dialog.append($btns_div);
 		}
 
-		var surl = "{{ request.surl }}";
-		var dbapp_url = "{{ request.dbapp_url }}";
+		var surl = "&#123;&#123; request.surl &#125;&#125;";
+		var dbapp_url = "&#123;&#123; request.dbapp_url &#125;&#125;";
 		var $common_opt = $("#id_map_ops");
 		$common_opt.find("a[relgo]").click(function(e){
 			var this_a = this;
@@ -685,7 +685,7 @@
             var stamp1 = new Date().getTime();
             $.ajax({
                 type: "POST",
-                url: "/{{ request.surl }}iaccess/ElectroMap/?func=del_map&map_pk="+map_pk+"&stamp="+stamp1,
+                url: "/&#123;&#123; request.surl &#125;&#125;iaccess/ElectroMap/?func=del_map&map_pk="+map_pk+"&stamp="+stamp1,
                 dataType: "json",
                 async: true,
                 success: function(data)
@@ -737,7 +737,7 @@
         var stamp5 = new Date().getTime();
         $.ajax({
             type: "POST",
-            url: "/{{ request.surl }}iaccess/ElectroMap/?func=save_mapdoorandchannelpos&pos_array="+pos_array+"&map_array="+map_array+"&stamp="+stamp5,
+            url: "/&#123;&#123; request.surl &#125;&#125;iaccess/ElectroMap/?func=save_mapdoorandchannelpos&pos_array="+pos_array+"&map_array="+map_array+"&stamp="+stamp5,
             dataType: "json",
             async: true,
             success: function(rdata)
@@ -761,16 +761,16 @@
        
     //保存变动后的门坐标以及地图尺寸--end
 	$("#id_screenfull").click(function(){
-		window.open("/{{ request.surl }}iaccess/ElectroMapPage/?display=ScreenFull","window","fullscreen=yes,resizable=yes,scrollbars=yes");
+		window.open("/&#123;&#123; request.surl &#125;&#125;iaccess/ElectroMapPage/?display=ScreenFull","window","fullscreen=yes,resizable=yes,scrollbars=yes");
 	});
-	{% endblock %} <!--end of edit_maps-->
-    {% endblock %}<!--end of electro_map-->
+	{# endblock #} <!--end of edit_maps-->
+    {# endblock #}<!--end of electro_map-->
     
-    {% block vid_new_window_settings %}var posy = $(document).scrollTop()+$(window).height()-320;{% endblock %}
+    {# block vid_new_window_settings #}var posy = $(document).scrollTop()+$(window).height()-320;{# endblock #}
     
-    {% else %}
+    {# else #}
         alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
-        window.location.href = "/{{ request.surl }}accounts/login/";
-    {% endif %}<!--can_ElectroMapPage-->
+        window.location.href = "/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+    {# endif #}<!--can_ElectroMapPage-->
    
 

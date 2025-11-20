@@ -1,15 +1,14 @@
 {% extends "Acc_Door_Set.html" %}
-{% load i18n %}
 {% block id_main_div %}
     {% if request.user|HasPerm:"personnel.browse_accmorecardempgroup" %}
         <div id="id_accmorecardempgroup" style="margin:15px 0px 10px 0px;">
         {% block datalist_before %}
-            <div id="id_datalist" class="div_box" style="float:left; width:45%; margin:0px 0px 0px 10px; _margin:0px 0px 0px 5px;"><h1>{% trans "多卡开门人员组列表" %}</h1>    
+            <div id="id_datalist" class="div_box" style="float:left; width:45%; margin:0px 0px 0px 10px; _margin:0px 0px 0px 5px;"><h1>多卡开门人员组列表</h1>    
             </div>
         {% endblock %}<!--endblock of datalist_before-add by darcy-->
         
         {% block extend_before %}
-            <div id="id_extend" class="div_box" style="float:right; width:46%; margin:0px 10px 0px 0px;_margin:0px 5px 0px 0px;"><h1 style="width:98%">{% trans "浏览指定人员组的人员" %}</h1>
+            <div id="id_extend" class="div_box" style="float:right; width:46%; margin:0px 10px 0px 0px;_margin:0px 5px 0px 0px;"><h1 style="width:98%">浏览指定人员组的人员</h1>
             </div>
         {% endblock %}<!--endblock of extend_before-add by darcy-->
         </div>
@@ -163,7 +162,6 @@
         window.location.href = "/{{ request.surl }}accounts/login/";
     {% endif %}<!--personnel.browse_accmorecardempgroup-->
 {% endblock %}
-
 
 
 

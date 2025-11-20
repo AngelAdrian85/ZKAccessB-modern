@@ -1,25 +1,25 @@
-{% extends "Acc_EmpLevel_Set.html" %}
-{% load i18n %}
+{# extends "Acc_EmpLevel_Set.html" #}
+{# load i18n #}
 
-{% block id_main_div %}
+{# block id_main_div #}
 	<div id="emplevel_byemp" style="margin:15px 0px 10px 0px;">
         <!-- 对应人员列表 -->
-		<div id="id_datalist" class="div_box" style="float:left; width:45%; margin:0px 0px 0px 10px; _margin:0px 0px 0px 5px;"><h1>{% trans "为人员编辑权限组" %}</h1>
+		<div id="id_datalist" class="div_box" style="float:left; width:45%; margin:0px 0px 0px 10px; _margin:0px 0px 0px 5px;"><h1>{# trans "为人员编辑权限组" #}</h1>
 		</div>
 		<!-- 权限组列表 -->
-		<div id="id_extend" class="div_box" style="float:right; width:45%; margin:0px 10px 0px 0px; _margin:0px 5px 0px 0px;"><h1 style="width:98%">{% trans "浏览指定人员所属的权限组" %}</h1>
+		<div id="id_extend" class="div_box" style="float:right; width:45%; margin:0px 10px 0px 0px; _margin:0px 5px 0px 0px;"><h1 style="width:98%">{# trans "浏览指定人员所属的权限组" #}</h1>
 		</div>
     </div>
-{% endblock %}
+{# endblock #}
 
-{% block getdatalist %}
-    {% block perm_control_getdatalist %}
-        {% if not request.user|HasPerm:"contenttypes.can_EmpLevelByEmpPage" %}
+{# block getdatalist #}
+    {# block perm_control_getdatalist #}
+        {# if not request.user|HasPerm:"contenttypes.can_EmpLevelByEmpPage" #}
             $("#id_search").remove();
             alert(gettext("对不起，您没有访问该页面的权限，不能浏览更多信息！"));
-            window.location.href = "/{{ request.surl }}accounts/login/";
-        {% endif %}<!-- contenttypes.can_EmpLevelByEmpPage --> 
-    {% endblock %}
+            window.location.href = "/&#123;&#123; request.surl &#125;&#125;accounts/login/";
+        {# endif #}<!-- contenttypes.can_EmpLevelByEmpPage --> 
+    {# endblock #}
     
     function process_str(string, num)
     {
@@ -32,7 +32,7 @@
     
     $("#id_sys_cur_model").val("Employee");
     $("#id_datalist").model_grid({
-        "model_url": "{{ dbapp_url }}personnel/Employee/",
+        "model_url": "&#123;&#123; dbapp_url &#125;&#125;personnel/Employee/",
         "need_plus_sign": false,
         "model_actions": false,
         "object_actions": true,
@@ -71,11 +71,11 @@
                 base_query = "emp__id__exact=0";
             }
             $("#id_extend").model_grid({
-                "model_url": "{{ dbapp_url }}iaccess/AccLevelSet/",
-                {% block getdatalist_level_type %}
+                "model_url": "&#123;&#123; dbapp_url &#125;&#125;iaccess/AccLevelSet/",
+                {# block getdatalist_level_type #}
                 "init_query": ["exception_fields=door_group&exception_fields=emp&level_type=1"],
                 "base_query": [base_query+"&level_type=1"],
-                {% endblock %}
+                {# endblock #}
                 "model_actions": false,
                 "object_actions": false,
                 "fields_show": ['level_name','level_timeseg'],
@@ -87,7 +87,7 @@
                 "row_operations": [],
                 "cached_data": false,
                 "init_after_get_jdata": function(){
-                    {% if request.user|HasPermDefaultGiven:"personnel.opdellevelfromemp_employee" %}
+                    {# if request.user|HasPermDefaultGiven:"personnel.opdellevelfromemp_employee" #}
                     $("#id_extend div.action").append('<li name="OpDelLevelOfEmp" id="id_OpDelLevelOfEmp"><a alt="OpDelLevelOfEmp" href="javascript:void(0)" class="action_OpDelLevelOfEmp">'+gettext("删除所属权限组")+'</a></li>')
                     $("#id_OpDelLevelOfEmp a").click(function(){
                         var levels = new Array()
@@ -119,7 +119,7 @@
                         $.ajax({
                             type: "POST",
                             dataType: "json",
-                            url:"/{{ request.surl }}iaccess/EmpLevelOp/?func=emp&data="+left_data+"&levels="+levels,
+                            url:"/&#123;&#123; request.surl &#125;&#125;iaccess/EmpLevelOp/?func=emp&data="+left_data+"&levels="+levels,
                             success: function(data)
                             {
                                 if(data.ret == 1)
@@ -143,7 +143,7 @@
                             }              
                         });
                     });
-                    {% endif %}<!-- opdellevelfromemp_employee-->
+                    {# endif #}<!-- opdellevelfromemp_employee-->
                 }  
             });
             
@@ -201,9 +201,9 @@
         }
     });
     
-{% endblock %}
+{# endblock #}
 
-{% block addjs %}
+{# block addjs #}
 	//可自定义查询结束数据载入页面后需要的操作
 	//var after_query_load = function()
 	//{
@@ -221,5 +221,5 @@
 	
 	//after_query_load();
 	
-{% endblock %}
+{# endblock #}
 

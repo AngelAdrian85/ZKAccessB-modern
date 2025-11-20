@@ -41,7 +41,7 @@ def repair_content(text):
     stack = []
 
     def push(tag):
-        if tag in ('if', 'for'):
+        if tag in ('if', 'for', 'block'):
             stack.append(tag)
 
     def pop_expected(expected):
@@ -61,8 +61,13 @@ def repair_content(text):
             tag = m.group(1)
             span = m.span()
             # closing tags
-            if tag in ('endif', 'endfor'):
-                expected = 'if' if tag == 'endif' else 'for'
+            if tag in ('endif', 'endfor', 'endblock'):
+                if tag == 'endif':
+                    expected = 'if'
+                elif tag == 'endfor':
+                    expected = 'for'
+                else:
+                    expected = 'block'
                 top = stack[-1] if stack else None
                 if top is None:
                     # nothing to close -- leave it alone

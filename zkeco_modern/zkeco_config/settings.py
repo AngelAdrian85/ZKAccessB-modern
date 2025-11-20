@@ -47,6 +47,8 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # Legacy models shim app used for tests and legacy ETL
+    "legacy_models",
     "django_extensions",
     "debug_toolbar",
 ]
@@ -54,7 +56,17 @@ INSTALLED_APPS = [
 # When opting into legacy exploration, enable the local stub app which
 # renders legacy templates for demo purposes.
 if os.environ.get("INCLUDE_LEGACY") == "1":
-    INSTALLED_APPS.append("legacy_stub")
+    # Only add the `legacy_stub` app to INSTALLED_APPS if `legacy_models`
+    # is not already present; when `legacy_models` exists it provides
+    # equivalent templatetags and models and adding the stub causes
+    # duplicate template-tag registrations (templates.E003 warnings).
+    try:
+        import importlib.util
+        if importlib.util.find_spec('legacy_models') is None:
+            INSTALLED_APPS.append("legacy_stub")
+    except Exception:
+        # best-effort: if importlib fails, fall back to appending the stub
+        INSTALLED_APPS.append("legacy_stub")
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -90,13 +102,64 @@ if os.environ.get("INCLUDE_LEGACY") == "1":
     legacy_templates = BASE_DIR.parent / 'zkeco' / 'units' / 'adms' / 'mysite' / 'templates'
     if legacy_templates.exists():
         TEMPLATES[0]["DIRS"].insert(0, str(legacy_templates))
-    # register the legacy_stub template tags as builtins so legacy templates can use filters
+    # register legacy templatetag builtins, but avoid duplicates when the
+    # same tag module exists under `legacy_models.templatetags` (this avoids
+    # templates.E003 warnings about the same tag name being provided twice).
     try:
+        import importlib.util
+
         builtins = TEMPLATES[0]["OPTIONS"].setdefault("builtins", [])
-        if "legacy_stub.templatetags.legacy_filters" not in builtins:
-            builtins.append("legacy_stub.templatetags.legacy_filters")
+        # candidate tag module basenames we expose from legacy_stub
+        tag_names = [
+            "legacy_filters",
+            "dbapp_tags",
+            "dbadmin_tags",
+            "personnel_tags",
+            "visitor_tags",
+        ]
+        for name in tag_names:
+            legacy_models_mod = f"legacy_models.templatetags.{name}"
+            legacy_stub_mod = f"legacy_stub.templatetags.{name}"
+            # Prefer the templatetag modules from `legacy_models` when present.
+            # If not present, fall back to the `legacy_stub` equivalents.
+            try:
+                if importlib.util.find_spec(legacy_models_mod) is not None:
+                    if legacy_models_mod not in builtins:
+                        builtins.append(legacy_models_mod)
+                else:
+                    if legacy_stub_mod not in builtins:
+                        builtins.append(legacy_stub_mod)
+            except Exception:
+                # best-effort: if importlib fails, fall back to adding stub
+                if legacy_stub_mod not in builtins:
+                    builtins.append(legacy_stub_mod)
+
+        # also expose a small compatibility module providing legacy block tags
+        # (e.g. `ifequal`) if not available in `legacy_models`.
+        try:
+            compat_name = 'legacy_compat'
+            legacy_models_compat = f"legacy_models.templatetags.{compat_name}"
+            legacy_stub_compat = f"legacy_stub.templatetags.{compat_name}"
+            if importlib.util.find_spec(legacy_models_compat) is not None:
+                if legacy_models_compat not in builtins:
+                    builtins.append(legacy_models_compat)
+            else:
+                if legacy_stub_compat not in builtins:
+                    builtins.append(legacy_stub_compat)
+        except Exception:
+            # best-effort: fall back to adding stub compat module
+            if 'legacy_stub_compat' in locals() and legacy_stub_compat not in builtins:
+                builtins.append(legacy_stub_compat)
     except Exception:
         pass
+
+    # If legacy exploration is enabled, point MEDIA settings at the legacy media
+    # folder so the development server can serve old CSS/JS/images referenced
+    # by the legacy templates (they use `/media/...` URLs).
+    legacy_media = BASE_DIR.parent / 'zkeco' / 'units' / 'adms' / 'mysite' / 'media'
+    if legacy_media.exists():
+        MEDIA_URL = "/media/"
+        MEDIA_ROOT = str(legacy_media)
 
 WSGI_APPLICATION = "zkeco_config.wsgi.application"
 

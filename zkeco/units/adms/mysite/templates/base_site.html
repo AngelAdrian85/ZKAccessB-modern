@@ -1,0 +1,12 @@
+{# Minimal base_site to satisfy legacy templates during rendering #}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>{% block title %}Legacy Base{% endblock %}</title>
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <div id="content">{% block content %}{% endblock %}</div>
+</body>
+</html>

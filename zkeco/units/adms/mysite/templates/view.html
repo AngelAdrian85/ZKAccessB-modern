@@ -67,8 +67,8 @@
 					<td width="215" >{{ val }}</td>
 					<td width="281" ><table width="279" border="0" cellspacing="0" cellpadding="0">
 					  <tr>
-					    <td width="143"><input type="radio" name="_fun_{{ fun }}" id="_fun_{{ fun }}_true" value="true"  checked="checked" />{% trans "显示"%}</td>
-					    <td width="136"><input type="radio" name="_fun_{{ fun }}" id="_fun_{{ fun }}_false" value="false"  />{% trans "隐藏" %}</td>
+					    <td width="143"><input type="radio" name="_fun_{{ fun }}" id="_fun_{{ fun }}_true" value="true"  checked="checked" />{% trans "EN: 显示"%}</td>
+					    <td width="136"><input type="radio" name="_fun_{{ fun }}" id="_fun_{{ fun }}_false" value="false"  />{% trans "EN: 隐藏" %}</td>
 				      </tr>
 					  </table></td>
 				</tr>
@@ -89,7 +89,7 @@
                     <input type="checkbox" name="_col_{{ fld }}"  class="lstfields"  value="true" /> 
                     <table><tr><td style="width:200px">
                      {{ des }}</td><td style="width:40px">
-                    {% trans "列宽" %}</td><td>
+                    {% trans "EN: 列宽" %}</td><td>
                     <input type="text"  class ="fieldstxt"  name="_txt_{{ fld }}" value="80" /></td></tr></table>
                     </li>
                     {% endfor %}
@@ -98,32 +98,32 @@
                 <td width="84"><table  align="center" >
                   <tr>
                     <td width="100" height="35"><span style="text-align: center">
-                      <input name="btnToUp" type="button" id="btnToUp"   value={%trans "上移"%} class="tblbutton"/>
+                      <input name="btnToUp" type="button" id="btnToUp"   value={%trans "EN: 上移"%} class="tblbutton"/>
                     </span></td>
                   </tr>
                   <tr>
                     <td height="35"><span style="text-align: center">
-                      <input name="btnToDown" type="button" id="btnToDown"  class="tblbutton" value={% trans "下移" %}/>
+                      <input name="btnToDown" type="button" id="btnToDown"  class="tblbutton" value={% trans "EN: 下移" %}/>
                     </span></td>
                   </tr>
                   <tr>
                     <td height="35"><span style="text-align: center">
-                      <input type="button"  id="btnSelectAll" value={% trans "全选" %} class="tblbutton" />
+                      <input type="button"  id="btnSelectAll" value={% trans "EN: 全选" %} class="tblbutton" />
                     </span></td>
                   </tr>
                   <tr>
                     <td height="35"><span style="text-align: center">
-                      <input type="button"  id="btnRe" value={% trans "反选" %} class="tblbutton" />
+                      <input type="button"  id="btnRe" value={% trans "EN: 反选" %} class="tblbutton" />
                     </span></td>
                   </tr>
                   <tr>
                     <td height="35"><span style="text-align: center">
-                      <input type="button"  id="btnUnselect" value={% trans "清除" %} class="tblbutton" />
+                      <input type="button"  id="btnUnselect" value={% trans "EN: 清除" %} class="tblbutton" />
                     </span></td>
                   </tr>
                   <tr>
                     <td height="35"><span style="text-align: center">
-                      <input name="btnAdjust" type="button" id="btnAdjust"   value={% trans "调整显示" %}  class="tblbutton"/>
+                      <input name="btnAdjust" type="button" id="btnAdjust"   value={% trans "EN: 调整显示" %}  class="tblbutton"/>
                     </span></td>
                   </tr>
                 </table></td>
@@ -172,8 +172,8 @@
 			{% for fld ,des in viewfilter.items %}
               <tr><td width="12">&nbsp;</td>
                 <td width="246">{{ des }}</td>
-                <td width="127"><input type="radio" name="_filter_{{ fld }}" id="_filter_{{ fld }}_true" value="true"  checked="checked" />{% trans "显示"%}</td>
-                <td width="117"><input type="radio" name="_filter_{{ fld }}" id="_filter_{{ fld }}_false" value="false"  />{% trans "隐藏" %}</td>
+                <td width="127"><input type="radio" name="_filter_{{ fld }}" id="_filter_{{ fld }}_true" value="true"  checked="checked" />{% trans "EN: 显示"%}</td>
+                <td width="117"><input type="radio" name="_filter_{{ fld }}" id="_filter_{{ fld }}_false" value="false"  />{% trans "EN: 隐藏" %}</td>
               </tr>
             {% endfor %}
             
@@ -198,25 +198,25 @@
  </tr>
  <tr><td><table width="523" border="0" cellspacing="0" cellpadding="0">
     <tr>
-      <td width="116" height="29" style="  text-align: center; vertical-align:middle">{% trans "视图名称" %}</td>
+      <td width="116" height="29" style="  text-align: center; vertical-align:middle">{% trans "EN: 视图名称" %}</td>
       <td width="251">        
           <input type="text" name="viewname" id="viewname"  width="100"  />        
       </td>
       <td width="156" style="  vertical-align:middle; text-align: left">
-        <input type="checkbox" name="defaultview"  value="true" /> {% trans "默认视图" %}
+        <input type="checkbox" name="defaultview"  value="true" /> {% trans "EN: 默认视图" %}
       </td></tr></table>
      </td>
  </tr>
  <tr>
    <td><table><tr>
   <td width="161" style=" vertical-align:middle; text-align: left">&nbsp;</td>
-  <td width="83" style=" vertical-align:middle; text-align: left"><input type="button" name="btnNew" id="btnNew" value={% trans "新建" %} style="width:90%; vertical-align:middle" /></td>
+  <td width="83" style=" vertical-align:middle; text-align: left"><input type="button" name="btnNew" id="btnNew" value={% trans "EN: 新建" %} style="width:90%; vertical-align:middle" /></td>
       <td width="81" align="center"><span style=" vertical-align:middle; text-align: left">
-        <input type="button" name="btnDelete" id="btnDelete" value={% trans "删除" %} style="width:90%; vertical-align:middle" />
+        <input type="button" name="btnDelete" id="btnDelete" value={% trans "EN: 删除" %} style="width:90%; vertical-align:middle" />
       </span></td>
-      <td width="90" align="center"><input type="button" name="btnSaveview" id="btnSaveview" value={% trans "保存" %} style="width:90%; vertical-align:middle" /></td>
+      <td width="90" align="center"><input type="button" name="btnSaveview" id="btnSaveview" value={% trans "EN: 保存" %} style="width:90%; vertical-align:middle" /></td>
       <td width="84" align="center">        
-        <input type="button" name="btnReturn" id="btnReturn" value={% trans "返回" %} style="width:90%; vertical-align:middle"  />
+        <input type="button" name="btnReturn" id="btnReturn" value={% trans "EN: 返回" %} style="width:90%; vertical-align:middle"  />
       </td>
     </tr>
   </table>

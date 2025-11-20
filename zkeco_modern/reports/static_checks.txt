@@ -1,0 +1,35 @@
+STATIC ENV CHECKS
+=================
+WORKDIR: C:\Users\AngelAdrian\Desktop\Acces\ZKAccessB\zkeco_modern
+
+PIP LIST:
+﻿Package              Version
+-------------------- -------
+asgiref              3.10.0
+colorama             0.4.6
+Django               4.2.26
+django-debug-toolbar 6.1.0
+django-extensions    4.1
+iniconfig            2.3.0
+mysqlclient          2.2.7
+packaging            25.0
+pip                  25.3
+pluggy               1.6.0
+Pygments             2.19.2
+pytest               9.0.1
+pytest-django        4.11.1
+setuptools           65.5.0
+sqlparse             0.5.3
+tzdata               2025.2
+
+INSTALLED_APPS IMPORT CHECKS:
+Found INSTALLED_APPS: 9 entries
+OK: imported django.contrib.admin
+OK: imported django.contrib.auth
+OK: imported django.contrib.contenttypes
+OK: imported django.contrib.sessions
+OK: imported django.contrib.messages
+OK: imported django.contrib.staticfiles
+OK: imported legacy_models
+OK: imported django_extensions
+OK: imported debug_toolbar

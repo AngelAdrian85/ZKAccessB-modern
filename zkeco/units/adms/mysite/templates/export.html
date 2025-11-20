@@ -3,7 +3,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<title>{% trans "无标题文档" }</title>
+<title>{% trans "EN: 无标题文档" }</title>
 <style type="text/css">
 .exportselect{
 	width:180px;
@@ -79,7 +79,7 @@ $("[name='format']").change(function(){
   </tr>
    -->
   <tr>
-    <td valign="middle" bgcolor="#f1fcfe">{% trans '文件类型' %}</td>
+    <td valign="middle" bgcolor="#f1fcfe">{% trans 'EN: EN: 文件类型' %}</td>
     <td background="#f1fcfe">    <select  name="format" class="exportselect" >
     	{% for filetype in filetype_list %}
 			{% for k,v in filetype.items %}
@@ -89,40 +89,40 @@ $("[name='format']").change(function(){
     </select></td>
   </tr>
   <tr class="displayN">
-    <td valign="middle" bgcolor="#f1fcfe">{% trans '文件编码' %}</td>
+    <td valign="middle" bgcolor="#f1fcfe">{% trans 'EN: EN: 文件编码' %}</td>
     <td background="#f1fcfe">    <select  name="filecode" class="exportselect" >
     	{% for k,v in filecoding.items%}
     	<option value="{{k}}">{{v}}</option>
         {% endfor %}
     </select></td>
   </tr>
-<tr><td colspan="2" bgcolor="#f1fcfe">{% trans '导出方式:' %}</td>
+<tr><td colspan="2" bgcolor="#f1fcfe">{% trans 'EN: EN: 导出方式:' %}</td>
 </tr>
 <tr><td colspan="2" background="#f1fcfe" style="padding-left:10px;">
-<input type="radio"  name="t" value="1" checked="checked">{% trans '全部记录(最多导出10000条最新记录)' %}</input>
+<input type="radio"  name="t" value="1" checked="checked">{% trans 'EN: EN: 全部记录(最多导出10000条最新记录)' %}</input>
 <div id="id_div_choicerecords" style="margin-top:5px"><ul>
   
-	<li class="floatN displayN"><input type="radio"  name="t" value="2"  >{% trans '按页导出' %}</input>
+	<li class="floatN displayN"><input type="radio"  name="t" value="2"  >{% trans 'EN: EN: 按页导出' %}</input>
 		<ul style="margin:3px 0px 3px 16px;">	
 			<li class="floatL">
-				{% trans '以每页' %}<input type="text" size="2" maxlength="2" value="15" id="pagerecords"></input>{% trans '条记录为单位,' %}			</li>
+				{% trans 'EN: EN: 以每页' %}<input type="text" size="2" maxlength="2" value="15" id="pagerecords"></input>{% trans 'EN: EN: 条记录为单位,' %}			</li>
 			<li class="floatL">
-				{% trans '从' %}<input type="text" size="4" maxlength="4" value="1" id="pagestart"></input>{% trans '页到' %}
-				<input type="text" size="4" value="10" id="pageend" maxlength="4"></input>{% trans '页' %}			</li>
+				{% trans 'EN: EN: 从' %}<input type="text" size="4" maxlength="4" value="1" id="pagestart"></input>{% trans 'EN: EN: 页到' %}
+				<input type="text" size="4" value="10" id="pageend" maxlength="4"></input>{% trans 'EN: EN: 页' %}			</li>
 		</ul>
 	</li>
-	<li class="clearB" id="id_li_records"><input type="radio"   name="t" value="3" >{% trans '选择记录数导出' %}</input>
+	<li class="clearB" id="id_li_records"><input type="radio"   name="t" value="3" >{% trans 'EN: EN: 选择记录数导出' %}</input>
 	    <ul style="margin:3px 3px 3px 16px;">
-	      <li>{% trans '从第' %}<input type="text" value="1" id="recordstart" size="4" maxlength="8"></input>{% trans '条起，共导出' %}
-	        <input type="text" value="100" id="recordend" size="4" maxlength="5"></input>{% trans '条记录' %}	        </li>
+	      <li>{% trans 'EN: EN: 从第' %}<input type="text" value="1" id="recordstart" size="4" maxlength="8"></input>{% trans 'EN: EN: 条起，共导出' %}
+	        <input type="text" value="100" id="recordend" size="4" maxlength="5"></input>{% trans 'EN: EN: 条记录' %}	        </li>
 		 </ul>
 	</li>
   </ul>
 </div></td></tr>
 </table>
   <div class="btns_class">
-	<input type="submit" value={% trans "确定" %}  id="btnExport" class="btn" />      
-	<input type="button" value={% trans "取消" %}  id="btnReturn" class="btn" />
+	<input type="submit" value={% trans "EN: EN: 确定" %}  id="btnExport" class="btn" />      
+	<input type="button" value={% trans "EN: 取消" %}  id="btnReturn" class="btn" />
 	<input type="hidden" name="txtviewname"  class="btn40" />
   </div>
 

@@ -39,6 +39,11 @@
       "file": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\templates\\rtmonitor.html",
       "patch": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\patches\\zkeco\\units\\adms\\mysite\\templates\\rtmonitor.html.partial.html",
       "status": "applied"
+    },
+    {
+      "file": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco\\units\\adms\\mysite\\templates\\setoption.html",
+      "patch": "C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\zkeco_modern\\scripts\\patches\\zkeco\\units\\adms\\mysite\\templates\\setoption.html.partial.html",
+      "status": "applied"
     }
   ]
 }

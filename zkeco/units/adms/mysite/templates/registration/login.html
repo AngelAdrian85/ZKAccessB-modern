@@ -9,36 +9,36 @@
 
         {% if "mysite"|is_zkaccess_att %}
             {% if "mysite"|is_oem %}
-                {% trans "门禁管理系统" %}
+                {% trans "EN: 门禁管理系统" %}
             {% else %}
                 {% if "mysite"|is_zkaccess_5to4 %}
-                    {% trans "ZKAccess4.5 门禁管理系统" %}
+                    {% trans "EN: ZKAccess4.5 门禁管理系统" %}
                 {% else %}
-                    {% trans "ZKAccess 门禁管理系统" %}
+                    {% trans "EN: ZKAccess 门禁管理系统" %}
                 {% endif %}
             {% endif %}
         {% else %}
             {% if "mysite"|is_oem %}
-                {% trans "时间&安全管理平台" %}
+                {% trans "EN: 时间&安全管理平台" %}
             {% else %}
-                {% trans "ZKECO 时间&安全管理平台" %}
+                {% trans "EN: ZKECO 时间&安全管理平台" %}
             {% endif %}
         {% endif %}
     {% else %}
         {% if "mysite.iaccess"|hasApp %}
             {% if "mysite"|is_oem %}
-                {% trans "门禁管理系统" %}
+                {% trans "EN: 门禁管理系统" %}
             {% else %}
-                {% trans "ZKAccess 门禁管理系统" %}
+                {% trans "EN: ZKAccess 门禁管理系统" %}
             {% endif %}
         {% else %}
             {% if "mysite"|is_oem %}
-                {% trans "考勤管理系统" %}
+                {% trans "EN: 考勤管理系统" %}
             {% else %}
-                {% trans "ZKTime8.0 考勤管理系统" %}
+                {% trans "EN: ZKTime8.0 考勤管理系统" %}
             {% endif %}
         {% endif %}
-    {% endif %} - {% trans '登录' %}
+    {% endif %} - {% trans 'Login' %}
 </title>
 
 <link href="{{ MEDIA_URL }}/css/css.css" rel="stylesheet" type="text/css" />
@@ -79,14 +79,14 @@
             <div class="login_middle_title user_login">
                 <div id="id_reservaion_div" class="user_login_only">
 					<span class="icon_user_login">&nbsp;</span>
-					{% trans '用户登录' %}
+					{% trans 'User Login' %}
 				</div>
                 <ul id="id_reservaion_ul" style="height:25px; overflow:hidden;display:none">
 					<li class="line_focus" cc="user_login">
 						<ul>
 							<li class="btn_logType_l">&nbsp;</li>
 							<li class="btn_logType_m">
-								<span>&nbsp;</span>{% trans '用户登录' %}
+								<span>&nbsp;</span>{% trans 'User Login' %}
 							</li>
 							<li class="btn_logType_r">&nbsp;</li>
 						</ul>
@@ -95,7 +95,7 @@
 						<ul>
 							<li class="btn_logType_l">&nbsp;</li>
 							<li class="btn_logType_m">
-								<span>&nbsp;</span>{% trans '预约登录' %}
+								<span>&nbsp;</span>{% trans 'EN: 预约登录' %}
 							</li>
 							<li class="btn_logType_r">&nbsp;</li>
 						</ul>
@@ -103,13 +103,13 @@
 				</ul><div class="clear"></div>
             <form action="" method="post" id="login-form" class="user_login" style="display:none;">{% csrf_token %}
                 <div class="login_inputBox">
-                    <div  class="floatL Link_black fontB login_titleBox">{% trans '用户名' %}</div>
+                    <div  class="floatL Link_black fontB login_titleBox">{% trans 'EN: 用户名' %}</div>
                     <div>
                         <input type="text" name="username" id="id_username" class="login_textBox" maxlength="30" />
                     </div>
                     <div style="clear:both"></div>
                     <div id="id_classlabel" class="floatL Link_black fontB login_titleBox " >
-                        {% trans '密码' %}
+                        {% trans 'EN: 密码' %}
                     </div>
                     <div id="id_pwdtxt" >
                         <input type="password" name="password" id="id_password" class="login_textBox" maxlength="18" />
@@ -119,20 +119,20 @@
                     <!--<div class="floatL login_titleBox" style="width:15px;" cellpadding="10"></div>-->					
                     <div style="margin:10px 0px 0px 30px;" id="login_btn_box">
                         <!--
-                        <input type="button" value="{% trans '密码登录' %}" id="id_pwdlogin" class="pwd_login_btn" onMouseOver="this.className='pwd_login_btnOver'" 
+                        <input type="button" value="{% trans 'EN: 密码登录' %}" id="id_pwdlogin" class="pwd_login_btn" onMouseOver="this.className='pwd_login_btnOver'" 
                         onmousedown="this.className='pwd_login_btndown'"  onmouseout="this.className='pwd_login_btn'" />&nbsp;&nbsp;
                         -->
                         <div class="login_btn0">
 							<div class="login_btn_l"></div>
 							<div class="login_btn_m">
-								<span id="id_login" tabindex="0">{% trans '登 录' %}</span>
+								<span id="id_login" tabindex="0">{% trans 'EN: 登 录' %}</span>
 							</div>
 							<div class="login_btn_r"></div>
 						</div>
                         <div class="login_btn0">
 							<div class="login_btn_l"></div>
 							<div class="login_btn_m">
-								<span id="id_reset" tabindex="0">{% trans '重 置' %}</span>
+								<span id="id_reset" tabindex="0">{% trans 'EN: 重 置' %}</span>
 							</div>
 							<div class="login_btn_r"></div>
 						</div>
@@ -142,7 +142,7 @@
                                 <div class="login_btn0">
                                 <div class="login_btn_l"></div>
                                 <div class="login_btn_m">
-                                    <span id="id_fp_identify" tabindex="0">{% trans '指纹登录' %}</span>
+                                    <span id="id_fp_identify" tabindex="0">{% trans 'EN: 指纹登录' %}</span>
                                 </div>
                                 <div class="login_btn_r"></div>
                                 </div>
@@ -160,18 +160,18 @@
                     <div id="id_selpwd" class="displayN" >
 
                     </div>
-                    <div class="messageBox" style="display:none;">{% trans '会话超时，请重新登录！' %}</div>
+                    <div class="messageBox" style="display:none;">{% trans 'EN: 会话超时，请重新登录！' %}</div>
                 </div>
             </form>
 			<form action="" method="post" id="login-self-form" class="employee_self" style="display:none;"><!-- 预约登录的表单 -->
                 <div class="login_inputBox">
-                    <div  class="floatL Link_black fontB login_titleBox">{% trans '用户名' %}</div>
+                    <div  class="floatL Link_black fontB login_titleBox">{% trans 'EN: 用户名' %}</div>
                     <div>
                         <input type="text" name="username" id="id_username_self" class="login_textBox" />
                     </div>
                     <div style="clear:both"></div>
                     <div id="id_classlabel" class="floatL Link_black fontB login_titleBox " >
-                        {% trans '密码' %}
+                        {% trans 'EN: 密码' %}
                     </div>
                     <div id="id_pwdtxt" >
                         <input type="password" name="password" id="id_password_self" class="login_textBox" />
@@ -181,20 +181,20 @@
                     <div class="floatL login_titleBox" style="width:15px;" cellpadding="10"></div>					
                     <div style="margin:10px 0px 0px 35px;" id="login_btn_box_self">
                         <!--
-                        <input type="button" value="{% trans '密码登录' %}" id="id_pwdlogin" class="pwd_login_btn" onMouseOver="this.className='pwd_login_btnOver'" 
+                        <input type="button" value="{% trans 'EN: 密码登录' %}" id="id_pwdlogin" class="pwd_login_btn" onMouseOver="this.className='pwd_login_btnOver'" 
                         onmousedown="this.className='pwd_login_btndown'"  onmouseout="this.className='pwd_login_btn'" />&nbsp;&nbsp;
                         -->
                         <div class="login_btn0">
 							<div class="login_btn_l"></div>
 							<div class="login_btn_m">
-								<span id="id_login_self">{% trans '登 录' %}</span>
+								<span id="id_login_self">{% trans 'EN: 登 录' %}</span>
 							</div>
 							<div class="login_btn_r"></div>
 						</div>
                         <div class="login_btn0">
 							<div class="login_btn_l"></div>
 							<div class="login_btn_m">
-								<span id="id_reset_self">{% trans '重 置' %}</span>
+								<span id="id_reset_self">{% trans 'EN: 重 置' %}</span>
 							</div>
 							<div class="login_btn_r"></div>
 						</div>
@@ -202,7 +202,7 @@
                             <div class="displayN"><!-- 预约登录 指纹登陆暂时屏蔽 -->
                                 <div class="login_btn_l"></div>
                                 <div class="login_btn_m">
-                                    <span id="id_fp_identify_self">{% trans '指纹登录' %}</span>
+                                    <span id="id_fp_identify_self">{% trans 'EN: 指纹登录' %}</span>
                                 </div>
                                 <div class="login_btn_r"></div>
                             </div>
@@ -219,7 +219,7 @@
                     <div id="id_selpwd" class="displayN" >
 
                     </div>
-                    <div class="messageBox" style="display:none;">{% trans '会话超时，请重新登录！' %}</div>
+                    <div class="messageBox" style="display:none;">{% trans 'EN: 会话超时，请重新登录！' %}</div>
                 </div>
 			</form>
 			</div>
@@ -227,8 +227,8 @@
         {% if "mysite.iaccess&mysite.att"|hasApp %}
             {% if "mysite"|is_zkaccess_att %}
                 <div class="login_middle_r_iaccess">
-                	<div class="login_iClock">C4&nbsp;{% trans '系列' %}</div>
-                	<div class="login_C">C3&nbsp;{% trans '系列' %}</div>
+                	<div class="login_iClock">C4&nbsp;{% trans 'EN: 系列' %}</div>
+                	<div class="login_C">C3&nbsp;{% trans 'EN: 系列' %}</div>
                 	<div class="login_IFace">F6</div>
                 	<div class="login_P">F7</div>
                 	<div class="login_PT">F18</div>
@@ -245,8 +245,8 @@
 		{% else %}
 			{% if "mysite.iaccess"|hasApp %}
 				<div class="login_middle_r_iaccess">
-					<div class="login_iClock">C4&nbsp;{% trans '系列' %}</div>
-					<div class="login_C">C3&nbsp;{% trans '系列' %}</div>
+					<div class="login_iClock">C4&nbsp;{% trans 'EN: 系列' %}</div>
+					<div class="login_C">C3&nbsp;{% trans 'EN: 系列' %}</div>
 					<div class="login_IFace">F6</div>
 					<div class="login_P">F7</div>
 					<div class="login_PT">F18</div>
@@ -418,7 +418,7 @@
 //                $("#id_login").parent().parent().attr("class","login_btn0");
 //                $(".messageBox").html("").show();
 //                if($.trim(doc_user_name.value)=="" || $.trim(doc_user_pwd.value)==""){
-//                    $(".messageBox").html("{% trans '请输入正确的用户名和密码！'%}").show();
+//                    $(".messageBox").html("{% trans 'EN: 请输入正确的用户名和密码！'%}").show();
 //                    $("#id_username").select();
 //                    return false;
 //                }
@@ -481,7 +481,7 @@
 //                {
 //                    $("#id_template10").val(zkonline.VerifyTemplate.toString());
 //                    serialize_form=$("#login-form").serialize();
-//                    $(".messageBox").html("{% trans '比对验证中，请稍等!' %}").show();
+//                    $(".messageBox").html("{% trans 'EN: 比对验证中，请稍等!' %}").show();
 //                    $.ajax({
 //                        url:window.location.href,
 //                        type:"POST",
@@ -491,12 +491,12 @@
 //                            $("#id_pwdlogin").attr("disabled", false);
 //                            if(msg=='error')
 //                            {
-//                                $(".messageBox").html("{% trans '验证失败，请重试!' %}").show();
+//                                $(".messageBox").html("{% trans 'EN: 验证失败，请重试!' %}").show();
 //                                return false;                    
 //                            }
 //                            else if(msg == "2")
 //                            {
-//                                $(".messageBox").html("{% trans '10.0指纹算法许可失败!' %}").show();
+//                                $(".messageBox").html("{% trans 'EN: 10.0指纹算法许可失败!' %}").show();
 //                                return false;
 //                            }
 //                            else
@@ -505,7 +505,7 @@
 //                                {
 //                                    alert(msg.split("=")[1]);
 //                                }
-//                                $(".messageBox").html("{% trans '验证通过，登录系统!' %}").show();
+//                                $(".messageBox").html("{% trans 'EN: 验证通过，登录系统!' %}").show();
 //                                var index=window.location.href.indexOf("?next=");
 //                                if(index!=-1){
 //                                    window.location.href=window.location.href.substring(index+6);
@@ -520,7 +520,7 @@
 //                }
 //                else
 //                {
-//                    $(".messageBox").html("{% trans '获取指纹失败，请重试!' %}").show();
+//                    $(".messageBox").html("{% trans 'EN: 获取指纹失败，请重试!' %}").show();
 //                    return false;
 //                    //window.location.href='../../data/index/';
 //                    //window.location.href = "/{{ request.surl }}accounts/login/";
@@ -528,8 +528,8 @@
 //            });
 //			
 //			if(!$.browser.msie){
-//				$("#id_fp_identify").attr({disabled:"true", title: "{% trans '登记指纹功能只支持IE浏览器' %}"}).css({cursor:"default",color:"#888888"}).unbind().click(function(){
-//					//$(".messageBox").html("{% trans '登记指纹功能只支持IE浏览器' %}").show();
+//				$("#id_fp_identify").attr({disabled:"true", title: "{% trans 'EN: 登记指纹功能只支持IE浏览器' %}"}).css({cursor:"default",color:"#888888"}).unbind().click(function(){
+//					//$(".messageBox").html("{% trans 'EN: 登记指纹功能只支持IE浏览器' %}").show();
 //                    return false;
 //				});
 //			}
@@ -545,7 +545,7 @@
 //                } 
 //                if(!flag)
 //                {
-//                    $("#id_fp_identify").attr({disabled:"true", title: "{% trans '请安装指纹仪驱动' %}"}).css({cursor:"default",color:"#888888"}).unbind().click(function()
+//                    $("#id_fp_identify").attr({disabled:"true", title: "{% trans 'EN: 请安装指纹仪驱动' %}"}).css({cursor:"default",color:"#888888"}).unbind().click(function()
 //                    {
 //                        return false;
 //                    });

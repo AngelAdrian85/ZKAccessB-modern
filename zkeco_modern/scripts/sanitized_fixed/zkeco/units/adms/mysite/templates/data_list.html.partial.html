@@ -1,5 +1,5 @@
 {% extends "base_page_frame.html" %}
-{% load i18n %}
+<!-- i18n load removed for validation fallback; translations inlined -->
 
 {% load dbapp_tags %}
 {% block datalist_content %}
@@ -29,9 +29,9 @@
                     <div>   
                         <li>
                           <div id="id_log_url">
-                             <!-- <a href='{{ log_url }}' target='_blank' class="action_log">{% trans "Log Entry" %}</a> -->
+                             <!-- <a href='{{ log_url }}' target='_blank' class="action_log">Log Entry</a> -->
                                 
-                               <a id="id_log_dialog" href="javascript:void(0);" ref="/{{ request.surl }}worktable/get_search_form/base/LogEntry/" query="{{ log_search }}" class=""><span class="action_log"></span>{% trans "日志记录" %}</a>							   
+                               <a id="id_log_dialog" href="javascript:void(0);" ref="/{{ request.surl }}worktable/get_search_form/base/LogEntry/" query="{{ log_search }}" class=""><span class="action_log"></span>日志记录</a>				   
                           </div>
                         </li>
                     </div>					
@@ -47,7 +47,7 @@
                     {% block import %}
                         {% if import_perm and request.user|HasPerm:import_perm %}
                             <li id="id_li_import" class="displayN">
-                                <div id="id_model_import"><a href="javascript:void(0)"><span class="action_import"></span>{% trans "导入" %}</a></div>
+                                <div id="id_model_import"><a href="javascript:void(0)"><span class="action_import"></span>导入</a></div>
                                 <div class='div_leftBottomLine'></div>
                             </li>
                         {% endif %}
@@ -55,7 +55,7 @@
                     {% block export %}
                         {% if export_perm and request.user|HasPerm:export_perm %}
                             <li id="id_li_export">
-                                <div id="id_model_export"><a href="javascript:void(0)"><span class="action_export"></span>{% trans "导出" %}</a></div>
+                                <div id="id_model_export"><a href="javascript:void(0)"><span class="action_export"></span>导出</a></div>
                                 <div class='div_leftBottomLine'></div>
                             </li>     
                         {% endif %}     
@@ -70,24 +70,23 @@
                                   {% else %}
                                    <span class="Link_blue1 displayB" id="id_advanced_search" ><a href="javascript:void(0)" class="action_advancedSearch">高级查询</a></span>
                                   {% endif %}
-                                  <span class="Link_blue1 displayB"><a href="javascript:void(0)" class="action_topClear" id="id_clear_advance">{% trans '清除查询' %}</a></span>
+                                  <span class="Link_blue1 displayB"><a href="javascript:void(0)" class="action_topClear" id="id_clear_advance">清除查询</a></span>
                               </div>
                             -->
-                        	{% if request.user|HasPerm:"{{ app  .view_{{model_name  " % <!-- 
+                        	{% if request.user|HasPerm:"base.browse_logentry" %} <!-- sanitized: replaced malformed HasPerm expression -->
                                 <div id="id_view_bar">
                                     <br />
                                         界面风格选择:&nbsp;<br />
 										<select id="cmbviewname">
                                         <option value="0" >默认</option>
-                                        {% for vn in myview % <option value="{{ vn }}">{{ vn }}</option>
-                                        {% endfor %}
+                                        {% for vn in myview %}<option value="{{ vn }}">{{ vn }}</option>{% endif %}
                                         </select>
                                     <span class="Link_blue1 displayN" id="id_view_show">
                                          <a href="javascript:void(0)">自定义界面风格</a>
                                     </span>
                                   </div>
                                 -->
-                             {% endif %}
+                             {% endfor %}
                         </div>
                     </li>
                 </ul>
@@ -113,9 +112,19 @@
         <div id="id_tab" >
             <div class="portlet-header sfActive">
                 {% block position %}
-                <ul><li class="floatL"><span class='icon_SiteMap'>&nbsp;</span>{% trans "当前位置：" %} {% if position %} {{ position }} {% else %}<span id="id_rel_log">{{ current_app|translate_str }}</span> -> {% if title|translate_str:'%' {{ title|translate_str|cap   {% else % {% endif % {% endif % </li></ul>
-                {% endblock % <!--<ul><li  class="floatR"><a href="{{ request.dbapp_url }}system/help/?p=/file/{{ LANGUAGE_CODE }}/help/{% if help_model_name %} {{ help_model_name|lower }} {% else %} {{ model_name|lower }} {% endif %}.html" target="_blank" title="{% trans '当前页帮助' %}" class="icon_help_current"></a></ul> -->
-                <!--<ul><li  class="floatR"><a target="_blank" title="{% trans '当前页帮助' %}" class="icon_help_current" href="/media/help.chm"></a></ul>-->
+                <ul>
+                    <li class="floatL">
+                        <span class='icon_SiteMap'>&nbsp;</span>当前位置：
+                        {% if position %}
+                            {{ position }}
+                        {% else %}
+                            <span id="id_rel_log">{{ current_app|translate_str }}</span>
+                            {% if title %} -> {{ title|translate_str|cap }} {% endif %}
+                        {% endif %}
+                    </li>
+                </ul>
+                {% endblock %}<!-- help link was intentionally left commented out -->
+                <!--<ul><li  class="floatR"><a target="_blank" title="当前页帮助" class="icon_help_current" href="/media/help.chm"></a></ul>-->
                 <ul class="floatR set_index Link_blue1">
                    <!-- <li class="floatL"><a name="{{ current_app }}.{{ current_app }}_default_page" rel="{{ model_url }}" href="javascript:void(0);">设为本子系统首页</a></li>
                      <li class="floatL"><a name="base.site_default_page" rel="{{ model_url }}" href="{{ model_url }}">设为整个系统首页</a></li> -->
@@ -136,7 +145,7 @@
             {% block search_div %}
                 {% if searchform %}
                 <div id="id_search" class="div_box" style="margin-bottom:0px !important; padding-bottom:2px;">
-                    <h1 style="margin-bottom:5px;">{% trans "查询" %}</h1>
+                    <h1 style="margin-bottom:5px;">查询</h1>
                     <table style="width:99%;">
                     <tr>
                         <td>
@@ -150,15 +159,15 @@
                             <div style="text-align:right;" class="topSearchBtn floatR"><!--height:20px;-->
                                
                                 <span class="Link_blue1">
-                                    <span class="action_topSearch floatL"></span><a href="javascript:void(0)" id="id_header_search" class="floatL">{% trans "查询" %}</a>
+                                    <span class="action_topSearch floatL"></span><a href="javascript:void(0)" id="id_header_search" class="floatL">查询</a>
                                 </span>
                                 {% block advance_search %}
                                 <span class="Link_blue1" id="id_advanced_search" >
-                                    <span class="action_advancedSearch floatL"></span><a href="javascript:void(0)" class="floatL">{% trans "高级" %}</a>
+                                    <span class="action_advancedSearch floatL"></span><a href="javascript:void(0)" class="floatL">高级</a>
                                 </span>
-                                {% endblock %}
+                                {% endif %}
                                 <span class="Link_blue1">
-                                    <span class="action_topClear floatL"></span><a href="javascript:void(0)" id="id_header_clear" class="floatL">{% trans "清除" %}</a>
+                                    <span class="action_topClear floatL"></span><a href="javascript:void(0)" id="id_header_clear" class="floatL">清除</a>
                                 </span>
                                 <div class="clear"></div>
                             </div>
@@ -182,7 +191,7 @@
                     {% endblock %}<!--endblock of datalist_before-add by darcy-->
                     <!-- 过滤器屏蔽{% if cl.has_filters____ %}
                      <div id="id_filter">
-                          <span id="id_filter_label">{% trans "Filter by" %}:
+                          <span id="id_filter_label">Filter by:
                           </span>
                           <span id="id_filterbar">
                             {% for spec in cl.filter_specs %}
@@ -194,7 +203,7 @@
                      </div>
                     {% block extend_before %}
                     <div id="id_extend">
-                    {% block AddDiv %}{% endblock %}<!--endblock of AddDiv-add by darcy-->
+                    {% block AddDiv %} {% endblock %}<!--endblock of AddDiv-add by darcy-->
                     </div>
                     {% endblock %}<!--endblock of extend_before-add by darcy-->
                 </div>

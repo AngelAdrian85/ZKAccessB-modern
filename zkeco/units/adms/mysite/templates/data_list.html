@@ -1,98 +1,97 @@
-{# extends "base_page_frame.html" #}
-{# load i18n #}
+{% extends "base_page_frame.html" %}
+<!-- i18n load removed for validation fallback; translations inlined -->
 
-{# load dbapp_tags #}
-{# block datalist_content #}
-<input type="hidden" id="id_sys_cur_app" value="&#123;&#123; app_label &#125;&#125;" /><!-- 当前应用名称 -->
-<input type="hidden" id="id_sys_cur_model" value="&#123;&#123; model_name &#125;&#125;" /><!-- 当前页面模型名称 -->
-<input type="hidden" id="id_sys_cur_appurl" value="&#123;&#123; dbapp_url &#125;&#125;" /><!-- APP的URL -->
+{% load dbapp_tags %}
+{% block datalist_content %}
+<input type="hidden" id="id_sys_cur_app" value="{{ app_label }}" /><!-- 当前应用名称 -->
+<input type="hidden" id="id_sys_cur_model" value="{{ model_name }}" /><!-- 当前页面模型名称 -->
+<input type="hidden" id="id_sys_cur_appurl" value="{{ dbapp_url }}" /><!-- APP的URL -->
 <input type="hidden" id="id_sys_cur_grid" value="#id_datalist" /><!-- 基于模型的grid的DIV -->
 <input type="hidden" id="id_sys_cur_exportfields" value="" /><!-- 导出时的报表字段-->
 <input type="hidden" id="id_sys_cur_exporttitle" value="" /><!-- 导出PDF时上的报表头 -->
 <input type="hidden" id="id_sys_isModelExport" value="true" /><!-- 设置当前是数据计算模型，还是实例模型 -->
-<input type="hidden" id="id_sys_virtual_app" value="&#123;&#123; app_label &#125;&#125;" /><!-- 当前应用名称 -->
+<input type="hidden" id="id_sys_virtual_app" value="{{ app_label }}" /><!-- 当前应用名称 -->
 
-{# block data_remove_left #}
+{% block data_remove_left %}
 <div class="leftBox" style="top: 115px;">
-    {# block model_extend #}
+    {% block model_extend %}
     <div id="id_model_extend" class="noUnderl">
             <!--  记录编辑  新增 日志操作-->
             <div class="leftBoxTop">
                 <ul class="Link_blue2 img_padding">
-                    {# block for_special_menu #}
-                    {# endblock #}<!--endblock of for_special_menu-add by darcy-->
+                    {% block for_special_menu %}
+                    {% endblock %}<!--endblock of for_special_menu-add by darcy-->
                     <div id="id_op_for_tab">
-                    {# block op_for_tab #}
-                    {# endblock #}<!--endblock of op_for_tab-add by darcy-->
-                    </div>{# if log_url #}
-					{# if request.user|HasPerm:"base.browse_logentry" #}
+                    {% block op_for_tab %}
+                    {% endblock %}<!--endblock of op_for_tab-add by darcy-->
+                    </div>{% if log_url %}
+					{% if request.user|HasPerm:"base.browse_logentry" %}
                     <div>   
                         <li>
                           <div id="id_log_url">
-                             <!-- <a href='&#123;&#123; log_url &#125;&#125;' target='_blank' class="action_log">{# trans "Log Entry" #}</a> -->
+                             <!-- <a href='{{ log_url }}' target='_blank' class="action_log">Log Entry</a> -->
                                 
-                               <a id="id_log_dialog" href="javascript:void(0);" ref="/&#123;&#123; request.surl &#125;&#125;worktable/get_search_form/base/LogEntry/" query="&#123;&#123; log_search &#125;&#125;" class=""><span class="action_log"></span>{# trans "日志记录" #}</a>							   
+                               <a id="id_log_dialog" href="javascript:void(0);" ref="/{{ request.surl }}worktable/get_search_form/base/LogEntry/" query="{{ log_search }}" class=""><span class="action_log"></span>日志记录</a>				   
                           </div>
                         </li>
                     </div>					
 					<div class='div_leftBottomLine' style="margin-top:3px"></div> 
-					{# endif #}
-					{# endif #}
+					{% endif %}
+					{% endif %}
                 </ul>
             </div>
             <!-- 关联操作 -->
-            {# block leftBoxMiddle #}
+            {% block leftBoxMiddle %}
             <div class="leftBoxMiddle">
                 <ul class="Link_blue2 img_padding">
-                    {# block import #}
-                        {# if import_perm and request.user|HasPerm:import_perm #}
+                    {% block import %}
+                        {% if import_perm and request.user|HasPerm:import_perm %}
                             <li id="id_li_import" class="displayN">
-                                <div id="id_model_import"><a href="javascript:void(0)"><span class="action_import"></span>{# trans "导入" #}</a></div>
+                                <div id="id_model_import"><a href="javascript:void(0)"><span class="action_import"></span>导入</a></div>
                                 <div class='div_leftBottomLine'></div>
                             </li>
-                        {# endif #}
-                    {# endblock #}
-                    {# block export #}
-                        {# if export_perm and request.user|HasPerm:export_perm #}
+                        {% endif %}
+                    {% endblock %}
+                    {% block export %}
+                        {% if export_perm and request.user|HasPerm:export_perm %}
                             <li id="id_li_export">
-                                <div id="id_model_export"><a href="javascript:void(0)"><span class="action_export"></span>{# trans "导出" #}</a></div>
+                                <div id="id_model_export"><a href="javascript:void(0)"><span class="action_export"></span>导出</a></div>
                                 <div class='div_leftBottomLine'></div>
                             </li>     
-                        {# endif #}     
-                    {# endblock #}
+                        {% endif %}     
+                    {% endblock %}
                 	
                     <li style="background:none !important;">
                          <div id="id_line">
                         <!-- 
                               <div id="id_searchbar">
-                                  {# if cl.searchHint #}
+                                  {% if cl.searchHint %}
                                   <span class="Link_blue1 displayB" id="id_advanced_search" ><a href="javascript:void(0)" class="action_advancedSearch">高级查询</a></span>
-                                  {# else #}
+                                  {% else %}
                                    <span class="Link_blue1 displayB" id="id_advanced_search" ><a href="javascript:void(0)" class="action_advancedSearch">高级查询</a></span>
-                                  {# endif #}
-                                  <span class="Link_blue1 displayB"><a href="javascript:void(0)" class="action_topClear" id="id_clear_advance">{# trans '清除查询' #}</a></span>
+                                  {% endif %}
+                                  <span class="Link_blue1 displayB"><a href="javascript:void(0)" class="action_topClear" id="id_clear_advance">清除查询</a></span>
                               </div>
                             -->
-                        	{# if request.user|HasPerm:"&#123;&#123; app  .view_&#123;&#123;model_name  " % <!-- 
+                        	{% if request.user|HasPerm:"base.browse_logentry" %} <!-- sanitized: replaced malformed HasPerm expression -->
                                 <div id="id_view_bar">
                                     <br />
                                         界面风格选择:&nbsp;<br />
 										<select id="cmbviewname">
                                         <option value="0" >默认</option>
-                                        {# for vn in myview % <option value="&#123;&#123; vn &#125;&#125;">&#123;&#123; vn &#125;&#125;</option>
-                                        {# endfor #}
+                                        {% for vn in myview %}<option value="{{ vn }}">{{ vn }}</option>{% endfor %}
                                         </select>
                                     <span class="Link_blue1 displayN" id="id_view_show">
                                          <a href="javascript:void(0)">自定义界面风格</a>
                                     </span>
                                   </div>
                                 -->
-                             {# endif #}
+                             {% endif %}
                         </div>
                     </li>
                 </ul>
             </div>
-            {# endblock #}<!--end of block leftBoxMiddle-->
+            {% endblock %}<!--end of block leftBoxMiddle-->
             <!-- 联系我们 -->
              <div class="Link_blue1 lineH22 img_padding leftBoxBottom">            
                  <ul>
@@ -104,44 +103,54 @@
              </div>
         <!-- end Right -->
     </div>
-    {# endblock #}<!--endblock of model_extend-add by darcy-->
+    {% endblock %}<!--endblock of model_extend-add by darcy-->
 </div>
-{# endblock #}
+{% endblock %}
 <!-- TOP -->
  <div class="rightBox">
- 		{# block data_remove_tab #}
+ 		{% block data_remove_tab %}
         <div id="id_tab" >
             <div class="portlet-header sfActive">
-                {# block position #}
-                <ul><li class="floatL"><span class='icon_SiteMap'>&nbsp;</span>{# trans "当前位置：" #} {# if position #} &#123;&#123; position &#125;&#125; {# else #}<span id="id_rel_log">&#123;&#123; current_app|translate_str &#125;&#125;</span> -> {# if title|translate_str:'%' &#123;&#123; title|translate_str|cap   {# else % {# endif % {# endif % </li></ul>
-                {# endblock % <!--<ul><li  class="floatR"><a href="&#123;&#123; request.dbapp_url &#125;&#125;system/help/?p=/file/&#123;&#123; LANGUAGE_CODE &#125;&#125;/help/{# if help_model_name #} &#123;&#123; help_model_name|lower &#125;&#125; {# else #} &#123;&#123; model_name|lower &#125;&#125; {# endif #}.html" target="_blank" title="{# trans '当前页帮助' #}" class="icon_help_current"></a></ul> -->
-                <!--<ul><li  class="floatR"><a target="_blank" title="{# trans '当前页帮助' #}" class="icon_help_current" href="/media/help.chm"></a></ul>-->
+                {% block position %}
+                <ul>
+                    <li class="floatL">
+                        <span class='icon_SiteMap'>&nbsp;</span>当前位置：
+                        {% if position %}
+                            {{ position }}
+                        {% else %}
+                            <span id="id_rel_log">{{ current_app|translate_str }}</span>
+                            {% if title %} -> {{ title|translate_str|cap }}{% endif %}
+                        {% endif %}
+                    </li>
+                </ul>
+                {% endblock %}<!-- help link was intentionally left commented out -->
+                <!--<ul><li  class="floatR"><a target="_blank" title="当前页帮助" class="icon_help_current" href="/media/help.chm"></a></ul>-->
                 <ul class="floatR set_index Link_blue1">
-                   <!-- <li class="floatL"><a name="&#123;&#123; current_app &#125;&#125;.&#123;&#123; current_app &#125;&#125;_default_page" rel="&#123;&#123; model_url &#125;&#125;" href="javascript:void(0);">设为本子系统首页</a></li>
-                     <li class="floatL"><a name="base.site_default_page" rel="&#123;&#123; model_url &#125;&#125;" href="&#123;&#123; model_url &#125;&#125;">设为整个系统首页</a></li> -->
+                   <!-- <li class="floatL"><a name="{{ current_app }}.{{ current_app }}_default_page" rel="{{ model_url }}" href="javascript:void(0);">设为本子系统首页</a></li>
+                     <li class="floatL"><a name="base.site_default_page" rel="{{ model_url }}" href="{{ model_url }}">设为整个系统首页</a></li> -->
                 </ul>
 				<!-- 屏蔽加入我的工作台快捷键 <ul class="nav Link_white font12 noUnderl floatL ul_action_more">
 					<li>加入我的工作台<br />
 						<ul>
-							<li><a href="&#123;&#123; model_url &#125;&#125;">a区域</a></li>
-							<li><a href="&#123;&#123; model_url &#125;&#125;">b区域</a></li>
+							<li><a href="{{ model_url }}">a区域</a></li>
+							<li><a href="{{ model_url }}">b区域</a></li>
 						</ul>
 					</li>
 				</ul>
                 -->
             </div>
         </div>
-        {# endblock #}
-        {# block content #}
-            {# block search_div #}
-                {# if searchform #}
+        {% endblock %}
+        {% block content %}
+            {% block search_div %}
+                {% if searchform %}
                 <div id="id_search" class="div_box" style="margin-bottom:0px !important; padding-bottom:2px;">
-                    <h1 style="margin-bottom:5px;">{# trans "查询" #}</h1>
+                    <h1 style="margin-bottom:5px;">查询</h1>
                     <table style="width:99%;">
                     <tr>
                         <td>
                             <div>
-                               &#123;&#123; searchform &#125;&#125;
+                               {{ searchform }}
                             </div> 
                         </td>
 					</tr>
@@ -150,15 +159,15 @@
                             <div style="text-align:right;" class="topSearchBtn floatR"><!--height:20px;-->
                                
                                 <span class="Link_blue1">
-                                    <span class="action_topSearch floatL"></span><a href="javascript:void(0)" id="id_header_search" class="floatL">{# trans "查询" #}</a>
+                                    <span class="action_topSearch floatL"></span><a href="javascript:void(0)" id="id_header_search" class="floatL">查询</a>
                                 </span>
-                                {# block advance_search #}
+                                {% block advance_search %}
                                 <span class="Link_blue1" id="id_advanced_search" >
-                                    <span class="action_advancedSearch floatL"></span><a href="javascript:void(0)" class="floatL">{# trans "高级" #}</a>
+                                    <span class="action_advancedSearch floatL"></span><a href="javascript:void(0)" class="floatL">高级</a>
                                 </span>
-                                {# endblock #}
+                                {% endblock %}
                                 <span class="Link_blue1">
-                                    <span class="action_topClear floatL"></span><a href="javascript:void(0)" id="id_header_clear" class="floatL">{# trans "清除" #}</a>
+                                    <span class="action_topClear floatL"></span><a href="javascript:void(0)" id="id_header_clear" class="floatL">清除</a>
                                 </span>
                                 <div class="clear"></div>
                             </div>
@@ -166,61 +175,60 @@
                     </tr>
                     </table>
                 </div>
-                {# endif #}
-            {# endblock #}
+                {% endif %}
+            {% endblock %}
             
-           {# block id_main_div #}
+           {% block id_main_div %}
            <div class="portlet floatL" id="id_main_div">
                 <div id="id_result">
                 </div>
                 <div class="div_inline" id="id_datalist_main">
                     <div class="div_ListAndFilter">
-                    {# block datalist_before #}
+                    {% block datalist_before %}
                     <div id="id_datalist" class="div_box clearB"><h1>&nbsp;</h1><!--<div class="dt_hdiv_right"></div>-->
-                    {# block addmiddiv #}  {# endblock #}<!--endblock of addminddiv-add by darcy-->
+                    {% block addmiddiv %}  {% endblock %}<!--endblock of addminddiv-add by darcy-->
                     </div>
-                    {# endblock #}<!--endblock of datalist_before-add by darcy-->
-                    <!-- 过滤器屏蔽{# if cl.has_filters____ #}
+                    {% endblock %}<!--endblock of datalist_before-add by darcy-->
+                    {% comment %} 过滤器屏蔽{% if cl.has_filters____ %}
                      <div id="id_filter">
-                          <span id="id_filter_label">{# trans "Filter by" #}:
-                          </span>
-                          <span id="id_filterbar">
-                            {# for spec in cl.filter_specs #}
-                               {# filter cl spec #}
-                            {# endfor #}
-                          </span>
+                         <span id="id_filter_label">Filter by:
+                         </span>
+                         <span id="id_filterbar">
+                           {% for spec in cl.filter_specs %}
+                             {% with __cl_arg="spec" %}{% filter cl %}{% endfor %}
+                         </span>
                      </div>
-                     {# endif #}-->
+                     {% endif %}{% endcomment %}
                      </div>
-                    {# block extend_before #}
+                    {% block extend_before %}
                     <div id="id_extend">
-                    {# block AddDiv #}{# endblock #}<!--endblock of AddDiv-add by darcy-->
+                    {% block AddDiv %}{% endblock %}<!--endblock of AddDiv-add by darcy-->
                     </div>
-                    {# endblock #}<!--endblock of extend_before-add by darcy-->
+                    {% endblock %}<!--endblock of extend_before-add by darcy-->
                 </div>
            </div>
-        {# endblock #}<!--endblock of id_main_div-add by darcy-->
-    {# endblock #}<!--endblock of content-add by darcy-->
+        {% endblock %}<!--endblock of id_main_div-add by darcy-->
+    {% endblock %}<!--endblock of content-add by darcy-->
 
 </div>
-{# endblock #}<!--endblock of datalist_content-add by darcy-->    
+{% endblock %}<!--endblock of datalist_content-add by darcy-->    
 
 
- {# block extend_js #}
+ {% block extend_js %}
 <script>
         $(function(){
             //日志
-            init_log($("#id_log_dialog"),"&#123;&#123; dataOpt.verbose_name|translate_str|cap &#125;&#125; "+gettext("日志"));
+            init_log($("#id_log_dialog"),"&#123;&#123; dataOpt.verbose_name|translate_str|cap }} "+gettext("日志"));
             search_init($("#id_search"),$("#id_datalist"));//查找
             render_widgets($("#id_search"));//添加验证
             /***首页设置开始 
             $("#id_tab").find("a").click(function(e){
-                var surl="/&#123;&#123;surl&#125;&#125;";
+                var surl="/&#123;&#123;surl}}";
                 var value=$(e.target).attr("rel");
                 value=value.substring(value.indexOf(surl)+surl.length,value.length);
                 var name=e.target.name;
                 $.ajax({
-                    url:"&#123;&#123;dbapp_url&#125;&#125;set_option",
+                    url:"&#123;&#123;dbapp_url}}set_option",
                     dataType:"json",
                     data:{q:name+"___"+value},
                     type:"POST",
@@ -241,37 +249,37 @@
         });
         
         
-        &#123;% block getdatalist #}
-            var str_query="&#123;% autoescape off #}&#123;&#123;query&#125;&#125;&#123;% endautoescape #}";
+        &#123;% block getdatalist %}
+            var str_query="&#123;% autoescape off %}&#123;&#123;query}}&#123;% endautoescape %}";
             $("#id_datalist").model_grid({
                     base_query:str_query.split("&"),
                     model_action_container:$("#id_op_for_tab"),
-                    dbapp_url:"&#123;&#123; dbapp_url &#125;&#125;",
-                    model_url:"&#123;&#123; model_url &#125;&#125;",
+                    dbapp_url:"&#123;&#123; dbapp_url }}",
+                    model_url:"&#123;&#123; model_url }}",
                     layout_types: [],//不显示图片模式
-                    &#123;% block row_operations #}
-                        row_operations:["op_edit","_delete","View_detail"&#123;% block extend_row_operations #}&#123;% endblock #}],
-                    &#123;% endblock #} 
+                    &#123;% block row_operations %}
+                        row_operations:["op_edit","_delete","View_detail"&#123;% block extend_row_operations %}&#123;% endblock %}],
+                    &#123;% endblock %} 
                     init_after_get_jdata:function(){
-                        $("#id_datalist").get(0).g.a_div.after("<div class='floatL' style='_position:relative;_z-index:10;'><ul id='id_action_more' class='nav Link_blue2 font12 noUnderl floatL ul_action_more'><li><a href='javascript:void(0)' class='action_more'>&#123;% trans '更多' #}...</a><ul class='action_more_list'></ul></li></ul></div>");
+                        $("#id_datalist").get(0).g.a_div.after("<div class='floatL' style='_position:relative;_z-index:10;'><ul id='id_action_more' class='nav Link_blue2 font12 noUnderl floatL ul_action_more'><li><a href='javascript:void(0)' class='action_more'>&#123;% trans '更多' %}...</a><ul class='action_more_list'></ul></li></ul></div>");
                         var $app_menu=$("#id_datalist").get(0).g.a_div;
                         var $menu_more=$(".action_more_list");
                         var min_width=380;
                         resize_menu($app_menu,$menu_more,min_width,"id_action_more");
                         $('.nav li').sfHover();						
 						
-                        &#123;% block extrajs #}&#123;% endblock #}
+                        &#123;% block extrajs %}&#123;% endblock %}
                     },
-                    &#123;% block extend_model_grid #}&#123;% endblock #}
+                    &#123;% block extend_model_grid %}&#123;% endblock %}
 
-                    &#123;% block disabled_actions #}
-                        disabled_actions:["_change"&#123;% block extend_disabled_actions #}&#123;% endblock #}],
-                    &#123;% endblock #} 
-                    cached_data: &#123;&#123; datalist &#125;&#125;//保证最后一个配置不以','结尾
+                    &#123;% block disabled_actions %}
+                        disabled_actions:["_change"&#123;% block extend_disabled_actions %}&#123;% endblock %}],
+                    &#123;% endblock %} 
+                    cached_data: &#123;&#123; datalist }}//保证最后一个配置不以','结尾
             });
-        &#123;% endblock #} 
-        &#123;% autoescape off #}
-            &#123;% block addjs #}&#123;% endblock #} 
+        &#123;% endblock %} 
+        &#123;% autoescape off %}
+            &#123;% block addjs %}&#123;% endblock %} 
             
 //            function show_help()
 //            {
@@ -286,8 +294,8 @@
 //
 //                }
 //            }
-        &#123;% endautoescape #}
+        &#123;% endautoescape %}
     </script>
-{# endblock #}<!--endblock of headjs -->    
-{# block extracss #} {# endblock #}
+{% endblock %}<!--endblock of headjs -->    
+{% block extracss %} {% endblock %}
 

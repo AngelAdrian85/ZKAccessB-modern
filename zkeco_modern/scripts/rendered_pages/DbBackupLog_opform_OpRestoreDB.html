@@ -1,0 +1,156 @@
+
+
+<!--<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">-->
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en-us" xml:lang="en-us" >
+<head>
+	<title> 
+	
+
+
+	</title>
+	
+<link rel="stylesheet" type="text/css" href="/media//css/menu.css" media="screen" />
+<link rel="stylesheet" type="text/css" href="/media//css/base.css" />
+
+<link rel="stylesheet" type="text/css" href="/media//css/jquery.clockpick.css" />
+<link rel="stylesheet" type="text/css" href="/media//css/sf.css" media="screen" />
+<link href="/media//css/css.css" rel="stylesheet" />
+<link href="/media//css/tabs.css" rel="stylesheet" />
+<link rel="stylesheet" type="text/css" href="/media//css/jquery.treeview.css" />
+<link rel="stylesheet" type="text/css" href="/media//css/datepiker.css" media="screen" />
+<link rel="stylesheet" type="text/css" href="/media//themes//css/skin.css" media="screen" />
+
+
+
+	
+<script src="/media//jslib/appconfig.js"> </script>
+<script src="/media//jslib/i18n.js"></script>
+<script src="/media//jslib/jquery.js"></script>
+<script src="/media//jslib/jquery.validate.js"></script>
+<script src="/media//jslib/i18n_en-us.js"></script>
+
+
+
+
+
+<script src="/media//jslib/jquery.plus.js"></script>
+<script src="/media//jslib/jquery.zcommon.js"></script>
+<script src="/media//jslib/widgets.js"></script>
+<script src="/media//jslib/jquery.tools.min.js"></script>
+
+<script src="/media//jslib/jquery.zgrid.js"></script>
+<script src="/media//jslib/datalist.js"></script>
+<script src="/media//jslib/datalistadd.js"></script>
+<script src="/media//jslib/report_design.js"></script>
+
+
+	
+	
+</head>
+<body>
+<!-- request.is_ajax-->
+
+	<div style="margin:0px;padding:0px;">
+	
+		<form method="post" onkeydown="if(event.keyCode==13){return false;}"  id="id_edit_form" enctype="multipart/form-data">
+			<input type="hidden" id="id_model_pk" name="pk" value="" />
+			<input type="hidden" id="id_model_info"  app_label=""  model_name=""/>
+			
+<div id="id_span_title" class="portlet-header sfActive">
+<span class='icon_SiteMap'>&nbsp;</span>EN: 当前位置：
+	 
+		<span id="id_rel_log"> -> </span>
+	->
+</div>
+<!-- title -->
+
+			
+			<div class="form_help">
+			
+			<div id="id_help" style="text-align: right;">
+				
+				<a href='javascript:void(0);' ref="/media//help/en-us//#detail"  ></a>
+				
+			</div>
+			<div class="clear"></div>
+			</div>
+			<!-- help_panel -->
+
+			
+
+<div style="margin:5px 2px 2px 10px">
+    <div>
+        <p>EN: 还原数据库需要到服务器上进行操作。在【服务控制台】中选择【还原数据库】。<br />点击【浏览】，在备份数据库列表中选择成功备份的数据库，点击【还原】开始还原数据库。还原成功后系统会有相应提示。</p>
+    </div>
+</div>
+
+<!--operation_panel-->
+
+			<table cellpadding="3" style="margin:0px 10px 0px 10px; position:relative;" class="tbl_data_edit">
+			<tr><td clospan="6">
+			<div id="id_tabs">
+			
+
+			
+			</div>
+			</td></tr>
+
+			<tr id="pre_addition_fields">
+    <th></th>
+    <td>
+	<table>
+		<tr>
+			<td><div id="objs_for_op" style="padding:2px;margin:0px 0px 2px 0px;"></div>
+			</td>
+			<td><div id="id_op_for_model" data=""></div><div id="id_store_select_emp">
+				<table id="id_tbl"></table></div>
+			</td>
+		</tr>
+        <tr class="displayN"><th></th><td><input type="checkbox" name="sync_to_branch" class="wZBaseBooleanField" id="id_sync_to_branch"></td></tr>
+	</table>
+</td>
+</tr>
+
+			
+			
+			<!-- form -->
+
+			<tr id="addition_fields"></tr>
+			</table>
+
+			
+			
+			
+
+
+		</form>
+
+		<input type="hidden" id="id_query_str" value=""/>
+
+		<div id="id_info"><div>
+		<script>
+			
+	var after_init = function()
+	{
+		//$("#OK").parent().hide();
+		$("#Cancel").text(gettext("退出"));
+	}
+
+			var $form=$("#id_edit_form");
+			render_widgets($form);
+			
+			
+			after_process=function()
+			{
+				$("#id_edit_form input[id^='id_']:first").focus();
+			}
+			
+		</script>
+		
+	</div>
+	<!-- content ???-->
+
+</body></html>
+
+
