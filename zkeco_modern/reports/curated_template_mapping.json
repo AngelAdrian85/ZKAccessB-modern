@@ -1,0 +1,96 @@
+{
+  "data_list.html": [
+    "/data_list",
+    "/data_list.html"
+  ],
+  "export.html": [
+    "/export",
+    "/export.html"
+  ],
+  "import.html": [
+    "/import",
+    "/import.html"
+  ],
+  "index.html": [
+    "/",
+    "/index",
+    "/index.html"
+  ],
+  "registration__logged_out.html": [
+    "/registration__logged_out",
+    "/registration/logged_out",
+    "/registration__logged_out.html"
+  ],
+  "registration__login.html": [
+    "/registration__login",
+    "/registration/login",
+    "/registration__login.html"
+  ],
+  "registration__password_change_done.html": [
+    "/registration__password_change_done",
+    "/registration/password_change_done",
+    "/registration__password_change_done.html"
+  ],
+  "registration__password_change_form.html": [
+    "/registration__password_change_form",
+    "/registration/password_change_form",
+    "/registration__password_change_form.html"
+  ],
+  "registration__password_reset_done.html": [
+    "/registration__password_reset_done",
+    "/registration/password_reset_done",
+    "/registration__password_reset_done.html"
+  ],
+  "registration__password_reset_email.html": [
+    "/registration__password_reset_email",
+    "/registration/password_reset_email",
+    "/registration__password_reset_email.html"
+  ],
+  "registration__password_reset_form.html": [
+    "/registration__password_reset_form",
+    "/registration/password_reset_form",
+    "/registration__password_reset_form.html"
+  ],
+  "setoption.html": [
+    "/setoption",
+    "/setoption.html"
+  ],
+  "sys_option.html": [
+    "/sys_option",
+    "/sys_option.html"
+  ],
+  "transaction_list.html": [
+    "/transaction_list",
+    "/transaction_list.html"
+  ],
+  "upgrade.html": [
+    "/upgrade",
+    "/upgrade.html"
+  ],
+  "upload.html": [
+    "/upload",
+    "/upload.html"
+  ],
+  "User_edit.html": [
+    "/User_edit",
+    "/user_edit",
+    "/User_edit.html"
+  ],
+  "User_list.html": [
+    "/User_list",
+    "/user_list",
+    "/User_list.html"
+  ],
+  "user_option_form.html": [
+    "/user_option_form",
+    "/user_option_form.html"
+  ],
+  "view.html": [
+    "/view",
+    "/view.html"
+  ],
+  "view_detail.html": [
+    "/view_detail",
+    "/view_detail.html"
+  ]
+}

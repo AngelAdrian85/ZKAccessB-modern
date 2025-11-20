@@ -1,0 +1,312 @@
+{
+  "404.html": {
+    "url": "http://127.0.0.1:8000/legacy/404.html",
+    "status": 200,
+    "len": 19977
+  },
+  "500.html": {
+    "url": "http://127.0.0.1:8000/legacy/500.html",
+    "status": 200,
+    "len": 13654
+  },
+  "Acc_Door_Set.html": {
+    "url": "http://127.0.0.1:8000/legacy/Acc_Door_Set.html",
+    "status": 200,
+    "len": 53
+  },
+  "advenquiry.html": {
+    "url": "http://127.0.0.1:8000/legacy/advenquiry.html",
+    "status": 200,
+    "len": 20091
+  },
+  "AppOption_edit.html": {
+    "url": "http://127.0.0.1:8000/legacy/AppOption_edit.html",
+    "status": 200,
+    "len": 17070
+  },
+  "AppOption_list.html": {
+    "url": "http://127.0.0.1:8000/legacy/AppOption_list.html",
+    "status": 200,
+    "len": 29457
+  },
+  "base_page_frame.html": {
+    "url": "http://127.0.0.1:8000/legacy/base_page_frame.html",
+    "status": 200,
+    "len": 19971
+  },
+  "base_site.html": {
+    "url": "http://127.0.0.1:8000/legacy/base_site.html",
+    "status": 200,
+    "len": 13676
+  },
+  "BaseCode_list.html": {
+    "url": "http://127.0.0.1:8000/legacy/BaseCode_list.html",
+    "status": 200,
+    "len": 29722
+  },
+  "data_edit.html": {
+    "url": "http://127.0.0.1:8000/legacy/data_edit.html",
+    "status": 200,
+    "len": 16927
+  },
+  "data_edit_2c.html": {
+    "url": "http://127.0.0.1:8000/legacy/data_edit_2c.html",
+    "status": 200,
+    "len": 16935
+  },
+  "data_edit_pst.html": {
+    "url": "http://127.0.0.1:8000/legacy/data_edit_pst.html",
+    "status": 200,
+    "len": 17444
+  },
+  "data_edit_swift.html": {
+    "url": "http://127.0.0.1:8000/legacy/data_edit_swift.html",
+    "status": 200,
+    "len": 16200
+  },
+  "data_list.html": {
+    "url": "http://127.0.0.1:8000/legacy/data_list.html",
+    "status": 200,
+    "len": 29457
+  },
+  "data_opform.html": {
+    "url": "http://127.0.0.1:8000/legacy/data_opform.html",
+    "status": 200,
+    "len": 16872
+  },
+  "DbBackupLog_list.html": {
+    "url": "http://127.0.0.1:8000/legacy/DbBackupLog_list.html",
+    "status": 200,
+    "len": 29457
+  },
+  "DbBackupLog_opform_OpBackupDB.html": {
+    "url": "http://127.0.0.1:8000/legacy/DbBackupLog_opform_OpBackupDB.html",
+    "status": 200,
+    "len": 21941
+  },
+  "DbBackupLog_opform_OpInitDB.html": {
+    "url": "http://127.0.0.1:8000/legacy/DbBackupLog_opform_OpInitDB.html",
+    "status": 200,
+    "len": 18254
+  },
+  "DbBackupLog_opform_OpRestoreDB.html": {
+    "url": "http://127.0.0.1:8000/legacy/DbBackupLog_opform_OpRestoreDB.html",
+    "status": 200,
+    "len": 17345
+  },
+  "export.html": {
+    "url": "http://127.0.0.1:8000/legacy/export.html",
+    "status": 200,
+    "len": 17242
+  },
+  "Group_edit.html": {
+    "url": "http://127.0.0.1:8000/legacy/Group_edit.html",
+    "status": 200,
+    "len": 16933
+  },
+  "Group_list.html": {
+    "url": "http://127.0.0.1:8000/legacy/Group_list.html",
+    "status": 200,
+    "len": 53
+  },
+  "help_default_en.html": {
+    "url": "http://127.0.0.1:8000/legacy/help_default_en.html",
+    "status": 200,
+    "len": 28121
+  },
+  "help_default_zh-cn.html": {
+    "url": "http://127.0.0.1:8000/legacy/help_default_zh-cn.html",
+    "status": 200,
+    "len": 27471
+  },
+  "import.html": {
+    "url": "http://127.0.0.1:8000/legacy/import.html",
+    "status": 200,
+    "len": 19935
+  },
+  "index.html": {
+    "url": "http://127.0.0.1:8000/legacy/index.html",
+    "status": 200,
+    "len": 14827
+  },
+  "info.html": {
+    "url": "http://127.0.0.1:8000/legacy/info.html",
+    "status": 200,
+    "len": 95
+  },
+  "init_models.html": {
+    "url": "http://127.0.0.1:8000/legacy/init_models.html",
+    "status": 200,
+    "len": 2166
+  },
+  "logcheck.html": {
+    "url": "http://127.0.0.1:8000/legacy/logcheck.html",
+    "status": 200,
+    "len": 22150
+  },
+  "LogEntry_list.html": {
+    "url": "http://127.0.0.1:8000/legacy/LogEntry_list.html",
+    "status": 200,
+    "len": 29457
+  },
+  "messages_list.html": {
+    "url": "http://127.0.0.1:8000/legacy/messages_list.html",
+    "status": 200,
+    "len": 29457
+  },
+  "no_permission_info.html": {
+    "url": "http://127.0.0.1:8000/legacy/no_permission_info.html",
+    "status": 200,
+    "len": 13614
+  },
+  "oplog_list.html": {
+    "url": "http://127.0.0.1:8000/legacy/oplog_list.html",
+    "status": 200,
+    "len": 29457
+  },
+  "piclist.html": {
+    "url": "http://127.0.0.1:8000/legacy/piclist.html",
+    "status": 200,
+    "len": 14011
+  },
+  "realtime.html": {
+    "url": "http://127.0.0.1:8000/legacy/realtime.html",
+    "status": 200,
+    "len": 18877
+  },
+  "registration__logged_out.html": {
+    "url": "http://127.0.0.1:8000/legacy/registration__logged_out.html",
+    "status": 404,
+    "len": 16498
+  },
+  "registration__login.html": {
+    "url": "http://127.0.0.1:8000/legacy/registration__login.html",
+    "status": 404,
+    "len": 16478
+  },
+  "registration__password_change_done.html": {
+    "url": "http://127.0.0.1:8000/legacy/registration__password_change_done.html",
+    "status": 404,
+    "len": 16538
+  },
+  "registration__password_change_form.html": {
+    "url": "http://127.0.0.1:8000/legacy/registration__password_change_form.html",
+    "status": 404,
+    "len": 16538
+  },
+  "registration__password_reset_done.html": {
+    "url": "http://127.0.0.1:8000/legacy/registration__password_reset_done.html",
+    "status": 404,
+    "len": 16534
+  },
+  "registration__password_reset_email.html": {
+    "url": "http://127.0.0.1:8000/legacy/registration__password_reset_email.html",
+    "status": 404,
+    "len": 16538
+  },
+  "registration__password_reset_form.html": {
+    "url": "http://127.0.0.1:8000/legacy/registration__password_reset_form.html",
+    "status": 404,
+    "len": 16534
+  },
+  "restore.html": {
+    "url": "http://127.0.0.1:8000/legacy/restore.html",
+    "status": 200,
+    "len": 14104
+  },
+  "rtmonitor.html": {
+    "url": "http://127.0.0.1:8000/legacy/rtmonitor.html",
+    "status": 200,
+    "len": 29457
+  },
+  "setoption.html": {
+    "url": "http://127.0.0.1:8000/legacy/setoption.html",
+    "status": 200,
+    "len": 3009
+  },
+  "site_medias.html": {
+    "url": "http://127.0.0.1:8000/legacy/site_medias.html",
+    "status": 200,
+    "len": 1230
+  },
+  "site_medias_bak.html": {
+    "url": "http://127.0.0.1:8000/legacy/site_medias_bak.html",
+    "status": 200,
+    "len": 1006
+  },
+  "site_medias_css.html": {
+    "url": "http://127.0.0.1:8000/legacy/site_medias_css.html",
+    "status": 200,
+    "len": 632
+  },
+  "site_medias_js.html": {
+    "url": "http://127.0.0.1:8000/legacy/site_medias_js.html",
+    "status": 200,
+    "len": 595
+  },
+  "special_menu.html": {
+    "url": "http://127.0.0.1:8000/legacy/special_menu.html",
+    "status": 200,
+    "len": 739
+  },
+  "sys_option.html": {
+    "url": "http://127.0.0.1:8000/legacy/sys_option.html",
+    "status": 200,
+    "len": 21696
+  },
+  "testpage.html": {
+    "url": "http://127.0.0.1:8000/legacy/testpage.html",
+    "status": 200,
+    "len": 16702
+  },
+  "testTree.html": {
+    "url": "http://127.0.0.1:8000/legacy/testTree.html",
+    "status": 200,
+    "len": 306
+  },
+  "transaction_list.html": {
+    "url": "http://127.0.0.1:8000/legacy/transaction_list.html",
+    "status": 200,
+    "len": 1103
+  },
+  "upgrade.html": {
+    "url": "http://127.0.0.1:8000/legacy/upgrade.html",
+    "status": 200,
+    "len": 14279
+  },
+  "upload.html": {
+    "url": "http://127.0.0.1:8000/legacy/upload.html",
+    "status": 200,
+    "len": 14923
+  },
+  "User_edit.html": {
+    "url": "http://127.0.0.1:8000/legacy/User_edit.html",
+    "status": 200,
+    "len": 28532
+  },
+  "User_list.html": {
+    "url": "http://127.0.0.1:8000/legacy/User_list.html",
+    "status": 200,
+    "len": 1729
+  },
+  "user_option_form.html": {
+    "url": "http://127.0.0.1:8000/legacy/user_option_form.html",
+    "status": 200,
+    "len": 17411
+  },
+  "view.html": {
+    "url": "http://127.0.0.1:8000/legacy/view.html",
+    "status": 200,
+    "len": 6223
+  },
+  "view_detail.html": {
+    "url": "http://127.0.0.1:8000/legacy/view_detail.html",
+    "status": 200,
+    "len": 1952
+  },
+  "welcome_sys.html": {
+    "url": "http://127.0.0.1:8000/legacy/welcome_sys.html",
+    "status": 200,
+    "len": 80
+  }
+}
