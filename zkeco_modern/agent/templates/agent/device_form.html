@@ -1,39 +1,320 @@
 {% extends 'agent/base_legacy.html' %}
+{% block title %}{% if obj %}Editează Dispozitiv{% else %}Dispozitiv Nou{% endif %}{% endblock %}
 {% block content %}
-<h2>{% if obj %}Editează Dispozitiv{% else %}Dispozitiv Nou{% endif %}</h2>
-<form method="post">{% csrf_token %}
-{{ form.as_p }}
-<div style="border:1px solid #ccc;padding:8px;margin:10px 0" data-tip="Utilitare rapid IP" title="Utilitare IP">
-	<label>Prefix rețea (ex: 192.168.1)</label>
-	<input type="text" id="netBase" value="192.168.1" style="width:140px" />
-	<button type="button" id="discoverBtn" class="btn" data-tip="Scanează primele 10 adrese">Descoperă</button>
-	<label>IP test</label><input type="text" id="pingIp" style="width:140px" />
-	<button type="button" id="pingBtn" class="btn" data-tip="Ping dispozitiv">Ping</button>
-	<div id="netResults" style="margin-top:6px;font-size:12px"></div>
+<style>
+.device-form-container { max-width: 1000px; margin: 20px auto; }
+.form-section { background: white; border: 1px solid #ddd; padding: 20px; margin: 20px 0; border-radius: 4px; }
+.form-section h3 { font-size: 14px; font-weight: bold; border-bottom: 2px solid #0066cc; padding-bottom: 8px; margin: 0 0 15px 0; color: #0066cc; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 15px; }
+.form-row.full { grid-template-columns: 1fr; }
+.form-group { display: flex; flex-direction: column; }
+.form-group label { font-weight: bold; font-size: 12px; margin-bottom: 5px; color: #333; }
+.form-group .helptext { font-size: 11px; color: #999; margin-top: 3px; }
+input[type="text"], input[type="number"], input[type="password"], select { 
+  padding: 8px 10px; border: 1px solid #ccc; border-radius: 3px; font-size: 12px; background: white;
+}
+input[type="text"]:focus, input[type="number"]:focus, input[type="password"]:focus, select:focus { 
+  outline: none; border-color: #0066cc; box-shadow: 0 0 3px #0066cc;
+}
+input[readonly] { background: #f5f5f5; color: #666; }
+.radio-options { display: flex; gap: 30px; margin: 10px 0; }
+.radio-options label { display: flex; align-items: center; gap: 8px; font-weight: normal; margin: 0; }
+.radio-options input { margin: 0; }
+.checkbox-options { display: flex; flex-direction: column; gap: 8px; }
+.checkbox-options label { display: flex; align-items: center; gap: 8px; font-weight: normal; margin: 0; }
+.checkbox-options input { margin: 0; }
+.discovery-section { background: #f0f8ff; border: 1px solid #0066cc; padding: 15px; margin: 20px 0; border-radius: 4px; }
+.discovery-section strong { color: #0066cc; }
+.discovery-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; margin: 10px 0; align-items: flex-end; }
+.discovery-row input { padding: 6px 8px; border: 1px solid #ccc; border-radius: 3px; font-size: 12px; }
+.btn-scan { background: #0066cc; color: white; border: none; padding: 6px 14px; border-radius: 3px; cursor: pointer; font-weight: bold; font-size: 12px; }
+.btn-scan:hover { background: #0052a3; }
+.results-box { margin-top: 10px; padding: 10px; background: white; border: 1px solid #ddd; border-radius: 3px; max-height: 120px; overflow-y: auto; font-size: 12px; }
+.ip-item { display: inline-block; margin: 4px; padding: 4px 8px; background: #e8f4f8; border: 1px solid #0066cc; border-radius: 3px; cursor: pointer; color: #0066cc; }
+.ip-item:hover { background: #d0e8f0; }
+.form-errors { background: #fee; border: 1px solid #fcc; color: #c00; padding: 12px; margin: 15px 0; border-radius: 3px; }
+.form-errors ul { margin: 5px 0; padding-left: 20px; }
+.form-errors li { margin: 3px 0; }
+.button-group { display: flex; gap: 10px; margin-top: 25px; }
+.btn-save { background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; }
+.btn-save:hover { background: #218838; }
+.btn-cancel { background: #6c757d; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: bold; font-size: 13px; text-decoration: none; display: inline-block; }
+.btn-cancel:hover { background: #5a6268; }
+.required::after { content: " *"; color: red; font-weight: bold; }
+</style>
+
+<div class="device-form-container">
+<h2>{% if obj %}✏️ Editează Dispozitiv{% else %}➕ Dispozitiv Nou{% endif %}</h2>
+
+{% if form.non_field_errors %}
+<div class="form-errors">
+  <strong>⚠️ Erori:</strong>
+  <ul>
+  {% for error in form.non_field_errors %}
+    <li>{{ error }}</li>
+  {% endfor %}
+  </ul>
 </div>
-<button class="btn" data-tip="Salvează dispozitiv" title="Salvează">Salvează</button>
-<a href="{% url 'crud-devices-list' %}" class="btn" data-tip="Înapoi" title="Înapoi">Înapoi</a>
+{% endif %}
+
+<form method="post" novalidate>{% csrf_token %}
+
+<!-- SECTION 1: BASIC INFORMATION -->
+<div class="form-section">
+  <h3>1. Informații de Bază</h3>
+  
+  <div class="form-row">
+    <div class="form-group">
+      <label for="{{ form.name.id_for_label }}" class="required">Nume Dispozitiv</label>
+      {{ form.name }}
+      {% if form.name.errors %}<span class="form-errors">{{ form.name.errors|join:", " }}</span>{% endif %}
+      <div class="helptext">Exemplu: FINANCIAR, MEDICAL ACCES CLUB, etc.</div>
+    </div>
+    <div class="form-group">
+      <label for="{{ form.serial_number.id_for_label }}">Număr Serie (SN)</label>
+      {{ form.serial_number }}
+      {% if form.serial_number.errors %}<span class="form-errors">{{ form.serial_number.errors|join:", " }}</span>{% endif %}
+      <div class="helptext">Auto-completat din descoperire</div>
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label for="{{ form.device_type.id_for_label }}" class="required">Tip Dispozitiv</label>
+      {{ form.device_type }}
+      {% if form.device_type.errors %}<span class="form-errors">{{ form.device_type.errors|join:", " }}</span>{% endif %}
+    </div>
+    <div class="form-group">
+      <label>Stare</label>
+      <div class="checkbox-options">
+        <label>
+          {{ form.enabled }}
+          <span>Activ (Enabled)</span>
+        </label>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 2: COMMUNICATION SETTINGS -->
+<div class="form-section">
+  <h3>2. Parametri de Comunicare</h3>
+  
+  <div class="form-row full">
+    <div class="form-group">
+      <label class="required">Mod de Comunicare</label>
+      <div class="radio-options">
+        <label>
+          <input type="radio" name="comm_mode" value="tcp" checked onchange="toggleCommMode()">
+          TCP/IP
+        </label>
+        <label>
+          <input type="radio" name="comm_mode" value="rs485" onchange="toggleCommMode()">
+          RS485
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- TCP/IP Fields -->
+  <div id="tcp-group">
+    <div class="form-row">
+      <div class="form-group">
+        <label for="{{ form.ip_address.id_for_label }}" class="required">Adresă IP</label>
+        {{ form.ip_address }}
+        {% if form.ip_address.errors %}<span class="form-errors">{{ form.ip_address.errors|join:", " }}</span>{% endif %}
+        <div class="helptext">Exemplu: 192.168.1.100</div>
+      </div>
+      <div class="form-group">
+        <label for="{{ form.port.id_for_label }}">Port</label>
+        {{ form.port }}
+        {% if form.port.errors %}<span class="form-errors">{{ form.port.errors|join:", " }}</span>{% endif %}
+        <div class="helptext">Implicit: 4370</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RS485 Fields -->
+  <div id="rs485-group" style="display: none;">
+    <div class="form-row">
+      <div class="form-group">
+        <label for="{{ form.rs485_port.id_for_label }}">Port Serial</label>
+        {{ form.rs485_port }}
+        {% if form.rs485_port.errors %}<span class="form-errors">{{ form.rs485_port.errors|join:", " }}</span>{% endif %}
+        <div class="helptext">COM1, COM2, /dev/ttyUSB0</div>
+      </div>
+      <div class="form-group">
+        <label for="{{ form.rs485_baudrate.id_for_label }}">Baud Rate</label>
+        {{ form.rs485_baudrate }}
+        {% if form.rs485_baudrate.errors %}<span class="form-errors">{{ form.rs485_baudrate.errors|join:", " }}</span>{% endif %}
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="{{ form.rs485_address.id_for_label }}">Adresă Dispozitiv</label>
+        {{ form.rs485_address }}
+        {% if form.rs485_address.errors %}<span class="form-errors">{{ form.rs485_address.errors|join:", " }}</span>{% endif %}
+        <div class="helptext">Adresă pe magistrala RS485</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label for="{{ form.comm_password.id_for_label }}">Parolă Comunicare</label>
+      {{ form.comm_password }}
+      {% if form.comm_password.errors %}<span class="form-errors">{{ form.comm_password.errors|join:", " }}</span>{% endif %}
+      <div class="helptext">Opțional - pentru dispozitive cu autentificare</div>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 3: LOCATION & CONFIGURATION -->
+<div class="form-section">
+  <h3>3. Locație și Configurare</h3>
+  
+  <div class="form-row">
+    <div class="form-group">
+      <label for="{{ form.area_name.id_for_label }}">Zonă / Locație</label>
+      {{ form.area_name }}
+      {% if form.area_name.errors %}<span class="form-errors">{{ form.area_name.errors|join:", " }}</span>{% endif %}
+      <div class="helptext">Exemplu: Intrare Principală, Birou Director, etc.</div>
+    </div>
+    <div class="form-group">
+      <label for="{{ form.time_zone.id_for_label }}">Fus Orar</label>
+      {{ form.time_zone }}
+      {% if form.time_zone.errors %}<span class="form-errors">{{ form.time_zone.errors|join:", " }}</span>{% endif %}
+      <div class="helptext">UTC+2, UTC+3, etc.</div>
+    </div>
+  </div>
+
+  <div class="form-row full">
+    <div class="form-group">
+      <label>Opțiuni</label>
+      <div class="checkbox-options">
+        <label>
+          {{ form.auto_sync_time }}
+          <span>Sincronizare Automată a Orei</span>
+        </label>
+        <label>
+          {{ form.clear_on_add }}
+          <span>Șterge Datele din Dispozitiv la Adăugare</span>
+        </label>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 4: TECHNICAL INFORMATION -->
+<div class="form-section">
+  <h3>4. Informații Tehnice</h3>
+  
+  <div class="form-row">
+    <div class="form-group">
+      <label for="{{ form.firmware_version.id_for_label }}">Versiune Firmware</label>
+      {{ form.firmware_version }}
+      <div class="helptext">Auto-detectată din descoperire</div>
+    </div>
+    <div class="form-group">
+      <label for="{{ form.hardware_version.id_for_label }}">Versiune Hardware</label>
+      {{ form.hardware_version }}
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 5: DISCOVERY & TESTING -->
+<div class="discovery-section">
+  <strong>🔍 Descoperire și Testare Dispozitiv</strong>
+  
+  <div class="discovery-row">
+    <div>
+      <label for="netBase">Prefix Rețea (e.g. 192.168.1):</label>
+      <input type="text" id="netBase" value="192.168.1" placeholder="192.168.1" />
+    </div>
+    <button type="button" class="btn-scan" onclick="discoverDevices()">🔎 Scanează Rețea</button>
+  </div>
+  
+  <div class="discovery-row">
+    <div>
+      <label for="pingIp">Test IP (ping):</label>
+      <input type="text" id="pingIp" placeholder="192.168.1.100" />
+    </div>
+    <button type="button" class="btn-scan" onclick="pingDevice()">📡 Ping</button>
+  </div>
+  
+  <div id="netResults" class="results-box" style="display: none;"></div>
+</div>
+
+<!-- BUTTONS -->
+<div class="button-group">
+  <button type="submit" class="btn-save">💾 Salvează Dispozitiv</button>
+  <a href="{% url 'crud-devices-list' %}" class="btn-cancel">❌ Anulează</a>
+</div>
+
 </form>
-{% endblock %}
+</div>
+
 <script>
-(function(){
-	const csrftoken=(document.querySelector('input[name=csrfmiddlewaretoken]')||{}).value;
-	function htmlEscape(s){return s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
-	document.getElementById('discoverBtn').addEventListener('click', async ()=>{
-		const base=document.getElementById('netBase').value.trim(); if(!base) return;
-		const box=document.getElementById('netResults'); box.textContent='Scan în curs...';
-		try{ const r=await fetch('/agent/devices/discover/?base='+encodeURIComponent(base)); const j=await r.json(); if(j.ok){
-			if(!j.responsive.length){ box.textContent='Nicio adresă receptivă.'; } else {
-				box.innerHTML='A găsit: '+ j.responsive.map(ip=>'<a href="#" class="ipPick" data-ip="'+htmlEscape(ip)+'">'+htmlEscape(ip)+'</a>').join(', ');
-				box.querySelectorAll('.ipPick').forEach(a=>a.addEventListener('click',e=>{ e.preventDefault(); document.querySelector('input[name=ip_address]').value=a.dataset.ip; }));
-			}
-		} else { box.textContent='Eroare scanare'; }
-		}catch(e){ box.textContent='Eroare comunicare'; }
-	});
-	document.getElementById('pingBtn').addEventListener('click', async ()=>{
-		const ip=document.getElementById('pingIp').value.trim(); if(!ip) return;
-		const box=document.getElementById('netResults'); box.textContent='Ping...';
-		try{ const r=await fetch('/agent/devices/ping/?ip='+encodeURIComponent(ip)); const j=await r.json(); if(j.ok){ box.textContent='Ping '+ip+': '+(j.alive?'ONLINE':'NO RESPONSE'); if(j.alive){ document.querySelector('input[name=ip_address]').value=ip; } } else { box.textContent='Ping failed'; } }catch(e){ box.textContent='Ping error'; }
-	});
-})();
+function toggleCommMode() {
+  const mode = document.querySelector('input[name="comm_mode"]:checked').value;
+  document.getElementById('tcp-group').style.display = (mode === 'tcp') ? 'block' : 'none';
+  document.getElementById('rs485-group').style.display = (mode === 'rs485') ? 'block' : 'none';
+}
+
+async function discoverDevices() {
+  const base = document.getElementById('netBase').value.trim();
+  if (!base) { alert('Introdu prefixul rețelei'); return; }
+  
+  const resultsDiv = document.getElementById('netResults');
+  resultsDiv.style.display = 'block';
+  resultsDiv.textContent = '⏳ Scanare în curs...';
+  
+  try {
+    const resp = await fetch(`/agent/devices/discover/?base=${encodeURIComponent(base)}`);
+    const data = await resp.json();
+    
+    if (data.ok && data.responsive.length > 0) {
+      let html = '<strong>🟢 Dispozitive găsite:</strong><br>';
+      data.responsive.forEach(ip => {
+        html += `<div class="ip-item" onclick="selectIP('${ip}')">${ip}</div> `;
+      });
+      resultsDiv.innerHTML = html;
+    } else {
+      resultsDiv.textContent = '❌ Nicio adresă receptivă';
+    }
+  } catch (e) {
+    resultsDiv.textContent = '❌ Eroare: ' + e.message;
+  }
+}
+
+async function pingDevice() {
+  const ip = document.getElementById('pingIp').value.trim();
+  if (!ip) { alert('Introdu o adresă IP'); return; }
+  
+  const resultsDiv = document.getElementById('netResults');
+  resultsDiv.style.display = 'block';
+  resultsDiv.textContent = '⏳ Ping...';
+  
+  try {
+    const resp = await fetch(`/agent/devices/ping/?ip=${encodeURIComponent(ip)}`);
+    const data = await resp.json();
+    
+    if (data.ok) {
+      resultsDiv.innerHTML = data.alive 
+        ? `🟢 <strong>${ip} ONLINE</strong> | <div class="ip-item" onclick="selectIP('${ip}')">Selectează IP</div>`
+        : `🔴 ${ip} NU RĂSPUNDE`;
+    } else {
+      resultsDiv.textContent = '❌ Eroare ping';
+    }
+  } catch (e) {
+    resultsDiv.textContent = '❌ Eroare: ' + e.message;
+  }
+}
+
+function selectIP(ip) {
+  document.getElementById('{{ form.ip_address.id_for_label|slice:"3:" }}').value = ip;
+}
+
+window.addEventListener('DOMContentLoaded', toggleCommMode);
 </script>
+{% endblock %}

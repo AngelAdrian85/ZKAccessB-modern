@@ -1,27 +1,326 @@
 {% extends 'agent/base_legacy.html' %}
+{% block title %}Dispozitive{% endblock %}
 {% block content %}
-<h2 data-tip="Lista dispozitivelor" title="Dispozitive">Dispozitive</h2>
-<p><a href="{% url 'crud-device-create' %}" class="btn" data-tip="Adaugă dispozitiv" title="Nou">+ Nou</a></p>
-{% if page %}
-<table class="crud" data-tip="Tabel dispozitive">
-<thead><tr><th>ID</th><th>Nume</th><th>Serial</th><th>IP</th><th>Firmware</th><th>Zonă</th><th>Activ</th><th>Actiuni</th></tr></thead>
+<style>
+.device-page-wrapper { background: #0f1519; min-height: calc(100vh - 80px); padding: 25px 15px; }
+.device-page-header { max-width: 1200px; margin: 0 auto 25px; display: flex; justify-content: space-between; align-items: center; }
+.device-page-header h2 { margin: 0; font-size: 28px; color: #e8f0f8; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+.btn-new { background: #3da5d9; color: #fff; border: none; padding: 12px 24px; border-radius: 6px; font-weight: 700; font-size: 14px; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.3); transition: all 0.3s ease; text-decoration: none; display: inline-block; }
+.btn-new:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0,0,0,0.4); background: #2d95c9; }
+.table-wrapper { max-width: 1200px; margin: 0 auto; overflow-x: auto; }
+.devices-table { width: 100%; border-collapse: collapse; background: #2d5a7b; border-radius: 8px; overflow: hidden; box-shadow: 0 8px 16px rgba(0,0,0,0.4); }
+.devices-table thead { background: linear-gradient(90deg, #1a3a52 0%, #3da5d9 100%); color: #fff; }
+.devices-table th { padding: 14px 12px; text-align: left; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+.devices-table td { padding: 12px; border-bottom: 1px solid #3d6a8b; font-size: 13px; color: #e8f0f8; }
+.devices-table tbody tr:hover { background: #3d6a8b; }
+.status-badge { display: inline-block; padding: 4px 10px; border-radius: 12px; font-weight: 600; font-size: 11px; }
+.status-active { background: #2da44e; color: #fff; }
+.status-inactive { background: #d97e4a; color: #fff; }
+.action-buttons { display: flex; gap: 6px; }
+.btn-edit { color: #3da5d9; text-decoration: none; font-weight: 600; font-size: 12px; padding: 4px 8px; }
+.btn-edit:hover { text-decoration: underline; }
+.btn-delete { background: #d97e4a; color: #fff; border: none; padding: 4px 10px; border-radius: 3px; cursor: pointer; font-weight: 600; font-size: 11px; }
+.btn-delete:hover { background: #c96940; }
+.pagination { max-width: 1200px; margin: 20px auto; text-align: center; font-size: 12px; }
+.pagination a { color: #3da5d9; text-decoration: none; padding: 6px 10px; margin: 0 2px; }
+.pagination a:hover { text-decoration: underline; }
+.empty-state { max-width: 1200px; margin: 0 auto; text-align: center; padding: 40px; background: #2d5a7b; border-radius: 8px; color: #7db3d9; border: 1px solid #3d6a8b; }
+.footer-device { max-width: 1200px; margin: 20px auto; text-align: center; font-size: 12px; color: #5a7a90; }
+</style>
+
+<div class="device-page-wrapper">
+<div class="device-page-header">
+  <h2>🖥️ Dispozitive</h2>
+  <button onclick="openDeviceModal()" class="btn-new" title="Adaugă dispozitiv nou">+ Dispozitiv Nou</button>
+</div>
+
+{% if page.object_list %}
+<div class="table-wrapper">
+<table class="devices-table">
+<thead>
+  <tr>
+    <th>ID</th><th>Nume</th><th>Serial (SN)</th><th>IP</th><th>Port</th><th>Mod</th><th>Firmware</th><th>Zonă</th><th>Status</th><th>Última Contactare</th><th>Acțiuni</th>
+  </tr>
+</thead>
 <tbody>
-{% for d in page.object_list %}
+{% for device in page.object_list %}
 <tr>
-  <td>{{ d.id }}</td>
-  <td>{{ d.name }}</td>
-  <td>{{ d.serial_number }}</td>
-  <td>{{ d.ip_address }}</td>
-  <td>{{ d.firmware_version }}</td>
-  <td>{{ d.area_name }}</td>
-  <td>{{ d.enabled }}</td>
+  <td><strong>#{{ device.id }}</strong></td>
+  <td><strong>{{ device.name }}</strong></td>
+  <td><code>{{ device.serial_number|default:"—" }}</code></td>
+  <td>{{ device.ip_address|default:"—" }}</td>
+  <td>{{ device.port|default:"4370" }}</td>
+  <td><span style="background: #cce5ff; padding: 2px 6px; border-radius: 3px; font-size: 11px;">{{ device.get_comm_mode_display }}</span></td>
+  <td>{{ device.firmware_version|default:"—" }}</td>
+  <td>{{ device.area_name|default:"—" }}</td>
   <td>
-    <a href="{% url 'crud-device-edit' d.id %}" data-tip="Editează">Edit</a>
-    <form method="post" action="{% url 'crud-device-delete' d.id %}" style="display:inline" onsubmit="return confirm('Ștergi dispozitiv?');">{% csrf_token %}<button data-tip="Șterge">X</button></form>
+    {% if device.enabled %}
+      <span class="status-badge status-active">✓ ACTIV</span>
+    {% else %}
+      <span class="status-badge status-inactive">✗ INACTIV</span>
+    {% endif %}
   </td>
+  <td><small>{% if device.last_contact %}{{ device.last_contact|date:"d.m H:i" }}{% else %}—{% endif %}</small></td>
+  <td><div class="action-buttons"><a href="{% url 'crud-device-edit' device.id %}" class="btn-edit">✏️ Edit</a><button class="btn-delete" onclick="if(confirm('Ești sigur?')) deleteDevice({{ device.id }});">🗑️ Șterge</button></div></td>
 </tr>
 {% endfor %}
-</tbody></table>
-<div class="pagination">{% if page.has_previous %}<a href="?page={{ page.previous_page_number }}" data-tip="Anterior">«</a>{% endif %} <span>{{ page.number }}/{{ page.paginator.num_pages }}</span> {% if page.has_next %}<a href="?page={{ page.next_page_number }}" data-tip="Următor">»</a>{% endif %}</div>
-{% else %}<p>Niciun dispozitiv.</p>{% endif %}
+</tbody>
+</table>
+</div>
+
+{% if page.paginator.num_pages > 1 %}
+<div class="pagination">
+  {% if page.has_previous %}<a href="?page=1">« Prima</a><a href="?page={{ page.previous_page_number }}">‹ Anterior</a>{% endif %}
+  <span style="color: #fff; margin: 0 10px;">Pagina <strong>{{ page.number }}</strong> din <strong>{{ page.paginator.num_pages }}</strong></span>
+  {% if page.has_next %}<a href="?page={{ page.next_page_number }}">Următor ›</a><a href="?page={{ page.paginator.num_pages }}">Ultima »</a>{% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="empty-state">
+  <p>📭 Niciun dispozitiv registrat. Clic pe "+ Dispozitiv Nou" pentru a adăuga.</p>
+</div>
+{% endif %}
+
+</div>
+
+<div class="footer-device">🔧 Modernized Device Management Interface</div>
+
+<script>
+function openDeviceModal() { document.getElementById('deviceModal').style.display='flex'; }
+function closeDeviceModal() { document.getElementById('deviceModal').style.display='none'; document.getElementById('deviceForm').reset(); document.getElementById('deviceStatus').textContent=''; }
+function deleteDevice(id) {
+  fetch('/agent/crud/devices/' + id + '/delete/', { method: 'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') } })
+    .then(r => r.json()).then(d => { if(d.ok) location.reload(); else alert('Eroare: ' + d.error); }).catch(e => alert('Eroare: ' + e));
+}
+function getCookie(name) {
+  let v = null;
+  if (document.cookie && document.cookie !== '') {
+    document.cookie.split(';').forEach(c => {
+      c = c.trim();
+      if (c.substring(0, name.length + 1) === (name + '=')) v = decodeURIComponent(c.substring(name.length + 1));
+    });
+  }
+  return v;
+}
+</script>
+
+<!-- Device Modal Form -->
+<style>
+.device-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); z-index: 650; align-items: center; justify-content: center; padding: 12px; }
+.device-modal-panel { background: #2d5a7b; border: 1px solid #3d6a8b; border-radius: 8px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6); width: min(900px, 98vw); max-height: 95vh; display: flex; flex-direction: column; }
+.device-modal-header { background: linear-gradient(90deg, #1a3a52 0%, #3da5d9 100%); border-radius: 8px 8px 0 0; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; color: #fff; font-size: 15px; font-weight: 600; }
+.device-modal-header button { background: transparent; border: none; color: #fff; font-size: 20px; cursor: pointer; }
+.device-modal-body { padding: 16px; color: #e8f0f8; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; flex: 1; }
+.device-modal-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.device-modal-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.device-modal-field label { font-size: 12px; color: #3da5d9; font-weight: 600; }
+.device-modal-field input, .device-modal-field select { background: #1a3a52; border: 1px solid #3d6a8b; color: #e8f0f8; padding: 8px; border-radius: 4px; font-size: 12px; }
+.device-modal-field input::placeholder, .device-modal-field select::placeholder { color: #5a7a90; }
+.device-modal-field input:focus, .device-modal-field select:focus { outline: none; border-color: #3da5d9; box-shadow: 0 0 0 3px rgba(61, 165, 217, 0.2); }
+.device-modal-section { background: #1a3a52; border: 1px solid #3d6a8b; border-radius: 6px; padding: 12px; }
+.device-modal-section h4 { margin: 0 0 10px 0; color: #3da5d9; font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; }
+.device-modal-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 16px; border-top: 1px solid #3d6a8b; }
+.device-modal-footer button { padding: 8px 18px; border: none; border-radius: 4px; font-size: 12px; font-weight: 600; cursor: pointer; }
+.device-modal-footer .primary { background: #3da5d9; color: #fff; }
+.device-modal-footer .primary:hover { background: #2d95c9; }
+.device-modal-footer .secondary { background: #3d6a8b; color: #e8f0f8; border: 1px solid #4d7a9b; }
+.device-modal-status { font-size: 12px; font-weight: 600; text-align: center; min-height: 18px; color: #2da44e; }
+</style>
+
+<div id="deviceModal" class="device-modal-overlay">
+  <div class="device-modal-panel">
+    <div class="device-modal-header">
+      <span>✚ Adaugă Dispozitiv</span>
+      <button onclick="closeDeviceModal()">✕</button>
+    </div>
+    <div class="device-modal-body">
+      <form id="deviceForm" onsubmit="submitDeviceForm(event)">
+        <div class="device-modal-section">
+          <h4>Informații de Bază</h4>
+          <div class="device-modal-grid">
+            <div class="device-modal-field">
+              <label><span style="color: #88c3ff;">*</span> Nume Dispozitiv</label>
+              <input name="name" required>
+            </div>
+            <div class="device-modal-field">
+              <label>Număr Serie (SN)</label>
+              <input name="serial_number">
+            </div>
+            <div class="device-modal-field">
+              <label><span style="color: #88c3ff;">*</span> Tip Dispozitiv</label>
+              <select name="device_type" required>
+                <option value="access_panel">Access Control Panel</option>
+                <option value="door_controller">Door Controller</option>
+                <option value="biometric_reader">Biometric Reader</option>
+                <option value="two_door_panel">Two-Door Panel</option>
+                <option value="multi_door_panel">Multi-Door Panel</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        
+        <div class="device-modal-section">
+          <h4>Parametri Comunicare</h4>
+          <div style="margin-bottom: 8px;">
+            <label style="color: #8ac7ff; font-size: 11px;">Mod Comunicare</label>
+            <div style="display: flex; gap: 16px; margin-top: 4px;">
+              <label style="display: flex; align-items: center; gap: 6px; color: #dfe8ff; font-weight: normal; margin: 0;"><input type="radio" name="comm_mode" value="tcp" checked onchange="toggleDeviceCommMode()"> TCP/IP</label>
+              <label style="display: flex; align-items: center; gap: 6px; color: #dfe8ff; font-weight: normal; margin: 0;"><input type="radio" name="comm_mode" value="rs485" onchange="toggleDeviceCommMode()"> RS485</label>
+            </div>
+          </div>
+          
+          <div id="device-tcp-group">
+            <div class="device-modal-grid">
+              <div class="device-modal-field">
+                <label>Adresă IP</label>
+                <input name="ip_address" placeholder="192.168.1.100">
+              </div>
+              <div class="device-modal-field">
+                <label>Port</label>
+                <input name="port" type="number" value="4370">
+              </div>
+              <div class="device-modal-field">
+                <label>Parolă</label>
+                <input name="comm_password" type="password">
+              </div>
+            </div>
+          </div>
+          
+          <div id="device-rs485-group" style="display: none;">
+            <div class="device-modal-grid">
+              <div class="device-modal-field">
+                <label>Port Serial</label>
+                <input name="rs485_port" placeholder="COM1">
+              </div>
+              <div class="device-modal-field">
+                <label>Baud Rate</label>
+                <input name="rs485_baudrate" type="number" value="9600">
+              </div>
+              <div class="device-modal-field">
+                <label>Adresă Device</label>
+                <input name="rs485_address" type="number">
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="device-modal-section">
+          <h4>Locație și Configurare</h4>
+          <div class="device-modal-grid">
+            <div class="device-modal-field">
+              <label>Zonă / Locație</label>
+              <input name="area_name" placeholder="Ex: Intrare A">
+            </div>
+            <div class="device-modal-field">
+              <label>Fus Orar</label>
+              <input name="time_zone" placeholder="UTC+2">
+            </div>
+            <div class="device-modal-field">
+              <label>Model Dispozitiv</label>
+              <input name="hardware_version" placeholder="Ex: ZK-X100">
+            </div>
+            <div class="device-modal-field" style="padding-top: 16px;">
+              <label style="display: flex; align-items: center; gap: 4px;"><input type="checkbox" name="enabled" checked> Activ</label>
+            </div>
+            <div class="device-modal-field">
+              <label style="display: flex; align-items: center; gap: 4px;"><input type="checkbox" name="auto_sync_time"> Sincronizare Automată Oră</label>
+            </div>
+            <div class="device-modal-field">
+              <label style="display: flex; align-items: center; gap: 4px;"><input type="checkbox" name="clear_on_add"> Șterge Date din Device</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="device-modal-section">
+          <h4>Informații Tehnice</h4>
+          <div class="device-modal-grid">
+            <div class="device-modal-field">
+              <label>Versiune Firmware</label>
+              <input name="firmware_version" placeholder="Ex: V2.3.4">
+            </div>
+            <div class="device-modal-field">
+              <label>Versiune Hardware</label>
+              <input name="hardware_version" placeholder="Ex: Rev 1.0" disabled style="background:#ddd; cursor:not-allowed;">
+            </div>
+          </div>
+        </div>
+
+        <div class="device-modal-section">
+          <h4>Descoperire și Testare Dispozitiv</h4>
+          <div style="display: flex; gap: 10px; align-items: flex-end;">
+            <div class="device-modal-field" style="flex: 1;">
+              <label>Scanare Rețea</label>
+              <input type="text" placeholder="192.168.1.0/24" id="discovery_range">
+            </div>
+            <button type="button" class="device-modal-field" onclick="discoverDevices()" style="background: #2da44e; color: #fff; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; height: fit-content;">🔍 Descoperă</button>
+          </div>
+          <div style="margin-top: 12px; padding: 10px; background: #f0f8ff; border-radius: 4px; border-left: 3px solid #1e90ff;">
+            <div id="discovery_results" style="font-size: 12px; color: #333;">Faceți clic pe „Descoperă" pentru a scana rețeaua</div>
+          </div>
+        </div>
+        
+        <div class="device-modal-footer">
+          <button type="button" class="secondary" onclick="closeDeviceModal()">Anulează</button>
+          <button type="submit" class="primary">Salvează</button>
+        </div>
+        <div id="deviceStatus" class="device-modal-status"></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleDeviceCommMode() {
+  const mode = document.querySelector('input[name="comm_mode"]:checked').value;
+  document.getElementById('device-tcp-group').style.display = (mode === 'tcp') ? 'block' : 'none';
+  document.getElementById('device-rs485-group').style.display = (mode === 'rs485') ? 'block' : 'none';
+}
+
+async function submitDeviceForm(e) {
+  e.preventDefault();
+  const form = document.getElementById('deviceForm');
+  const status = document.getElementById('deviceStatus');
+  const formData = new FormData(form);
+  
+  status.textContent = '⏳ Se salvează...';
+  try {
+    const resp = await fetch('/agent/crud/devices/new/', { 
+      method: 'POST',
+      headers: { 'X-CSRFToken': getCookie('csrftoken') },
+      body: formData
+    });
+    const data = await resp.json();
+    if (data.ok) {
+      status.textContent = '✓ Dispozitiv salvat!';
+      setTimeout(() => { closeDeviceModal(); location.reload(); }, 1000);
+    } else {
+      status.textContent = '✗ Eroare: ' + (data.error || 'Necunoscut');
+    }
+  } catch (e) {
+    status.textContent = '✗ Eroare: ' + e.message;
+  }
+}
+
+function discoverDevices() {
+  const range = document.getElementById('discovery_range').value || '192.168.1.0/24';
+  const resultsDiv = document.getElementById('discovery_results');
+  resultsDiv.innerHTML = '⏳ Se scanează: ' + range;
+  
+  fetch(`/agent/devices/discover/?range=${encodeURIComponent(range)}`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.devices && data.devices.length > 0) {
+        resultsDiv.innerHTML = '<strong>✓ Găsite ' + data.devices.length + ' dispozitive:</strong><ul style="margin: 8px 0; padding-left: 20px;">' +
+          data.devices.map(d => `<li>${d.ip} - ${d.model || 'Unknown'}</li>`).join('') + '</ul>';
+      } else {
+        resultsDiv.innerHTML = '⚠ Nu au fost găsite dispozitive în rețeaua ' + range;
+      }
+    })
+    .catch(e => {
+      resultsDiv.innerHTML = '✗ Eroare la scanare: ' + e.message;
+    });
+}
+</script>
+
 {% endblock %}

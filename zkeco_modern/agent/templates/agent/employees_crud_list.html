@@ -1,31 +1,31 @@
 {% extends 'agent/base_legacy.html' %}
 {% block title %}Employees CRUD{% endblock %}
 {% block content %}
-<h2>Employees (CRUD)</h2>
-<p>
-  <a class='op' data-tip='Adaugă un angajat nou' href='{% url "crud-employee-create" %}'>Add Employee</a> |
-  <a class='op' data-tip='Importă mai mulți angajați dintr-un fișier' href='{% url "crud-employee-import" %}'>Bulk Import</a> |
-  <a class='op' data-tip='Exportă lista în format CSV' href='{% url "crud-employee-export" %}?format=csv'>Export CSV</a>
+<h2 style="color: #3da5d9; padding-bottom: 10px;">👥 Employees Management</h2>
+<p style="margin-top: 10px;">
+  <a class='op' data-tip='Adaugă un angajat nou' href='{% url "crud-employee-create" %}' style="background: #3da5d9; color: #fff; padding: 6px 12px; border-radius: 4px; text-decoration: none;">+ Add Employee</a> |
+  <a class='op' data-tip='Importă mai mulți angajați dintr-un fișier' href='{% url "crud-employee-import" %}' style="background: #3da5d9; color: #fff; padding: 6px 12px; border-radius: 4px; text-decoration: none;">⬆ Bulk Import</a> |
+  <a class='op' data-tip='Exportă lista în format CSV' href='{% url "crud-employee-export" %}?format=csv' style="background: #3da5d9; color: #fff; padding: 6px 12px; border-radius: 4px; text-decoration: none;">⬇ Export CSV</a>
 </p>
-<table class='status-box' style='width:100%;border-collapse:collapse'>
-<tr><th>First</th><th>Last</th><th>Card</th><th>Levels</th><th>Active</th><th>Actions</th></tr>
+<table class='status-box' style='width:100%;border-collapse:collapse;background:#2d5a7b;border:1px solid #3d6a8b;'>
+<tr style="background: linear-gradient(90deg, #1a3a52 0%, #3da5d9 100%); color: #fff; font-weight: 600;"><th style="padding:10px;border:1px solid #3d6a8b;">First</th><th style="padding:10px;border:1px solid #3d6a8b;">Last</th><th style="padding:10px;border:1px solid #3d6a8b;">Card</th><th style="padding:10px;border:1px solid #3d6a8b;">Levels</th><th style="padding:10px;border:1px solid #3d6a8b;">Active</th><th style="padding:10px;border:1px solid #3d6a8b;">Actions</th></tr>
 {% for e in employees %}
-<tr data-emp-id='{{ e.id }}'>
-  <td class='inline-edit' data-field='first_name'>{{ e.first_name }}</td>
-  <td class='inline-edit' data-field='last_name'>{{ e.last_name }}</td>
-  <td class='inline-edit' data-field='card_number'>{{ e.card_number }}</td>
-  <td>{{ e.access_levels.all|join:", " }}</td>
-  <td class='inline-edit' data-field='active'>{{ e.active }}</td>
-  <td><a class='op' data-tip='Editează acest angajat' href='{% url "crud-employee-edit" e.id %}'>Edit</a>
+<tr data-emp-id='{{ e.id }}' style="border-bottom: 1px solid #3d6a8b; background: #2d5a7b; color: #e8f0f8;">
+  <td class='inline-edit' data-field='first_name' style="padding: 8px; border-right: 1px solid #3d6a8b;">{{ e.first_name }}</td>
+  <td class='inline-edit' data-field='last_name' style="padding: 8px; border-right: 1px solid #3d6a8b;">{{ e.last_name }}</td>
+  <td class='inline-edit' data-field='card_number' style="padding: 8px; border-right: 1px solid #3d6a8b;">{{ e.card_number }}</td>
+  <td style="padding: 8px; border-right: 1px solid #3d6a8b;">{{ e.access_levels.all|join:", " }}</td>
+  <td class='inline-edit' data-field='active' style="padding: 8px; border-right: 1px solid #3d6a8b;">{{ e.active }}</td>
+  <td style="padding: 8px;"><a class='op' data-tip='Editează acest angajat' href='{% url "crud-employee-edit" e.id %}' style="background: #3da5d9; color: #fff; padding: 4px 8px; border-radius: 3px; text-decoration: none; font-size: 12px;">Edit</a>
     <form method='post' action='{% url "crud-employee-delete" e.id %}' style='display:inline' onsubmit='return confirm("Delete employee?")' title='Șterge definitiv angajatul'>
-      {% csrf_token %}<button class='op' data-tip='Șterge angajatul' style='background:#632626'>Del</button>
+      {% csrf_token %}<button class='op' data-tip='Șterge angajatul' style='background:#d97e4a; color: #fff; padding: 4px 8px; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;'>Del</button>
     </form>
-    <input type='number' min='1' placeholder='Door ID' class='door-check-input' style='width:70px'>
-    <button type='button' class='op check-access-btn' data-tip='Verifică dacă angajatul are acces la ușa indicată'>Check</button>
-    <span class='access-indicator' style='margin-left:4px;font-weight:bold'></span>
+    <input type='number' min='1' placeholder='Door ID' class='door-check-input' style='width:70px;padding:4px;border:1px solid #3d6a8b;border-radius:3px;background:#1a3a52;color:#e8f0f8;'>
+    <button type='button' class='op check-access-btn' data-tip='Verifică dacă angajatul are acces la ușa indicată' style="background: #2da44e; color: #fff; padding: 4px 8px; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;">Check</button>
+    <span class='access-indicator' style='margin-left:4px;font-weight:bold;color:#3da5d9'></span>
   </td>
 </tr>
-{% empty %}<tr><td colspan='5'>No employees</td></tr>{% endfor %}
+{% empty %}<tr><td colspan='6' style="padding: 10px; text-align: center; color: #5a7a90;">No employees</td></tr>{% endfor %}
 </table>
 {% endblock %}
 {% block extra_js %}

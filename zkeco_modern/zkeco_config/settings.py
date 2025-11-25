@@ -37,7 +37,7 @@ SECRET_KEY = "django-insecure-your-secret-key-here"
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS: list[str] = []
+ALLOWED_HOSTS: list[str] = ["127.0.0.1", "localhost", "testserver"]
 
 # Application definition
 INSTALLED_APPS = [
@@ -49,7 +49,6 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "legacy_models",  # legacy shim
     "django_extensions",
-    "debug_toolbar",
     "zkeco_modern.agent",  # use fully-qualified path to avoid ModuleNotFoundError 'agent'
     "channels",
 ]
@@ -77,13 +76,13 @@ if os.environ.get("INCLUDE_LEGACY") == "1":
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "debug_toolbar.middleware.DebugToolbarMiddleware",
 ]
 
 ROOT_URLCONF = "zkeco_config.urls"
@@ -220,6 +219,8 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # Use leading slash so {% static %} resolves correctly (e.g. /static/agent/dashboard.css)
 STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "static-root"
+WHITENOISE_USE_FINDERS = True
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
@@ -235,6 +236,13 @@ CHANNEL_LAYERS = {
 }
 
 # Debug toolbar settings
-INTERNAL_IPS = [
-    "127.0.0.1",
-]
+INTERNAL_IPS = ["127.0.0.1"]
+
+# Auth redirects
+LOGIN_REDIRECT_URL = "/agent/dashboard/"
+LOGOUT_REDIRECT_URL = "/accounts/login/"
+
+# When DEBUG is enabled and DEBUG_TOOLBAR=1 env var is set, load debug toolbar apps/middleware dynamically.
+if DEBUG and os.environ.get("DEBUG_TOOLBAR") == "1":
+    INSTALLED_APPS.append("debug_toolbar")
+    MIDDLEWARE.append("debug_toolbar.middleware.DebugToolbarMiddleware")

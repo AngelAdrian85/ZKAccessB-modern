@@ -186,25 +186,19 @@ def _show_help_ro():
         txt.pack(fill='both', expand=True)
         info = [
             ('Dashboard', 'Deschide pagina principală de monitorizare.'),
-            ('Server WSGI', 'Pornește serverul web în modul WSGI (fără WebSockets, simplu).'),
-            ('Server ASGI', 'Pornește serverul în modul ASGI (WebSockets). Dacă lipsește Daphne, cade automat pe WSGI.'),
-            ('Restart Server', 'Oprește și repornește serverul folosind modul configurat.'),
-            ('Stop Server', 'Oprește serverul web.'),
-            ('CommCenter Start', 'Pornește serviciul de comunicație cu dispozitivele (polling evenimente).'),
-            ('CommCenter Stop', 'Oprește serviciul de comunicație cu dispozitivele.'),
-            ('Configure Server Port', 'Setează portul și modul (ASGI/WSGI) pentru server și salvează în config.'),
-            ('Configure Database', 'Afișează detalii despre motorul bazei de date folosit.'),
-            ('Database Backup Location', 'Alege directorul unde se salvează copiile de siguranță ale bazei de date.'),
-            ('Video File Location', 'Definește directorul pentru fișiere video asociate sistemului.'),
-            ('Picture File Location', 'Definește directorul pentru fișiere imagine (poze utilizatori, etc).'),
-            ('Restore Database', 'Restaurează baza de date dintr-un fișier backup selectat.'),
+            ('Web Server (ASGI)', 'Serverul prim ă cu suport WebSockets. Se pornește automat la deschiderea tray. Dacă lipsește Daphne, cade pe WSGI.'),
+            ('CommCenter', 'Serviciul de comunicație cu dispozitivele (polling, sincronizare, cicluri).'),
+            ('Admin Menu → Server WSGI', 'Fallback manual la WSGI dacă ASGI are probleme. Fără WebSockets.'),
+            ('Configure Server Port', 'Setează portul și modul (ASGI/WSGI) pentru server.'),
+            ('Configure Database', 'Afișează detalii despre motorul bazei de date.'),
+            ('Database Backup Location', 'Alege directorul pentru copiile de siguranță.'),
+            ('Video File Location', 'Definește directorul pentru fișiere video.'),
+            ('Picture File Location', 'Definește directorul pentru fișiere imagine (poze utilizatori).'),
+            ('Restore Database', 'Restaurează baza de date dintr-un fișier backup.'),
             ('Backup Database', 'Creează o copie de siguranță a bazei de date curente.'),
-            ('Start Services', 'Pornește serverul și CommCenter împreună.'),
-            ('Restart Services', 'Repornește serverul și CommCenter (stop + start).'),
-            ('Stop Services', 'Oprește atât serverul cât și CommCenter.'),
             ('License Activation', 'Activează licența cu cheia furnizată (validare HMAC).'),
             ('View Server Log', 'Deschide fișierul server.log pentru depanare.'),
-            ('Quit', 'Închide agentul tray și oprește serviciile active.'),
+            ('Quit', 'Închide agentul tray, oprește serviciile active și distruge procesul.'),
         ]
         for title, desc in info:
             txt.insert('end', f"• {title}: {desc}\n\n")
@@ -281,72 +275,68 @@ def _is_server_running(host='127.0.0.1', port=DEFAULT_PORT):
     finally:
         s.close()
 
-def _start_server(host=DEFAULT_HOST, port=DEFAULT_PORT, asgi=False):
+def _start_server(host=DEFAULT_HOST, port=DEFAULT_PORT, asgi=True, retry_count=3):
     global _SERVER_PROC
     if _SERVER_PROC and _SERVER_PROC.poll() is None:
         return True
-    env = os.environ.copy()
-    env['DJANGO_SETTINGS_MODULE'] = 'zkeco_config.settings'
-    # Ensure parent of project folder is on PYTHONPATH so 'import zkeco_modern' works
-    try:
-        base_dir = Path(settings.BASE_DIR)
-        parent_dir = base_dir.parent
-        existing = env.get('PYTHONPATH','')
-        paths = [p for p in existing.split(os.pathsep) if p]
-        # Add parent directory if not present (needed when manage.py resides inside project subfolder)
-        if str(parent_dir) not in paths:
-            paths.insert(0, str(parent_dir))
-        # Also ensure base_dir itself present for relative imports
-        if str(base_dir) not in paths:
-            paths.insert(0, str(base_dir))
-        env['PYTHONPATH'] = os.pathsep.join(paths)
-    except Exception:
-        pass
-    # If ASGI requested, ensure Daphne is available; otherwise fallback and persist
-    if asgi:
+    # Retry with exponential backoff if port bind fails
+    for attempt in range(retry_count):
         try:
-            importlib.import_module('daphne')
-        except Exception:
-            asgi = False
+            if attempt > 0:
+                wait_time = 2 ** attempt
+                logging.info('Server retry attempt %d, waiting %ds', attempt + 1, wait_time)
+                time.sleep(wait_time)
+            env = os.environ.copy()
+            env['DJANGO_SETTINGS_MODULE'] = 'zkeco_config.settings'
             try:
-                _CONFIG.set('tray','server_mode','wsgi')
-                _save_config()
+                base_dir = Path(settings.BASE_DIR)
+                parent_dir = base_dir.parent
+                existing = env.get('PYTHONPATH','')
+                paths = [p for p in existing.split(os.pathsep) if p]
+                if str(parent_dir) not in paths:
+                    paths.insert(0, str(parent_dir))
+                if str(base_dir) not in paths:
+                    paths.insert(0, str(base_dir))
+                env['PYTHONPATH'] = os.pathsep.join(paths)
             except Exception:
                 pass
-    cmd = (
-        [sys.executable, '-m', 'daphne', '-b', host, '-p', str(port), 'zkeco_config.asgi:application']
-        if asgi else
-        [sys.executable, str(Path(settings.BASE_DIR) / 'manage.py'), 'runserver', f'{host}:{port}', '--noreload']
-    )
-    try:
-        log_path = _server_log_path()
-        logf = open(log_path, 'ab')
-        _SERVER_PROC = subprocess.Popen(cmd, env=env, stdout=logf, stderr=subprocess.STDOUT, cwd=str(settings.BASE_DIR))
-        logging.info('Server started (%s) pid=%s', 'ASGI' if asgi else 'WSGI', _SERVER_PROC.pid)
-        time.sleep(1.0)
-        if _SERVER_PROC.poll() is not None:
-            err = _read_first_error_from_log()
-            try:
-                messagebox.showerror('Server start failed', err or 'Server exited immediately. See server.log')
-            except Exception:
-                pass
-            return False
-        return True
-    except Exception as e:
-        logging.error('Server start failed: %s', e)
-        # Fallback once from ASGI to WSGI on failure
-        if asgi:
-            try:
-                return _start_server(host=host, port=port, asgi=False)
-            except Exception:
-                pass
-        try:
-            err = _read_first_error_from_log()
-            detail = err or f'{e.__class__.__name__}: {e}'
-            messagebox.showerror('Start Server', detail)
-        except Exception:
-            pass
-        return False
+            
+            # Try ASGI first if requested
+            if asgi:
+                try:
+                    importlib.import_module('daphne')
+                    cmd = [sys.executable, '-m', 'daphne', '-b', host, '-p', str(port), 'zkeco_config.asgi:application']
+                    server_type = 'ASGI (Daphne)'
+                except Exception:
+                    # Daphne not available, fallback to WSGI
+                    cmd = [sys.executable, str(Path(settings.BASE_DIR) / 'manage.py'), 'runserver', f'{host}:{port}', '--noreload', '--nostatic']
+                    server_type = 'WSGI (runserver)'
+                    asgi = False
+            else:
+                cmd = [sys.executable, str(Path(settings.BASE_DIR) / 'manage.py'), 'runserver', f'{host}:{port}', '--noreload', '--nostatic']
+                server_type = 'WSGI (runserver)'
+            
+            log_path = _server_log_path()
+            logf = open(log_path, 'ab')
+            _SERVER_PROC = subprocess.Popen(cmd, env=env, stdout=logf, stderr=subprocess.STDOUT, cwd=str(settings.BASE_DIR))
+            logging.info('Server started (%s) pid=%s on %s:%s (attempt %d)', server_type, _SERVER_PROC.pid, host, port, attempt + 1)
+            time.sleep(1.5)
+            if _SERVER_PROC.poll() is not None:
+                # Process died, retry
+                logging.warning('Server process exited immediately, retrying...')
+                continue
+            # Success
+            return True
+        except Exception as e:
+            logging.error('Server start attempt %d failed: %s', attempt + 1, e)
+            if attempt == retry_count - 1:
+                try:
+                    err = _read_first_error_from_log()
+                    detail = err or f'{e.__class__.__name__}: {e}'
+                    messagebox.showerror('Start Server', 'Failed after retries:\n' + detail)
+                except Exception:
+                    pass
+    return False
 
 def _stop_server():
     global _SERVER_PROC
@@ -373,13 +363,58 @@ def _open_dashboard():
     webbrowser.open(f'http://127.0.0.1:{port}/agent/dashboard/')
 
 def _shutdown(icon):
-    _stop_server()
+    """Cleanly shutdown tray agent, stop all services, and destroy the icon instance."""
     try:
-        import threading
-        _STOP_EVENT.set()
+        logging.info('===== SHUTDOWN INITIATED =====')
+        logging.info('Stopping server...')
+        _stop_server()
+        logging.info('Stopping commcenter...')
+        _stop_comm_center()
+        time.sleep(0.5)
+    except Exception as e:
+        logging.error('Error stopping server/commcenter: %s', e)
+    
+    # Kill any lingering processes on configured port
+    try:
+        logging.info('Cleaning up port bindings...')
+        cfg_port = _CONFIG.get('tray', 'port', fallback='8000')
+        logging.info(f'Scanning for processes on port {cfg_port}')
+        pids = subprocess.run(['netstat', '-ano'], capture_output=True, text=True)
+        for line in pids.stdout.split('\n'):
+            if f':{cfg_port}' in line:
+                parts = line.split()
+                if parts:
+                    pid = parts[-1]
+                    if pid.isdigit() and int(pid) != os.getpid():
+                        try:
+                            subprocess.run(['taskkill', '/PID', pid, '/F', '/T'], 
+                                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            logging.info(f'Killed PID {pid} on port {cfg_port}')
+                        except Exception as e:
+                            logging.error(f'Failed to kill PID {pid}: {e}')
+    except Exception as e:
+        logging.error(f'Error cleaning up ports: {e}')
+    
+    try:
+        if _STOP_EVENT:
+            _STOP_EVENT.set()
     except Exception:
         pass
-    icon.stop()
+    
+    try:
+        logging.info('Removing tray icon...')
+        icon.visible = False
+        icon.stop()
+    except Exception as e:
+        logging.error('Error removing icon: %s', e)
+    
+    try:
+        logging.info('===== SHUTDOWN COMPLETE =====')
+        time.sleep(0.3)
+        logging.info('Terminating process...')
+        os.kill(os.getpid(), signal.SIGTERM)
+    except Exception:
+        pass
 
 def _build_menu(icon, host, port):
     # Legacy-like actions -------------------------------------------------
@@ -567,7 +602,26 @@ def _build_menu(icon, host, port):
         except Exception as e:
             messagebox.showerror('Backup', f'Failed: {e}')
 
+    # Per-server submenus
+    django_server_menu = pystray.Menu(
+        pystray.MenuItem('Start', lambda: threading.Thread(target=_start_server, args=(host, port, True), daemon=True).start()),
+        pystray.MenuItem('Stop', lambda: threading.Thread(target=_stop_server, daemon=True).start()),
+        pystray.MenuItem('Restart', lambda: threading.Thread(target=lambda: (_stop_server(), time.sleep(1), _start_server(host=host, port=port, asgi=True)), daemon=True).start()),
+    )
+
+    commcenter_menu = pystray.Menu(
+        pystray.MenuItem('Start', lambda: threading.Thread(target=_start_comm_center, daemon=True).start()),
+        pystray.MenuItem('Stop', lambda: threading.Thread(target=_stop_comm_center, daemon=True).start()),
+        pystray.MenuItem('Restart', lambda: threading.Thread(target=lambda: (_stop_comm_center(), time.sleep(1), _start_comm_center()), daemon=True).start()),
+    )
+
+    wsgi_fallback_menu = pystray.Menu(
+        pystray.MenuItem('Start WSGI (Fallback)', lambda: threading.Thread(target=_start_server, args=(host, port, False), daemon=True).start()),
+        pystray.MenuItem('Stop WSGI', lambda: threading.Thread(target=_stop_server, daemon=True).start()),
+    )
+
     legacy_menu = pystray.Menu(
+        pystray.MenuItem('Server WSGI (Manual Fallback)', wsgi_fallback_menu),
         pystray.MenuItem('Configure Server Port', lambda: threading.Thread(target=_configure_port, daemon=True).start()),
         pystray.MenuItem('Configure Database', lambda: messagebox.showinfo('Configure DB','Using SQLite file at %s' % (Path(settings.BASE_DIR)/'db.sqlite3'))),
         pystray.MenuItem('Database Backup Location', lambda: threading.Thread(target=_select_path, args=('backup_dir','Backup Location'), daemon=True).start()),
@@ -575,23 +629,20 @@ def _build_menu(icon, host, port):
         pystray.MenuItem('Picture File Location', lambda: threading.Thread(target=_select_path, args=('picture_dir','Picture Files'), daemon=True).start()),
         pystray.MenuItem('Restore Database', lambda: threading.Thread(target=_restore_db, daemon=True).start()),
         pystray.MenuItem('Backup Database', lambda: threading.Thread(target=_backup_db, daemon=True).start()),
-        pystray.MenuItem('Start Services', lambda: threading.Thread(target=lambda: (_start_server(host=host, port=port, asgi=True), _start_comm_center()), daemon=True).start()),
-        pystray.MenuItem('Restart Services', lambda: threading.Thread(target=lambda: (_stop_server(), _stop_comm_center(), _start_server(host=host, port=port, asgi=_CONFIG.get('tray','server_mode', fallback='asgi')=="asgi"), _start_comm_center()), daemon=True).start()),
-        pystray.MenuItem('Stop Services', lambda: threading.Thread(target=lambda: (_stop_server(), _stop_comm_center()), daemon=True).start()),
         pystray.MenuItem('License Activation', lambda: threading.Thread(target=_license_activation, daemon=True).start()),
         pystray.MenuItem('View Server Log', lambda: webbrowser.open(str(Path(getattr(settings, 'BASE_DIR', Path.cwd())) / 'server.log'))),
     )
 
     return pystray.Menu(
         pystray.MenuItem('Dashboard', lambda: _open_dashboard()),
-        pystray.MenuItem('Server WSGI', lambda: threading.Thread(target=_start_server, args=(host, port, False), daemon=True).start()),
-        pystray.MenuItem('Server ASGI', lambda: threading.Thread(target=_start_server, args=(host, port, True), daemon=True).start()),
-        pystray.MenuItem('Restart Server', lambda: threading.Thread(target=lambda: (_stop_server(), _start_server(host=host, port=port, asgi=_CONFIG.get('tray','server_mode', fallback='asgi')=="asgi")), daemon=True).start()),
-        pystray.MenuItem('Stop Server', lambda: threading.Thread(target=_stop_server, daemon=True).start()),
-        pystray.MenuItem('CommCenter Start', lambda: threading.Thread(target=_start_comm_center, daemon=True).start()),
-        pystray.MenuItem('CommCenter Stop', lambda: threading.Thread(target=_stop_comm_center, daemon=True).start()),
+        pystray.MenuItem('Web Server (ASGI)', django_server_menu),
+        pystray.MenuItem('CommCenter', commcenter_menu),
+        pystray.MenuItem('---', pystray.Menu()),  # Separator
+        pystray.MenuItem('Stop All Services', lambda: threading.Thread(target=lambda: (_stop_server(), _stop_comm_center()), daemon=True).start()),
+        pystray.MenuItem('Start All Services', lambda: threading.Thread(target=lambda: (_start_server(host=host, port=port, asgi=True), _start_comm_center()), daemon=True).start()),
+        pystray.MenuItem('---', pystray.Menu()),  # Separator
         pystray.MenuItem('Ajutor (RO)', lambda: threading.Thread(target=_show_help_ro, daemon=True).start()),
-        pystray.MenuItem('Legacy Menu', legacy_menu),
+        pystray.MenuItem('Admin Menu', legacy_menu),
         pystray.MenuItem('Quit', lambda: _shutdown(icon)),
     )
 
@@ -682,6 +733,7 @@ class Command(BaseCommand):
                 try:
                     server_running = _SERVER_PROC is not None and _SERVER_PROC.poll() is None
                     center_running = _CENTER is not None
+                    any_running = server_running or center_running  # Green if ANY service runs
                     tip = []
                     if center_running and _CENTER:
                         total = len(_CENTER.sessions)
@@ -694,9 +746,13 @@ class Command(BaseCommand):
                     tip.append(f'Licență:{_license_status()}')
                     tip.append('Click dreapta: meniu')
                     icon_ref.title = ' | '.join(tip)
-                    state = (server_running, center_running)
+                    state = (server_running, center_running, any_running)
                     if state != _LAST_ICON_STATE:
-                        color = _choose_icon_color(server_running, center_running)
+                        # Green if any service running, yellow if partially, red if all off
+                        if any_running:
+                            color = (46, 204, 113) if (server_running and center_running) else (241, 196, 15)
+                        else:
+                            color = (231, 76, 60)
                         new_img = _build_icon(color=color)
                         if new_img is not None:
                             icon_ref.icon = new_img
@@ -721,6 +777,18 @@ class Command(BaseCommand):
         if options.get('auto_restart'):
             threading.Thread(target=_restart_loop, daemon=True).start()
         self.stdout.write('Tray icon active. Right-click for menu.')
-        icon.run()
-        self.stdout.write('Tray agent exited.')
+        
+        # Wrap icon.run() with exception handling and cleanup
+        try:
+            icon.run()
+        except Exception as e:
+            logging.error(f'Exception in tray icon run: {e}')
+        finally:
+            self.stdout.write('Tray icon loop exited. Performing final cleanup...')
+            try:
+                _shutdown(icon)
+            except Exception as cleanup_err:
+                logging.error(f'Error during final cleanup: {cleanup_err}')
+            self.stdout.write('Tray agent exited.')
+        
         return 0

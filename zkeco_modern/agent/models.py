@@ -8,6 +8,7 @@ class DeviceRealtimeLog(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        app_label = 'agent'
         indexes = [
             models.Index(fields=["device_id", "created_at"]),
         ]
@@ -25,6 +26,7 @@ class DeviceEventLog(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        app_label = 'agent'
         indexes = [
             models.Index(fields=["device_id", "created_at"]),
             models.Index(fields=["code"]),
@@ -35,23 +37,63 @@ class DeviceEventLog(models.Model):
 
 
 class Device(models.Model):
-    name = models.CharField(max_length=128)
-    device_type = models.CharField(max_length=64, default='Access Control Panel')
-    ip_address = models.GenericIPAddressField(null=True, blank=True)
-    area_name = models.CharField(max_length=64, blank=True, default='')
-    enabled = models.BooleanField(default=True)
-    serial_number = models.CharField(max_length=64, blank=True, default='')
-    firmware_version = models.CharField(max_length=64, blank=True, default='')
+    COMM_MODE_CHOICES = [
+        ('tcp', 'TCP/IP'),
+        ('rs485', 'RS485'),
+    ]
+    
+    PANEL_TYPE_CHOICES = [
+        ('access_panel', 'Access Control Panel'),
+        ('door_controller', 'Door Controller'),
+        ('biometric_reader', 'Biometric Reader'),
+        ('two_door_panel', 'Two-Door Access Control Panel'),
+        ('multi_door_panel', 'Multi-Door Access Control Panel'),
+    ]
+    
+    # Basic identification
+    name = models.CharField(max_length=128, help_text="Device display name (e.g., FINANCIAR, MEDICAL)")
+    serial_number = models.CharField(max_length=64, blank=True, default='', unique=True, help_text="Device serial number for identification")
+    device_type = models.CharField(max_length=64, choices=PANEL_TYPE_CHOICES, default='access_panel')
+    
+    # Communication parameters
+    comm_mode = models.CharField(max_length=10, choices=COMM_MODE_CHOICES, default='tcp', help_text="TCP/IP or RS485")
+    ip_address = models.GenericIPAddressField(null=True, blank=True, help_text="IP address for TCP/IP devices")
+    port = models.IntegerField(default=4370, help_text="Communication port (default 4370 for ZK)")
+    comm_password = models.CharField(max_length=128, blank=True, default='', help_text="Device communication password")
+    
+    # RS485 parameters (if applicable)
+    rs485_port = models.CharField(max_length=20, blank=True, default='COM1', help_text="Serial port for RS485 (e.g., COM1, /dev/ttyUSB0)")
+    rs485_baudrate = models.IntegerField(default=9600, help_text="Baud rate for RS485")
+    rs485_address = models.IntegerField(null=True, blank=True, help_text="Device address on RS485 bus")
+    
+    # Location and grouping
+    area_name = models.CharField(max_length=128, blank=True, default='', help_text="Physical area/location")
+    time_zone = models.CharField(max_length=50, blank=True, default='', help_text="Device time zone")
+    
+    # Status and configuration
+    enabled = models.BooleanField(default=True, help_text="Is device enabled for polling")
+    auto_sync_time = models.BooleanField(default=True, help_text="Automatically sync time to device")
+    clear_on_add = models.BooleanField(default=False, help_text="Clear device data when adding to system")
+    
+    # Technical details
+    firmware_version = models.CharField(max_length=64, blank=True, default='', help_text="Firmware version")
+    hardware_version = models.CharField(max_length=64, blank=True, default='', help_text="Hardware version")
+    
+    # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
+    last_contact = models.DateTimeField(null=True, blank=True, help_text="Last successful communication")
 
     class Meta:
         indexes = [
             models.Index(fields=["serial_number"]),
             models.Index(fields=["ip_address"]),
+            models.Index(fields=["enabled"]),
         ]
+        verbose_name = "Access Control Device"
+        verbose_name_plural = "Access Control Devices"
 
-    def __str__(self):  # pragma: no cover
-        return f"Device {self.name} ({self.serial_number})"[:80]
+    def __str__(self):
+        return f"{self.name} (SN:{self.serial_number})"[:80]
 
 
 class DeviceStatus(models.Model):

@@ -7,6 +7,57 @@
   <link rel="stylesheet" href="{% static 'agent/legacy_layout.css' %}">
   <link rel="icon" type="image/svg+xml" href="{% static 'agent/favicon.svg' %}">
   <style>
+    /* ========== MODERN BLUE-GRAY THEME ========== */
+    :root {
+      --azure-gradient: linear-gradient(90deg, #1a3a52 0%, #3da5d9 100%);
+      --azure-dark: #1a3a52;
+      --azure-mid: #2d5a7b;
+      --azure-light: #3da5d9;
+      --blue-accent: #2da44e;
+      --dark-bg: #0f1519;
+      --light-text: #e8f0f8;
+      --border-color: #3d6a8b;
+      --accent-orange: #d97e4a;
+    }
+
+    /* Global theme application */
+    .panel { background: #2d5a7b; border: 1px solid #3d6a8b; color: #e8f0f8; }
+    .panel h2 { color: #3da5d9; }
+    .panel.accent { background: #1a3a52; border-color: #4d7a9b; }
+    
+    /* Gradient headers for tables/lists */
+    .panel-header, .list-header, table thead { background: var(--azure-gradient); color: #fff; }
+    table thead th { padding: 12px; text-align: left; font-weight: 600; }
+    
+    /* Status indicators */
+    .status-online { color: #2da44e; font-weight: 600; }
+    .status-offline { color: #d97e4a; font-weight: 600; }
+    .status-pending { color: #3da5d9; font-weight: 600; }
+
+    /* Button styling */
+    button.primary, .btn-primary { background: #3da5d9; color: #fff; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; }
+    button.primary:hover, .btn-primary:hover { background: #2d95c9; }
+    button.secondary, .btn-secondary { background: #3d6a8b; color: #e8f0f8; padding: 8px 16px; border: 1px solid #4d7a9b; border-radius: 4px; cursor: pointer; font-weight: 600; }
+    button.secondary:hover, .btn-secondary:hover { background: #4d7a9b; }
+    button.success { background: #2da44e; color: #fff; }
+    button.success:hover { background: #238636; }
+    button.danger { background: #d97e4a; color: #fff; }
+    button.danger:hover { background: #c96940; }
+
+    /* Modal backgrounds */
+    .modal-overlay { background: rgba(0, 0, 0, 0.7); }
+    .modal-panel { background: #2d5a7b; border: 1px solid #3d6a8b; }
+    
+    /* Form styling */
+    input[type="text"], input[type="email"], input[type="password"], input[type="number"], select, textarea {
+      background: #fff; border: 1px solid #c5d3e3; color: #0a2847; padding: 8px 12px; border-radius: 4px; font-family: inherit;
+    }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: #1e7bc9; box-shadow: 0 0 0 3px rgba(30, 123, 201, 0.1); }
+    
+    /* Gradient accent lines */
+    .accent-line { border-top: 3px solid var(--azure-gradient); }
+    .accent-left { border-left: 4px solid var(--azure-mid); padding-left: 12px; }
+
     /* Tooltip styling */
     .op[data-tip], a[data-tip], button[data-tip] { position:relative; }
     .op[data-tip]:hover::after, a[data-tip]:hover::after, button[data-tip]:hover::after {
@@ -40,6 +91,13 @@
       <a href="/agent/menu/personnel/" data-tip="Meniu acțiuni personal">Employees</a>
       <a href="#" data-tip="Gestionare departamente (în curs de migrare)">Departments</a>
       <a href="#" data-tip="Administrare carduri și date biometrice (în curs de migrare)">Cards & Biometrics</a>
+    </div>
+    <div class="nav-section">
+      <h2>Device</h2>
+      <a href="/agent/menu/device/" data-tip="Meniu operațiuni dispozitive - descoperire, backup, sincronizare">Devices</a>
+      <a href="/agent/crud/devices/" data-tip="Lista completă de dispozitive cu detalii tehnice">Device List</a>
+      <a href="/agent/devices/discover/" data-tip="Scanare rețea pentru dispozitive compatibile">Device Discovery</a>
+      <a href="/agent/monitor/" data-tip="Monitorizare timp real pentru toate dispozitivele" target="_blank">Real-time Monitor</a>
     </div>
     <div class="nav-section">
       <h2>Access</h2>

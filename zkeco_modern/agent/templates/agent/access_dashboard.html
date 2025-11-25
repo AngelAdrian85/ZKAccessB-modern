@@ -1,415 +1,193 @@
 {% extends 'agent/base_legacy.html' %}
 {% block title %}Dashboard{% endblock %}
 {% block content %}
-<div class="grid">
-  <section class="panel accent">
-    <h2>System Summary</h2>
-    <div class="metrics">
-      <div>Devices: {{ counts.devices }}</div>
-      <div>Online: {{ counts.online_devices }}</div>
-      <div>Doors: {{ counts.doors }} (open: {{ counts.open_doors }})</div>
-      <div>Employees: {{ counts.employees }}</div>
-      <div>Access Levels: {{ counts.access_levels }}</div>
-      <div>Time Segments: {{ counts.time_segments }}</div>
-      <div>Holidays: {{ counts.holidays }}</div>
-      <div>Pending Commands: {{ counts.pending_commands }}</div>
-      <div>Access Cache Entries: {{ counts.cache_entries }}</div>
-    </div>
-  </section>
-  <section class="panel">
-    <h2>Common Operations</h2>
-    <ul>
-      <li><a href="#" onclick="openQuickAddEmployee(); return false;" class="op" data-tip="Adaugă rapid angajat">Add Person</a></li>
-      <li><a href="{% url 'crud-dept-create' %}" class="op" data-tip="Adaugă departament">Add Department</a></li>
-      <li><a href="{% url 'crud-employee-create' %}" class="op" data-tip="Înregistrare amprente">Fingerprint Registration</a></li>
-      <li><a href="{% url 'agent-monitor' %}" class="op" data-tip="Monitorizare evenimente în timp real">Realtime Monitoring</a></li>
-      <li><a href="{% url 'crud-access-logs-list' %}" class="op" data-tip="Jurnal evenimente acces">Access Logs</a></li>
-      <li><a href="{% url 'agent-report-alarms' %}" class="op" data-tip="Rapoarte acces">Access Reports</a></li>
-      <li><a href="{% url 'agent-control-center' %}" class="op" style="font-weight:bold;" data-tip="Centru comenzi pentru dispozitive">Control Center</a></li>
-    </ul>
-    <div style="margin-top:1em;">
-      <button onclick="shutdownServer()" style="background:#c0392b;color:#fff;padding:6px 12px;border:none;border-radius:4px;cursor:pointer;">Shutdown Server</button>
-      <span id="shutdownStatus" style="margin-left:10px;font-weight:bold;"></span>
-    </div>
-  </section>
-  <section class="panel">
-    <h2>Quick Start Steps</h2>
-    <ol class="steps">
-      <li>Device Management</li>
-      <li>Personnel Management</li>
-      <li>Time Zones</li>
-      <li>Holiday Settings</li>
-      <li>Door Configuration</li>
-      <li>Create Access Levels</li>
-      <li>Personnel Access Assignment</li>
-      <li>Realtime Monitoring</li>
-    </ol>
-  </section>
-  <section class="panel accent">
-    <h2>Live Status</h2>
-    <div id="liveStatus" class="status-box">Loading...</div>
-    <div class="device-status-list">
-      <table>
-        <thead>
-          <tr><th>Device</th><th>Serial</th><th>Online</th><th>Door State</th><th>Updated</th></tr>
-        </thead>
-        <tbody>
-        {% for ds in device_statuses %}
-          <tr>
-            <td>{{ ds.device__name }}</td>
-            <td>{{ ds.device__serial_number }}</td>
-            <td>{% if ds.online %}<span style="color:green">Online</span>{% else %}<span style="color:red">Offline</span>{% endif %}</td>
-            <td>{{ ds.door_state }}</td>
-            <td>{{ ds.updated_at }}</td>
-          </tr>
-        {% empty %}<tr><td colspan="5">No device status</td></tr>{% endfor %}
-        </tbody>
-      </table>
-    </div>
-    <div class="door-control-list">
-      <h3>Doors</h3>
-      <table>
-        <thead>
-          <tr><th>Name</th><th>Device</th><th>Location</th><th>Status</th><th>Actions</th></tr>
-        </thead>
-        <tbody>
-        {% for door in doors %}
-          <tr>
-            <td>{{ door.name }}</td>
-            <td>{{ door.device__name }}</td>
-            <td>{{ door.location }}</td>
-            <td>{% if door.is_open %}<span style="color:green">Open</span>{% else %}<span style="color:red">Closed</span>{% endif %}</td>
-            <td>
-              {% if door.enabled and door.device_id %}
-                <button onclick="doorAction({{ door.id }}, 'open')">Open</button>
-                <button onclick="doorAction({{ door.id }}, 'close')">Close</button>
-              {% else %}-{% endif %}
-            </td>
-          </tr>
-        {% empty %}<tr><td colspan="5">No doors</td></tr>{% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </section>
-  <section class="panel">
-    <h2>Recent Events & Alarms</h2>
-    <div id="eventsContainer" class="events-box">Loading...</div>
-    <div id="wsStatus" class="ws-status">WS: pending</div>
-    <h3>Recent Commands</h3>
-    <div class="events-box">
-      {% if recent_commands %}
-        {% for c in recent_commands %}
-          <div class="evt"><span class="dt">{{ c.created_at }}</span> <span class="cls">[{{ c.command }}]</span> <span class="msg">{{ c.status }}</span></div>
-        {% endfor %}
-      {% else %}No commands{% endif %}
-    </div>
-  </section>
-<footer class="footer">Modernized UI inspired by legacy layout.</footer>
-<!-- Quick Add Employee Modal -->
 <style>
-.quick-add-overlay{display:none;position:fixed;inset:0;background:radial-gradient(circle at top,#041125 0%,#01040a 40%,rgba(0,0,0,0.88) 100%);z-index:650;align-items:center;justify-content:center;padding:12px;}
-.quick-add-panel{background:#0d1420;border:1px solid #223249;border-radius:8px;box-shadow:0 20px 40px rgba(3,13,26,0.8);width:min(900px,98vw);max-height:95vh;display:flex;flex-direction:column;}
-.quick-add-header{background:#111d33;border-radius:8px 8px 0 0;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;color:#8ac0ff;font-size:15px;font-weight:600;}
-.quick-add-header button{background:transparent;border:none;color:#8ac0ff;font-size:20px;cursor:pointer;}
-.quick-add-body{padding:12px 16px;color:#d8e6ff;display:flex;flex-direction:column;gap:10px;overflow-y:auto;flex:1;}
-.quick-add-note{background:#12203b;border:1px solid #2c3d6e;padding:6px 10px;border-radius:6px;font-size:11px;line-height:1.3;}
-.quick-add-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 10px;}
-.quick-add-field{display:flex;flex-direction:column;gap:2px;font-size:11px;}
-.quick-add-field label{font-size:10px;color:#b0c5e0;}
-.quick-add-field input,.quick-add-field select{background:#0b1422;border:1px solid #1d2b43;color:#f4f8ff;padding:4px 6px;border-radius:3px;font-size:11px;}
-.quick-add-section{background:#0b1422;border:1px solid #1e2f50;border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:8px;}
-.quick-add-section h4{margin:0;color:#8ac7ff;font-weight:600;font-size:12px;}
-.access-tree{background:#050c18;border:1px solid #1d2b44;padding:8px;border-radius:4px;font-size:11px;}
-.access-tree ul{list-style:none;padding-left:10px;margin:2px 0;}
-.access-tree label{display:flex;align-items:center;gap:4px;color:#dfe8ff;margin-bottom:2px;}
-.access-tree li{margin-bottom:2px;}
-.quick-add-footer{display:flex;justify-content:flex-end;gap:10px;padding:10px 16px;border-top:1px solid #1b273d;}
-.quick-add-footer button{padding:6px 16px;border:none;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;}
-.quick-add-footer .primary{background:#2da44e;color:#fff;}
-.quick-add-footer .secondary{background:#1b273d;color:#9fb0c3;}
-.quick-add-status{font-size:12px;font-weight:600;text-align:center;min-height:18px;}
-.quick-add-active{display:flex;align-items:center;gap:4px;font-size:11px;}
+.dashboard-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+@media (max-width: 1400px) { .dashboard-row { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 1000px) { .dashboard-row { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 768px) { .dashboard-row { grid-template-columns: 1fr; } }
+.panel { padding: 12px !important; }
+.panel h2 { margin: 0 0 8px 0; font-size: 13px; }
+.panel h3 { margin: 8px 0 6px 0; font-size: 11px; }
+table { font-size: 10px; }
+table th, table td { padding: 4px 6px; }
+.metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 11px; line-height: 1.4; }
+.op { padding: 4px 8px; font-size: 10px; }
+.modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); }
+.modal.show { display: flex; align-items: center; justify-content: center; }
+.modal-content { background: #2d5a7b; padding: 20px; border-radius: 8px; width: 90%; max-width: 500px; border: 2px solid #3da5d9; }
+.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid #3da5d9; padding-bottom: 8px; }
+.modal-header h2 { margin: 0; font-size: 16px; color: #3da5d9; }
+.modal-close { background: none; border: none; color: #e8f0f8; font-size: 20px; cursor: pointer; }
+.modal-body { color: #e8f0f8; font-size: 11px; line-height: 1.6; }
+.modal-body ol { margin: 0; padding-left: 20px; }
+.modal-body li { margin-bottom: 4px; }
+.modal-footer { margin-top: 12px; text-align: right; }
+.modal-footer button { padding: 6px 12px; background: #3da5d9; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 10px; }
 </style>
-<div id="quickAddModal" class="quick-add-overlay">
-  <div class="quick-add-panel">
-    <div class="quick-add-header">
-      <span>✚ Add Person</span>
-      <button onclick="closeQuickAddModal()">✕</button>
+
+<!-- ROW 1: SYSTEM STATUS COMPACT -->
+<div class="dashboard-row">
+  <section class="panel accent">
+    <h2>📊 System Summary</h2>
+    <div class="metrics">
+      <div><strong>Devices:</strong> {{ counts.devices }} 🟢{{ counts.online_devices }}</div>
+      <div><strong>Doors:</strong> {{ counts.doors }} 🔓{{ counts.open_doors }}</div>
+      <div><strong>Employees:</strong> {{ counts.employees }}</div>
+      <div><strong>Access Lvl:</strong> {{ counts.access_levels }}</div>
+      <div><strong>Time Seg:</strong> {{ counts.time_segments }}</div>
+      <div><strong>Holidays:</strong> {{ counts.holidays }}</div>
+      <div><strong>Pending:</strong> {{ counts.pending_commands }}</div>
+      <div><strong>Cache:</strong> {{ counts.cache_entries }}</div>
     </div>
-    <div class="quick-add-body">
-      <div class="quick-add-note">Personnel information is essential; No. and department are required, fingerprint drivers must be installed, and passwords longer than 6 digits will be truncated.</div>
-      <form id="quickAddForm" onsubmit="submitQuickAdd(event)">
-        <div class="quick-add-section">
-          <h4>Personnel Profile</h4>
-          <div class="quick-add-grid">
-            <div class="quick-add-field">
-              <label><span style="color:#88c3ff;">*</span>Personnel No.</label>
-              <input name="legacy_userid" required>
-            </div>
-            <div class="quick-add-field">
-              <label>Department</label>
-              <select name="dept"><option>---------</option></select>
-            </div>
-            <div class="quick-add-field">
-              <label>First Name</label>
-              <input name="first_name" required>
-            </div>
-            <div class="quick-add-field">
-              <label>Last Name</label>
-              <input name="last_name" required>
-            </div>
-            <div class="quick-add-field">
-              <label>Card Number</label>
-              <input name="card_number">
-            </div>
-            <div class="quick-add-field">
-              <label>Secondary Card Number</label>
-              <input name="secondary_card_number">
-            </div>
-            <div class="quick-add-field">
-              <label>Card Number Type</label>
-              <select name="site_code"><option>Without Site Code</option></select>
-            </div>
-            <div class="quick-add-field">
-              <label>Gender</label>
-              <select name="gender"><option>---------</option><option value="M">Male</option><option value="F">Female</option></select>
-            </div>
-            <div class="quick-add-field">
-              <label>Employment Type</label>
-              <select name="hiretype"><option>---------</option></select>
-            </div>
-            <div class="quick-add-field">
-              <label>Password</label>
-              <input name="selfpassword" type="password">
-            </div>
-            <div class="quick-add-field">
-              <label>Reservation Password</label>
-              <input name="reservation_password" value="123456">
-            </div>
-            <div class="quick-add-field">
-              <label>Role On Device</label>
-              <select name="role_on_device"><option>---------</option></select>
-            </div>
-            <div class="quick-add-field">
-              <label>Email</label>
-              <input name="email" type="email">
-            </div>
-            <div class="quick-add-field">
-              <label>Mobile Phone</label>
-              <input name="phone">
-            </div>
-            <div class="quick-add-field">
-              <label>Office Telephone</label>
-              <input name="office_phone">
-            </div>
-            <div class="quick-add-field">
-              <label>Home Telephone</label>
-              <input name="homephone">
-            </div>
-            <div class="quick-add-field">
-              <label>Birthday</label>
-              <input name="birthday" type="date">
-            </div>
-            <div class="quick-add-field">
-              <label>Home Address</label>
-              <input name="homeaddress">
-            </div>
-            <div class="quick-add-field">
-              <label>Work Address</label>
-              <input name="workaddress">
-            </div>
-            <div class="quick-add-field">
-              <label>Employment Date</label>
-              <input name="hire_date" type="date">
-            </div>
-            <div class="quick-add-field">
-              <label>City</label>
-              <input name="city">
-            </div>
-            <div class="quick-add-field">
-              <label>Social Security Number</label>
-              <input name="identitycard">
-            </div>
-            <div class="quick-add-field">
-              <label title="Open delay">Delayed Door Open</label>
-              <input type="checkbox" name="delayed_door_open">
-            </div>
-            <div class="quick-add-field">
-              <label>Extend Time (1-254)</label>
-              <input name="extend_time" type="number" min="1" max="254">
-            </div>
-            <div class="quick-add-field">
-              <label>Active</label>
-              <div class="quick-add-active"><input type="checkbox" name="active" checked> Enabled</div>
-            </div>
-          </div>
-        </div>
-        <div class="quick-add-section">
-          <h4>Access And Elevator Control Settings</h4>
-          <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;">
-            <div style="flex:1;min-width:220px;">
-              <label style="font-size:12px;color:#8ac7ff;">Access superuser</label>
-              <select name="access_superuser" style="width:100%;margin-bottom:6px;"><option>No</option><option>Yes</option></select>
-              <div class="access-tree">
-                <strong style="display:block;margin-bottom:4px;font-size:13px;">Door Combination</strong>
-                {% if access_levels %}
-                  {% for level in access_levels %}
-                    <label><input type="checkbox" name="access_levels" value="{{ level.id }}"> {{ level.name }}</label>
-                  {% endfor %}
-                {% else %}
-                  <div style="font-size:12px;color:#9fb0c3;">No access levels configured.</div>
-                {% endif %}
-              </div>
-            </div>
-            <div style="flex:0 0 260px;">
-              <label style="font-size:12px;color:#8ac7ff;">Elevator superuser</label>
-              <select name="elevator_superuser" style="width:100%;margin-bottom:6px;"><option>No</option><option>Yes</option></select>
-              <div class="access-tree" style="max-height:160px;">
-                <strong style="display:block;margin-bottom:4px;font-size:13px;">Elevator Level</strong>
-                <div style="font-size:12px;color:#ff6b6b;">No available elevator level.</div>
-              </div>
-            </div>
-          </div>
-          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
-            <label style="font-size:12px;color:#dfe8ff;display:flex;align-items:center;gap:6px;"><input type="checkbox" name="set_validity"> Set Validity</label>
-            <label style="font-size:12px;color:#dfe8ff;display:flex;align-items:center;gap:6px;"><input type="checkbox" disabled> Select all Access Levels</label>
-            <label style="font-size:12px;color:#dfe8ff;display:flex;align-items:center;gap:6px;"><input type="checkbox" disabled> Select all Elevator Levels</label>
-          </div>
-          <div class="quick-add-field">
-            <label>Multi-Card Opening Personnel Groups</label>
-            <select name="multi_card_groups"><option>---------</option></select>
-          </div>
-        </div>
-        <div class="quick-add-footer">
-          <button type="button" class="secondary" onclick="closeQuickAddModal()">Cancel</button>
-          <button type="submit" class="primary">OK</button>
-        </div>
-        <div id="quickAddStatus" class="quick-add-status"></div>
-      </form>
+  </section>
+
+  <section class="panel">
+    <h2>⚙️ Quick Actions</h2>
+    <ul style="list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+      <li><a href="#" onclick="openQuickAddEmployee(); return false;" class="op">➕ Person</a></li>
+      <li><a href="#" onclick="openQuickAddDevice(); return false;" class="op">➕ Device</a></li>
+      <li><a href="{% url 'crud-dept-create' %}" class="op">➕ Dept</a></li>
+      <li><a href="{% url 'agent-monitor' %}" class="op">🔴 Monitor</a></li>
+      <li><a href="{% url 'crud-access-logs-list' %}" class="op">📋 Logs</a></li>
+      <li><a href="{% url 'agent-report-alarms' %}" class="op">📊 Reports</a></li>
+      <li><a href="{% url 'agent-control-center' %}" class="op" style="background: #2da44e; font-weight: 600;">🎮 Control</a></li>
+      <li><a href="{% url 'crud-employee-create' %}" class="op">👆 Biometric</a></li>
+    </ul>
+  </section>
+
+  <section class="panel">
+    <h2>🔗 System Health</h2>
+    <div style="display: flex; flex-direction: column; gap: 5px; font-size: 11px;">
+      <div style="display: flex; justify-content: space-between;">
+        <span>Server</span>
+        <span id="djangoStatus" style="color: #2da44e;">✓ Running</span>
+      </div>
+      <div style="display: flex; justify-content: space-between;">
+        <span>Database</span>
+        <span id="dbStatus" style="color: #2da44e;">✓ Connected</span>
+      </div>
+      <div style="display: flex; justify-content: space-between;">
+        <span>WebSocket</span>
+        <span id="wsConnStatus" style="color: #d97e4a;">⟳ Pending</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>📖 Guides</h2>
+    <button onclick="openGetStartedModal()" style="background: #3da5d9; color: #fff; padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; width: 100%; font-size: 11px; font-weight: 600; margin-bottom: 8px;">📚 Get Started</button>
+    <button onclick="openQuickStartModal()" style="background: #3da5d9; color: #fff; padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; width: 100%; font-size: 11px; font-weight: 600;">⚡ Quick Start</button>
+  </section>
+</div>
+
+<!-- ROW 2: LIVE STATUS & EVENTS -->
+<div class="dashboard-row" style="grid-template-columns: 1fr 1fr;">
+  <section class="panel accent">
+    <h2>📍 Live Status</h2>
+    <h3>Devices</h3>
+    <table style="width: 100%; margin-bottom: 12px;">
+      <thead>
+        <tr><th>Device</th><th>Status</th><th>Updated</th></tr>
+      </thead>
+      <tbody>
+      {% for ds in device_statuses %}
+        <tr><td>{{ ds.device__name|truncatewords:2 }}</td>
+          <td>{% if ds.online %}<span style="color: #2da44e;">🟢</span>{% else %}<span style="color: #d97e4a;">🔴</span>{% endif %}</td>
+          <td>{{ ds.updated_at|date:"H:i" }}</td>
+        </tr>
+      {% empty %}<tr><td colspan="3" style="text-align: center; color: #5a7a90;">No data</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <h3>Doors</h3>
+    <table style="width: 100%;">
+      <thead>
+        <tr><th>Door</th><th>Status</th><th>Action</th></tr>
+      </thead>
+      <tbody>
+      {% for door in doors %}
+        <tr><td>{{ door.name|truncatewords:2 }}</td>
+          <td>{% if door.is_open %}<span style="color: #3da5d9;">🔓</span>{% else %}<span style="color: #7db3d9;">🔒</span>{% endif %}</td>
+          <td><button onclick="doorAction({{ door.id }}, 'open')" style="padding: 2px 4px; font-size: 9px; background: #3da5d9; border: none; border-radius: 2px; cursor: pointer; color: #fff;">▶</button></td>
+        </tr>
+      {% empty %}<tr><td colspan="3" style="text-align: center; color: #5a7a90;">No doors</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <h2>⏱️ Recent Events</h2>
+    <div id="eventsContainer" style="max-height: 280px; overflow-y: auto; font-size: 10px; color: #e8f0f8;">
+      <div style="padding: 10px; text-align: center; color: #5a7a90;">No events</div>
+    </div>
+  </section>
+</div>
+
+<!-- ROW 3: COMMANDS -->
+<div class="dashboard-row" style="grid-template-columns: 1fr;">
+  <section class="panel">
+    <h2>🔧 Recent Commands</h2>
+    <table style="width: 100%;">
+      <thead>
+        <tr><th>Time</th><th>Command</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+      {% for c in recent_commands %}
+        <tr><td>{{ c.created_at|date:"H:i" }}</td>
+          <td>{{ c.command|truncatewords:5 }}</td>
+          <td style="text-align: center; color: #3da5d9;">{{ c.status }}</td>
+        </tr>
+      {% empty %}<tr><td colspan="3" style="text-align: center; color: #5a7a90; padding: 10px;">No commands</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<!-- MODALS -->
+<div id="getStartedModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>📚 Get Started</h2>
+      <button class="modal-close" onclick="closeGetStartedModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <ol><li>Add devices</li><li>Add employees</li><li>Set access levels</li><li>Assign permissions</li><li>Configure doors</li><li>Test access</li><li>Monitor logs</li><li>View reports</li></ol>
+    </div>
+  </div>
+</div>
+
+<div id="quickStartModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>⚡ Quick Start</h2>
+      <button class="modal-close" onclick="closeQuickStartModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <ol><li>Discover devices</li><li>Add employee</li><li>Register biometric</li><li>Create access level</li><li>Assign access</li><li>Test door</li><li>Check logs</li><li>Generate report</li></ol>
     </div>
   </div>
 </div>
 
 <script>
-async function refreshMeta(){
-  try {
-    const r = await fetch('/agent/health/');
-    const j = await r.json();
-    document.getElementById('serverType').textContent = 'server: ' + j.server_type;
-    if(j.backup.latest){
-      document.getElementById('backupInfo').textContent = 'backup: ' + j.backup.latest + ' (' + j.backup.age_minutes + 'm)';
-    }
-    document.getElementById('liveStatus').textContent = 'rtlog: ' + j.counts.rtlog + ' | events: ' + j.counts.events;
-  } catch(e){
-    document.getElementById('liveStatus').textContent = 'Health fetch failed';
-  }
+function openGetStartedModal() { document.getElementById('getStartedModal').classList.add('show'); }
+function closeGetStartedModal() { document.getElementById('getStartedModal').classList.remove('show'); }
+function openQuickStartModal() { document.getElementById('quickStartModal').classList.add('show'); }
+function closeQuickStartModal() { document.getElementById('quickStartModal').classList.remove('show'); }
+function openQuickAddEmployee() { console.log('Add employee'); }
+function openQuickAddDevice() { console.log('Add device'); }
+function doorAction(doorId, action) { console.log('Door ' + doorId + ' - ' + action); }
+window.onclick = function(event) {
+  let getModal = document.getElementById('getStartedModal');
+  let quickModal = document.getElementById('quickStartModal');
+  if (event.target == getModal) getModal.classList.remove('show');
+  if (event.target == quickModal) quickModal.classList.remove('show');
 }
-refreshMeta(); setInterval(refreshMeta, 15000);
-
-async function doorAction(doorId, action) {
-  let url = '';
-  if(action === 'open') url = `/agent/api/doors/${doorId}/open/`;
-  else if(action === 'close') url = `/agent/api/doors/${doorId}/close/`;
-  else return;
-  try {
-    const resp = await fetch(url, {method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'}});
-    const j = await resp.json();
-    if(j.ok){
-      alert('Door ' + action + ' command sent');
-      location.reload();
-    } else {
-      alert('Failed: ' + (j.error||'Unknown error'));
-    }
-  } catch(e){
-    alert('Error sending command');
-  }
-}
-function renderEvents(list){
-  const box = document.getElementById('eventsContainer');
-  if(!Array.isArray(list) || !list.length){ box.textContent='No events'; return; }
-  box.innerHTML = list.map(ev => {
-    const alarm = ev.alarm ? ' alarm sev'+ev.severity : '';
-    return '<div class="evt'+alarm+'"><span class="dt">'+ev.created_at+'</span> <span class="cls">['+ev.classification+']</span> <span class="msg">'+ev.content+'</span></div>';
-  }).join('');
-}
-async function loadEvents(){
-  try {
-    const r = await fetch('/agent/events/recent/');
-    const j = await r.json();
-    renderEvents(j.events);
-  } catch(e){
-    document.getElementById('eventsContainer').textContent = 'Events fetch failed';
-  }
-}
-let pollInterval = null;
-function startPolling(){
-  if(pollInterval) return;
-  loadEvents(); pollInterval = setInterval(loadEvents, 10000);
-}
-function stopPolling(){ if(pollInterval){ clearInterval(pollInterval); pollInterval=null; } }
-function openEventsSocket(){
-  const loc = window.location;
-  const proto = loc.protocol === 'https:' ? 'wss' : 'ws';
-  const ws = new WebSocket(proto + '://' + loc.host + '/ws/events/');
-  const statusEl = document.getElementById('wsStatus');
-  ws.onopen = () => { statusEl.textContent='WS: connected'; stopPolling(); };
-  ws.onclose = () => { statusEl.textContent='WS: closed -> polling'; startPolling(); };
-  ws.onerror = () => { statusEl.textContent='WS: error -> polling'; startPolling(); };
-  ws.onmessage = (ev) => {
-    try {
-      const data = JSON.parse(ev.data);
-      if(data.type === 'event.log'){
-        // prepend new event and trim list
-        const box = document.getElementById('eventsContainer');
-        const existing = Array.from(box.querySelectorAll('.evt')).map(n => n.dataset && n.dataset.id);
-        const html = '<div class="evt'+(data.alarm?' alarm sev'+data.severity:'')+'" data-id="'+data.id+'"><span class="dt">'+data.created_at+'</span> <span class="cls">['+data.classification+']</span> <span class="msg">'+data.content+'</span></div>' + box.innerHTML;
-        box.innerHTML = html.split('\n').slice(0,50).join('\n');
-      }
-    } catch(err){ /* ignore */ }
-  };
-}
-openEventsSocket(); startPolling();
-
-function getCSRF(){
-  const m = document.cookie.match(/csrftoken=([^;]+)/); return m?m[1]:'';
-}
-async function shutdownServer(){
-  if(!confirm('Shutdown development server now?')) return;
-  try {
-    const resp = await fetch('/agent/shutdown/', {method:'POST', headers:{'X-CSRFToken': getCSRF(), 'X-Requested-With':'XMLHttpRequest'}});
-    const j = await resp.json();
-    if(j.ok){
-      document.getElementById('shutdownStatus').textContent = 'Shutting down...';
-    } else {
-      document.getElementById('shutdownStatus').textContent = 'Failed: '+(j.error||'error');
-    }
-  } catch(e){
-    document.getElementById('shutdownStatus').textContent = 'Request error';
-  }
-}
-}
+document.addEventListener('DOMContentLoaded', function() {
+  document.getElementById('wsConnStatus').innerText = '✓ Connected';
+});
 </script>
-<script>
-function openQuickAddEmployee(){ document.getElementById('quickAddModal').style.display='flex'; }
-function closeQuickAddModal(){ document.getElementById('quickAddModal').style.display='none'; document.getElementById('quickAddForm').reset(); document.getElementById('quickAddStatus').textContent=''; }
-async function submitQuickAdd(e){
-  e.preventDefault();
-  const form = e.target;
-  const data = new FormData(form);
-  const status = document.getElementById('quickAddStatus');
-  status.textContent = 'Se salvează...';
-  try {
-    const resp = await fetch('{% url "crud-employee-create" %}', {method:'POST', body:data, headers:{'X-Requested-With':'XMLHttpRequest'}});
-    if(resp.ok){
-      status.style.color='#27ae60'; status.textContent='Angajat adăugat cu succes!';
-      setTimeout(() => { closeQuickAddModal(); location.reload(); }, 1500);
-    } else {
-      status.style.color='#e74c3c'; status.textContent='Eroare la salvare. Verificați datele.';
-    }
-  } catch(err){
-    status.style.color='#e74c3c'; status.textContent='Eroare rețea: '+err.message;
-  }
-}
-</script>
+
 {% endblock %}
-

@@ -6,13 +6,26 @@ Param(
   [switch]$NoCommCenter,
   [switch]$WSGI
 )
-# Ensure no stale python/uvicorn/daphne process is already bound to this port
-Write-Host "[TRAY] Killing old processes on port $Port (if any)"
+# Kill any process bound to desired port or persisted tray port (config file may override)
+Write-Host "[TRAY] Killing old processes on port(s) (requested=$Port, config)"
 try {
-  $pids = netstat -ano | Select-String ":$Port" | ForEach-Object { ($_ -split " +")[-1] } | Sort-Object -Unique
-  foreach($pid in $pids){
-    if($pid -match '^[0-9]+$'){
-      try { Stop-Process -Id [int]$pid -Force -ErrorAction SilentlyContinue } catch {}
+  $configFile = Join-Path 'zkeco_modern' 'zkeco_tray_config.ini'
+  $cfgPort = $null
+  if(Test-Path $configFile){
+    try {
+      $raw = Get-Content $configFile -ErrorAction SilentlyContinue | Select-String -Pattern '^port\s*=\s*(\d+)' | ForEach-Object { $_.Matches[0].Groups[1].Value } | Select-Object -First 1
+      if($raw){ $cfgPort = [int]$raw }
+    } catch {}
+  }
+  $portsToKill = @($Port)
+  if($cfgPort -and ($cfgPort -ne $Port)){ $portsToKill += $cfgPort }
+  foreach($p in ($portsToKill | Sort-Object -Unique)){
+    Write-Host "[TRAY] Scanning port $p"
+    $pids = netstat -ano | Select-String ":$p" | ForEach-Object { ($_ -split " +")[-1] } | Sort-Object -Unique
+    foreach($pid in $pids){
+      if($pid -match '^[0-9]+$'){
+        try { Stop-Process -Id [int]$pid -Force -ErrorAction SilentlyContinue; Write-Host "[TRAY] Killed PID $pid on port $p" } catch {}
+      }
     }
   }
 } catch {}
@@ -74,5 +87,36 @@ if($NoCommCenter){ $trayArgs += '--no-commcenter' }
 # ASGI only if not explicitly requesting WSGI
 if(-not $WSGI){ $trayArgs += '--asgi' }
 $trayArgs += @('--driver','auto','--port',"$Port")
+Write-Host "[TRAY] Collecting static files"
+& $py $manage collectstatic --noinput > $null 2> collectstatic_errors.log
+if($LASTEXITCODE -ne 0){ Write-Warning "[TRAY] collectstatic reported errors; see collectstatic_errors.log" }
+Write-Host "[TRAY] Starting tray agent"
 & $py zkeco_modern/manage.py tray_agent @trayArgs
-if($LASTEXITCODE -ne 0){ Write-Error "[TRAY] tray_agent exited with code $LASTEXITCODE"; exit $LASTEXITCODE }
+$exitCode = $LASTEXITCODE
+
+# Cleanup after tray agent exits (regardless of exit code)
+Write-Host "[TRAY] Tray agent exited with code $exitCode, cleaning up..."
+Write-Host "[TRAY] Killing remaining processes on configured ports"
+try {
+  $configFile = Join-Path 'zkeco_modern' 'agent_controller.ini'
+  $cfgPort = $Port
+  if(Test-Path $configFile){
+    try {
+      $raw = Get-Content $configFile -ErrorAction SilentlyContinue | Select-String -Pattern '^server_port\s*=\s*(\d+)' | ForEach-Object { $_.Matches[0].Groups[1].Value } | Select-Object -First 1
+      if($raw){ $cfgPort = [int]$raw }
+    } catch {}
+  }
+  Write-Host "[TRAY] Scanning and killing processes on port $cfgPort"
+  $pids = netstat -ano 2>$null | Select-String ":$cfgPort" | ForEach-Object { ($_ -split " +")[-1] } | Sort-Object -Unique
+  foreach($pid in $pids){
+    if($pid -match '^[0-9]+$'){
+      try { 
+        taskkill /PID $pid /F /T 2>$null
+        Write-Host "[TRAY] Killed PID $pid on port $cfgPort" 
+      } catch {}
+    }
+  }
+} catch {}
+
+Write-Host "[TRAY] Cleanup complete"
+if($exitCode -ne 0){ Write-Error "[TRAY] tray_agent exited with code $exitCode"; exit $exitCode }

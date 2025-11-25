@@ -1,22 +1,22 @@
 {% extends 'agent/base_legacy.html' %}
 {% block title %}Access Levels{% endblock %}
 {% block content %}
-<h2>Access Levels (CRUD)</h2>
-<p><a class='op' href='{% url "crud-access-level-create" %}'>Add Access Level</a></p>
-<table class='status-box' style='width:100%;border-collapse:collapse'>
-<tr><th>Name</th><th>Doors</th><th>Segments</th><th>Actions</th></tr>
+<h2 style="color: #3da5d9; padding-bottom: 10px;">🔐 Access Levels</h2>
+<p style="margin-top: 10px;"><a class='op' href='{% url "crud-access-level-create" %}' style="background: #3da5d9; color: #fff; padding: 6px 12px; border-radius: 4px; text-decoration: none;">+ Add Access Level</a></p>
+<table class='status-box' style='width:100%;border-collapse:collapse;background:#2d5a7b;border:1px solid #3d6a8b;'>
+<tr style="background: linear-gradient(90deg, #1a3a52 0%, #3da5d9 100%); color: #fff; font-weight: 600;"><th style="padding:10px;border:1px solid #3d6a8b;">Name</th><th style="padding:10px;border:1px solid #3d6a8b;">Doors</th><th style="padding:10px;border:1px solid #3d6a8b;">Segments</th><th style="padding:10px;border:1px solid #3d6a8b;">Actions</th></tr>
 {% for l in page.object_list %}
-<tr>
-  <td>{{ l.name }}</td>
-  <td>{% for d in l.doors.all %}{{ d.name }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</td>
-  <td>{% for s in l.time_segments.all %}{{ s.name }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</td>
-  <td><a class='op' href='{% url "crud-access-level-edit" l.id %}'>Edit</a>
+<tr style="border-bottom: 1px solid #e0e6f2; background: #fff;">
+  <td style="padding: 8px; border-right: 1px solid #e0e6f2;">{{ l.name }}</td>
+  <td style="padding: 8px; border-right: 1px solid #e0e6f2;">{% for d in l.doors.all %}{{ d.name }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</td>
+  <td style="padding: 8px; border-right: 1px solid #e0e6f2;">{% for s in l.time_segments.all %}{{ s.name }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</td>
+  <td style="padding: 8px;"><a class='op' href='{% url "crud-access-level-edit" l.id %}' style="background: #2da44e; color: #fff; padding: 4px 8px; border-radius: 3px; text-decoration: none; font-size: 12px;">Edit</a>
     <form method='post' action='{% url "crud-access-level-delete" l.id %}' style='display:inline' onsubmit='return confirm("Delete level?")'>
-      {% csrf_token %}<button class='op' style='background:#632626'>Del</button>
+      {% csrf_token %}<button class='op' style='background:#da3633; color: #fff; padding: 4px 8px; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;'>Del</button>
     </form>
   </td>
 </tr>
-{% empty %}<tr><td colspan='4'>No levels</td></tr>{% endfor %}
+{% empty %}<tr><td colspan='4' style="padding: 10px; text-align: center; color: #999;">No levels</td></tr>{% endfor %}
 </table>
 <div>Page {{ page.number }} of {{ page.paginator.num_pages }}</div>
 {% if page.has_previous %}<a href='?page={{ page.previous_page_number }}'>Prev</a>{% endif %}

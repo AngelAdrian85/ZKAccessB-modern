@@ -33,7 +33,13 @@ except Exception:
     pass
 
 if settings.DEBUG:
-    urlpatterns.append(path("__debug__/", include("debug_toolbar.urls")))
+    # Load debug toolbar only when env DEBUG_TOOLBAR=1 (keeps migrations/tests clean)
+    import os as _os
+    if _os.environ.get("DEBUG_TOOLBAR") == "1":
+        try:
+            urlpatterns.append(path("__debug__/", include("debug_toolbar.urls")))
+        except Exception:
+            pass
     # Provide Django auth views under `/registration/` during development so
     # legacy templates that expect `/registration/login/` resolve for testing.
     urlpatterns.append(path('registration/', include('django.contrib.auth.urls')))
@@ -45,7 +51,6 @@ if settings.DEBUG:
         # Debug endpoint to accept OAuth redirect callbacks for local testing
         urlpatterns.append(path('oauth-debug/', dev_views.oauth_debug))
     except Exception:
-        # don't block development if dev_views can't be imported
         pass
 
 # Serve MEDIA files in development when MEDIA_URL/MEDIA_ROOT are configured.

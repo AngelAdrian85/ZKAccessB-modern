@@ -659,16 +659,65 @@ def open_web_ui(icon, item):
         pass
 
 def exit_controller(icon, item):
+    _log('===== EXIT CONTROLLER: Starting cleanup sequence =====')
     _stop_threads.set()
-    # attempt to terminate managed Django server process as well
+    
+    # 1. Stop all managed services first
+    _log('Stopping Windows services...')
+    for svc in SVC_NAMES:
+        try:
+            subprocess.Popen(['cmd', '/c', f'net stop {svc}'], 
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            time.sleep(0.5)
+            _log(f'Stopped service: {svc}')
+        except Exception as e:
+            _log(f'Could not stop service {svc}: {e}')
+    
+    # 2. Terminate managed Django server process
     global SERVER_PROC
+    _log('Terminating Django server process...')
     try:
         if SERVER_PROC and SERVER_PROC.poll() is None:
+            _log(f'Terminating SERVER_PROC (PID: {SERVER_PROC.pid})')
             SERVER_PROC.terminate()
             time.sleep(1)
-    except Exception:
-        pass
-    icon.stop()
+            if SERVER_PROC.poll() is None:
+                _log(f'Force killing SERVER_PROC (PID: {SERVER_PROC.pid})')
+                SERVER_PROC.kill()
+            _log('Django server process terminated')
+    except Exception as e:
+        _log(f'Error terminating server: {e}')
+    
+    # 3. Kill any lingering processes on configured server port
+    _log('Cleaning up port bindings...')
+    try:
+        server_port = CFG.get('controller', 'server_port', fallback='8000')
+        _log(f'Scanning for processes on port {server_port}')
+        pids = subprocess.run(['netstat', '-ano'], capture_output=True, text=True)
+        for line in pids.stdout.split('\n'):
+            if f':{server_port}' in line:
+                parts = line.split()
+                if parts:
+                    pid = parts[-1]
+                    if pid.isdigit():
+                        try:
+                            subprocess.run(['taskkill', '/PID', pid, '/F'], 
+                                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                            _log(f'Killed PID {pid} on port {server_port}')
+                        except Exception as e:
+                            _log(f'Failed to kill PID {pid}: {e}')
+    except Exception as e:
+        _log(f'Error cleaning up ports: {e}')
+    
+    _log('===== Cleanup complete. Stopping tray icon. =====')
+    time.sleep(0.5)
+    try:
+        icon.stop()
+    except Exception as e:
+        _log(f'Error stopping icon: {e}')
+    
+    # Exit gracefully
+    sys.exit(0)
 
 
 def _build_icon(color_bg, text='SC'):

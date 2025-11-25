@@ -1,0 +1,29 @@
+{% extends "agent/base_legacy.html" %}
+{% block title %}Login{% endblock %}
+{% block content %}
+<div style="max-width:380px;margin:40px auto 60px auto;background:#fff;border:1px solid #d0d7de;padding:28px 30px;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.08);">
+  <h2 style="margin-top:0;margin-bottom:18px;font-weight:600;font-size:20px;">Sign In</h2>
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% if form.errors %}
+      <ul class="errorlist" style="color:#cf222e;margin:0 0 14px 0;font-size:13px;list-style:none;padding:0;">
+      {% for field, errs in form.errors.items %}
+        {% for e in errs %}<li>{{ e }}</li>{% endfor %}
+      {% endfor %}
+      </ul>
+    {% endif %}
+    <label style="display:block;margin-bottom:12px;font-size:13px;color:#333;font-weight:600;">Username
+      {{ form.username }}
+    </label>
+    <label style="display:block;margin-bottom:16px;font-size:13px;color:#333;font-weight:600;">Password
+      {{ form.password }}
+    </label>
+    {% if next %}<input type="hidden" name="next" value="{{ next }}" />{% endif %}
+    <button type="submit" style="padding:10px 16px;background:#1e6bb8;color:#fff;border:1px solid #1e6bb8;border-radius:6px;cursor:pointer;width:100%;font-size:15px;font-weight:600;">Login</button>
+  </form>
+</div>
+<script>
+// Focus first field for faster login
+document.addEventListener('DOMContentLoaded',()=>{ const u=document.querySelector('input[name="username"]'); if(u){ u.focus(); } });
+</script>
+{% endblock %}

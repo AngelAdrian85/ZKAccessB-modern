@@ -1,5 +1,5 @@
 from django import forms
-from .models import Door, TimeSegment, Holiday, AccessLevel, Employee, EmployeeCard
+from .models import Door, TimeSegment, Holiday, AccessLevel, Employee, EmployeeCard, Device
 try:
     from legacy_models.models import (
         Employee as LegacyEmployee,
@@ -383,70 +383,57 @@ class AccessLogFilterForm(forms.Form):
 
 # ---- Device Extended Bridge Form ----
 
-class DeviceExtendedForm(forms.Form):
-    """Bridge modern Device model with legacy Device details.
-
-    Does not inherit ModelForm directly to allow combining fields from both
-    schemas without forcing required legacy presence. Save method performs
-    sync operations best-effort.
-    """
-    name = forms.CharField(label='Nume dispozitiv', max_length=128, widget=forms.TextInput(attrs={'class':'txt','title':'Nume logic'}))
-    device_type = forms.CharField(label='Tip', max_length=64, required=False, widget=forms.TextInput(attrs={'class':'txt','title':'Tip dispozitiv'}))
-    ip_address = forms.GenericIPAddressField(label='IP', required=False, widget=forms.TextInput(attrs={'class':'txt','title':'Adresă IP'}))
-    area_name = forms.CharField(label='Zonă', max_length=64, required=False, widget=forms.TextInput(attrs={'class':'txt','title':'Nume zonă logică'}))
-    enabled = forms.BooleanField(label='Activ', required=False, initial=True)
-    serial_number = forms.CharField(label='Număr serie', max_length=128, required=False, widget=forms.TextInput(attrs={'class':'txt','title':'Serial (sn)'}))
-    firmware_version = forms.CharField(label='Firmware', max_length=64, required=False, widget=forms.TextInput(attrs={'class':'txt','title':'Versiune firmware'}))
-    # Legacy enriched details
-    comm_type = forms.CharField(label='Comm Type', max_length=32, required=False, widget=forms.TextInput(attrs={'class':'txt','title':'Tip comunicare'}))
-    com_port = forms.CharField(label='COM Port', max_length=64, required=False, widget=forms.TextInput(attrs={'class':'txt','title':'Port serial / COM'}))
-    com_address = forms.CharField(label='COM Addr', max_length=128, required=False, widget=forms.TextInput(attrs={'class':'txt','title':'Adresă comunicare'}))
-    acpanel_type = forms.CharField(label='AC Panel Type', max_length=64, required=False, widget=forms.TextInput(attrs={'class':'txt','title':'Tip panou acces'}))
-    fp_count = forms.IntegerField(label='FP Count', required=False)
-    transaction_count = forms.IntegerField(label='Tranzacții', required=False)
-
+class DeviceExtendedForm(forms.ModelForm):
+    """Complete device registration form matching legacy app."""
+    
+    class Meta:
+        model = Device
+        fields = [
+            'name', 'serial_number', 'device_type', 'comm_mode', 'ip_address', 'port',
+            'comm_password', 'rs485_port', 'rs485_baudrate', 'rs485_address',
+            'area_name', 'time_zone', 'firmware_version', 'hardware_version',
+            'enabled', 'auto_sync_time', 'clear_on_add'
+        ]
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., FINANCIAR, Medical'}),
+            'serial_number': forms.TextInput(attrs={'class': 'form-control', 'readonly': True}),
+            'device_type': forms.Select(attrs={'class': 'form-control'}),
+            'comm_mode': forms.RadioSelect(choices=Device.COMM_MODE_CHOICES),
+            'ip_address': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '192.168.1.100'}),
+            'port': forms.NumberInput(attrs={'class': 'form-control', 'value': '4370'}),
+            'comm_password': forms.PasswordInput(attrs={'class': 'form-control', 'placeholder': '(optional)'}),
+            'rs485_port': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'COM1'}),
+            'rs485_baudrate': forms.NumberInput(attrs={'class': 'form-control', 'value': '9600'}),
+            'rs485_address': forms.NumberInput(attrs={'class': 'form-control'}),
+            'area_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Physical location'}),
+            'time_zone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'UTC+2'}),
+            'firmware_version': forms.TextInput(attrs={'class': 'form-control', 'readonly': True}),
+            'hardware_version': forms.TextInput(attrs={'class': 'form-control', 'readonly': True}),
+            'enabled': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'auto_sync_time': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'clear_on_add': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }
+    
     def __init__(self, *args, **kwargs):
-        self.instance = kwargs.pop('instance', None)  # modern device instance
         super().__init__(*args, **kwargs)
-        # preload from modern instance
-        if self.instance:
-            self.initial.update({
-                'name': self.instance.name,
-                'device_type': self.instance.device_type,
-                'ip_address': self.instance.ip_address,
-                'area_name': self.instance.area_name,
-                'enabled': self.instance.enabled,
-                'serial_number': self.instance.serial_number,
-                'firmware_version': self.instance.firmware_version,
-            })
-        # Attempt preload legacy match
-        try:
-            from legacy_models.models import Device as LegacyDevice  # type: ignore
-            legacy = None
-            if self.instance and self.instance.serial_number:
-                legacy = LegacyDevice.objects.filter(sn=self.instance.serial_number).first()
-            if not legacy and self.instance and self.instance.name:
-                legacy = LegacyDevice.objects.filter(device_name=self.instance.name).first()
-            self._legacy = legacy
-            if legacy:
-                preload_map = {
-                    'comm_type': legacy.comm_type,
-                    'com_port': legacy.com_port,
-                    'com_address': legacy.com_address,
-                    'acpanel_type': legacy.acpanel_type,
-                    'fp_count': legacy.fp_count,
-                    'transaction_count': legacy.transaction_count,
-                    'firmware_version': legacy.fw_version or self.initial.get('firmware_version'),
-                }
-                for k,v in preload_map.items():
-                    if v is not None:
-                        self.initial[k] = v
-                if legacy.area and hasattr(legacy.area,'areaname'):
-                    self.initial['area_name'] = legacy.area.areaname
-                if legacy.sn and not self.initial.get('serial_number'):
-                    self.initial['serial_number'] = legacy.sn
-        except Exception:
-            self._legacy = None
+        self.fields['comm_mode'].initial = 'tcp'
+        self.fields['auto_sync_time'].initial = True
+        self.fields['enabled'].initial = True
+        self.fields['port'].initial = 4370
+        self.fields['rs485_baudrate'].initial = 9600
+    
+    def clean(self):
+        cleaned = super().clean()
+        comm_mode = cleaned.get('comm_mode')
+        
+        if comm_mode == 'tcp':
+            if not cleaned.get('ip_address'):
+                self.add_error('ip_address', 'IP address required for TCP/IP')
+        elif comm_mode == 'rs485':
+            if not cleaned.get('rs485_port'):
+                self.add_error('rs485_port', 'Serial port required for RS485')
+        
+        return cleaned
 
     def save(self):
         from .models import Device as ModernDevice  # local import

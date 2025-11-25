@@ -225,7 +225,17 @@ def device_create(request: HttpRequest):
     if request.method == 'POST':
         form = DeviceExtendedForm(request.POST)
         if form.is_valid():
-            obj = form.save(); return render(request,'agent/device_saved.html',{'obj': obj, 'created': True})
+            obj = form.save()
+            is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+            if is_ajax:
+                return JsonResponse({'ok': True, 'id': obj.id, 'message': 'Device created'})
+            return render(request,'agent/device_saved.html',{'obj': obj, 'created': True})
+        else:
+            is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+            if is_ajax:
+                errors = {k: v[0] if v else '' for k, v in form.errors.items()}
+                return JsonResponse({'ok': False, 'error': 'Form validation failed', 'errors': errors}, status=400)
+            return render(request,'agent/device_form.html',{'form': form})
     else:
         form = DeviceExtendedForm()
     return render(request,'agent/device_form.html',{'form': form})
