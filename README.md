@@ -199,6 +199,146 @@ python manage.py runserver 127.0.0.1:8001
 python manage.py runserver
 ```
 
+### 5. Test Suite Not Detected (0 tests)
+
+**Cause**: Django's auto-discovery occasionally skips `zkeco_modern.agent.test_core` because of the fully-qualified app path and the presence of a root-level `agent` shim.
+
+**Fix (explicit module invocation)**:
+```powershell
+python zkeco_modern/manage.py test zkeco_modern.agent.test_core --verbosity=2
+```
+
+Or use the helper batch script:
+```powershell
+./test_agent.bat
+```
+
+### 6. WebSocket 404 at /ws/events/ or /ws/monitor/
+
+**Cause**: ASGI router imported legacy shim `agent.routing` instead of fully-qualified module.
+
+**Fix**: Confirm `zkeco_modern/zkeco_config/asgi.py` imports:
+```python
+from zkeco_modern.agent.routing import websocket_urlpatterns as agent_ws
+```
+Then restart server:
+```powershell
+python zkeco_modern/manage.py runserver
+```
+
+### 7. Controlled Shutdown from Dashboard
+
+Use the new "Shutdown Server" button on the dashboard (staff only). Internally it calls:
+`POST /agent/shutdown/` which schedules a clean process exit.
+
+### 8. Running Only One Test (Example)
+```powershell
+python zkeco_modern/manage.py test zkeco_modern.agent.test_core.CoreAccessTests.test_access_cache
+```
+
+### 9. Rebuild Virtual Environment Quickly
+```powershell
+Remove-Item -Recurse -Force .venv_new; python -m venv .venv_new; .\.venv_new\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+## Test & Runtime Shortcuts
+
+| Task | Command |
+|------|---------|
+| Run server | `python zkeco_modern/manage.py runserver` |
+| Run agent tests | `python zkeco_modern/manage.py test zkeco_modern.agent.test_core` |
+| Specific test | `python zkeco_modern/manage.py test zkeco_modern.agent.test_core.CoreAccessTests.test_async_command_ack` |
+| Generate events CSV | `curl http://localhost:8000/agent/reports/events/?export=csv -o events.csv` |
+| Generate alarms PDF | `curl http://localhost:8000/agent/reports/alarms/?export=pdf -o alarms.pdf` |
+| Shutdown server | `Invoke-WebRequest -UseBasicParsing -Method POST http://localhost:8000/agent/shutdown/ -WebSession $s` |
+
+## System Tray Agent
+
+A lightweight Windows system tray controller is available via a Django management command. It can:
+- Start/stop the development server (runserver)
+- Start the CommCenter stub (background polling + simulated logs)
+- Open the modern dashboard quickly
+- Quit gracefully
+
+### Launch
+```powershell
+python zkeco_modern/manage.py tray_agent
+```
+Optionally skip auto-starting the server:
+```powershell
+python zkeco_modern/manage.py tray_agent --no-server
+```
+
+### Menu Items
+- Open Dashboard: Opens `http://127.0.0.1:8000/agent/dashboard/` in browser
+- Start Server / Stop Server: Controls Django dev server subprocess
+- Start CommCenter: Ensures background polling thread active
+- Quit: Stops server (if running) and exits tray
+
+### Notes
+- Requires `pystray` and `Pillow` (already listed in `requirements.txt`).
+- Uses a stub driver; replace with real SDK integration later.
+- Heartbeat & logs visible via existing dashboard panels.
+
+## Control Center Page
+
+Unified page at `/agent/control/` groups major operations similar to the legacy agent UI:
+
+| Group | Items |
+|-------|-------|
+| CommCenter | Start / Stop / Status (poll, sessions, counts) |
+| Realtime | Dashboard, Monitor, Device Status, Event & Alarm Reports |
+| Access Control | Doors, Time Segments, Holidays, Access Levels |
+| Personnel | Employee CRUD, Report, Bulk Import/Export |
+| System Ops | Server Shutdown, Admin Site, Metrics (JSON / Prometheus) |
+| Caching & Commands | Sample access check, recent commands JSON |
+
+All actions use the existing permission model (staff-only for destructive operations).
+
+## ASGI / WebSockets
+
+To enable live WebSockets (`/ws/events/`, `/ws/monitor/`) run under **Daphne** instead of the Django dev server:
+
+```powershell
+./auto_start_asgi.ps1  # runs migrations, tests, then starts daphne
+```
+
+Or manually:
+```powershell
+.\.venv_new\Scripts\python.exe -m daphne -b 0.0.0.0 -p 8000 zkeco_config.asgi:application
+```
+
+If you want to skip tests:
+```powershell
+./auto_start_asgi.ps1 -SkipTests
+```
+
+## System Tray Quick Launch
+
+One-liner to launch tray icon (starts server & stub CommCenter):
+```powershell
+./tray_launch.ps1
+```
+Or directly (after venv prepared):
+```powershell
+python zkeco_modern/manage.py tray_agent
+```
+
+Tray menu items:
+- Start/Stop Server (development)
+- Start CommCenter (stub background polling)
+- Open Dashboard
+- Quit (graceful)
+
+## Favicon
+
+Added `static/agent/favicon.svg` to remove 404s; browsers now display a simple "AC" icon.
+
+
+
+> Note: For authenticated curl/Invoke-WebRequest calls you must first obtain a session cookie via login or use the browser session.
+
+
 For production, use PostgreSQL or MySQL instead.
 
 ## Dependencies
@@ -240,7 +380,7 @@ Run the test matrix locally (examples):
 
 ```powershell
 # zkeco_modern
-$env:PYTHONPATH = (Resolve-Path .\zkeco_modern).Path; $env:DJANGO_SETTINGS_MODULE = 'zkeco_config.settings'; .\venv311\Scripts\python.exe -m pytest -q
+$env:PYTHONPATH = (Resolve-Path .\zkeco_modern).Path; $python zkeco_modern/manage.py tray_agentpython zkeco_modern/manage.py tray_agentenv:DJANGO_SETTINGS_MODULE = 'zkeco_config.settings'; .\venv311\Scripts\python.exe -m pytest -q
 
 # zkeco_new
 $env:PYTHONPATH = (Resolve-Path .\zkeco_new).Path; $env:DJANGO_SETTINGS_MODULE = 'zkeco.settings'; .\venv311\Scripts\python.exe -m pytest -q
@@ -346,3 +486,38 @@ For issues or questions:
 **Status**: ✅ Production-Ready (Development)  
 **Maintainer**: Development Team  
 **License**: (To be specified)
+
+---
+
+# zkeco_modern Quick Start
+
+## One-Step Launch
+```powershell
+.\start_all.bat
+```
+- Creates `.venv` if missing
+- Installs dependencies
+- Migrates DB
+- Ensures admin user (`admin`/`adminpass`)
+- Starts server on port 8000
+
+## Manual Usage
+```powershell
+.\.venv\Scripts\activate
+python manage.py runserver 0.0.0.0:8000
+python manage.py test
+```
+
+## Door Control
+- Use dashboard door panel to open/close doors (staff login required)
+
+## Health & Status
+- Health: [http://localhost:8000/agent/health/](http://localhost:8000/agent/health/)
+- Metrics: [http://localhost:8000/agent/metrics/](http://localhost:8000/agent/metrics/)
+
+## Troubleshooting
+- If duplicate tests run, ensure only `test_core.py` is present in `agent/`
+- For PowerShell, always prefix scripts with `./` or `.`
+
+---
+Modernized by migration from legacy ZKAccessB.

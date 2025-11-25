@@ -1,0 +1,112 @@
+{% load static %}
+<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>{% block title %}Access Control{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'agent/dashboard.css' %}">
+  <link rel="stylesheet" href="{% static 'agent/legacy_layout.css' %}">
+  <link rel="icon" type="image/svg+xml" href="{% static 'agent/favicon.svg' %}">
+  <style>
+    /* Tooltip styling */
+    .op[data-tip], a[data-tip], button[data-tip] { position:relative; }
+    .op[data-tip]:hover::after, a[data-tip]:hover::after, button[data-tip]:hover::after {
+      content: attr(data-tip);
+      position:absolute;
+      left:50%;
+      transform:translateX(-50%);
+      bottom:-38px;
+      background:#222; color:#fff; padding:6px 10px; border-radius:6px;
+      font-size:12px; line-height:1.2; white-space:normal; width:max-content; max-width:240px;
+      box-shadow:0 2px 6px rgba(0,0,0,0.35); z-index:50;
+    }
+    .op[data-tip]:hover::before, a[data-tip]:hover::before, button[data-tip]:hover::before {
+      content:""; position:absolute; left:50%; transform:translateX(-50%); bottom:-12px; width:0; height:0;
+      border-left:6px solid transparent; border-right:6px solid transparent; border-top:6px solid #222; z-index:51;
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <h1>ZK Access</h1>
+    <div class="nav-section">
+      <h2>Monitoring</h2>
+      <a href="/agent/dashboard/" data-tip="Panou principal cu statistici și starea dispozitivelor">Dashboard</a>
+      <a href="/agent/monitor/" data-tip="Monitorizare evenimente în timp real">Real-time Monitor</a>
+      <a href="/agent/status/" data-tip="Rezumat stare dispozitive și uși">Status Summary</a>
+    </div>
+    <div class="nav-section">
+      <h2>Personnel</h2>
+      <a href="/agent/menu/personnel/" data-tip="Meniu acțiuni personal">Employees</a>
+      <a href="#" data-tip="Gestionare departamente (în curs de migrare)">Departments</a>
+      <a href="#" data-tip="Administrare carduri și date biometrice (în curs de migrare)">Cards & Biometrics</a>
+    </div>
+    <div class="nav-section">
+      <h2>Access</h2>
+      <a href="/agent/menu/access/" data-tip="Meniu configurare control acces">Access Control</a>
+      <a href="/agent/access/doors/" data-tip="Lista uși gestionate de sistem">Doors</a>
+      <a href="/agent/access/time-segments/" data-tip="Intervale orare pentru permisiuni">Time Segments</a>
+      <a href="/agent/access/holidays/" data-tip="Zile libere / sărbători pentru excepții">Holidays</a>
+      <a href="/agent/access/levels/" data-tip="Niveluri de acces și permisiuni">Access Levels</a>
+    </div>
+    <div class="nav-section">
+      <h2>Reports</h2>
+      <a href="/agent/reports/alarms/" data-tip="Raport alarme">Alarm Report</a>
+      <a href="/agent/reports/events/" data-tip="Toate evenimentele recente">All Events</a>
+      <a href="#" data-tip="Raport nivel acces angajați (în curs de migrare)">Employee Level</a>
+    </div>
+    <div class="nav-section">
+      <h2>Admin</h2>
+      <a href="/admin/" data-tip="Interfața completă de administrare Django">Django Admin</a>
+      <a href="#" data-tip="Opțiuni sistem (în curs de migrare)">System Options</a>
+    </div>
+  </aside>
+  <div class="content">
+    <div class="topbar-legacy">
+      <div class="meta">
+        <span id="serverType">server: ...</span>
+        <span id="backupInfo">backup: ...</span>
+      </div>
+      <div class="meta"><a href="/admin/">Admin</a></div>
+    </div>
+    <div class="main-wrap">
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+</div>
+<div id="loading-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:500;align-items:center;justify-content:center;color:#fff;font-size:18px;">
+  <div style="background:#222;padding:20px 30px;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.4);text-align:center;">
+    <div class="spinner" style="margin-bottom:10px;width:32px;height:32px;border:4px solid #555;border-top-color:#09f;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+    <div>Se încarcă pagina...</div>
+  </div>
+</div>
+<script>
+async function refreshMeta(){
+  try {
+    const r = await fetch('/agent/health/');
+    const j = await r.json();
+    document.getElementById('serverType').textContent = 'server: ' + j.server_type;
+    if(j.backup && j.backup.latest){
+      document.getElementById('backupInfo').textContent = 'backup: ' + j.backup.latest + ' (' + j.backup.age_minutes + 'm)';
+    }
+  } catch(e){ /* ignore */ }
+}
+refreshMeta(); setInterval(refreshMeta, 20000);
+// Loading modal activation on navigation
+function showLoading(){ const m=document.getElementById('loading-modal'); if(m){ sessionStorage.setItem('lastNavTs', Date.now().toString()); m.style.display='flex'; } }
+function hideLoading(){ const m=document.getElementById('loading-modal'); if(m){ m.style.display='none'; } }
+document.addEventListener('DOMContentLoaded',()=>{ hideLoading(); });
+window.addEventListener('pageshow', hideLoading);
+document.addEventListener('DOMContentLoaded',()=>{
+  document.querySelectorAll('a').forEach(a=>{
+    a.addEventListener('click', e => {
+      if(a.target==='_blank' || a.getAttribute('href')=== '#' || a.href.startsWith('javascript:')) return;
+      showLoading();
+    });
+  });
+});
+// Spinner animation
+const cssAnim=document.createElement('style'); cssAnim.textContent='@keyframes spin{to{transform:rotate(360deg)}}'; document.head.appendChild(cssAnim);
+</script>
+</body>
+</html>

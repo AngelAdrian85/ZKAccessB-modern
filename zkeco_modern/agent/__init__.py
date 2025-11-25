@@ -1,0 +1,1 @@
+default_app_config = "zkeco_modern.agent.apps.AgentConfig"

@@ -1,0 +1,11 @@
+{% extends 'agent/base_legacy.html' %}
+{% block title %}Door{% endblock %}
+{% block content %}
+<h2>{% if obj %}Edit Door{% else %}Create Door{% endif %}</h2>
+<form method='post' title='Formular ușă – configurație bază'>
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type='submit' class='op' data-tip='Salvează datele ușii'>Save</button>
+  <a class='op' data-tip='Înapoi la lista ușilor' href='{% url "crud-doors-list" %}'>Back</a>
+</form>
+{% endblock %}

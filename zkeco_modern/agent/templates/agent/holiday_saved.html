@@ -1,0 +1,6 @@
+{% extends 'agent/base_legacy.html' %}
+{% block title %}Holiday Saved{% endblock %}
+{% block content %}
+<h2>Holiday {{ obj.name }} {% if created %}created{% else %}updated{% endif %}</h2>
+<p><a class='op' href='{% url "crud-holidays-list" %}'>Return to list</a></p>
+{% endblock %}

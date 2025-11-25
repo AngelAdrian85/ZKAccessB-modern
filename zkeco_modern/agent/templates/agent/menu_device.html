@@ -1,0 +1,18 @@
+{% extends 'agent/base_legacy.html' %}
+{% block title %}Devices{% endblock %}
+{% block content %}
+<div class='grid'>
+  <section class='panel'><h2>Device Operations</h2><ul>
+    <li><a class='op' title='Adaugă un dispozitiv nou' href='/agent/devices/'>Add Device</a></li>
+    <li><a class='op' title='Scanează rețeaua pentru dispozitive compatibile' href='/agent/devices/'>Discover Network Devices</a></li>
+    <li><a class='op' title='Creează backup pentru datele dispozitivului' href='/agent/control/'>Backup Device Data</a></li>
+    <li><a class='op' title='Monitorizare evenimente în timp real (deschide în tab nou)' href='/agent/monitor/' target='_blank'>Monitor Realtime</a></li>
+    <li><a class='op' title='Jurnal acces pentru analiză rapidă' href='/agent/crud/access-logs/'>Access Logs</a></li>
+  </ul></section>
+  <section class='panel accent'><h2>Status & Sync</h2><ul>
+    <li><a class='op' title='Sincronizează ora pe dispozitive' href='/agent/control/'>Sync Time</a></li>
+    <li><a class='op' title='Actualizează statusul dispozitivelor' href='/agent/status/'>Refresh Status</a></li>
+    <li><a class='op' title='Trimite modificările de personal către dispozitive' href='/agent/control/'>Push Personnel Changes</a></li>
+  </ul></section>
+<footer class='footer'>Device module (modernized).</footer>
+{% endblock %}

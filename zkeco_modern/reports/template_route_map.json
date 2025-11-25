@@ -1,0 +1,272 @@
+{
+  "404.html": [
+    "/404",
+    "/404.html"
+  ],
+  "500.html": [
+    "/500",
+    "/500.html"
+  ],
+  "Acc_Door_Set.html": [
+    "/Acc_Door_Set",
+    "/acc_door_set",
+    "/Acc_Door_Set.html"
+  ],
+  "advenquiry.html": [
+    "/advenquiry",
+    "/advenquiry.html"
+  ],
+  "AppOption_edit.html": [
+    "/AppOption_edit",
+    "/appoption_edit",
+    "/AppOption_edit.html"
+  ],
+  "AppOption_list.html": [
+    "/AppOption_list",
+    "/appoption_list",
+    "/AppOption_list.html"
+  ],
+  "BaseCode_list.html": [
+    "/BaseCode_list",
+    "/basecode_list",
+    "/BaseCode_list.html"
+  ],
+  "base_page_frame.html": [
+    "/base_page_frame",
+    "/base_page_frame.html"
+  ],
+  "base_site.html": [
+    "/base_site",
+    "/base_site.html"
+  ],
+  "data_edit.html": [
+    "/data_edit",
+    "/data_edit.html"
+  ],
+  "data_edit_2c.html": [
+    "/data_edit_2c",
+    "/data_edit_2c.html"
+  ],
+  "data_edit_pst.html": [
+    "/data_edit_pst",
+    "/data_edit_pst.html"
+  ],
+  "data_edit_swift.html": [
+    "/data_edit_swift",
+    "/data_edit_swift.html"
+  ],
+  "data_list.html": [
+    "/data_list",
+    "/data_list.html"
+  ],
+  "data_opform.html": [
+    "/data_opform",
+    "/data_opform.html"
+  ],
+  "DbBackupLog_list.html": [
+    "/DbBackupLog_list",
+    "/dbbackuplog_list",
+    "/DbBackupLog_list.html"
+  ],
+  "DbBackupLog_opform_OpBackupDB.html": [
+    "/DbBackupLog_opform_OpBackupDB",
+    "/dbbackuplog_opform_opbackupdb",
+    "/DbBackupLog_opform_OpBackupDB.html"
+  ],
+  "DbBackupLog_opform_OpInitDB.html": [
+    "/DbBackupLog_opform_OpInitDB",
+    "/dbbackuplog_opform_opinitdb",
+    "/DbBackupLog_opform_OpInitDB.html"
+  ],
+  "DbBackupLog_opform_OpRestoreDB.html": [
+    "/DbBackupLog_opform_OpRestoreDB",
+    "/dbbackuplog_opform_oprestoredb",
+    "/DbBackupLog_opform_OpRestoreDB.html"
+  ],
+  "export.html": [
+    "/export",
+    "/export.html"
+  ],
+  "Group_edit.html": [
+    "/Group_edit",
+    "/group_edit",
+    "/Group_edit.html"
+  ],
+  "Group_list.html": [
+    "/Group_list",
+    "/group_list",
+    "/Group_list.html"
+  ],
+  "help_default_en.html": [
+    "/help_default_en",
+    "/help_default_en.html"
+  ],
+  "help_default_zh-cn.html": [
+    "/help_default_zh-cn",
+    "/help_default_zh-cn.html"
+  ],
+  "import.html": [
+    "/import",
+    "/import.html"
+  ],
+  "index.html": [
+    "/",
+    "/index",
+    "/index.html"
+  ],
+  "info.html": [
+    "/info",
+    "/info.html"
+  ],
+  "init_models.html": [
+    "/init_models",
+    "/init_models.html"
+  ],
+  "logcheck.html": [
+    "/logcheck",
+    "/logcheck.html"
+  ],
+  "LogEntry_list.html": [
+    "/LogEntry_list",
+    "/logentry_list",
+    "/LogEntry_list.html"
+  ],
+  "messages_list.html": [
+    "/messages_list",
+    "/messages_list.html"
+  ],
+  "no_permission_info.html": [
+    "/no_permission_info",
+    "/no_permission_info.html"
+  ],
+  "oplog_list.html": [
+    "/oplog_list",
+    "/oplog_list.html"
+  ],
+  "piclist.html": [
+    "/piclist",
+    "/piclist.html"
+  ],
+  "realtime.html": [
+    "/realtime",
+    "/realtime.html"
+  ],
+  "registration__logged_out.html": [
+    "/registration__logged_out",
+    "/registration/logged_out",
+    "/registration__logged_out.html"
+  ],
+  "registration__login.html": [
+    "/registration__login",
+    "/registration/login",
+    "/registration__login.html"
+  ],
+  "registration__password_change_done.html": [
+    "/registration__password_change_done",
+    "/registration/password_change_done",
+    "/registration__password_change_done.html"
+  ],
+  "registration__password_change_form.html": [
+    "/registration__password_change_form",
+    "/registration/password_change_form",
+    "/registration__password_change_form.html"
+  ],
+  "registration__password_reset_done.html": [
+    "/registration__password_reset_done",
+    "/registration/password_reset_done",
+    "/registration__password_reset_done.html"
+  ],
+  "registration__password_reset_email.html": [
+    "/registration__password_reset_email",
+    "/registration/password_reset_email",
+    "/registration__password_reset_email.html"
+  ],
+  "registration__password_reset_form.html": [
+    "/registration__password_reset_form",
+    "/registration/password_reset_form",
+    "/registration__password_reset_form.html"
+  ],
+  "restore.html": [
+    "/restore",
+    "/restore.html"
+  ],
+  "rtmonitor.html": [
+    "/rtmonitor",
+    "/rtmonitor.html"
+  ],
+  "setoption.html": [
+    "/setoption",
+    "/setoption.html"
+  ],
+  "site_medias.html": [
+    "/site_medias",
+    "/site_medias.html"
+  ],
+  "site_medias_bak.html": [
+    "/site_medias_bak",
+    "/site_medias_bak.html"
+  ],
+  "site_medias_css.html": [
+    "/site_medias_css",
+    "/site_medias_css.html"
+  ],
+  "site_medias_js.html": [
+    "/site_medias_js",
+    "/site_medias_js.html"
+  ],
+  "special_menu.html": [
+    "/special_menu",
+    "/special_menu.html"
+  ],
+  "sys_option.html": [
+    "/sys_option",
+    "/sys_option.html"
+  ],
+  "testpage.html": [
+    "/testpage",
+    "/testpage.html"
+  ],
+  "testTree.html": [
+    "/testTree",
+    "/testtree",
+    "/testTree.html"
+  ],
+  "transaction_list.html": [
+    "/transaction_list",
+    "/transaction_list.html"
+  ],
+  "upgrade.html": [
+    "/upgrade",
+    "/upgrade.html"
+  ],
+  "upload.html": [
+    "/upload",
+    "/upload.html"
+  ],
+  "User_edit.html": [
+    "/User_edit",
+    "/user_edit",
+    "/User_edit.html"
+  ],
+  "User_list.html": [
+    "/User_list",
+    "/user_list",
+    "/User_list.html"
+  ],
+  "user_option_form.html": [
+    "/user_option_form",
+    "/user_option_form.html"
+  ],
+  "view.html": [
+    "/view",
+    "/view.html"
+  ],
+  "view_detail.html": [
+    "/view_detail",
+    "/view_detail.html"
+  ],
+  "welcome_sys.html": [
+    "/welcome_sys",
+    "/welcome_sys.html"
+  ]
+}

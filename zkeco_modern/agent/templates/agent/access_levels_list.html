@@ -1,0 +1,21 @@
+{% extends 'agent/base_legacy.html' %}
+{% block title %}Access Levels{% endblock %}
+{% block content %}
+<h2>Access Levels</h2>
+<p>Placeholder for AccLevelSet_list / AccLevelSet_edit.</p>
+<ul class='panel'>
+  <li>Level 1 - Offices</li>
+  <li>Level 2 - Offices + Server Room</li>
+  <li>Level 3 - All Areas</li>
+  <li><a href='#' class='op'>Add Access Level</a></li>
+</ul>
+<script>
+// Placeholder websocket subscription for future access level change events
+function startLevelsWS(){
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(proto + '://' + location.host + '/ws/events/');
+  ws.onmessage = (e)=>{ /* Future: update access level stats */ };
+}
+startLevelsWS();
+</script>
+{% endblock %}

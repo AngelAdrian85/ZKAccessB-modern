@@ -1,0 +1,81 @@
+{% extends 'agent/base_legacy.html' %}
+{% block content %}
+<h2 data-tip="Lista departamente" title="Departamente">Departamente</h2>
+{% if missing %}<p class="warn" data-tip="Modelul Dept nu este disponibil">Model indisponibil.</p>{% endif %}
+<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+	<a href="{% url 'crud-dept-create' %}" class="btn" data-tip="Adaugă departament" title="Nou departament">+ Nou</a>
+	<input type="text" id="deptSearch" placeholder="Caută nume/cod" data-tip="Căutare rapidă" style="padding:4px"/>
+	<button type="button" id="deptSearchBtn" class="btn" data-tip="Aplică filtrul">Caută</button>
+	<button type="button" id="deptResetBtn" class="btn" data-tip="Resetare filtrare">Reset</button>
+</div>
+<div style="display:flex;gap:20px;margin-top:14px;align-items:flex-start;flex-wrap:wrap">
+	<div id="deptTree" style="min-width:240px;max-height:320px;overflow:auto;border:1px solid #ccc;padding:6px" data-tip="Arbore ierarhic departamente" title="Arbore"></div>
+	<div style="flex:1;min-width:300px">
+{% if page %}
+<table class="crud" data-tip="Tabel departamente" title="Tabel departamente">
+<thead><tr><th>ID</th><th>Nume</th><th>Cod</th><th>Actiuni</th></tr></thead>
+<tbody>
+{% for d in page.object_list %}
+<tr>
+<td>{{ d.id }}</td>
+<td>{{ d.DeptName }}</td>
+<td>{{ d.code }}</td>
+<td>
+<a href="{% url 'crud-dept-edit' d.id %}" data-tip="Editează" title="Editează">Edit</a>
+<form method="post" action="{% url 'crud-dept-delete' d.id %}" style="display:inline" onsubmit="return confirm('Ștergi?');">
+{% csrf_token %}<button data-tip="Șterge" title="Șterge">X</button>
+</form>
+</td>
+</tr>
+{% endfor %}
+</tbody></table>
+<div class="pagination">{% if page.has_previous %}<a href="?page={{ page.previous_page_number }}" data-tip="Pagina anterioară">«</a>{% endif %} <span>{{ page.number }}/{{ page.paginator.num_pages }}</span> {% if page.has_next %}<a href="?page={{ page.next_page_number }}" data-tip="Pagina următoare">»</a>{% endif %}</div>
+{% endif %}
+</div>
+<script>
+(function(){
+	async function fetchTree(){
+		try{ const r=await fetch('/agent/crud/depts/tree/'); const j=await r.json(); if(j.ok){ renderTree(j.tree); }}catch(e){}
+	}
+	function renderTree(nodes){
+		const cont=document.getElementById('deptTree'); cont.innerHTML='';
+		function mk(list, lvl){
+			const ul=document.createElement('ul'); ul.style.listStyle='none'; ul.style.margin='0'; ul.style.paddingLeft=(lvl*14)+'px';
+			list.forEach(n=>{
+				const li=document.createElement('li');
+				li.textContent=n.name; li.dataset.id=n.id; li.style.cursor='pointer';
+				li.draggable=true;
+				li.addEventListener('click',()=>{ window.location='?parent='+n.id; });
+				li.addEventListener('dragstart',e=>{ e.dataTransfer.setData('text/plain', n.id); });
+				li.addEventListener('dragover',e=>{ e.preventDefault(); li.style.background='#eef'; });
+				li.addEventListener('dragleave',()=>{ li.style.background=''; });
+				li.addEventListener('drop',e=>{ e.preventDefault(); li.style.background=''; const draggedId=e.dataTransfer.getData('text/plain'); if(draggedId && draggedId!=n.id){ updateParent(draggedId, n.id); }});
+				ul.appendChild(li); if(n.children && n.children.length){ li.appendChild(mk(n.children,lvl+1)); }
+			});
+			return ul;
+		}
+		cont.appendChild(mk(nodes,0));
+	}
+	async function updateParent(childId, parentId){
+		try{
+			const r=await fetch('/agent/crud/depts/update-parent/',{method:'POST',headers:{'Content-Type':'application/json','X-CSRFToken':csrftoken},body:JSON.stringify({child:childId,parent:parentId})});
+			const j=await r.json(); if(j.ok){ fetchTree(); }
+		}catch(e){}
+	}
+	async function search(){
+		const q=document.getElementById('deptSearch').value.trim();
+		const url='/agent/crud/depts/search/?q='+encodeURIComponent(q);
+		try{ const r=await fetch(url); const j=await r.json(); if(j.ok){ replaceTable(j.rows); }}catch(e){}
+	}
+	function replaceTable(rows){
+		const tbody=document.querySelector('table.crud tbody'); if(!tbody) return; tbody.innerHTML='';
+		rows.forEach(r=>{
+			const tr=document.createElement('tr'); tr.innerHTML=`<td>${r.id}</td><td>${r.DeptName}</td><td>${r.code||''}</td><td><a href="/agent/crud/depts/${r.id}/edit/">Edit</a></td>`; tbody.appendChild(tr);
+		});
+	}
+	document.getElementById('deptSearchBtn').addEventListener('click',search);
+	document.getElementById('deptResetBtn').addEventListener('click',()=>{ document.getElementById('deptSearch').value=''; window.location='?'; });
+	fetchTree();
+})();
+</script>
+{% endblock %}

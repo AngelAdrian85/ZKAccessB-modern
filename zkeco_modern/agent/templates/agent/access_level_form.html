@@ -1,0 +1,11 @@
+{% extends 'agent/base_legacy.html' %}
+{% block title %}Access Level{% endblock %}
+{% block content %}
+<h2>{% if obj %}Edit Access Level{% else %}Create Access Level{% endif %}</h2>
+<form method='post'>
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type='submit' class='op'>Save</button>
+  <a href='{% url "crud-access-levels-list" %}'>Back</a>
+</form>
+{% endblock %}

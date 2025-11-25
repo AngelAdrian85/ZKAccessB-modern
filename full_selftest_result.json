@@ -1,0 +1,12 @@
+﻿{
+    "server_pid":  10020,
+    "server_running":  true,
+    "backup_exit_code":  0,
+    "backup_latest":  "db_backup_20251120_145350.sql",
+    "restore_exit_code":  0,
+    "backup_log_excerpt":  "[tray-notify] Header debug: mysqldump=C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\mysql\\bin\\mysqldump.exe bytes=b\u0027MZ\u0027 | [tray-notify] Mysqldump cmd: C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\mysql\\bin\\mysqldump.exe -uroot --databases zkeco_db --skip-lock-tables | [tray-notify] Backup success: db_backup_20251120_145350.sql | ",
+    "restore_log":  "{\"restore\":\"ok\",\"file\":\"db_backup_20251120_145350.sql\"} ",
+    "monitor_page":  "ok",
+    "ws_port_status":  "port-open",
+    "timestamp":  "2025-11-20T14:53:53"
+}

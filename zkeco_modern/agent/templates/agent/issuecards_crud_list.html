@@ -1,0 +1,83 @@
+{% extends 'agent/base_legacy.html' %}
+{% block content %}
+<h2 data-tip="Lista carduri" title="Carduri">Carduri emise</h2>
+<p>
+	<a href="{% url 'crud-issuecard-create' %}" class="btn" data-tip="Emite card" title="Emite">+ Emite</a>
+	<button id="batchDeactivate" class="btn" type="button" data-tip="Dezactivează cardurile selectate">Batch Deactivate</button>
+	<button id="batchReissue" class="btn" type="button" data-tip="Reemite (1 an) cardurile selectate">Batch Reissue</button>
+	<button id="batchExport" class="btn" type="button" data-tip="Exportă selecția CSV">Export CSV</button>
+</p>
+{% if missing %}<p class="warn">Model IssueCard indisponibil.</p>{% endif %}
+{% if page %}
+<table class="crud" data-tip="Tabel carduri">
+<thead><tr><th><input type="checkbox" id="selectAll" title="Selectează toate"/></th><th>ID</th><th>Card</th><th>Status</th><th>UserID</th><th>Tip</th><th>Valid până</th><th>Actiuni</th></tr></thead>
+<tbody>
+{% for c in page.object_list %}
+<tr data-card-row="{{ c.id }}">
+<td><input type="checkbox" class="rowChk" value="{{ c.id }}"/></td>
+<td>{{ c.id }}</td>
+<td>{{ c.cardno }}</td>
+<td>{{ c.cardstatus }}</td>
+<td>{{ c.userid.userid if c.userid }}</td>
+<td>{{ c.card_type }}</td>
+<td>{{ c.valid_until }}</td>
+<td>
+	<a href="{% url 'crud-issuecard-edit' c.id %}" data-tip="Editează">Edit</a>
+	<button type="button" class="quickDeactivate" data-id="{{ c.id }}" data-tip="Dezactivează rapid">Deactivate</button>
+	<button type="button" class="quickReissue" data-id="{{ c.id }}" data-tip="Reemite rapid">Reissue</button>
+	<form method="post" action="{% url 'crud-issuecard-delete' c.id %}" style="display:inline" onsubmit="return confirm('Ștergi card?');">{% csrf_token %}<button data-tip="Șterge">X</button></form>
+</td>
+</tr>
+{% endfor %}
+</tbody></table>
+<div class="pagination">{% if page.has_previous %}<a href="?page={{ page.previous_page_number }}" data-tip="Pagina anterioară">«</a>{% endif %} <span>{{ page.number }}/{{ page.paginator.num_pages }}</span> {% if page.has_next %}<a href="?page={{ page.next_page_number }}" data-tip="Pagina următoare">»</a>{% endif %}</div>
+{% endif %}
+<script>
+(function(){
+	const csrftoken = (document.querySelector('input[name=csrfmiddlewaretoken]')||{}).value;
+	function post(url){
+		return fetch(url,{method:'POST',headers:{'X-CSRFToken':csrftoken}}).then(r=>r.json()).catch(()=>({ok:false}));
+	}
+	function updateRow(id, data){
+		const row=document.querySelector('tr[data-card-row="'+id+'"]');
+		if(!row) return;
+		if(data.status){ row.querySelectorAll('td')[3].textContent=data.status; }
+		if(data.valid_until){ row.querySelectorAll('td')[5].textContent=data.valid_until; }
+		row.classList.remove('row-reissue','row-deactivate');
+		if(data.status==='Valid'){ row.classList.add('row-reissue'); }
+		if(data.status==='Inactive'){ row.classList.add('row-deactivate'); }
+	}
+	document.querySelectorAll('.quickDeactivate').forEach(btn=>{
+		btn.addEventListener('click', async ()=>{
+			const id=btn.dataset.id; const data=await post('/agent/crud/issuecards/'+id+'/deactivate/'); if(data.ok){ updateRow(id,data); }
+		});
+	});
+	document.querySelectorAll('.quickReissue').forEach(btn=>{
+		btn.addEventListener('click', async ()=>{
+			const id=btn.dataset.id; const data=await post('/agent/crud/issuecards/'+id+'/reissue/'); if(data.ok){ updateRow(id,data); }
+		});
+	});
+	const selectAll=document.getElementById('selectAll');
+	selectAll && selectAll.addEventListener('change',()=>{
+		document.querySelectorAll('.rowChk').forEach(ch=> ch.checked=selectAll.checked);
+	});
+	function selectedIds(){ return Array.from(document.querySelectorAll('.rowChk:checked')).map(x=>x.value); }
+	async function batch(action){
+		const ids=selectedIds(); if(!ids.length) return;
+		for(const id of ids){
+			const data=await post('/agent/crud/issuecards/'+id+'/'+action+'/'); if(data.ok) updateRow(id,data);
+		}
+	}
+	document.getElementById('batchDeactivate').addEventListener('click',()=>batch('deactivate'));
+	document.getElementById('batchReissue').addEventListener('click',()=>batch('reissue'));
+	document.getElementById('batchExport').addEventListener('click',()=>{
+		const ids=selectedIds(); if(!ids.length) return; const csv=['id']; csv.push(...ids); const blob=new Blob([csv.join('\n')],{type:'text/csv'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='issuecards_selection.csv'; a.click();
+	});
+})();
+</script>
+<style>
+.row-reissue { background:#0b5; color:#fff; transition:background .4s; }
+.row-deactivate { background:#c22; color:#fff; transition:background .4s; }
+table.crud tr.row-reissue a, table.crud tr.row-deactivate a { color:#fff; }
+</style>
+{% endblock %}

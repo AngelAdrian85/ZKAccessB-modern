@@ -1,0 +1,40 @@
+{% extends 'agent/base_legacy.html' %}
+{% block title %}Employee{% endblock %}
+{% block content %}
+<h2>{% if obj %}Edit Employee{% else %}Create Employee{% endif %}</h2>
+<form method='post' title='Formular angajat – câmpuri esențiale + extinse dacă există date legacy'>
+  {% csrf_token %}
+  {{ form.as_p }}
+  {% if form.legacy_userid %}
+  <fieldset style='border:1px solid #999;padding:8px;margin-top:12px' title='Date suplimentare moștenite din sistemul vechi'>
+    <legend style='font-weight:bold'>Câmpuri Legacy (Opțional)</legend>
+    <div class='legacy-fields'>
+      <p title='Identificator numeric vechi'>{{ form.legacy_userid.label_tag }} {{ form.legacy_userid }}</p>
+      <p title='Departament asignat'>{{ form.dept.label_tag }} {{ form.dept }}</p>
+      <p title='Genul angajatului'>{{ form.gender.label_tag }} {{ form.gender }}</p>
+      <p title='Data angajării'>{{ form.hire_date.label_tag }} {{ form.hire_date }}</p>
+      <p title='Email'>{{ form.email.label_tag }} {{ form.email }}</p>
+      <p title='Telefon'>{{ form.phone.label_tag }} {{ form.phone }}</p>
+      <p title='Nivel privilegiu/rol'>{{ form.privilege.label_tag }} {{ form.privilege }}</p>
+      <p title='Act identitate'>{{ form.identitycard.label_tag }} {{ form.identitycard }}</p>
+      <p title='Cod site card'>{{ form.site_code.label_tag }} {{ form.site_code }}</p>
+      <p title='Adresă domiciliu'>{{ form.homeaddress.label_tag }} {{ form.homeaddress }}</p>
+      <p title='Stradă / detaliu adresă'>{{ form.street.label_tag }} {{ form.street }}</p>
+      <p title='Acces valabil de la'>{{ form.acc_startdate.label_tag }} {{ form.acc_startdate }}</p>
+      <p title='Acces valabil până la'>{{ form.acc_enddate.label_tag }} {{ form.acc_enddate }}</p>
+      <p title='Extensie timp'>{{ form.extend_time.label_tag }} {{ form.extend_time }}</p>
+      <p title='Întârziere ușă'>{{ form.delayed_door_open.label_tag }} {{ form.delayed_door_open }}</p>
+      <p title='Tip angajare'>{{ form.hiretype.label_tag }} {{ form.hiretype }}</p>
+      <p title='Tip personal'>{{ form.emptype.label_tag }} {{ form.emptype }}</p>
+      <p title='Parolă self'>{{ form.selfpassword.label_tag }} {{ form.selfpassword }}</p>
+      <p title='Parolă rezervare'>{{ form.reservation_password.label_tag }} {{ form.reservation_password }}</p>
+      <p title='Rol pe dispozitiv'>{{ form.role_on_device.label_tag }} {{ form.role_on_device }}</p>
+      <p title='Elevator superuser'>{{ form.elevator_superuser.label_tag }} {{ form.elevator_superuser }}</p>
+      <p title='Nivel lift'>{{ form.elevator_level.label_tag }} {{ form.elevator_level }}</p>
+    </div>
+  </fieldset>
+  {% endif %}
+  <button type='submit' class='op' data-tip='Salvează modificările angajatului'>Save</button>
+  <a class='op' data-tip='Înapoi la lista angajaților' href='{% url "crud-employees-list" %}'>Back</a>
+</form>
+{% endblock %}

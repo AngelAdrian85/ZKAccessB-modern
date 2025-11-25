@@ -13,8 +13,13 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    # Redirect site root to admin for convenience in development
-    path("", RedirectView.as_view(url="/admin/", permanent=False)),
+    # Redirect root to the modern dashboard instead of legacy/admin
+    path("", RedirectView.as_view(url="/agent/dashboard/", permanent=False)),
+    # Convenience short /dashboard/ route
+    path("dashboard/", RedirectView.as_view(url="/agent/dashboard/", permanent=False)),
+    # Use fully-qualified module path to avoid app_label mismatch when a root 'agent' shim exists
+    path("agent/", include("zkeco_modern.agent.urls")),
+    path('accounts/', include('django.contrib.auth.urls')),
 ]
 
 # As a local-first fallback, ensure `/iaccess/` resolves by mapping directly
@@ -32,6 +37,16 @@ if settings.DEBUG:
     # Provide Django auth views under `/registration/` during development so
     # legacy templates that expect `/registration/login/` resolve for testing.
     urlpatterns.append(path('registration/', include('django.contrib.auth.urls')))
+    # Development-only: serve legacy templates directly for exploration.
+    try:
+        from . import dev_views
+        urlpatterns.append(path('legacy/<path:tmpl_path>/', dev_views.serve_legacy_template))
+        urlpatterns.append(path('index/', dev_views.serve_index))
+        # Debug endpoint to accept OAuth redirect callbacks for local testing
+        urlpatterns.append(path('oauth-debug/', dev_views.oauth_debug))
+    except Exception:
+        # don't block development if dev_views can't be imported
+        pass
 
 # Serve MEDIA files in development when MEDIA_URL/MEDIA_ROOT are configured.
 if settings.DEBUG and getattr(settings, 'MEDIA_URL', None) and getattr(settings, 'MEDIA_ROOT', None):

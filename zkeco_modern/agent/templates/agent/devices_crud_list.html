@@ -1,0 +1,27 @@
+{% extends 'agent/base_legacy.html' %}
+{% block content %}
+<h2 data-tip="Lista dispozitivelor" title="Dispozitive">Dispozitive</h2>
+<p><a href="{% url 'crud-device-create' %}" class="btn" data-tip="Adaugă dispozitiv" title="Nou">+ Nou</a></p>
+{% if page %}
+<table class="crud" data-tip="Tabel dispozitive">
+<thead><tr><th>ID</th><th>Nume</th><th>Serial</th><th>IP</th><th>Firmware</th><th>Zonă</th><th>Activ</th><th>Actiuni</th></tr></thead>
+<tbody>
+{% for d in page.object_list %}
+<tr>
+  <td>{{ d.id }}</td>
+  <td>{{ d.name }}</td>
+  <td>{{ d.serial_number }}</td>
+  <td>{{ d.ip_address }}</td>
+  <td>{{ d.firmware_version }}</td>
+  <td>{{ d.area_name }}</td>
+  <td>{{ d.enabled }}</td>
+  <td>
+    <a href="{% url 'crud-device-edit' d.id %}" data-tip="Editează">Edit</a>
+    <form method="post" action="{% url 'crud-device-delete' d.id %}" style="display:inline" onsubmit="return confirm('Ștergi dispozitiv?');">{% csrf_token %}<button data-tip="Șterge">X</button></form>
+  </td>
+</tr>
+{% endfor %}
+</tbody></table>
+<div class="pagination">{% if page.has_previous %}<a href="?page={{ page.previous_page_number }}" data-tip="Anterior">«</a>{% endif %} <span>{{ page.number }}/{{ page.paginator.num_pages }}</span> {% if page.has_next %}<a href="?page={{ page.next_page_number }}" data-tip="Următor">»</a>{% endif %}</div>
+{% else %}<p>Niciun dispozitiv.</p>{% endif %}
+{% endblock %}

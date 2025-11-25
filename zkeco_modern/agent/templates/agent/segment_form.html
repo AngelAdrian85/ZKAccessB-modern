@@ -1,0 +1,19 @@
+{% extends 'agent/base_legacy.html' %}
+{% block title %}Segment{% endblock %}
+{% block content %}
+<h2>{% if obj %}Edit Segment{% else %}Create Segment{% endif %}</h2>
+<form method='post'>
+  {% csrf_token %}
+  {{ form.name.errors }}
+  <p>{{ form.name.label_tag }} {{ form.name }}</p>
+  <p>{{ form.start_time.label_tag }} {{ form.start_time }} - {{ form.end_time.label_tag }} {{ form.end_time }}</p>
+  <fieldset style='border:1px solid #333;padding:6px;margin-bottom:8px'>
+    <legend>Days of Week</legend>
+    {% for cb in form.days %}
+      <label style='display:inline-block;margin-right:10px'>{{ cb.tag }} {{ cb.choice_label }}</label>
+    {% endfor %}
+  </fieldset>
+  <button type='submit' class='op'>Save</button>
+  <a href='{% url "crud-segments-list" %}'>Back</a>
+</form>
+{% endblock %}

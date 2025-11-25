@@ -1,0 +1,6 @@
+{% extends 'agent/base_legacy.html' %}
+{% block content %}
+<h2 data-tip="Dispozitiv salvat" title="Salvat">Dispozitiv salvat</h2>
+<p>ID {{ obj.id }} - {{ obj.name }} ({{ obj.serial_number }})</p>
+<p><a href="{% url 'crud-devices-list' %}" class="btn" data-tip="Înapoi la listă" title="Înapoi">Înapoi</a></p>
+{% endblock %}

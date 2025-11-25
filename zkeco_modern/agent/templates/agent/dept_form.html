@@ -1,0 +1,12 @@
+{% extends 'agent/base_legacy.html' %}
+{% block content %}
+<h2>{% if obj %}Editează Departament{% else %}Departament Nou{% endif %}</h2>
+{% if missing %}<p class="warn">Model Dept indisponibil.</p>{% endif %}
+{% if form %}
+<form method="post">{% csrf_token %}
+{{ form.as_p }}
+<button class="btn" data-tip="Salvează departamentul" title="Salvează">Salvează</button>
+<a href="{% url 'crud-depts-list' %}" class="btn" data-tip="Înapoi la listă" title="Înapoi">Înapoi</a>
+</form>
+{% endif %}
+{% endblock %}

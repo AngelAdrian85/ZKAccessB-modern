@@ -1,0 +1,61 @@
+{% extends 'agent/base_legacy.html' %}
+{% block title %}Employees CRUD{% endblock %}
+{% block content %}
+<h2>Employees (CRUD)</h2>
+<p>
+  <a class='op' data-tip='Adaugă un angajat nou' href='{% url "crud-employee-create" %}'>Add Employee</a> |
+  <a class='op' data-tip='Importă mai mulți angajați dintr-un fișier' href='{% url "crud-employee-import" %}'>Bulk Import</a> |
+  <a class='op' data-tip='Exportă lista în format CSV' href='{% url "crud-employee-export" %}?format=csv'>Export CSV</a>
+</p>
+<table class='status-box' style='width:100%;border-collapse:collapse'>
+<tr><th>First</th><th>Last</th><th>Card</th><th>Levels</th><th>Active</th><th>Actions</th></tr>
+{% for e in employees %}
+<tr data-emp-id='{{ e.id }}'>
+  <td class='inline-edit' data-field='first_name'>{{ e.first_name }}</td>
+  <td class='inline-edit' data-field='last_name'>{{ e.last_name }}</td>
+  <td class='inline-edit' data-field='card_number'>{{ e.card_number }}</td>
+  <td>{{ e.access_levels.all|join:", " }}</td>
+  <td class='inline-edit' data-field='active'>{{ e.active }}</td>
+  <td><a class='op' data-tip='Editează acest angajat' href='{% url "crud-employee-edit" e.id %}'>Edit</a>
+    <form method='post' action='{% url "crud-employee-delete" e.id %}' style='display:inline' onsubmit='return confirm("Delete employee?")' title='Șterge definitiv angajatul'>
+      {% csrf_token %}<button class='op' data-tip='Șterge angajatul' style='background:#632626'>Del</button>
+    </form>
+    <input type='number' min='1' placeholder='Door ID' class='door-check-input' style='width:70px'>
+    <button type='button' class='op check-access-btn' data-tip='Verifică dacă angajatul are acces la ușa indicată'>Check</button>
+    <span class='access-indicator' style='margin-left:4px;font-weight:bold'></span>
+  </td>
+</tr>
+{% empty %}<tr><td colspan='5'>No employees</td></tr>{% endfor %}
+</table>
+{% endblock %}
+{% block extra_js %}
+<script>
+function getCSRF(){ const m=document.cookie.match(/csrftoken=([^;]+)/); return m?m[1]:''; }
+document.querySelectorAll('td.inline-edit').forEach(td=>{
+  document.querySelectorAll('.check-access-btn').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const tr = btn.closest('tr');
+      const empId = tr.getAttribute('data-emp-id');
+      const doorId = tr.querySelector('.door-check-input').value.trim();
+      const indicator = tr.querySelector('.access-indicator');
+      if(!doorId){ indicator.textContent='Door?'; indicator.style.color='#e09'; return; }
+      indicator.textContent='...'; indicator.style.color='#999';
+      fetch(`/agent/api/access/check/?employee=${empId}&door=${doorId}`)
+        .then(r=>r.json()).then(d=>{
+          if(!d.ok){ indicator.textContent='ERR'; indicator.style.color='#e00'; return; }
+          indicator.textContent= d.allowed ? 'ALLOW' : 'DENY';
+          indicator.style.color = d.allowed ? '#0c4' : '#d33';
+          indicator.title = d.reason + (d.cached? ' (cached)':'');
+        }).catch(()=>{ indicator.textContent='ERR'; indicator.style.color='#e00'; });
+    });
+  });
+  td.contentEditable=true;
+  td.addEventListener('blur',()=>{
+    const tr=td.closest('tr'); const id=tr.getAttribute('data-emp-id'); const field=td.getAttribute('data-field');
+    let value=td.innerText.trim(); if(field==='active'){ value=(value.toLowerCase().startsWith('t')||value==='1'); }
+    fetch(`/agent/crud/employees/${id}/inline/`, {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCSRF()}, body:JSON.stringify({field,value})})
+      .then(r=>r.json()).then(d=>{ if(!d.ok){ console.warn('Inline update failed', d); }});
+  });
+});
+</script>
+{% endblock %}

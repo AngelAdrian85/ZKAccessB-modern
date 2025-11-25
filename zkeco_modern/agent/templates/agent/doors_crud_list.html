@@ -1,0 +1,64 @@
+{% extends 'agent/base_legacy.html' %}
+{% block title %}Doors List{% endblock %}
+{% block content %}
+<h2>Doors (CRUD)</h2>
+<p><a class='op' href='{% url "crud-door-create" %}'>Add Door</a></p>
+<table class='status-box' style='width:100%;border-collapse:collapse'>
+<tr><th>Name</th><th>Device</th><th>Location</th><th>Enabled</th><th>State</th><th>Actions</th></tr>
+{% for d in page.object_list %}
+<tr data-door-id='{{ d.id }}'>
+  <td class='inline-edit' data-field='name'>{{ d.name }}</td>
+  <td>{{ d.device }}</td>
+  <td class='inline-edit' data-field='location'>{{ d.location }}</td>
+  <td class='inline-edit' data-field='enabled'>{{ d.enabled }}</td>
+  <td class='door-state'>{{ d.is_open|yesno:"OPEN,CLOSED" }}</td>
+  <td>
+    <a class='op' href='{% url "crud-door-edit" d.id %}'>Edit</a>
+    {% if d.device %}
+      <button class='op door-open-btn'>Open</button>
+      <button class='op door-close-btn' style='background:#444'>Close</button>
+    {% endif %}
+    <form method='post' action='{% url "crud-door-delete" d.id %}' style='display:inline' onsubmit='return confirm("Delete door?")'>
+      {% csrf_token %}<button class='op' style='background:#632626'>Del</button>
+    </form>
+  </td>
+</tr>
+{% empty %}<tr><td colspan='5'>No doors</td></tr>{% endfor %}
+</table>
+<div>Page {{ page.number }} of {{ page.paginator.num_pages }}</div>
+{% if page.has_previous %}<a href='?page={{ page.previous_page_number }}'>Prev</a>{% endif %}
+{% if page.has_next %}<a href='?page={{ page.next_page_number }}'>Next</a>{% endif %}
+{% endblock %}
+{% block extra_js %}
+<script>
+function getCSRF(){
+  const m = document.cookie.match(/csrftoken=([^;]+)/); return m?m[1]:'';
+}
+document.querySelectorAll('td.inline-edit').forEach(td=>{
+  td.contentEditable = true;
+  td.addEventListener('blur', ()=>{
+    const tr = td.closest('tr');
+    const id = tr.getAttribute('data-door-id');
+    const field = td.getAttribute('data-field');
+    let value = td.innerText.trim();
+    if(field==='enabled'){ value = (value.toLowerCase().startsWith('t')||value==='1'||value.toLowerCase()==='true'); }
+    fetch(`/agent/crud/doors/${id}/inline/`, {
+      method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCSRF()},
+      body: JSON.stringify({field, value})
+    }).then(r=>r.json()).then(data=>{ if(!data.ok){ console.warn(data); } });
+  });
+});
+document.querySelectorAll('.door-open-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const id = btn.closest('tr').getAttribute('data-door-id');
+    fetch(`/agent/api/doors/${id}/open/`).then(r=>r.json()).then(data=>{ if(data.ok){ btn.closest('tr').querySelector('.door-state').innerText='OPEN'; } });
+  });
+});
+document.querySelectorAll('.door-close-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const id = btn.closest('tr').getAttribute('data-door-id');
+    fetch(`/agent/api/doors/${id}/close/`).then(r=>r.json()).then(data=>{ if(data.ok){ btn.closest('tr').querySelector('.door-state').innerText='CLOSED'; } });
+  });
+});
+</script>
+{% endblock %}

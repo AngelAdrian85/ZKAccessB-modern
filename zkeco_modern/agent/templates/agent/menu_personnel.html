@@ -1,0 +1,20 @@
+{% extends 'agent/base_legacy.html' %}
+{% block title %}Personnel{% endblock %}
+{% block content %}
+<div class='grid'>
+  <section class='panel'><h2>People</h2><ul>
+    <li><a class='op' title='Adaugă un angajat nou' href='/agent/crud/employees/new/'>Add Employee</a></li>
+    <li><a class='op' title='Importă angajați din fișier' href='/agent/crud/employees/import/'>Import Employees</a></li>
+    <li><a class='op' title='Înregistrează amprente (pagina angajaților)' href='/agent/crud/employees/'>Fingerprint Registration</a></li>
+    <li><a class='op' title='Emite sau actualizează cardul angajatului' href='/agent/crud/issuecards/'>Issue Cards</a></li>
+    <li><a class='op' title='Gestionează cardurile emise' href='/agent/crud/issuecards/'>Card List</a></li>
+    <li><a class='op' title='Departamente organizație' href='/agent/crud/depts/'>Departments</a></li>
+    <li><a class='op' title='Zone fizice / arii' href='/agent/crud/areas/'>Areas</a></li>
+  </ul></section>
+  <section class='panel accent'><h2>Quick Actions</h2><ul>
+    <li><a class='op' title='Dezactivează cardul unui angajat' href='/agent/crud/employees/'>Deactivate Card</a></li>
+    <li><a class='op' title='Resetează codul/PIN pentru acces' href='/agent/crud/employees/'>Reset PIN</a></li>
+    <li><a class='op' title='Sincronizează modificările către dispozitive' href='/agent/control/'>Sync to Devices</a></li>
+  </ul></section>
+<footer class='footer'>Personnel module (modernized).</footer>
+{% endblock %}

@@ -1,0 +1,95 @@
+{% extends 'agent/base_legacy.html' %}
+{% block title %}Control Center{% endblock %}
+{% block content %}
+<h1>System Control Center</h1>
+<p>Central hub grouped similar to legacy agent.</p>
+<div class="grid">
+  <section class="panel accent">
+    <h2>CommCenter Status</h2>
+    <div id="ccStatus">Loading...</div>
+    <div style="margin-top:0.5em;">
+      <button onclick="startCenter()">Start CommCenter</button>
+      <button onclick="stopCenter()">Stop CommCenter</button>
+      <button onclick="refreshStatus()">Refresh</button>
+    </div>
+  </section>
+  <section class="panel">
+    <h2>Realtime & Monitoring</h2>
+    <ul>
+      <li><a href="/agent/dashboard/">Dashboard</a></li>
+      <li><a href="/agent/monitor/">Realtime Monitor</a></li>
+      <li><a href="/agent/status/">Device Status Summary</a></li>
+      <li><a href="/agent/reports/events/">Event Reports</a></li>
+      <li><a href="/agent/reports/alarms/">Alarm Reports</a></li>
+    </ul>
+  </section>
+  <section class="panel">
+    <h2>Access Control</h2>
+    <ul>
+      <li><a href="/agent/access/doors/">Doors (List)</a></li>
+      <li><a href="/agent/access/time-segments/">Time Segments</a></li>
+      <li><a href="/agent/access/holidays/">Holidays</a></li>
+      <li><a href="/agent/access/levels/">Access Levels</a></li>
+    </ul>
+  </section>
+  <section class="panel">
+    <h2>Personnel</h2>
+    <ul>
+      <li><a href="/agent/crud/employees/">Employee CRUD</a></li>
+      <li><a href="/agent/reports/employees/">Employee Report</a></li>
+      <li><a href="/agent/crud/employees/import/">Bulk Import</a></li>
+      <li><a href="/agent/crud/employees/export/?format=csv">Export CSV</a></li>
+    </ul>
+  </section>
+  <section class="panel">
+    <h2>System Ops</h2>
+    <ul>
+      <li><button onclick="shutdownServer()" style="background:#c0392b;color:#fff;border:none;padding:4px 10px;">Shutdown Server</button></li>
+      <li><a href="/admin/" target="_blank">Admin Site</a></li>
+      <li><a href="/agent/metrics/">JSON Metrics</a></li>
+      <li><a href="/agent/metrics/prometheus/">Prometheus Metrics</a></li>
+    </ul>
+    <div id="shutdownMsg" style="margin-top:0.5em;font-weight:bold"></div>
+  </section>
+  <section class="panel">
+    <h2>Caching & Commands</h2>
+    <ul>
+      <li><a href="/agent/api/access/check/?employee=1&door=1">Sample Access Check</a></li>
+      <li><a href="/agent/api/commands/recent/" target="_blank">Recent Commands JSON</a></li>
+    </ul>
+  </section>
+</div>
+<script>
+function getCSRF(){ const m=document.cookie.match(/csrftoken=([^;]+)/); return m?m[1]:''; }
+async function refreshStatus(){
+  try { const r=await fetch('/agent/control/comm-center/status/'); const j=await r.json(); if(!j.ok) throw new Error(j.error||'error');
+    const c=j.center; let html='';
+    html += '<div><b>Running:</b> '+c.running+'</div>';
+    if(c.running){
+      html += '<div><b>Sessions:</b> '+c.sessions+'</div>';
+      html += '<div><b>Rtlog Lines:</b> '+c.rtlog_lines+'</div>';
+      html += '<div><b>Event Logs:</b> '+c.event_logs+'</div>';
+      html += '<div><b>Poll Interval:</b> '+c.poll_interval+'s</div>';
+      html += '<div><b>Last Cycle:</b> '+c.last_cycle+'</div>';
+    } else {
+      html += '<div>CommCenter not running.</div>';
+    }
+    document.getElementById('ccStatus').innerHTML=html;
+  } catch(e){ document.getElementById('ccStatus').textContent='Status error'; }
+}
+async function startCenter(){
+  try { const r=await fetch('/agent/control/comm-center/start/', {method:'POST', headers:{'X-CSRFToken':getCSRF()}}); const j=await r.json(); refreshStatus(); }
+  catch(e){ alert('Start failed'); }
+}
+async function stopCenter(){
+  try { const r=await fetch('/agent/control/comm-center/stop/', {method:'POST', headers:{'X-CSRFToken':getCSRF()}}); const j=await r.json(); refreshStatus(); }
+  catch(e){ alert('Stop failed'); }
+}
+async function shutdownServer(){
+  if(!confirm('Shutdown server now?')) return;
+  try { const r=await fetch('/agent/shutdown/', {method:'POST', headers:{'X-CSRFToken':getCSRF()}}); const j=await r.json(); document.getElementById('shutdownMsg').textContent=j.ok?'Server shutting down...':'Failed'; }
+  catch(e){ document.getElementById('shutdownMsg').textContent='Error'; }
+}
+refreshStatus(); setInterval(refreshStatus, 10000);
+</script>
+{% endblock %}

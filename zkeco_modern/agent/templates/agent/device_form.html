@@ -1,0 +1,39 @@
+{% extends 'agent/base_legacy.html' %}
+{% block content %}
+<h2>{% if obj %}Editează Dispozitiv{% else %}Dispozitiv Nou{% endif %}</h2>
+<form method="post">{% csrf_token %}
+{{ form.as_p }}
+<div style="border:1px solid #ccc;padding:8px;margin:10px 0" data-tip="Utilitare rapid IP" title="Utilitare IP">
+	<label>Prefix rețea (ex: 192.168.1)</label>
+	<input type="text" id="netBase" value="192.168.1" style="width:140px" />
+	<button type="button" id="discoverBtn" class="btn" data-tip="Scanează primele 10 adrese">Descoperă</button>
+	<label>IP test</label><input type="text" id="pingIp" style="width:140px" />
+	<button type="button" id="pingBtn" class="btn" data-tip="Ping dispozitiv">Ping</button>
+	<div id="netResults" style="margin-top:6px;font-size:12px"></div>
+</div>
+<button class="btn" data-tip="Salvează dispozitiv" title="Salvează">Salvează</button>
+<a href="{% url 'crud-devices-list' %}" class="btn" data-tip="Înapoi" title="Înapoi">Înapoi</a>
+</form>
+{% endblock %}
+<script>
+(function(){
+	const csrftoken=(document.querySelector('input[name=csrfmiddlewaretoken]')||{}).value;
+	function htmlEscape(s){return s.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+	document.getElementById('discoverBtn').addEventListener('click', async ()=>{
+		const base=document.getElementById('netBase').value.trim(); if(!base) return;
+		const box=document.getElementById('netResults'); box.textContent='Scan în curs...';
+		try{ const r=await fetch('/agent/devices/discover/?base='+encodeURIComponent(base)); const j=await r.json(); if(j.ok){
+			if(!j.responsive.length){ box.textContent='Nicio adresă receptivă.'; } else {
+				box.innerHTML='A găsit: '+ j.responsive.map(ip=>'<a href="#" class="ipPick" data-ip="'+htmlEscape(ip)+'">'+htmlEscape(ip)+'</a>').join(', ');
+				box.querySelectorAll('.ipPick').forEach(a=>a.addEventListener('click',e=>{ e.preventDefault(); document.querySelector('input[name=ip_address]').value=a.dataset.ip; }));
+			}
+		} else { box.textContent='Eroare scanare'; }
+		}catch(e){ box.textContent='Eroare comunicare'; }
+	});
+	document.getElementById('pingBtn').addEventListener('click', async ()=>{
+		const ip=document.getElementById('pingIp').value.trim(); if(!ip) return;
+		const box=document.getElementById('netResults'); box.textContent='Ping...';
+		try{ const r=await fetch('/agent/devices/ping/?ip='+encodeURIComponent(ip)); const j=await r.json(); if(j.ok){ box.textContent='Ping '+ip+': '+(j.alive?'ONLINE':'NO RESPONSE'); if(j.alive){ document.querySelector('input[name=ip_address]').value=ip; } } else { box.textContent='Ping failed'; } }catch(e){ box.textContent='Ping error'; }
+	});
+})();
+</script>

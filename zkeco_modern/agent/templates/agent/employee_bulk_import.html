@@ -1,0 +1,27 @@
+{% extends 'agent/base_legacy.html' %}
+{% block title %}Employee Bulk Import{% endblock %}
+{% block content %}
+<h2>Bulk Import Employees</h2>
+<p>CSV format: first_name,last_name,card_number,access_levels(optional pipe-separated)<br>
+Example: Ana,Pop,CARD123,Office|Server</p>
+<form method='post' enctype='multipart/form-data'>
+  {% csrf_token %}
+  <input type='file' name='file' accept='.csv' required>
+  <button type='submit' class='op'>Upload</button>
+  <a href='{% url "crud-employees-list" %}'>Back</a>
+</form>
+{% if summary %}
+<h3>Result</h3>
+<table class='status-box' style='width:100%;border-collapse:collapse'>
+<tr><th>Card</th><th>Created</th><th>Levels</th><th>Error</th></tr>
+{% for row in summary %}
+<tr>
+  <td>{{ row.card }}</td>
+  <td>{{ row.created }}</td>
+  <td>{{ row.levels|join:', ' }}</td>
+  <td>{{ row.error }}</td>
+</tr>
+{% endfor %}
+</table>
+{% endif %}
+{% endblock %}

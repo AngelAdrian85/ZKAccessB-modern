@@ -1,0 +1,32 @@
+{% extends 'agent/base_legacy.html' %}
+{% block title %}Doors{% endblock %}
+{% block content %}
+<h2>Doors</h2>
+<p>Placeholder page inspired by Acc_Door_Mng / Acc_Door_Set.</p>
+<table class='status-box' style='width:100%;border-collapse:collapse'>
+  <tr><th style='text-align:left'>Door</th><th>Status</th><th>Actions</th></tr>
+  <tr id='door-main'><td>Main Entrance</td><td class='st'>Closed</td><td><a href='#' class='op'>Open</a></td></tr>
+  <tr id='door-server'><td>Server Room</td><td class='st'>Closed</td><td><a href='#' class='op'>Open</a></td></tr>
+</table>
+<script>
+// Subscribe to monitor websocket for live door status (placeholder mapping)
+const mapSerialToRow = { 'main-serial': 'door-main', 'server-serial': 'door-server' };
+function applyStatus(payload){
+  if(payload.type !== 'device.status') return;
+  // Demo: use serial mapping if provided
+  const rowId = mapSerialToRow[payload.serial] || null;
+  if(!rowId) return;
+  const row = document.getElementById(rowId);
+  if(row){
+    const cell = row.querySelector('.st');
+    if(cell){ cell.textContent = payload.door_state || (payload.online?'Online':'Offline'); }
+  }
+}
+function startWS(){
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const ws = new WebSocket(proto + '://' + location.host + '/ws/monitor/');
+  ws.onmessage = (e)=>{ try{ applyStatus(JSON.parse(e.data)); }catch(err){} };
+}
+startWS();
+</script>
+{% endblock %}

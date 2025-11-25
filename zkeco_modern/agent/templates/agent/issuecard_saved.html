@@ -1,0 +1,6 @@
+{% extends 'agent/base_legacy.html' %}
+{% block content %}
+<h2 data-tip="Card salvat" title="Card salvat">Card salvat</h2>
+<p>ID {{ obj.id }} - {{ obj.cardno }}</p>
+<p><a href="{% url 'crud-issuecards-list' %}" class="btn" data-tip="Înapoi la listă" title="Înapoi">Înapoi</a></p>
+{% endblock %}

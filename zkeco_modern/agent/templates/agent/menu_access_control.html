@@ -1,0 +1,19 @@
+{% extends 'agent/base_legacy.html' %}
+{% block title %}Access Control{% endblock %}
+{% block content %}
+<div class='grid'>
+  <section class='panel'><h2>Configuration</h2><ul>
+    <li><a class='op' title='Gestionează zonele fizice' href='/agent/crud/areas/'>Areas</a></li>
+    <li><a class='op' title='Gestionează ușile de acces' href='/agent/crud/doors/'>Doors</a></li>
+    <li><a class='op' title='Definește intervale orare pentru control acces' href='/agent/crud/time-segments/'>Time Zones</a></li>
+    <li><a class='op' title='Gestionează sărbătorile/ zile libere' href='/agent/crud/holidays/'>Holidays</a></li>
+    <li><a class='op' title='Departamente organizație' href='/agent/crud/depts/'>Departments</a></li>
+  </ul></section>
+  <section class='panel accent'><h2>Levels & Permissions</h2><ul>
+    <li><a class='op' title='Definește niveluri de acces' href='/agent/crud/access-levels/'>Access Levels</a></li>
+    <li><a class='op' title='Asignează niveluri de acces angajaților' href='/agent/crud/access-levels/'>Assign Access</a></li>
+    <li><a class='op' title='Monitorizare în timp real uși/dispozitive (tab nou)' href='/agent/monitor/' target='_blank'>Realtime Monitoring</a></li>
+    <li><a class='op' title='Jurnal evenimente acces' href='/agent/crud/access-logs/'>Access Logs</a></li>
+  </ul></section>
+<footer class='footer'>Access Control module (modernized).</footer>
+{% endblock %}

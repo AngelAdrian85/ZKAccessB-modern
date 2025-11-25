@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html><head><title>Devices</title><meta charset="utf-8" />
+<style>
+body{font-family:Arial;background:#f5f9fc;margin:0;}
+header{background:#1e6bb8;color:#fff;padding:10px 16px;font-size:18px;}
+.table-wrap{padding:14px;}
+table{border-collapse:collapse;width:100%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08);}
+th,td{border:1px solid #d0d7de;padding:6px 8px;font-size:13px;text-align:left;}
+th{background:#f0f3f6;}
+tr:nth-child(even){background:#fafbfc;}
+.actions a{margin-right:6px;font-size:12px;color:#0969da;text-decoration:none;}
+.actions a.delete{color:#cf222e;}
+.search-bar{margin-bottom:10px;display:flex;gap:8px;}
+.search-bar input{flex:1;padding:6px;border:1px solid #d0d7de;border-radius:4px;}
+.btn{padding:6px 12px;border:1px solid #1e6bb8;background:#1e6bb8;color:#fff;border-radius:4px;cursor:pointer;font-size:12px;}
+.badge{display:inline-block;padding:2px 6px;border-radius:10px;background:#2da44e;color:#fff;font-size:11px;}
+</style></head>
+<body>
+<header>Device Management (Prototype)</header>
+<div class="table-wrap">
+  <div class="search-bar">
+    <input id="filter" placeholder="Search by ID or SN" oninput="filterRows()" />
+    <button class="btn" onclick="location.href='/agent/monitor/'">Go Monitor</button>
+  </div>
+  <table id="dev-table">
+    <thead>
+      <tr><th>ID</th><th>Serial/Name</th><th>Type</th><th>IP Address</th><th>Firmware</th><th>Status</th><th>Actions</th></tr>
+    </thead>
+    <tbody>
+    {% for d in devices %}
+      <tr data-q="{{ d.id }} {{ d.sn }}">
+        <td>{{ d.id }}</td>
+        <td>{{ d.sn }}</td>
+        <td>Access Control Panel</td>
+        <td>-</td>
+        <td>-</td>
+        <td><span class="badge">UNKNOWN</span></td>
+        <td class="actions">
+          <a href="/agent/api/devices/{{ d.id }}/doors/0/open/" target="_blank">Open</a>
+          <a href="/agent/api/devices/{{ d.id }}/doors/0/close/" target="_blank">Close</a>
+          <a href="/agent/api/devices/{{ d.id }}/doors/0/cancel-alarm/" target="_blank" class="delete">AlarmOff</a>
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="7">No devices discovered yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+<script>
+function filterRows(){
+  const term=document.getElementById('filter').value.toLowerCase();
+  document.querySelectorAll('#dev-table tbody tr').forEach(r=>{
+    const q=r.getAttribute('data-q');
+    r.style.display = (!term || q.toLowerCase().includes(term)) ? '' : 'none';
+  });
+}
+</script>
+</body></html>

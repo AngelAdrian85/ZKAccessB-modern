@@ -1,0 +1,29 @@
+{% extends 'agent/base_legacy.html' %}
+{% block content %}
+<h2 data-tip="Evenimente acces" title="Jurnal Acces">Jurnal Acces</h2>
+<form method="get" class="filter" data-tip="Filtru jurnal" title="Filtru">
+{{ form.as_p }}
+<button class="btn" data-tip="Aplică filtrul" title="Filtrează">Filtrează</button>
+<a href="?" class="btn" data-tip="Resetează filtrul" title="Reset">Reset</a>
+</form>
+{% if missing %}<p class="warn">Model AccessLog indisponibil.</p>{% endif %}
+{% if page %}
+<table class="crud" data-tip="Tabel evenimente" title="Evenimente">
+<thead><tr><th>Data</th><th>UserID</th><th>Card</th><th>Ușă</th><th>Device</th><th>Tip</th><th>Rezultat</th><th>Info</th></tr></thead>
+<tbody>
+{% for e in page.object_list %}
+<tr>
+<td>{{ e.timestamp }}</td>
+<td>{% if e.userid %}{{ e.userid.userid }}{% endif %}</td>
+<td>{{ e.cardno }}</td>
+<td>{% if e.door %}{{ e.door.name }}{% endif %}</td>
+<td>{% if e.device %}{{ e.device.device_name }}{% endif %}</td>
+<td>{{ e.event_type }}</td>
+<td>{{ e.result }}</td>
+<td>{{ e.info|truncatechars:60 }}</td>
+</tr>
+{% endfor %}
+</tbody></table>
+<div class="pagination">{% if page.has_previous %}<a href="?page={{ page.previous_page_number }}" data-tip="Pagina anterioară">«</a>{% endif %} <span>{{ page.number }}/{{ page.paginator.num_pages }}</span> {% if page.has_next %}<a href="?page={{ page.next_page_number }}" data-tip="Pagina următoare">»</a>{% endif %}</div>
+{% endif %}
+{% endblock %}

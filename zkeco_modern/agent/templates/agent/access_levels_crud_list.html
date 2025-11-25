@@ -1,0 +1,24 @@
+{% extends 'agent/base_legacy.html' %}
+{% block title %}Access Levels{% endblock %}
+{% block content %}
+<h2>Access Levels (CRUD)</h2>
+<p><a class='op' href='{% url "crud-access-level-create" %}'>Add Access Level</a></p>
+<table class='status-box' style='width:100%;border-collapse:collapse'>
+<tr><th>Name</th><th>Doors</th><th>Segments</th><th>Actions</th></tr>
+{% for l in page.object_list %}
+<tr>
+  <td>{{ l.name }}</td>
+  <td>{% for d in l.doors.all %}{{ d.name }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</td>
+  <td>{% for s in l.time_segments.all %}{{ s.name }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</td>
+  <td><a class='op' href='{% url "crud-access-level-edit" l.id %}'>Edit</a>
+    <form method='post' action='{% url "crud-access-level-delete" l.id %}' style='display:inline' onsubmit='return confirm("Delete level?")'>
+      {% csrf_token %}<button class='op' style='background:#632626'>Del</button>
+    </form>
+  </td>
+</tr>
+{% empty %}<tr><td colspan='4'>No levels</td></tr>{% endfor %}
+</table>
+<div>Page {{ page.number }} of {{ page.paginator.num_pages }}</div>
+{% if page.has_previous %}<a href='?page={{ page.previous_page_number }}'>Prev</a>{% endif %}
+{% if page.has_next %}<a href='?page={{ page.next_page_number }}'>Next</a>{% endif %}
+{% endblock %}

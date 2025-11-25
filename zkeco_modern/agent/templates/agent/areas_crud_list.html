@@ -1,0 +1,23 @@
+{% extends 'agent/base_legacy.html' %}
+{% block content %}
+<h2 data-tip="Lista zone" title="Zone">Zone</h2>
+<p><a href="{% url 'crud-area-create' %}" class="btn" data-tip="Adaugă zonă" title="Nouă">+ Nouă</a></p>
+{% if missing %}<p class="warn">Model Area indisponibil.</p>{% endif %}
+{% if page %}
+<table class="crud" data-tip="Tabel zone">
+<thead><tr><th>ID</th><th>Nume</th><th>Actiuni</th></tr></thead>
+<tbody>
+{% for a in page.object_list %}
+<tr>
+<td>{{ a.id }}</td>
+<td>{{ a.areaname }}</td>
+<td>
+<a href="{% url 'crud-area-edit' a.id %}" data-tip="Editează">Edit</a>
+<form method="post" action="{% url 'crud-area-delete' a.id %}" style="display:inline" onsubmit="return confirm('Ștergi?');">{% csrf_token %}<button data-tip="Șterge">X</button></form>
+</td>
+</tr>
+{% endfor %}
+</tbody></table>
+<div class="pagination">{% if page.has_previous %}<a href="?page={{ page.previous_page_number }}" data-tip="Pagina anterioară">«</a>{% endif %} <span>{{ page.number }}/{{ page.paginator.num_pages }}</span> {% if page.has_next %}<a href="?page={{ page.next_page_number }}" data-tip="Pagina următoare">»</a>{% endif %}</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,152 @@
+{% extends 'agent/base_legacy.html' %}
+{% block title %}Real-Time Monitoring{% endblock %}
+{% block content %}
+<style>
+.device-icon{width:80px;height:80px;background:#1e303d;border:2px solid #2d4961;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;margin:8px;position:relative;cursor:pointer;transition:all 0.3s;}
+.device-icon.online{border-color:#2da44e;background:#1a3d2a;}
+.device-icon.offline{border-color:#cf222e;opacity:0.5;}
+.device-icon .icon{font-size:32px;margin-bottom:4px;}
+.device-icon .label{font-size:10px;color:#cfe9f8;text-align:center;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.device-icon.online .icon::before{content:'🏢';}
+.device-icon.offline .icon::before{content:'⚫';}
+.device-grid{display:flex;flex-wrap:wrap;justify-content:center;padding:20px;gap:12px;min-height:200px;}
+#event-grid{width:100%;border-collapse:collapse;font-size:11px;background:#152a38;margin-top:20px;}
+#event-grid thead tr{background:#0d3a63;}
+#event-grid th{border:1px solid #1e303d;padding:6px;color:#fff;font-weight:600;}
+#event-grid td{border:1px solid #1e303d;padding:4px;color:#cfe9f8;}
+.toolbar{background:#0d3a63;padding:8px 12px;margin:-20px -20px 12px -20px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-bottom:2px solid #1e303d;}
+.toolbar button{padding:6px 12px;border-radius:4px;border:none;background:#1e3e55;color:#fff;cursor:pointer;font-size:12px;font-weight:500;}
+.toolbar button:hover{background:#245678;}
+.toolbar button.action{background:#2da44e;}
+.toolbar button.danger{background:#cf222e;}
+.toolbar input,.toolbar select{background:#152a38;border:1px solid #1e303d;color:#cfe9f8;padding:4px 8px;border-radius:4px;font-size:12px;}
+.filter-links{display:flex;gap:12px;margin:8px 0;font-size:12px;flex-wrap:wrap;}
+.filter-links a{color:#4db3ff;text-decoration:none;padding:4px 0;}
+.filter-links a:hover{text-decoration:underline;}
+@keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.08);}}
+@keyframes flash{0%,100%{border-color:#cf222e;}50%{border-color:#ff6b6b;}}
+.device-icon.alarm{animation:flash 0.8s infinite;}
+</style>
+
+<div class="toolbar">
+  <label style="color:#fff;font-weight:600;">Area:</label>
+  <select id="areaFilter"><option>All</option></select>
+  <label style="color:#fff;font-weight:600;">Access Control Panel:</label>
+  <select id="panelFilter"><option>----------------</option></select>
+  <label style="color:#fff;font-weight:600;">Door:</label>
+  <select id="doorFilter"><option>----------------</option></select>
+  <button class="action" onclick="bulkOpen()" data-tip="Deschide toate ușile">▶Open all current doors</button>
+  <button class="danger" onclick="bulkClose()" data-tip="Închide toate ușile">▶Close all current doors</button>
+  <button onclick="cancelAllAlarms()" style="background:#815f00;" data-tip="Anulează toate alarmele">▶Cancel all alarms</button>
+</div>
+
+<div style="background:#f0f4f8;padding:8px 12px;margin:-20px -20px 12px -20px;border-bottom:1px solid #d0d7de;">
+  <h3 style="margin:0 0 8px 0;color:#0d3a63;font-size:14px;font-weight:600;">🚪 Door Status Monitoring</h3>
+  <div class="filter-links">
+    <a href="#" onclick="bulkOpen(); return false;">▶Open all current doors</a>
+    <a href="#" onclick="bulkClose(); return false;">▶Close all current doors</a>
+    <a href="#" onclick="cancelAllAlarms(); return false;">▶Cancel all alarms</a>
+  </div>
+</div>
+
+<div class="device-grid" id="devices"></div>
+
+<div style="margin-top:20px;">
+  <h3 style="color:#5fc4ff;font-size:14px;font-weight:600;margin:0 0 8px 0;display:flex;justify-content:space-between;align-items:center;">
+    📋 Events Monitoring
+    <input id="eventFilter" placeholder="Filter events..." style="padding:4px 8px;background:#152a38;border:1px solid #1e303d;border-radius:4px;max-width:200px;color:#cfe9f8;font-size:12px;" oninput="filterEvents()" />
+  </h3>
+  <div style="overflow:auto;max-height:400px;border:1px solid #1e303d;border-radius:6px;">
+    <table id="event-grid">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Device</th>
+          <th>Event point</th>
+          <th>Event Description</th>
+          <th>Card Number</th>
+          <th>No.(Firstname Lastname)</th>
+          <th>Status</th>
+          <th>Verify Mode</th>
+        </tr>
+      </thead>
+      <tbody id="events"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const devs={};
+function renderDevices(){
+  const wrap=document.getElementById('devices');
+  wrap.innerHTML=Object.values(devs)
+    .map(d=>{
+      const deviceName = (d.sn || d.id || 'Device').toString();
+      const isOnline = d.online !== false;
+      const hasAlarm = d.door_state === 'ALARM';
+      return `<div class='device-icon ${isOnline?"online":"offline"} ${hasAlarm?"alarm":""}' onclick='alert("Device: ${deviceName}")' title='${deviceName} - ${isOnline?"ONLINE":"OFFLINE"}'>
+        <div class='icon'></div>
+        <div class='label'>${deviceName}</div>
+      </div>`;
+    })
+    .join('') || '<p style="color:#999;text-align:center;padding:40px;">No devices connected. Waiting for device status...</p>';
+}
+function addEvent(obj){
+  const body=document.getElementById('events');
+  const tr=document.createElement('tr');
+  const alarm = (obj.status||'').toUpperCase()==='ALARM' || /(alarm)/i.test(obj.description||'');
+  tr.style.background = alarm ? '#3b1e1e' : '';
+  tr.innerHTML = [
+    new Date().toLocaleTimeString(),
+    obj.device_id||'',
+    obj.point||'',
+    obj.description||obj.event||JSON.stringify(obj).slice(0,40),
+    obj.card_no||'',
+    obj.name||'',
+    obj.status||'',
+    obj.verify_mode||''
+  ].map(val=>`<td>${val}</td>`).join('');
+  body.insertBefore(tr, body.firstChild); // Insert at top
+  // Trim rows if exceed 500
+  while(body.rows.length>500){ body.deleteRow(500); }
+}
+function filterEvents(){
+  const term=document.getElementById('eventFilter').value.toLowerCase();
+  document.querySelectorAll('#events tr').forEach(r=>{
+    r.style.display = (!term || r.textContent.toLowerCase().includes(term)) ? '' : 'none';
+  });
+}
+function wsConnect(){
+  const ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws/monitor/');
+  ws.onmessage=(e)=>{
+    let data; try{data=JSON.parse(e.data);}catch(err){return;}
+    if(data.type==='device.status'||data.type==='device.online'){
+      devs[data.device_id]=Object.assign(devs[data.device_id]||{id:data.device_id},{online:data.online!==false,sn:data.serial||data.sn,door_state:data.door_state||'CLOSED'});
+      renderDevices();
+    } else if(data.type==='rtlog.batch'){
+      addEvent({rtlog_count:data.lines.length,device_id:data.device_id});
+    } else if(data.type==='event.batch'){
+      if(data.descriptions && data.codes){
+        data.descriptions.forEach((desc,i)=>{ addEvent({event:desc,code:data.codes[i],device_id:data.device_id}); });
+      } else { addEvent({events:data.count,device_id:data.device_id}); }
+    } else if(data.type==='legacy.event'){
+      addEvent(data);
+    } else if(/^door\./.test(data.type)){
+      const ds = devs[data.device_id] || {id:data.device_id};
+      if(data.type==='door.open'){ ds.door_state='OPEN'; }
+      else if(data.type==='door.close'){ ds.door_state='CLOSED'; }
+      else if(data.type==='door.normal_open'){ ds.door_state='NORMAL_OPEN'; }
+      else if(data.type==='door.cancel_alarm'){ ds.door_state='ALARM_CLEARED'; }
+      devs[data.device_id]=ds; renderDevices(); addEvent({event:data.type,device_id:data.device_id});
+    } else { addEvent(data); }
+  };
+}
+function doorAction(id,door,action){ fetch(`/agent/api/devices/${id}/doors/${door}/${action}/`).then(r=>r.json()).then(j=>addEvent({door_action:action,device_id:id,ok:j.ok})); }
+function bulkOpen(){Object.values(devs).forEach(d=>doorAction(d.id,0,'open'));}
+function bulkClose(){Object.values(devs).forEach(d=>doorAction(d.id,0,'close'));}
+function cancelAllAlarms(){Object.values(devs).forEach(d=>doorAction(d.id,0,'cancel-alarm'));}
+function refreshDevices(){renderDevices();}
+wsConnect();
+document.getElementById('filter').addEventListener('input',()=>renderDevices());
+</script>
+{% endblock %}

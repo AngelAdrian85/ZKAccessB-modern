@@ -1,0 +1,42 @@
+{% extends 'agent/base_legacy.html' %}
+{% block title %}All Events{% endblock %}
+{% block content %}
+<h2>All Events</h2>
+<div class="filter-bar">
+  <form method="get">
+    <label>Start <input type="datetime-local" name="start" value="{{ request.GET.start }}"></label>
+    <label>End <input type="datetime-local" name="end" value="{{ request.GET.end }}"></label>
+    <label>Device ID <input type="text" name="device" value="{{ request.GET.device }}" size="4"></label>
+    <label>Class
+      <select name="classification">
+        <option value="">-- any --</option>
+        <option value="FORCED_OPEN" {% if request.GET.classification == 'FORCED_OPEN' %}selected{% endif %}>FORCED_OPEN</option>
+        <option value="ACCESS_DENIED" {% if request.GET.classification == 'ACCESS_DENIED' %}selected{% endif %}>ACCESS_DENIED</option>
+        <option value="INVALID_CARD" {% if request.GET.classification == 'INVALID_CARD' %}selected{% endif %}>INVALID_CARD</option>
+        <option value="TAMPER" {% if request.GET.classification == 'TAMPER' %}selected{% endif %}>TAMPER</option>
+        <option value="DOOR_LEFT_OPEN" {% if request.GET.classification == 'DOOR_LEFT_OPEN' %}selected{% endif %}>DOOR_LEFT_OPEN</option>
+        <option value="ALARM_GENERIC" {% if request.GET.classification == 'ALARM_GENERIC' %}selected{% endif %}>ALARM_GENERIC</option>
+        <option value="NORMAL" {% if request.GET.classification == 'NORMAL' %}selected{% endif %}>NORMAL</option>
+      </select>
+    </label>
+    <label>Alarm Only <input type="checkbox" name="alarm" value="1" {% if request.GET.alarm %}checked{% endif %}></label>
+    <button type="submit">Filter</button>
+  </form>
+</div>
+<div class="export-links">
+  <a href="?{{ request.GET.urlencode }}&export=csv">Export CSV</a>
+  <a href="?{{ request.GET.urlencode }}&export=pdf">Export PDF</a>
+</div>
+<table class='status-box' style='width:100%;border-collapse:collapse'>
+  <tr><th style='text-align:left'>Time</th><th>Class</th><th>Alarm</th><th>Message</th><th>Severity</th></tr>
+  {% for e in events %}
+  <tr>
+    <td>{{ e.created_at }}</td>
+    <td>{{ e.classification }}</td>
+    <td>{% if e.alarm %}YES{% else %}NO{% endif %}</td>
+    <td>{{ e.content }}</td>
+    <td>{{ e.severity }}</td>
+  </tr>
+  {% empty %}<tr><td colspan='5'>No events</td></tr>{% endfor %}
+</table>
+{% endblock %}

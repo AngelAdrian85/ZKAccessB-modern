@@ -1,9 +1,23 @@
-# Minimal dependencies for zkeco_modern
-Django>=4.2,<5
+django==4.2.26
+channels==4.0.0
+channels-redis==4.2.0
+redis==5.0.1
 mysqlclient>=2.1
 django-debug-toolbar>=4.0
 django-extensions>=3.2
+pystray==0.19.5
+Pillow==12.0.0
+keyring==25.7.0
+requests==2.32.5
+playwright==1.44.0
 
-# Optional (add as needed):
+# ASGI production servers
+uvicorn==0.32.0
+daphne==4.1.2
+gunicorn==23.0.0
+reportlab==4.2.5
+
+# Optional:
 # djangorestframework
 # celery
+# prometheus-client

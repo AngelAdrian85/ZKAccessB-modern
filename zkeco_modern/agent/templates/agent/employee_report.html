@@ -1,0 +1,22 @@
+{% extends 'agent/base_legacy.html' %}
+{% block title %}Employees{% endblock %}
+{% block content %}
+<h2>Employees & Access Levels</h2>
+<p><a class='op' href='#'>Add Employee (soon)</a></p>
+<table class='status-box' style='width:100%;border-collapse:collapse'>
+<tr><th>Name</th><th>Card</th><th>Access Levels</th><th>Active</th></tr>
+{% for e in employees %}
+<tr>
+  <td>{{ e.name }}</td>
+  <td>{{ e.card }}</td>
+  <td>{{ e.levels }}</td>
+  <td>{{ e.active }}</td>
+</tr>
+{% empty %}<tr><td colspan='4'>No employees</td></tr>{% endfor %}
+</table>
+{% endblock %}
+{% block extra_js %}
+<script>
+// Future: websocket subscription for employee changes
+</script>
+{% endblock %}

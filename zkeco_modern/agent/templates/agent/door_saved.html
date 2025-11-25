@@ -1,0 +1,6 @@
+{% extends 'agent/base_legacy.html' %}
+{% block title %}Door Saved{% endblock %}
+{% block content %}
+<h2>Door {{ obj.name }} {% if created %}created{% else %}updated{% endif %}</h2>
+<p><a class='op' data-tip='Înapoi la lista ușilor' href='{% url "crud-doors-list" %}'>Return to list</a></p>
+{% endblock %}

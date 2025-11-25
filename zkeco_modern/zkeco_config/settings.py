@@ -47,11 +47,18 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    # Legacy models shim app used for tests and legacy ETL
-    "legacy_models",
+    "legacy_models",  # legacy shim
     "django_extensions",
     "debug_toolbar",
+    "zkeco_modern.agent",  # use fully-qualified path to avoid ModuleNotFoundError 'agent'
+    "channels",
 ]
+
+# If legacy_models cannot be imported (missing legacy 'mysite' path), drop it gracefully
+try:
+    import legacy_models  # type: ignore
+except Exception:
+    INSTALLED_APPS = [a for a in INSTALLED_APPS if a != "legacy_models"]
 
 # When opting into legacy exploration, enable the local stub app which
 # renders legacy templates for demo purposes.
@@ -162,6 +169,7 @@ if os.environ.get("INCLUDE_LEGACY") == "1":
         MEDIA_ROOT = str(legacy_media)
 
 WSGI_APPLICATION = "zkeco_config.wsgi.application"
+ASGI_APPLICATION = "zkeco_config.asgi.application"
 
 # Database
 # For development, use SQLite to avoid MySQL dependency issues
@@ -210,10 +218,21 @@ USE_I18N = True
 USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
-STATIC_URL = "static/"
+# Use leading slash so {% static %} resolves correctly (e.g. /static/agent/dashboard.css)
+STATIC_URL = "/static/"
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# Channels / WebSocket layer configuration with Redis fallback to in-memory.
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer" if os.environ.get("REDIS_URL") else "channels.layers.InMemoryChannelLayer",
+        "CONFIG": {
+            "hosts": [os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0")]
+        } if os.environ.get("REDIS_URL") else {},
+    }
+}
 
 # Debug toolbar settings
 INTERNAL_IPS = [

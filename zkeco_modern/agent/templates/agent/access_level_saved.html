@@ -1,0 +1,6 @@
+{% extends 'agent/base_legacy.html' %}
+{% block title %}Access Level Saved{% endblock %}
+{% block content %}
+<h2>Access Level {{ obj.name }} {% if created %}created{% else %}updated{% endif %}</h2>
+<p><a class='op' href='{% url "crud-access-levels-list" %}'>Return to list</a></p>
+{% endblock %}

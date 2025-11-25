@@ -4,6 +4,7 @@ from django.db import models
 class Dept(models.Model):
     code = models.CharField(max_length=32, blank=True, null=True)
     DeptName = models.CharField(max_length=128)
+    parent = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True)
 
     def __str__(self):
         return self.DeptName
@@ -42,6 +43,11 @@ class Employee(models.Model):
     selfpassword = models.CharField(max_length=64, blank=True, null=True)
     hiretype = models.CharField(max_length=32, blank=True, null=True)
     emptype = models.CharField(max_length=32, blank=True, null=True)
+    # Newly added extended fields bridging legacy UI requirements
+    reservation_password = models.CharField(max_length=64, blank=True, null=True)
+    role_on_device = models.CharField(max_length=64, blank=True, null=True)
+    elevator_superuser = models.BooleanField(default=False)
+    elevator_level = models.CharField(max_length=64, blank=True, null=True)
 
     def __str__(self):
         return f"{self.userid} - {self.firstname or ''} {self.lastname or ''}".strip()

@@ -1,0 +1,12 @@
+{% extends 'agent/base_legacy.html' %}
+{% block content %}
+<h2>{% if obj %}Editează Zonă{% else %}Zonă Nouă{% endif %}</h2>
+{% if missing %}<p class="warn">Model Area indisponibil.</p>{% endif %}
+{% if form %}
+<form method="post">{% csrf_token %}
+{{ form.as_p }}
+<button class="btn" data-tip="Salvează zona" title="Salvează">Salvează</button>
+<a href="{% url 'crud-areas-list' %}" class="btn" data-tip="Înapoi" title="Înapoi">Înapoi</a>
+</form>
+{% endif %}
+{% endblock %}

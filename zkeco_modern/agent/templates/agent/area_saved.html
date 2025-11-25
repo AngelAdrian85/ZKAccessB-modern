@@ -1,0 +1,6 @@
+{% extends 'agent/base_legacy.html' %}
+{% block content %}
+<h2>Zonă salvată</h2>
+<p>ID {{ obj.id }} - {{ obj.areaname }}</p>
+<p><a href="{% url 'crud-areas-list' %}" class="btn" data-tip="Înapoi la listă" title="Înapoi">Înapoi</a></p>
+{% endblock %}

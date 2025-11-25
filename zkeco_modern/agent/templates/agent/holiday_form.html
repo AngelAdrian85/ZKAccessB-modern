@@ -1,0 +1,11 @@
+{% extends 'agent/base_legacy.html' %}
+{% block title %}Holiday{% endblock %}
+{% block content %}
+<h2>{% if obj %}Edit Holiday{% else %}Create Holiday{% endif %}</h2>
+<form method='post'>
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type='submit' class='op'>Save</button>
+  <a href='{% url "crud-holidays-list" %}'>Back</a>
+</form>
+{% endblock %}

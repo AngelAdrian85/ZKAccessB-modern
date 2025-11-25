@@ -1,0 +1,33 @@
+{
+  "http://127.0.0.1:8000/": {
+    "code": 200,
+    "links": [
+      "http://127.0.0.1:8000/#content-start",
+      "http://127.0.0.1:8000/admin/"
+    ]
+  },
+  "http://127.0.0.1:8000/iaccess/": {
+    "code": 200,
+    "links": []
+  },
+  "http://127.0.0.1:8000/registration/login/": {
+    "code": 200,
+    "links": []
+  },
+  "http://127.0.0.1:8000/#content-start": {
+    "code": 200,
+    "links": [
+      "http://127.0.0.1:8000/admin/"
+    ]
+  },
+  "http://127.0.0.1:8000/admin/": {
+    "code": 200,
+    "links": [
+      "http://127.0.0.1:8000/admin/#content-start"
+    ]
+  },
+  "http://127.0.0.1:8000/admin/#content-start": {
+    "code": 200,
+    "links": []
+  }
+}

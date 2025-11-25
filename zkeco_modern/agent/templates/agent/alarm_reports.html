@@ -1,0 +1,28 @@
+{% extends 'agent/base_legacy.html' %}
+{% block title %}Alarm Report{% endblock %}
+{% block content %}
+<h2>Alarm Report</h2>
+<div class="filter-bar">
+  <form method="get">
+    <label>Start <input type="datetime-local" name="start" value="{{ request.GET.start }}"></label>
+    <label>End <input type="datetime-local" name="end" value="{{ request.GET.end }}"></label>
+    <label>Device ID <input type="text" name="device" value="{{ request.GET.device }}" size="4"></label>
+    <button type="submit">Filter</button>
+  </form>
+</div>
+<div class="export-links">
+  <a href="?{{ request.GET.urlencode }}&export=csv">Export CSV</a>
+  <a href="?{{ request.GET.urlencode }}&export=pdf">Export PDF</a>
+</div>
+<table class='status-box' style='width:100%;border-collapse:collapse'>
+  <tr><th style='text-align:left'>Time</th><th>Classification</th><th>Message</th><th>Severity</th></tr>
+  {% for a in alarms %}
+  <tr>
+    <td>{{ a.created_at }}</td>
+    <td>{{ a.classification }}</td>
+    <td>{{ a.content }}</td>
+    <td>{{ a.severity }}</td>
+  </tr>
+  {% empty %}<tr><td colspan='4'>No alarms</td></tr>{% endfor %}
+</table>
+{% endblock %}

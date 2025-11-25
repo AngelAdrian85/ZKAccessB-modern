@@ -1,0 +1,6 @@
+{% extends 'agent/base_legacy.html' %}
+{% block title %}Employee Saved{% endblock %}
+{% block content %}
+<h2>Employee {{ obj.first_name }} {{ obj.last_name }} {% if created %}created{% else %}updated{% endif %}</h2>
+<p><a class='op' href='{% url "crud-employees-list" %}'>Return to list</a></p>
+{% endblock %}
