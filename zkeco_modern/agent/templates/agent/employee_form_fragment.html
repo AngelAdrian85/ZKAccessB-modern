@@ -1,0 +1,243 @@
+<style>
+/* Tight two-column layout to match legacy modal spacing */
+ .emp-grid { display: grid; grid-template-columns: 1fr 360px; gap: 12px 28px; padding:22px 32px; font-size:12px; align-items:start; max-width:1160px; margin:0 auto; }
+.emp-field { display:flex; align-items:center; gap:10px; min-height:26px; }
+.emp-field label { color:#0b4f86; font-weight:600; font-size:12px; width:130px; margin:0; text-align:left; }
+.emp-field > *:not(label) { flex:1 1 auto; }
+.employee-quick-form > form { background: #ffffff; color: #0b1720; padding:8px; }
+.emp-field input[type=text], .emp-field input[type=email], .emp-field input[type=number], .emp-field input[type=date], .emp-field select, .emp-field textarea { background:#ffffff; border:1px solid #c6d6e6; color:#0b1720; padding:4px 6px; border-radius:3px; height:20px; box-sizing:border-box; font-size:12px; width:100%; }
+.emp-field .left-input { max-width: 360px; }
+.emp-field .right-input { max-width: 260px; }
+.emp-field textarea { height:56px; }
+.emp-full { grid-column: 1 / -1; }
+.emp-actions { padding:10px 14px; display:flex; justify-content:flex-end; gap:10px; background:transparent; border-top:1px solid rgba(0,0,0,0.03); }
+.field-errors { color:#b22; font-size:11px; margin-left:114px; min-height:14px; }
+.access-levels-select { height:120px; }
+.emp-grid h4 { margin:10px 0 8px 0; font-size:13px; color:#0b4f86; width:100%; }
+.photo-box { width:120px; height:140px; border:1px solid #c6d6e6; background:#f7fbff; display:flex;align-items:center;justify-content:center;border-radius:4px; }
+@media (max-width: 1280px) { .emp-grid { grid-template-columns: 1fr; } .emp-field label { width:120px; } .field-errors { margin-left:0; } }
+</style>
+
+<div class="employee-quick-form">
+  <form id="employeeQuickForm">
+    {% csrf_token %}
+    <div class="emp-grid">
+      <!-- add a small right-side photo area similar to legacy: -->
+      <!-- photo area already exists further down; ensure spacing aligns -->
+      <div class="emp-full" style="font-size:12px;color:#345;line-height:1.3;padding:6px 0 10px 0;">
+        <div style="background:#f0f7fb;border:1px solid #d8eaf6;padding:8px 10px;border-radius:4px;color:#234;">Personnel information is the system's basic information, so No. and department are required items. Fingerprint registration needs to be driven by a fingerprint scanner. If you have not installed such a driver yet, download one first!</div>
+      </div>
+      <div class="emp-full" style="margin-bottom:6px;"><strong style="color:#0b5394;font-size:13px;">Personnel Profile</strong></div>
+      <!-- Row 1 -->
+      <div class="emp-field">
+        <label for="id_legacy_userid">Personnel No. :</label>
+        <div style="display:flex;gap:8px;align-items:center; width:100%;"><div style="flex:1">{{ form.legacy_userid }}</div><button type="button" onclick="checkPersonnelNo()" style="padding:4px 6px;">Check</button></div>
+        <div class="field-errors">{{ form.legacy_userid.errors }}</div>
+      </div>
+      <div class="emp-field">
+        <label for="id_city">City:</label>
+        {{ form.city }}
+        <div class="field-errors">{{ form.city.errors }}</div>
+      </div>
+
+      <!-- Row 2 -->
+      <div class="emp-field">
+        <label for="id_first_name">First name:</label>
+        {{ form.first_name }}
+        <div class="field-errors">{{ form.first_name.errors }}</div>
+      </div>
+      <div class="emp-field">
+        <label for="id_last_name">Last name:</label>
+        {{ form.last_name }}
+        <div class="field-errors">{{ form.last_name.errors }}</div>
+      </div>
+
+      <!-- Row 3 -->
+      <div class="emp-field">
+        <label for="id_ssn">Social Security Number:</label>
+        {{ form.ssn }}
+        <div class="field-errors">{{ form.ssn.errors }}</div>
+      </div>
+      <div class="emp-field">
+        <label for="id_gender">Gender:</label>
+        {{ form.gender }}
+        <div class="field-errors">{{ form.gender.errors }}</div>
+      </div>
+
+      <!-- Row 4 -->
+      <div class="emp-field">
+        <label for="id_card_number">Card number:</label>
+        {{ form.card_number }}
+        <div class="field-errors">{{ form.card_number.errors }}</div>
+      </div>
+      <div class="emp-field">
+        <label for="id_card_type">Card Number Type:</label>
+        {{ form.card_type }}
+        <div class="field-errors">{{ form.card_type.errors }}</div>
+      </div>
+
+      <!-- Row 5 -->
+      <div class="emp-field">
+        <label for="id_password_on_record">Password:</label>
+        {{ form.password_on_record }}
+        <div class="field-errors">{{ form.password_on_record.errors }}</div>
+      </div>
+      <div class="emp-field">
+        <label for="id_identitycard">C.I.:</label>
+        {{ form.identitycard }}
+        <div class="field-errors">{{ form.identitycard.errors }}</div>
+      </div>
+
+      <!-- Row 6 -->
+      <div class="emp-field">
+        <label for="id_dept">Department:</label>
+        {{ form.dept }}
+        <div class="field-errors">{{ form.dept.errors }}</div>
+      </div>
+      <div class="emp-field">
+        <label for="id_hire_date">Employment Date:</label>
+        {{ form.hire_date }}
+        <div class="field-errors">{{ form.hire_date.errors }}</div>
+      </div>
+
+      <!-- Row 7 -->
+      <div class="emp-field">
+        <label for="id_secondary_card_number">Secondary Card:</label>
+        {{ form.secondary_card_number }}
+        <div class="field-errors">{{ form.secondary_card_number.errors }}</div>
+      </div>
+      <div class="emp-field">
+        <label for="id_reservation_password">Reservation Password:</label>
+        {{ form.reservation_password }}
+        <div class="field-errors">{{ form.reservation_password.errors }}</div>
+      </div>
+
+      <!-- Row 8 -->
+      <div class="emp-field">
+        <label for="id_extend_time">Extensie timp (min):</label>
+        {{ form.extend_time }}
+        <div class="field-errors">{{ form.extend_time.errors }}</div>
+      </div>
+      <div class="emp-field">
+        <label for="id_delayed_door_open">Delayed Door Open:</label>
+        {{ form.delayed_door_open }}
+        <div class="field-errors">{{ form.delayed_door_open.errors }}</div>
+      </div>
+
+      <!-- Row 9 -->
+      <div class="emp-field">
+        <label for="id_role_on_device">Role On Device:</label>
+        {{ form.role_on_device }}
+        <div class="field-errors">{{ form.role_on_device.errors }}</div>
+      </div>
+      <div class="emp-field">
+        <label for="id_hiretype">Employment Type:</label>
+        {{ form.hiretype }}
+        <div class="field-errors">{{ form.hiretype.errors }}</div>
+      </div>
+
+      <!-- Row 10 -->
+      <div class="emp-field">
+        <label for="id_phone">Office Telephone:</label>
+        {{ form.phone }}
+        <div class="field-errors">{{ form.phone.errors }}</div>
+      </div>
+      <div class="emp-field">
+        <label for="id_home_phone">Home Telephone:</label>
+        {{ form.home_phone }}
+        <div class="field-errors">{{ form.home_phone.errors }}</div>
+      </div>
+
+      <!-- Row 11 -->
+      <div class="emp-field">
+        <label for="id_mobile_phone">Mobile Phone:</label>
+        {{ form.mobile_phone }}
+        <div class="field-errors">{{ form.mobile_phone.errors }}</div>
+      </div>
+      <div class="emp-field">
+        <label for="id_birthday">Birthday:</label>
+        {{ form.birthday }}
+        <div class="field-errors">{{ form.birthday.errors }}</div>
+      </div>
+
+      <!-- Row 12: Email + Photo -->
+      <div class="emp-field">
+        <label for="id_email">Email:</label>
+        {{ form.email }}
+        <div class="field-errors">{{ form.email.errors }}</div>
+      </div>
+      <div class="emp-field photo-field" style="flex-direction:column;align-items:center;">
+        <div class="photo-box">No Photo</div>
+        <div style="font-size:11px;color:#666;margin-top:6px;text-align:center;">Upload Personal Photo<br/>(Optimal Size 120x140 Pixel)</div>
+        <div style="margin-top:6px;"><input type="file" name="photo" disabled></div>
+      </div>
+ 
+
+      <div class="emp-field emp-full"><h4>Access And Elevator Control Settings</h4></div>
+
+      <div class="emp-field">
+        <label for="id_access_superuser">Access superuser:</label>
+        {{ form.access_superuser }}
+        <div class="field-errors">{{ form.access_superuser.errors }}</div>
+      </div>
+      <div class="emp-field">
+        <label for="id_elevator_superuser">Elevator superuser:</label>
+        {{ form.elevator_superuser }}
+        <div class="field-errors">{{ form.elevator_superuser.errors }}</div>
+      </div>
+
+      <div class="emp-field emp-full access-block">
+        <label for="id_access_levels">Access levels:</label>
+        <div class="access-block-inner" style="display:flex;gap:16px;align-items:flex-start;width:100%;">
+          <div class="left" style="flex:1;">
+            <div class="available-title" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+              <div style="font-size:12px;color:#0b5394;font-weight:600">Available</div>
+              <label style="font-size:12px"><input type="checkbox" id="select_all_access_levels"> Select all</label>
+            </div>
+            <div class="access-box" style="border:1px solid #c7d3e0;padding:8px;height:220px;overflow:auto;background:#fff;">
+              {% for checkbox in form.access_levels %}
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">{{ checkbox.tag }} <span style="margin-left:6px">{{ checkbox.choice_label }}</span></div>
+              {% endfor %}
+            </div>
+          </div>
+          <div class="right" style="width:260px;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><div style="width:120px;font-size:12px;color:#0b5394;">Elevator Level:</div><div style="flex:1">{{ form.elevator_level }}</div></div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><div style="width:120px;font-size:12px;color:#0b5394;">Set Validity:</div><div style="flex:1">{{ form.set_validity }}</div></div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><div style="width:120px;font-size:12px;color:#0b5394;">Multi-Card Groups:</div><div style="flex:1">{{ form.multi_card_group }}</div></div>
+            <div class="field-errors">{{ form.elevator_level.errors }} {{ form.set_validity.errors }} {{ form.multi_card_group.errors }}</div>
+          </div>
+        </div>
+        <div class="field-errors">{{ form.access_levels.errors }}</div>
+      </div>
+
+      <div class="emp-field">
+        <label for="id_active">&nbsp;</label>
+        <div style="display:flex;align-items:center;gap:8px;"><label style="color:#0b5394;font-weight:600">{{ form.active }} Active</label></div>
+        <div class="field-errors">{{ form.active.errors }}</div>
+      </div>
+
+    </div>
+
+    <div class="emp-actions">
+      <button type="button" onclick="closeEmployeeModal()" style="background:#3d6a8b;color:#e8f0f8;border:none;padding:8px 12px;border-radius:4px;">Anulează</button>
+      <button type="submit" id="employeeQuickSave" style="background:#3da5d9;color:#fff;border:none;padding:8px 12px;border-radius:4px;">Salvează</button>
+    </div>
+    <div id="employeeQuickStatus" style="padding:8px 12px; font-size:12px; color:#e8f0f8;"></div>
+  </form>
+</div>
+<script>
+  // Select/deselect all access levels in the injected fragment
+  (function(){
+    const root = document.getElementById('employeeModalBody') || document;
+    const toggle = root.querySelector('#select_all_access_levels');
+    if(toggle){
+      toggle.addEventListener('change', function(){
+        const checks = root.querySelectorAll('input[type=checkbox][name*="access_levels"]');
+        checks.forEach(c => c.checked = toggle.checked);
+      });
+    }
+    window.checkPersonnelNo = function(){
+      alert('Check Personnel No. not implemented in this demo.');
+    }
+  })();
+</script>

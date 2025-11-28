@@ -10,6 +10,7 @@ from .models import CommandLog, EmployeeAccessCache
 from .forms import (DoorForm, TimeSegmentFormWithDays, HolidayForm, AccessLevelForm,
                     EmployeeForm, EmployeeExtendedForm, DeptForm, AreaForm,
                     IssueCardForm, AccessLogFilterForm, DeviceExtendedForm)
+from django.template.loader import render_to_string
 try:
     from legacy_models.models import Dept as LegacyDept, Area as LegacyArea, IssueCard as LegacyIssueCard, AccessLog as LegacyAccessLog
 except Exception:  # pragma: no cover
@@ -1393,13 +1394,25 @@ def employee_create(request: HttpRequest):
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
     from .forms import EmployeeExtendedForm
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     if request.method == 'POST':
         form = EmployeeExtendedForm(request.POST)
         if form.is_valid():
-            form.save(); return render(request,'agent/employee_saved.html',{'obj': form.instance,'created': True})
+            obj = form.save()
+            if is_ajax:
+                return JsonResponse({'ok': True, 'id': obj.id})
+            return render(request, 'agent/employee_saved.html', {'obj': obj, 'created': True})
+        else:
+            if is_ajax:
+                errors = {k: v[0] if v else '' for k, v in form.errors.items()}
+                return JsonResponse({'ok': False, 'errors': errors}, status=400)
+            return render(request, 'agent/employee_form.html', {'form': form})
     else:
         form = EmployeeExtendedForm()
-    return render(request,'agent/employee_form.html',{'form': form})
+        if is_ajax:
+            html = render_to_string('agent/employee_form_fragment.html', {'form': form}, request=request)
+            return JsonResponse({'html': html})
+    return render(request, 'agent/employee_form.html', {'form': form})
 
 def employee_edit(request: HttpRequest, pk: int):
     if not request.user.is_authenticated or not request.user.is_staff:

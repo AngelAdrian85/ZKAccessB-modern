@@ -15,15 +15,20 @@ table th, table td { padding: 4px 6px; }
 .op { padding: 4px 8px; font-size: 10px; }
 .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); }
 .modal.show { display: flex; align-items: center; justify-content: center; }
-.modal-content { background: #2d5a7b; padding: 20px; border-radius: 8px; width: 90%; max-width: 500px; border: 2px solid #3da5d9; }
-.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid #3da5d9; padding-bottom: 8px; }
-.modal-header h2 { margin: 0; font-size: 16px; color: #3da5d9; }
-.modal-close { background: none; border: none; color: #e8f0f8; font-size: 20px; cursor: pointer; }
-.modal-body { color: #e8f0f8; font-size: 11px; line-height: 1.6; }
-.modal-body ol { margin: 0; padding-left: 20px; }
-.modal-body li { margin-bottom: 4px; }
-.modal-footer { margin-top: 12px; text-align: right; }
-.modal-footer button { padding: 6px 12px; background: #3da5d9; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 10px; }
+/* Outer blue frame matching legacy admin modal */
+.modal-content { width: 90%; max-width: 1200px; padding: 8px; border-radius: 10px; background: linear-gradient(#5c95b8, #2f5f80); border: 2px solid #3b7fa3; box-shadow: 0 8px 22px rgba(0,0,0,0.45); position: relative; }
+/* Inner white panel that contains the title bar, body and footer */
+.modal-inner { background: #fff; border-radius: 6px; overflow: hidden; border: 3px solid #a8def4; }
+.modal-titlebar { background: linear-gradient(#eaf6fc,#dff3fb); padding: 8px 12px; border-bottom: 1px solid #cfeaf8; font-weight:700; color:#234e6c; font-size:13px; }
+.modal-titlebar { background: linear-gradient(#eaf6fc,#dff3fb); padding: 8px 14px; border-bottom: 1px solid #bfe8f6; font-weight:700; color:#234e6c; font-size:13px; }
+  .modal-titlebar .title { display:flex; align-items:center; gap:8px; }
+.modal-titlebar .icon { width:18px; height:18px; background:#3da5d9; color:#fff; display:inline-flex; align-items:center; justify-content:center; border-radius:3px; font-weight:700; font-size:12px; }
+  .modal-body { color: #0b1720; font-size: 12px; line-height: 1.5; padding: 18px 22px; max-height: 70vh; overflow: auto; background: #fff; }
+  .modal-footer { padding: 10px 16px; text-align: right; border-top: 1px solid #e6f3f9; background: #fff; }
+  .modal-footer button { padding: 6px 10px; background: #f3f5f7; color: #2b6b8d; border: 1px solid #d0e6f3; border-radius: 4px; cursor: pointer; font-size: 11px; }
+  .modal-footer button.primary { background:#3da5d9;color:#fff;border:1px solid #2f86ad; }
+  /* Close button overlapping the outer frame */
+  .modal-close { position: absolute; right: 18px; top: -16px; width:30px; height:30px; border-radius:50%; background:#fff; border:2px solid #3da5d9; color:#2b6b8d; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,0.25); font-weight:700; }
 </style>
 
 <!-- ROW 1: SYSTEM STATUS COMPACT -->
@@ -171,22 +176,119 @@ table th, table td { padding: 4px 6px; }
   </div>
 </div>
 
+<!-- Employee quick-add modal (loads the create form in an iframe) -->
+<div id="employeeModal" class="modal">
+  <div class="modal-content" style="width: 1200px; max-width: 1200px;">
+    <button class="modal-close" onclick="closeEmployeeModal()">×</button>
+    <div class="modal-inner">
+      <div class="modal-titlebar"><div class="title"><span class="icon">+</span> Add Employee</div></div>
+      <div class="modal-body" id="employeeModalBody">
+        <!-- form will be loaded here via AJAX -->
+      </div>
+      <div class="modal-footer">
+        <button id="employeeModalOk" class="primary" style="margin-right:8px;">OK</button>
+        <button onclick="closeEmployeeModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 function openGetStartedModal() { document.getElementById('getStartedModal').classList.add('show'); }
 function closeGetStartedModal() { document.getElementById('getStartedModal').classList.remove('show'); }
 function openQuickStartModal() { document.getElementById('quickStartModal').classList.add('show'); }
 function closeQuickStartModal() { document.getElementById('quickStartModal').classList.remove('show'); }
-function openQuickAddEmployee() { console.log('Add employee'); }
 function openQuickAddDevice() { console.log('Add device'); }
+async function openQuickAddEmployee() {
+  try{
+    const url = '{% url "crud-employee-create" %}' + '?_ts=' + Date.now();
+    const resp = await fetch(url, { cache: 'no-store', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+    if(!resp.ok){ console.error('Failed to fetch form', resp.status); return; }
+    const data = await resp.json();
+    const container = document.getElementById('employeeModalBody');
+    container.innerHTML = data.html || '<div style="padding:12px;color:#900">Failed to load form</div>';
+    // Execute any inline scripts returned in the fragment (innerHTML does not run them)
+    const scripts = container.querySelectorAll('script');
+    scripts.forEach(old => {
+      const s = document.createElement('script');
+      if (old.src) s.src = old.src;
+      if (old.type) s.type = old.type;
+      s.text = old.textContent;
+      old.parentNode.replaceChild(s, old);
+    });
+    document.getElementById('employeeModal').classList.add('show');
+
+    // Attach submit handler for quick form
+    const form = document.getElementById('employeeQuickForm');
+    if(form){
+      form.addEventListener('submit', async function(e){
+        e.preventDefault();
+        const status = document.getElementById('employeeQuickStatus');
+        status.textContent = '⏳ Saving...';
+        // clear previous inline errors
+        container.querySelectorAll('.field-errors').forEach(d => d.textContent = '');
+        const formData = new FormData(form);
+        try{
+          const r = await fetch(url, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRFToken': (document.cookie.match(/csrftoken=([^;]+)/)||[])[1] || '' }, body: formData });
+          const d = await r.json().catch(()=>({ ok: false, error: 'Invalid server response' }));
+          if(r.ok && d.ok){
+            status.textContent = '✓ Employee created';
+            setTimeout(()=>{ closeEmployeeModal(); location.reload(); }, 800);
+            return;
+          }
+          // If validation errors returned, map them inline
+          if(d && d.errors){
+            applyFormErrors(container, d.errors);
+            status.textContent = '✗ Validation failed';
+            return;
+          }
+          status.textContent = '✗ '+(d.error || 'Validation failed');
+        }catch(err){ status.textContent = '✗ '+err.message; }
+      });
+    }
+  }catch(e){ console.error('openQuickAddEmployee', e); }
+}
+// Place server-side validation errors next to fields in the injected fragment
+function applyFormErrors(container, errors){
+  try{
+    Object.keys(errors||{}).forEach(function(field){
+      const msg = errors[field] || '';
+      // try to find element by id 'id_<field>'
+      const el = container.querySelector('#id_' + field) || container.querySelector('[name="' + field + '"]');
+      if(el){
+        // find nearest .field-errors
+        let fd = el.parentElement && el.parentElement.querySelector('.field-errors');
+        if(!fd){
+          // try ascending parents
+          let p = el.parentElement;
+          while(p && !fd){ fd = p.querySelector && p.querySelector('.field-errors'); p = p.parentElement; }
+        }
+        if(fd) fd.textContent = Array.isArray(msg) ? msg.join('; ') : msg;
+      }
+    });
+  }catch(e){ console.error('applyFormErrors', e); }
+}
+function closeEmployeeModal(){ document.getElementById('employeeModal').classList.remove('show'); document.getElementById('employeeModalBody').innerHTML=''; }
 function doorAction(doorId, action) { console.log('Door ' + doorId + ' - ' + action); }
 window.onclick = function(event) {
   let getModal = document.getElementById('getStartedModal');
   let quickModal = document.getElementById('quickStartModal');
+  let empModal = document.getElementById('employeeModal');
   if (event.target == getModal) getModal.classList.remove('show');
   if (event.target == quickModal) quickModal.classList.remove('show');
+  if (event.target == empModal) closeEmployeeModal();
 }
 document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('wsConnStatus').innerText = '✓ Connected';
+});
+// Modal-level OK button should trigger the inner quick form submit when present
+document.addEventListener('click', function(e){
+  if(e.target && e.target.id === 'employeeModalOk'){
+    const form = document.getElementById('employeeQuickForm');
+    if(form){
+      if(typeof form.requestSubmit === 'function') form.requestSubmit(); else form.submit();
+    }
+  }
 });
 </script>
 
