@@ -51,5 +51,3 @@ mysql/data/
 
 # Zip/patch outputs
 *.zip
-zkeco_modern/db.sqlite3
-zkeco_modern/db.sqlite3-journal

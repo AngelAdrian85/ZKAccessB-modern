@@ -98,8 +98,7 @@ $exitCode = $LASTEXITCODE
 Write-Host "[TRAY] Tray agent exited with code $exitCode, cleaning up..."
 Write-Host "[TRAY] Killing remaining processes on configured ports"
 try {
-  $conf
-  igFile = Join-Path 'zkeco_modern' 'agent_controller.ini'
+  $configFile = Join-Path 'zkeco_modern' 'agent_controller.ini'
   $cfgPort = $Port
   if(Test-Path $configFile){
     try {

@@ -65,17 +65,16 @@ class EmployeeForm(forms.ModelForm):
         required=False,
         max_length=32,
         label="Secondary Card Number",
-        widget=forms.TextInput(attrs={"class": "txt", "maxlength": "32"}),
+        widget=forms.TextInput(attrs={"class": "txt"}),
     )
     class Meta:
         model = Employee
         fields = ["first_name", "last_name", "card_number", "access_levels", "active"]
         widgets = {
-            "first_name": forms.TextInput(attrs={"class": "txt", "maxlength": "64"}),
-            "last_name": forms.TextInput(attrs={"class": "txt", "maxlength": "64"}),
-            "card_number": forms.TextInput(attrs={"class": "txt", "maxlength": "32"}),
-            # Use checkbox list to match legacy UI
-            "access_levels": forms.CheckboxSelectMultiple(attrs={"class": "access-levels-checkboxes"}),
+            "first_name": forms.TextInput(attrs={"class": "txt"}),
+            "last_name": forms.TextInput(attrs={"class": "txt"}),
+            "card_number": forms.TextInput(attrs={"class": "txt"}),
+            "access_levels": forms.SelectMultiple(attrs={"size": 6}),
         }
 
     def clean(self):
@@ -123,38 +122,27 @@ class EmployeeExtendedForm(EmployeeForm):
 
     # Legacy-only optional fields
     legacy_userid = forms.IntegerField(required=False, label="Legacy UserID", widget=forms.NumberInput(attrs={"class": "txt", "title": "Identificator numeric unic din sistemul vechi"}))
-    card_type = forms.ChoiceField(required=False, label="Card Number Type", choices=[('without_site','Without Site Code'),('with_site','With Site Code')], widget=forms.Select(attrs={'class':'txt'}))
-    password_on_record = forms.CharField(required=False, max_length=32, label="Password", widget=forms.TextInput(attrs={'class':'txt','maxlength':'32'}))
     dept = forms.ModelChoiceField(required=False, queryset=LegacyDept.objects.all() if LegacyDept else [], label="Departament", widget=forms.Select(attrs={"title": "Departamentul angajatului"}))
-    gender = forms.CharField(required=False, max_length=16, label="Gen", widget=forms.TextInput(attrs={"class": "txt", "title": "Gen (M/F)", "maxlength": "16"}))
+    gender = forms.CharField(required=False, max_length=16, label="Gen", widget=forms.TextInput(attrs={"class": "txt", "title": "Gen (M/F)"}))
     hire_date = forms.DateField(required=False, label="Data angajării", widget=forms.DateInput(attrs={"type": "date", "title": "Data angajării în companie"}))
-    email = forms.EmailField(required=False, label="Email", widget=forms.EmailInput(attrs={"class": "txt", "title": "Email contact", "maxlength": "254"}))
-    phone = forms.CharField(required=False, label="Office Telephone", max_length=32, widget=forms.TextInput(attrs={"class": "txt", "title": "Telefon birou", "maxlength": "32"}))
-    home_phone = forms.CharField(required=False, label="Home Telephone", max_length=32, widget=forms.TextInput(attrs={"class": "txt", "title": "Telefon acasa", "maxlength": "32"}))
-    mobile_phone = forms.CharField(required=False, label="Mobile Phone", max_length=32, widget=forms.TextInput(attrs={"class": "txt", "title": "Telefon mobil", "maxlength": "32"}))
-    city = forms.CharField(required=False, max_length=64, label="City", widget=forms.TextInput(attrs={"class": "txt", "maxlength": "64"}))
-    ssn = forms.CharField(required=False, max_length=32, label="Social Security Number", widget=forms.TextInput(attrs={"class": "txt", "maxlength": "32"}))
-    staff_type = forms.CharField(required=False, max_length=64, label="Staff Type", widget=forms.TextInput(attrs={"class": "txt", "maxlength": "64"}))
-    birthday = forms.DateField(required=False, label="Birthday", widget=forms.DateInput(attrs={"type": "date"}))
-    privilege = forms.CharField(required=False, label="Privilegiu", max_length=64, widget=forms.TextInput(attrs={"class": "txt", "title": "Nivel de privilegiu/rol", "maxlength": "64"}))
-    identitycard = forms.CharField(required=False, max_length=64, label="C.I.", widget=forms.TextInput(attrs={"class": "txt", "title": "Carte identitate / act", "maxlength": "64"}))
-    site_code = forms.CharField(required=False, max_length=32, label="Cod Site", widget=forms.TextInput(attrs={"class": "txt", "title": "Cod / prefix card (site)", "maxlength": "32"}))
-    homeaddress = forms.CharField(required=False, max_length=256, label="Adresă", widget=forms.TextInput(attrs={"class": "txt", "title": "Adresă domiciliu", "maxlength": "256"}))
-    street = forms.CharField(required=False, max_length=256, label="Stradă", widget=forms.TextInput(attrs={"class": "txt", "title": "Stradă / detaliu adresă", "maxlength": "256"}))
+    email = forms.EmailField(required=False, label="Email", widget=forms.EmailInput(attrs={"class": "txt", "title": "Email contact"}))
+    phone = forms.CharField(required=False, label="Telefon", max_length=32, widget=forms.TextInput(attrs={"class": "txt", "title": "Număr de telefon"}))
+    privilege = forms.CharField(required=False, label="Privilegiu", max_length=64, widget=forms.TextInput(attrs={"class": "txt", "title": "Nivel de privilegiu/rol"}))
+    identitycard = forms.CharField(required=False, max_length=64, label="C.I.", widget=forms.TextInput(attrs={"class": "txt", "title": "Carte identitate / act"}))
+    site_code = forms.CharField(required=False, max_length=32, label="Cod Site", widget=forms.TextInput(attrs={"class": "txt", "title": "Cod / prefix card (site)"}))
+    homeaddress = forms.CharField(required=False, max_length=256, label="Adresă", widget=forms.TextInput(attrs={"class": "txt", "title": "Adresă domiciliu"}))
+    street = forms.CharField(required=False, max_length=256, label="Stradă", widget=forms.TextInput(attrs={"class": "txt", "title": "Stradă / detaliu adresă"}))
     acc_startdate = forms.DateField(required=False, label="Acces de la", widget=forms.DateInput(attrs={"type": "date", "title": "Data început valabilitate acces"}))
     acc_enddate = forms.DateField(required=False, label="Acces până la", widget=forms.DateInput(attrs={"type": "date", "title": "Data sfârșit valabilitate acces"}))
     extend_time = forms.IntegerField(required=False, label="Extensie timp", widget=forms.NumberInput(attrs={"class": "txt", "title": "Extensie timp suplimentar (minute)"}))
     delayed_door_open = forms.BooleanField(required=False, label="Întârziere ușă", widget=forms.CheckboxInput(attrs={"title": "Are întârziere la deschiderea ușii"}))
-    hiretype = forms.CharField(required=False, max_length=32, label="Tip angajare", widget=forms.TextInput(attrs={"class": "txt", "title": "Tip angajare (ex: Full / Part)", "maxlength": "32"}))
-    emptype = forms.CharField(required=False, max_length=32, label="Tip personal", widget=forms.TextInput(attrs={"class": "txt", "title": "Categorie personal", "maxlength": "32"}))
-    selfpassword = forms.CharField(required=False, max_length=64, label="Parolă Self", widget=forms.PasswordInput(attrs={"class": "txt", "title": "Parolă autogestiune (opțional)", "maxlength": "64"}))
-    reservation_password = forms.CharField(required=False, max_length=64, label="Parolă Rezervare", widget=forms.TextInput(attrs={"class": "txt", "title": "Parolă rezervare / acces secundar", "maxlength": "64"}))
-    role_on_device = forms.CharField(required=False, max_length=64, label="Rol pe Dispozitiv", widget=forms.TextInput(attrs={"class": "txt", "title": "Rol pe dispozitiv (ex: Operator)", "maxlength": "64"}))
+    hiretype = forms.CharField(required=False, max_length=32, label="Tip angajare", widget=forms.TextInput(attrs={"class": "txt", "title": "Tip angajare (ex: Full / Part)"}))
+    emptype = forms.CharField(required=False, max_length=32, label="Tip personal", widget=forms.TextInput(attrs={"class": "txt", "title": "Categorie personal"}))
+    selfpassword = forms.CharField(required=False, max_length=64, label="Parolă Self", widget=forms.PasswordInput(attrs={"class": "txt", "title": "Parolă autogestiune (opțional)"}))
+    reservation_password = forms.CharField(required=False, max_length=64, label="Parolă Rezervare", widget=forms.TextInput(attrs={"class": "txt", "title": "Parolă rezervare / acces secundar"}))
+    role_on_device = forms.CharField(required=False, max_length=64, label="Rol pe Dispozitiv", widget=forms.TextInput(attrs={"class": "txt", "title": "Rol pe dispozitiv (ex: Operator)"}))
     elevator_superuser = forms.BooleanField(required=False, label="Elevator Superuser", widget=forms.CheckboxInput(attrs={"title": "Acces special lift"}))
-    elevator_level = forms.CharField(required=False, max_length=64, label="Nivel Lift", widget=forms.TextInput(attrs={"class": "txt", "title": "Nivel / grup lift", "maxlength": "64"}))
-    access_superuser = forms.ChoiceField(required=False, label='Access superuser', choices=[('no','No'),('yes','Yes')], widget=forms.Select(attrs={'class':'txt'}))
-    set_validity = forms.BooleanField(required=False, label='Set Validity', widget=forms.CheckboxInput())
-    multi_card_group = forms.ChoiceField(required=False, label='Multi-Card Opening Personnel Groups', choices=[('','---------')], widget=forms.Select(attrs={'class':'txt'}))
+    elevator_level = forms.CharField(required=False, max_length=64, label="Nivel Lift", widget=forms.TextInput(attrs={"class": "txt", "title": "Nivel / grup lift"}))
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
