@@ -119,4 +119,14 @@ try {
 } catch {}
 
 Write-Host "[TRAY] Cleanup complete"
-if($exitCode -ne 0){ Write-Error "[TRAY] tray_agent exited with code $exitCode"; exit $exitCode }
+# Exit code 15 is normal (user quit); exit codes 1-11 are errors, others are unexpected
+if($exitCode -eq 15){
+  Write-Host "[TRAY] tray_agent exited normally (exit code 15)"
+  exit 0
+} elseif($exitCode -gt 0 -and $exitCode -lt 12){
+  Write-Error "[TRAY] tray_agent exited with error code $exitCode"
+  exit $exitCode
+} elseif($exitCode -ne 0){
+  Write-Warning "[TRAY] tray_agent exited with unexpected code $exitCode"
+  exit 0
+}
