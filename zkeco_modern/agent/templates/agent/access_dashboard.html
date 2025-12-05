@@ -24,6 +24,58 @@ table th, table td { padding: 4px 6px; }
 .modal-body li { margin-bottom: 4px; }
 .modal-footer { margin-top: 12px; text-align: right; }
 .modal-footer button { padding: 6px 12px; background: #3da5d9; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 10px; }
+
+/* Employee Modal - Ultra Compact with Blue Frame */
+#employeeModal .modal-content { 
+  max-width: 850px; 
+  width: 95%; 
+  background: linear-gradient(135deg, #1e4a6b 0%, #2d5a7b 50%, #1e4a6b 100%); 
+  padding: 3px; 
+  border-radius: 6px; 
+}
+#employeeModal .modal-inner { 
+  background: #ffffff; 
+  border: 1px solid #7db3d9; 
+  border-radius: 4px; 
+  overflow: hidden; 
+}
+#employeeModal .modal-titlebar { 
+  background: linear-gradient(to bottom, #3da5d9 0%, #2d7ba5 100%); 
+  color: #ffffff; 
+  padding: 4px 8px; 
+  display: flex; 
+  align-items: center; 
+  gap: 6px; 
+  font-size: 12px; 
+  font-weight: 600; 
+}
+#employeeModal .modal-titlebar::before { 
+  content: ""; 
+  width: 10px; 
+  height: 10px; 
+  background: #1e4a6b; 
+  border: 1px solid #5a9dc9; 
+  display: inline-block; 
+}
+#employeeModal .modal-body-wrapper { 
+  max-height: 75vh; 
+  overflow-y: auto; 
+}
+#employeeModal .modal-close { 
+  position: absolute; 
+  top: 8px; 
+  right: 8px; 
+  background: #d97e4a; 
+  color: #fff; 
+  border: none; 
+  border-radius: 50%; 
+  width: 20px; 
+  height: 20px; 
+  font-size: 14px; 
+  line-height: 1; 
+  cursor: pointer; 
+  z-index: 1001; 
+}
 </style>
 
 <!-- ROW 1: SYSTEM STATUS COMPACT -->
@@ -171,19 +223,160 @@ table th, table td { padding: 4px 6px; }
   </div>
 </div>
 
+<div id="employeeModal" class="modal">
+  <div class="modal-content">
+    <button class="modal-close" onclick="closeEmployeeModal()">&times;</button>
+    <div class="modal-inner">
+      <div class="modal-titlebar">Add Employee</div>
+      <div class="modal-body-wrapper">
+        <div id="employeeModalBody">
+          <div style="padding:20px;text-align:center;color:#999;">Loading...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="deviceModal" class="modal">
+  <div class="modal-content">
+    <button class="modal-close" onclick="closeDeviceModal()">&times;</button>
+    <div class="modal-inner">
+      <div class="modal-titlebar">Add Device</div>
+      <div class="modal-body-wrapper">
+        <div id="deviceModalBody">
+          <div style="padding:20px;text-align:center;color:#999;">Loading...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 function openGetStartedModal() { document.getElementById('getStartedModal').classList.add('show'); }
 function closeGetStartedModal() { document.getElementById('getStartedModal').classList.remove('show'); }
 function openQuickStartModal() { document.getElementById('quickStartModal').classList.add('show'); }
 function closeQuickStartModal() { document.getElementById('quickStartModal').classList.remove('show'); }
-function openQuickAddEmployee() { console.log('Add employee'); }
-function openQuickAddDevice() { console.log('Add device'); }
+
+function openQuickAddEmployee() { 
+  const modal = document.getElementById('employeeModal');
+  const body = document.getElementById('employeeModalBody');
+  
+  modal.classList.add('show');
+  body.innerHTML = '<div style="padding:20px;text-align:center;color:#999;">Loading...</div>';
+  
+  fetch('{% url "crud-employee-create" %}', {
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  })
+  .then(response => response.text())
+  .then(html => {
+    body.innerHTML = html;
+    // Execute any inline scripts in the fragment
+    const scripts = body.querySelectorAll('script');
+    scripts.forEach(script => {
+      const newScript = document.createElement('script');
+      newScript.textContent = script.textContent;
+      document.body.appendChild(newScript);
+      document.body.removeChild(newScript);
+    });
+    
+    // Setup form submission
+    const form = body.querySelector('#employeeQuickForm');
+    if(form) {
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        submitEmployeeForm(form);
+      });
+    }
+  })
+  .catch(err => {
+    body.innerHTML = '<div style="padding:20px;text-align:center;color:#d97e4a;">Error loading form: ' + err.message + '</div>';
+  });
+}
+
+function closeEmployeeModal() { 
+  document.getElementById('employeeModal').classList.remove('show'); 
+}
+
+function closeDeviceModal() { 
+  document.getElementById('deviceModal').classList.remove('show'); 
+}
+
+function openQuickAddDevice() {
+  const modal = document.getElementById('deviceModal');
+  const body = document.getElementById('deviceModalBody');
+  
+  modal.classList.add('show');
+  body.innerHTML = '<div style="padding:20px;text-align:center;color:#999;">Loading...</div>';
+  
+  fetch('{% url "crud-device-create" %}', {
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  })
+  .then(response => response.text())
+  .then(html => {
+    body.innerHTML = html;
+    // Execute any inline scripts in the fragment
+    const scripts = body.querySelectorAll('script');
+    scripts.forEach(script => {
+      const newScript = document.createElement('script');
+      newScript.textContent = script.textContent;
+      document.body.appendChild(newScript);
+      document.body.removeChild(newScript);
+    });
+    
+    // Setup form submission
+    const form = body.querySelector('#deviceQuickForm');
+    if(form) {
+      form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        submitDeviceForm(form);
+      });
+    }
+  })
+  .catch(err => {
+    body.innerHTML = '<div style="padding:20px;text-align:center;color:#d97e4a;">Error loading form: ' + err.message + '</div>';
+  });
+}
+
+function submitDeviceForm(form) {
+  const formData = new FormData(form);
+  const status = document.getElementById('deviceQuickStatus');
+  
+  fetch(form.action || '{% url "crud-device-create" %}', {
+    method: 'POST',
+    body: formData,
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  })
+  .then(response => response.json())
+  .then(data => {
+    if(data.ok) {
+      status.innerHTML = '<span style="color:#2da44e;">✓ Device created successfully!</span>';
+      setTimeout(() => {
+        closeDeviceModal();
+        location.reload(); // Refresh to show new device
+      }, 1500);
+    } else {
+      status.innerHTML = '<span style="color:#d97e4a;">⚠ Errors: ' + JSON.stringify(data.errors) + '</span>';
+      // Map errors to field-errors divs if they exist
+      Object.keys(data.errors || {}).forEach(field => {
+        const errorDiv = form.querySelector(`[name="${field}"]`)?.parentElement?.querySelector('.field-errors');
+        if(errorDiv) errorDiv.textContent = data.errors[field].join(', ');
+      });
+    }
+  })
+  .catch(err => {
+    status.innerHTML = '<span style="color:#d97e4a;">⚠ Submit error: ' + err.message + '</span>';
+  });
+}
 function doorAction(doorId, action) { console.log('Door ' + doorId + ' - ' + action); }
 window.onclick = function(event) {
   let getModal = document.getElementById('getStartedModal');
   let quickModal = document.getElementById('quickStartModal');
+  let empModal = document.getElementById('employeeModal');
+  let devModal = document.getElementById('deviceModal');
   if (event.target == getModal) getModal.classList.remove('show');
   if (event.target == quickModal) quickModal.classList.remove('show');
+  if (event.target == empModal) empModal.classList.remove('show');
+  if (event.target == devModal) devModal.classList.remove('show');
 }
 document.addEventListener('DOMContentLoaded', function() {
   document.getElementById('wsConnStatus').innerText = '✓ Connected';

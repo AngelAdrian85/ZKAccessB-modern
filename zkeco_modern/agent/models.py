@@ -199,15 +199,70 @@ class AccessLevel(models.Model):
 
 
 class Employee(models.Model):
+    # Core identification
     first_name = models.CharField(max_length=64)
     last_name = models.CharField(max_length=64)
     card_number = models.CharField(max_length=32, unique=True)
     access_levels = models.ManyToManyField(AccessLevel, blank=True)
     active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    
+    # Legacy bridge fields
+    legacy_userid = models.IntegerField(null=True, blank=True, unique=True, help_text="Identificator numeric unic din sistemul vechi")
+    dept_id = models.IntegerField(null=True, blank=True, help_text="ID Departament (referință la legacy Dept)")
+    
+    # Personal information
+    gender = models.CharField(max_length=16, blank=True, default='', help_text="Gen (M/F)")
+    ssn = models.CharField(max_length=64, blank=True, default='', help_text="Social Security Number")
+    birthday = models.DateField(null=True, blank=True, help_text="Data nașterii")
+    city = models.CharField(max_length=128, blank=True, default='', help_text="Oraș")
+    
+    # Contact information
+    mobile_phone = models.CharField(max_length=32, blank=True, default='', help_text="Telefon mobil")
+    home_phone = models.CharField(max_length=32, blank=True, default='', help_text="Telefon acasă")
+    phone = models.CharField(max_length=32, blank=True, default='', help_text="Telefon birou")
+    email = models.EmailField(max_length=128, blank=True, default='', help_text="Email contact")
+    
+    # Address information
+    homeaddress = models.CharField(max_length=256, blank=True, default='', help_text="Adresă domiciliu")
+    street = models.CharField(max_length=256, blank=True, default='', help_text="Stradă / detaliu adresă")
+    identitycard = models.CharField(max_length=64, blank=True, default='', help_text="Adresă de lucru")
+    
+    # Card and access information
+    card_type = models.CharField(max_length=64, blank=True, default='', help_text="Tip card (WITH/WITHOUT Site Code)")
+    site_code = models.CharField(max_length=32, blank=True, default='', help_text="Cod / prefix card (site)")
+    secondary_card_number = models.CharField(max_length=32, null=True, blank=True, unique=True, help_text="Card secundar")
+    password_on_record = models.CharField(max_length=32, blank=True, default='', help_text="Parolă 6 cifre")
+    reservation_password = models.CharField(max_length=64, blank=True, default='123456', help_text="Parolă rezervare / acces secundar")
+    selfpassword = models.CharField(max_length=64, blank=True, default='', help_text="Parolă autogestiune (opțional)")
+    
+    # Employment information
+    hire_date = models.DateField(null=True, blank=True, help_text="Data angajării în companie")
+    hiretype = models.CharField(max_length=32, blank=True, default='', help_text="Tip angajare")
+    emptype = models.CharField(max_length=32, blank=True, default='', help_text="Tip personal")
+    privilege = models.CharField(max_length=64, blank=True, default='', help_text="Nivel de privilegiu/rol")
+    role_on_device = models.CharField(max_length=64, blank=True, default='', help_text="Rol pe dispozitiv")
+    
+    # Access control settings
+    acc_startdate = models.DateField(null=True, blank=True, help_text="Data început valabilitate acces")
+    acc_enddate = models.DateField(null=True, blank=True, help_text="Data sfârșit valabilitate acces")
+    extend_time = models.IntegerField(null=True, blank=True, help_text="Extensie timp suplimentar (1-254)")
+    delayed_door_open = models.BooleanField(default=False, help_text="Are întârziere la deschiderea ușii")
+    access_superuser = models.BooleanField(default=False, help_text="Superuser acces")
+    
+    # Elevator control settings
+    elevator_superuser = models.BooleanField(default=False, help_text="Acces special lift")
+    elevator_level = models.CharField(max_length=64, blank=True, default='', help_text="Nivel / grup lift")
+    
+    # Multi-card support
+    multi_card_group = models.CharField(max_length=64, blank=True, default='', help_text="Grup multi-card")
+    set_validity = models.BooleanField(default=False, help_text="Setează validitate")
 
     class Meta:
-        indexes = [models.Index(fields=["card_number"])]
+        indexes = [
+            models.Index(fields=["card_number"]),
+            models.Index(fields=["legacy_userid"]),
+        ]
 
     def __str__(self):  # pragma: no cover
         return f"Employee {self.first_name} {self.last_name}"[:80]

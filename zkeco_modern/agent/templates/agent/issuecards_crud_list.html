@@ -1,13 +1,31 @@
 {% extends 'agent/base_legacy.html' %}
 {% block content %}
-<h2 data-tip="Lista carduri" title="Carduri">Carduri emise</h2>
-<p>
-	<a href="{% url 'crud-issuecard-create' %}" class="btn" data-tip="Emite card" title="Emite">+ Emite</a>
-	<button id="batchDeactivate" class="btn" type="button" data-tip="Dezactivează cardurile selectate">Batch Deactivate</button>
-	<button id="batchReissue" class="btn" type="button" data-tip="Reemite (1 an) cardurile selectate">Batch Reissue</button>
-	<button id="batchExport" class="btn" type="button" data-tip="Exportă selecția CSV">Export CSV</button>
-</p>
+<style>
+	.layout { display:grid; grid-template-columns: 180px 1fr; gap:16px; }
+	.sidebar { border:1px solid #333; padding:10px; background:#1f1f1f; }
+	.sidebar a, .sidebar button { display:block; margin-bottom:8px; padding:6px 10px; border:1px solid #444; background:#242424; color:#eee; text-decoration:none; }
+	.header { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+	.search-row { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:8px; margin-bottom:10px; }
+	.panel { border:1px solid #333; padding:8px; }
+</style>
+
+<div class="header"><h2>Issue Card</h2><small>Current Window: Personnel → Issue card</small></div>
 {% if missing %}<p class="warn">Model IssueCard indisponibil.</p>{% endif %}
+
+<div class="layout">
+	<div class="sidebar">
+		<a href="{% url 'crud-issuecard-create' %}">Batch issue card</a>
+		<a href="{% url 'agent-menu-personnel' %}#logs">Log Events</a>
+		<button type="button" id="cardsExport">Export</button>
+	</div>
+	<div>
+		<div class="panel">
+			<div class="search-row">
+				<input type="text" id="srchPersonnel" placeholder="Personnel No." />
+				<input type="text" id="srchCard" placeholder="Card Number" />
+				<input type="text" id="srchFirst" placeholder="First Name" />
+				<input type="text" id="srchLast" placeholder="Last Name" />
+			</div>
 {% if page %}
 <table class="crud" data-tip="Tabel carduri">
 <thead><tr><th><input type="checkbox" id="selectAll" title="Selectează toate"/></th><th>ID</th><th>Card</th><th>Status</th><th>UserID</th><th>Tip</th><th>Valid până</th><th>Actiuni</th></tr></thead>
@@ -32,6 +50,9 @@
 </tbody></table>
 <div class="pagination">{% if page.has_previous %}<a href="?page={{ page.previous_page_number }}" data-tip="Pagina anterioară">«</a>{% endif %} <span>{{ page.number }}/{{ page.paginator.num_pages }}</span> {% if page.has_next %}<a href="?page={{ page.next_page_number }}" data-tip="Pagina următoare">»</a>{% endif %}</div>
 {% endif %}
+		</div>
+	</div>
+</div>
 <script>
 (function(){
 	const csrftoken = (document.querySelector('input[name=csrfmiddlewaretoken]')||{}).value;
@@ -68,10 +89,30 @@
 			const data=await post('/agent/crud/issuecards/'+id+'/'+action+'/'); if(data.ok) updateRow(id,data);
 		}
 	}
-	document.getElementById('batchDeactivate').addEventListener('click',()=>batch('deactivate'));
-	document.getElementById('batchReissue').addEventListener('click',()=>batch('reissue'));
-	document.getElementById('batchExport').addEventListener('click',()=>{
+	// Sidebar actions
+	const batchBtn = document.createElement('button'); batchBtn.textContent='Batch Deactivate'; batchBtn.className='btn'; document.querySelector('.sidebar').appendChild(batchBtn);
+	batchBtn.addEventListener('click',()=>batch('deactivate'));
+	const reBtn = document.createElement('button'); reBtn.textContent='Batch Reissue'; reBtn.className='btn'; document.querySelector('.sidebar').appendChild(reBtn);
+	reBtn.addEventListener('click',()=>batch('reissue'));
+	// Export selection
+	document.getElementById('cardsExport').addEventListener('click',()=>{
 		const ids=selectedIds(); if(!ids.length) return; const csv=['id']; csv.push(...ids); const blob=new Blob([csv.join('\n')],{type:'text/csv'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='issuecards_selection.csv'; a.click();
+	});
+	// Search client-side (basic filter on current page)
+	function text(td){ return (td.textContent||'').toLowerCase(); }
+	function applySearch(){
+		const p = (document.getElementById('srchPersonnel').value||'').toLowerCase();
+		const c = (document.getElementById('srchCard').value||'').toLowerCase();
+		const f = (document.getElementById('srchFirst').value||'').toLowerCase();
+		const l = (document.getElementById('srchLast').value||'').toLowerCase();
+		document.querySelectorAll('table.crud tbody tr').forEach(tr=>{
+			const tds = tr.querySelectorAll('td');
+			const matches = (!p || text(tds[4]).includes(p)) && (!c || text(tds[2]).includes(c)) && (!f || text(tds[4]).includes(f)) && (!l || text(tds[4]).includes(l));
+			tr.style.display = matches ? '' : 'none';
+		});
+	}
+	['srchPersonnel','srchCard','srchFirst','srchLast'].forEach(id=>{
+		const el=document.getElementById(id); el && el.addEventListener('input', applySearch);
 	});
 })();
 </script>

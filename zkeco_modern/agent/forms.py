@@ -64,16 +64,23 @@ class EmployeeForm(forms.ModelForm):
     secondary_card_number = forms.CharField(
         required=False,
         max_length=32,
-        label="Secondary Card Number",
-        widget=forms.TextInput(attrs={"class": "txt"}),
+        label="Card Secundar",
+        widget=forms.TextInput(attrs={"class": "txt", "placeholder": "Număr card secundar (opțional)"}),
     )
     class Meta:
         model = Employee
         fields = ["first_name", "last_name", "card_number", "access_levels", "active"]
+        labels = {
+            "first_name": "Prenume",
+            "last_name": "Nume",
+            "card_number": "Nr. Card Principal",
+            "access_levels": "Niveluri Acces",
+            "active": "Activ"
+        }
         widgets = {
-            "first_name": forms.TextInput(attrs={"class": "txt"}),
-            "last_name": forms.TextInput(attrs={"class": "txt"}),
-            "card_number": forms.TextInput(attrs={"class": "txt"}),
+            "first_name": forms.TextInput(attrs={"class": "txt", "placeholder": "ex: Ion"}),
+            "last_name": forms.TextInput(attrs={"class": "txt", "placeholder": "ex: Popescu"}),
+            "card_number": forms.TextInput(attrs={"class": "txt", "placeholder": "ex: 1234567890"}),
             "access_levels": forms.SelectMultiple(attrs={"size": 6}),
         }
 
@@ -121,27 +128,57 @@ class EmployeeExtendedForm(EmployeeForm):
     """
 
     # Legacy-only optional fields
-    legacy_userid = forms.IntegerField(required=False, label="Legacy UserID", widget=forms.NumberInput(attrs={"class": "txt", "title": "Identificator numeric unic din sistemul vechi"}))
-    dept = forms.ModelChoiceField(required=False, queryset=LegacyDept.objects.all() if LegacyDept else [], label="Departament", widget=forms.Select(attrs={"title": "Departamentul angajatului"}))
-    gender = forms.CharField(required=False, max_length=16, label="Gen", widget=forms.TextInput(attrs={"class": "txt", "title": "Gen (M/F)"}))
-    hire_date = forms.DateField(required=False, label="Data angajării", widget=forms.DateInput(attrs={"type": "date", "title": "Data angajării în companie"}))
-    email = forms.EmailField(required=False, label="Email", widget=forms.EmailInput(attrs={"class": "txt", "title": "Email contact"}))
-    phone = forms.CharField(required=False, label="Telefon", max_length=32, widget=forms.TextInput(attrs={"class": "txt", "title": "Număr de telefon"}))
-    privilege = forms.CharField(required=False, label="Privilegiu", max_length=64, widget=forms.TextInput(attrs={"class": "txt", "title": "Nivel de privilegiu/rol"}))
-    identitycard = forms.CharField(required=False, max_length=64, label="C.I.", widget=forms.TextInput(attrs={"class": "txt", "title": "Carte identitate / act"}))
+    legacy_userid = forms.IntegerField(required=False, label="Nr. Personal", widget=forms.NumberInput(attrs={"class": "txt", "title": "Identificator numeric unic (Personnel No.)", "placeholder": "ex: 1, 2, 3..."}))
+    dept = forms.ModelChoiceField(
+        required=False,
+        queryset=LegacyDept.objects.all() if LegacyDept else LegacyDept.objects.none(),
+        label="Departament",
+        widget=forms.Select(attrs={"title": "Departamentul angajatului"}),
+        empty_label="----------"
+    )
+    gender = forms.CharField(required=False, max_length=16, label="Gen", widget=forms.Select(choices=[('','----------'),('M','Masculin'),('F','Feminin')], attrs={"title": "Gen (M/F)"}))
+    
+    # Contact fields matching legacy
+    ssn = forms.CharField(required=False, max_length=64, label="CNP", widget=forms.TextInput(attrs={"class": "txt", "placeholder": "Cod Numeric Personal"}))
+    birthday = forms.DateField(required=False, label="Data Nașterii", widget=forms.DateInput(attrs={"type": "date", "title": "Data nașterii"}))
+    mobile_phone = forms.CharField(required=False, max_length=32, label="Telefon Mobil", widget=forms.TextInput(attrs={"class": "txt", "placeholder": "ex: 0722123456"}))
+    home_phone = forms.CharField(required=False, max_length=32, label="Telefon Acasă", widget=forms.TextInput(attrs={"class": "txt", "placeholder": "ex: 0212345678"}))
+    city = forms.CharField(required=False, max_length=128, label="Oraș", widget=forms.TextInput(attrs={"class": "txt", "placeholder": "ex: București"}))
+    
+    # Card and password fields
+    card_type = forms.CharField(required=False, max_length=64, label="Tip Card", widget=forms.Select(choices=[('','Fără Site Code'),('SITE','Cu Site Code')], attrs={"title": "Tipul cardului de acces"}))
+    password_on_record = forms.CharField(required=False, max_length=32, label="Parolă", widget=forms.TextInput(attrs={"class": "txt", "maxlength": "6", "title": "Parolă acces (6 cifre)", "placeholder": "123456"}))
+    
+    # Access control fields
+    access_levels = forms.ModelMultipleChoiceField(
+        queryset=AccessLevel.objects.all(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+        label="Niveluri Acces"
+    )
+    access_superuser = forms.BooleanField(required=False, label="Superuser Acces", widget=forms.CheckboxInput(attrs={"title": "Acces administrator"}))
+    multi_card_group = forms.CharField(required=False, max_length=64, label="Grupuri Multi-Card", widget=forms.Select(choices=[('',"----------")], attrs={"title": "Grup pentru acces multi-card"}))
+    set_validity = forms.BooleanField(required=False, label="Setează Validitate", widget=forms.CheckboxInput(attrs={"title": "Activează perioada de valabilitate"}))
+    
+    # Employment fields
+    hire_date = forms.DateField(required=False, label="Data Angajării", widget=forms.DateInput(attrs={"type": "date", "title": "Data angajării în companie"}))
+    email = forms.EmailField(required=False, label="Email", widget=forms.EmailInput(attrs={"class": "txt", "title": "Email contact", "placeholder": "nume@companie.ro"}))
+    phone = forms.CharField(required=False, label="Telefon Birou", max_length=32, widget=forms.TextInput(attrs={"class": "txt", "title": "Număr de telefon birou", "placeholder": "ex: 0212345678"}))
+    privilege = forms.CharField(required=False, label="Privilegiu", max_length=64, widget=forms.TextInput(attrs={"class": "txt", "title": "Nivel de privilegiu/rol", "placeholder": "ex: Admin, User"}))
+    identitycard = forms.CharField(required=False, max_length=64, label="Adresă Serviciu", widget=forms.TextInput(attrs={"class": "txt", "title": "Adresă de lucru"}))
     site_code = forms.CharField(required=False, max_length=32, label="Cod Site", widget=forms.TextInput(attrs={"class": "txt", "title": "Cod / prefix card (site)"}))
-    homeaddress = forms.CharField(required=False, max_length=256, label="Adresă", widget=forms.TextInput(attrs={"class": "txt", "title": "Adresă domiciliu"}))
+    homeaddress = forms.CharField(required=False, max_length=256, label="Adresă Domiciliu", widget=forms.TextInput(attrs={"class": "txt", "title": "Adresă domiciliu", "placeholder": "Strada, nr, bloc, ap"}))
     street = forms.CharField(required=False, max_length=256, label="Stradă", widget=forms.TextInput(attrs={"class": "txt", "title": "Stradă / detaliu adresă"}))
     acc_startdate = forms.DateField(required=False, label="Acces de la", widget=forms.DateInput(attrs={"type": "date", "title": "Data început valabilitate acces"}))
     acc_enddate = forms.DateField(required=False, label="Acces până la", widget=forms.DateInput(attrs={"type": "date", "title": "Data sfârșit valabilitate acces"}))
-    extend_time = forms.IntegerField(required=False, label="Extensie timp", widget=forms.NumberInput(attrs={"class": "txt", "title": "Extensie timp suplimentar (minute)"}))
-    delayed_door_open = forms.BooleanField(required=False, label="Întârziere ușă", widget=forms.CheckboxInput(attrs={"title": "Are întârziere la deschiderea ușii"}))
-    hiretype = forms.CharField(required=False, max_length=32, label="Tip angajare", widget=forms.TextInput(attrs={"class": "txt", "title": "Tip angajare (ex: Full / Part)"}))
-    emptype = forms.CharField(required=False, max_length=32, label="Tip personal", widget=forms.TextInput(attrs={"class": "txt", "title": "Categorie personal"}))
+    extend_time = forms.IntegerField(required=False, label="Timp Extins", widget=forms.NumberInput(attrs={"class": "txt", "title": "Extensie timp suplimentar (1-254)", "placeholder":"1-254", "min":"1", "max":"254"}))
+    delayed_door_open = forms.BooleanField(required=False, label="Deschidere Întârziată", widget=forms.CheckboxInput(attrs={"title": "Are întârziere la deschiderea ușii"}))
+    hiretype = forms.CharField(required=False, max_length=32, label="Tip Angajare", widget=forms.Select(choices=[('','----------')], attrs={"title": "Tipul de angajare"}))
+    emptype = forms.CharField(required=False, max_length=32, label="Tip Personal", widget=forms.Select(choices=[('','----------')], attrs={"title": "Tipul de personal"}))
     selfpassword = forms.CharField(required=False, max_length=64, label="Parolă Self", widget=forms.PasswordInput(attrs={"class": "txt", "title": "Parolă autogestiune (opțional)"}))
-    reservation_password = forms.CharField(required=False, max_length=64, label="Parolă Rezervare", widget=forms.TextInput(attrs={"class": "txt", "title": "Parolă rezervare / acces secundar"}))
-    role_on_device = forms.CharField(required=False, max_length=64, label="Rol pe Dispozitiv", widget=forms.TextInput(attrs={"class": "txt", "title": "Rol pe dispozitiv (ex: Operator)"}))
-    elevator_superuser = forms.BooleanField(required=False, label="Elevator Superuser", widget=forms.CheckboxInput(attrs={"title": "Acces special lift"}))
+    reservation_password = forms.CharField(required=False, max_length=64, label="Parolă Rezervare", widget=forms.TextInput(attrs={"class": "txt", "title": "Parolă rezervare / acces secundar", "value": "123456"}))
+    role_on_device = forms.CharField(required=False, max_length=64, label="Rol Dispozitiv", widget=forms.Select(choices=[('','----------')], attrs={"title": "Rolul pe dispozitiv"}))
+    elevator_superuser = forms.BooleanField(required=False, label="Superuser Lift", widget=forms.CheckboxInput(attrs={"title": "Acces special lift"}))
     elevator_level = forms.CharField(required=False, max_length=64, label="Nivel Lift", widget=forms.TextInput(attrs={"class": "txt", "title": "Nivel / grup lift"}))
 
     def __init__(self, *args, **kwargs):
@@ -153,6 +190,54 @@ class EmployeeExtendedForm(EmployeeForm):
             existing_card = self.instance.cards.order_by("created_at").first()
             if existing_card:
                 self.initial.setdefault("secondary_card_number", existing_card.card_number)
+            
+            # Preload department from dept_id
+            if self.instance.dept_id and LegacyDept:
+                try:
+                    dept_obj = LegacyDept.objects.get(id=self.instance.dept_id)
+                    self.initial['dept'] = dept_obj
+                except Exception:
+                    pass
+            
+            # PRIORITATE: Valorile din Employee model au prioritate absolută
+            # Le setăm explicit în self.initial DUPĂ super().__init__()
+            employee_values = {
+                'legacy_userid': self.instance.legacy_userid,
+                'gender': self.instance.gender,
+                'ssn': self.instance.ssn,
+                'birthday': self.instance.birthday,
+                'city': self.instance.city,
+                'mobile_phone': self.instance.mobile_phone,
+                'home_phone': self.instance.home_phone,
+                'phone': self.instance.phone,
+                'email': self.instance.email,
+                'homeaddress': self.instance.homeaddress,
+                'street': self.instance.street,
+                'identitycard': self.instance.identitycard,
+                'card_type': self.instance.card_type,
+                'site_code': self.instance.site_code,
+                'password_on_record': self.instance.password_on_record,
+                'reservation_password': self.instance.reservation_password,
+                'selfpassword': self.instance.selfpassword,
+                'hire_date': self.instance.hire_date,
+                'hiretype': self.instance.hiretype,
+                'emptype': self.instance.emptype,
+                'privilege': self.instance.privilege,
+                'role_on_device': self.instance.role_on_device,
+                'acc_startdate': self.instance.acc_startdate,
+                'acc_enddate': self.instance.acc_enddate,
+                'extend_time': self.instance.extend_time,
+                'delayed_door_open': self.instance.delayed_door_open,
+                'access_superuser': self.instance.access_superuser,
+                'elevator_superuser': self.instance.elevator_superuser,
+                'elevator_level': self.instance.elevator_level,
+            }
+            # Setează valorile din Employee - acestea au PRIORITATE ABSOLUTĂ
+            for k, v in employee_values.items():
+                if v is not None and v != '':  # Doar dacă există valoare în Employee
+                    self.initial[k] = v
+                
+        # Legacy fallback - DOAR pentru câmpuri care NU au valoare în Employee
         if LegacyEmployee and self.instance and self.instance.pk:
             # Match by card_number -> legacy.card_number or badgenumber
             card = self.instance.card_number
@@ -162,7 +247,8 @@ class EmployeeExtendedForm(EmployeeForm):
                 except Exception:
                     self._legacy_obj = None
             if self._legacy_obj:
-                initial_map = {
+                # Folosim setdefault() - setează DOAR dacă nu există deja în initial
+                legacy_fallback = {
                     'legacy_userid': self._legacy_obj.userid,
                     'gender': self._legacy_obj.gender,
                     'hire_date': self._legacy_obj.hiredday,
@@ -185,30 +271,99 @@ class EmployeeExtendedForm(EmployeeForm):
                     'elevator_superuser': getattr(self._legacy_obj,'elevator_superuser', None),
                     'elevator_level': getattr(self._legacy_obj,'elevator_level', None),
                 }
-                for k,v in initial_map.items():
-                    if v is not None:
-                        self.initial[k] = v
+                # setdefault = setează DOAR dacă nu există deja
+                for k,v in legacy_fallback.items():
+                    if v is not None and v != '':
+                        self.initial.setdefault(k, v)
                 if self._legacy_obj.defaultdept:
-                    self.initial['dept'] = self._legacy_obj.defaultdept
+                    self.initial.setdefault('dept', self._legacy_obj.defaultdept)
+
+    def clean_legacy_userid(self):
+        """Validare legacy_userid pentru a preveni duplicate."""
+        userid = self.cleaned_data.get('legacy_userid')
+        if userid is not None:
+            # Verifică dacă acest userid este deja folosit de alt angajat
+            existing = Employee.objects.filter(legacy_userid=userid)
+            # Exclude instanța curentă dacă editează (nu e create)
+            if self.instance and self.instance.pk:
+                existing = existing.exclude(pk=self.instance.pk)
+            if existing.exists():
+                from django.core.exceptions import ValidationError
+                raise ValidationError(
+                    f'Nr. Personal {userid} este deja folosit de {existing.first().first_name} {existing.first().last_name}. '
+                    'Te rog să alegi un număr diferit sau folosește butonul "Verifică" pentru a găsi unul disponibil.'
+                )
+        return userid
 
     def save(self, commit=True):
+        # Store secondary card for later processing
         self._pending_secondary_card = self.cleaned_data.get("secondary_card_number")
         self._defer_secondary_card_sync = not commit
-        emp = super().save(commit=commit)
+        
+        # Create/update Employee instance
+        emp = super().save(commit=False)
+        
+        # Sync all extended fields to modern Employee model
+        emp.legacy_userid = self.cleaned_data.get('legacy_userid')
+        emp.gender = self.cleaned_data.get('gender') or ''
+        emp.ssn = self.cleaned_data.get('ssn') or ''
+        emp.birthday = self.cleaned_data.get('birthday')
+        emp.city = self.cleaned_data.get('city') or ''
+        emp.mobile_phone = self.cleaned_data.get('mobile_phone') or ''
+        emp.home_phone = self.cleaned_data.get('home_phone') or ''
+        emp.phone = self.cleaned_data.get('phone') or ''
+        emp.email = self.cleaned_data.get('email') or ''
+        emp.homeaddress = self.cleaned_data.get('homeaddress') or ''
+        emp.street = self.cleaned_data.get('street') or ''
+        emp.identitycard = self.cleaned_data.get('identitycard') or ''
+        emp.card_type = self.cleaned_data.get('card_type') or ''
+        emp.site_code = self.cleaned_data.get('site_code') or ''
+        emp.password_on_record = self.cleaned_data.get('password_on_record') or ''
+        emp.reservation_password = self.cleaned_data.get('reservation_password') or '123456'
+        emp.selfpassword = self.cleaned_data.get('selfpassword') or ''
+        emp.hire_date = self.cleaned_data.get('hire_date')
+        emp.hiretype = self.cleaned_data.get('hiretype') or ''
+        emp.emptype = self.cleaned_data.get('emptype') or ''
+        emp.privilege = self.cleaned_data.get('privilege') or ''
+        emp.role_on_device = self.cleaned_data.get('role_on_device') or ''
+        emp.acc_startdate = self.cleaned_data.get('acc_startdate')
+        emp.acc_enddate = self.cleaned_data.get('acc_enddate')
+        emp.extend_time = self.cleaned_data.get('extend_time')
+        emp.delayed_door_open = self.cleaned_data.get('delayed_door_open') or False
+        emp.access_superuser = self.cleaned_data.get('access_superuser') or False
+        emp.elevator_superuser = self.cleaned_data.get('elevator_superuser') or False
+        emp.elevator_level = self.cleaned_data.get('elevator_level') or ''
+        emp.multi_card_group = self.cleaned_data.get('multi_card_group') or ''
+        emp.set_validity = self.cleaned_data.get('set_validity') or False
+        
+        # Save department ID
+        dept = self.cleaned_data.get('dept')
+        if dept:
+            emp.dept_id = dept.id
+        else:
+            emp.dept_id = None
+        
+        # Save Employee instance
         if commit:
+            emp.save()
+            self.save_m2m()
             self._sync_secondary_card(emp, self._pending_secondary_card)
             self._pending_secondary_card = None
             self._defer_secondary_card_sync = False
+        
         # Basic validation for access dates
         sd = self.cleaned_data.get('acc_startdate')
         ed = self.cleaned_data.get('acc_enddate')
         if sd and ed and ed < sd:
             self.add_error('acc_enddate', 'Data de sfârșit trebuie să fie după data de început')
+        
         # Elevator level validation (restrict to predefined set if provided)
         allowed_levels = {'L1','L2','L3','VIP','STAFF'}
         lvl = self.cleaned_data.get('elevator_level')
         if lvl and lvl not in allowed_levels:
             self.add_error('elevator_level', f'Nivel invalid. Acceptat: {", ".join(sorted(allowed_levels))}')
+        
+        # Legacy database sync (best-effort, optional)
         if LegacyEmployee:
             try:
                 # Update or create legacy record
@@ -248,6 +403,7 @@ class EmployeeExtendedForm(EmployeeForm):
                     leg.save()
             except Exception:
                 pass
+        
         return emp
 
     def save_m2m(self):

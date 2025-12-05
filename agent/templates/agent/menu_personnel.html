@@ -1,0 +1,228 @@
+{% extends "agent/base_legacy.html" %}
+{% load static %}
+
+{% block title %}Personal – Module Unificat{% endblock %}
+
+{% block content %}
+<style>
+  .tabs { display:flex; gap:8px; margin-bottom:12px; }
+  .tabs button { padding:8px 12px; border:1px solid #444; background:#1f1f1f; color:#ddd; cursor:pointer; }
+  .tabs button.active { background:#2a2a2a; border-color:#666; }
+  .action-bar { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0; }
+  .action-bar a, .action-bar button { padding:6px 10px; border:1px solid #444; background:#242424; color:#eee; text-decoration:none; }
+  .search-row { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:8px; margin-bottom:10px; }
+  .list { border:1px solid #333; }
+  table { width:100%; border-collapse:collapse; }
+  th, td { border-bottom:1px solid #2e2e2e; padding:6px 8px; }
+  th { background:#1e1e1e; }
+  .hidden { display:none; }
+  .status { font-size:12px; color:#aaa; margin-top:6px; }
+</style>
+
+<h2>Personal</h2>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="tab-employees">Angajați</button>
+  <button class="tab-btn" data-tab="tab-departments">Departamente</button>
+  <button class="tab-btn" data-tab="tab-cards">Carduri</button>
+  <button class="tab-btn" data-tab="tab-logs">Log Evenimente</button>
+  <div style="margin-left:auto" class="status" id="tab-status">Gata.</div>
+</div>
+
+<!-- Angajați -->
+<section id="tab-employees">
+  <div class="action-bar">
+    <a href="{% url 'crud-employee-create' %}">Adaugă Angajat</a>
+    <a href="{% url 'crud-export-employees' %}">Export Angajați</a>
+    <a href="{% url 'crud-import-employees' %}">Import Angajați</a>
+  </div>
+  <form method="get" class="search-row">
+    <input type="text" name="q_userid" value="{{ request.GET.q_userid }}" placeholder="ID/Legacy User" />
+    <input type="text" name="q_card" value="{{ request.GET.q_card }}" placeholder="Număr card" />
+    <input type="text" name="q_phone" value="{{ request.GET.q_phone }}" placeholder="Telefon" />
+    <input type="text" name="q_dept" value="{{ request.GET.q_dept }}" placeholder="Departament" />
+    <button type="submit">Caută</button>
+  </form>
+  <div class="list">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th><th>Nume</th><th>Card</th><th>Dept</th><th>Telefon</th><th>Acțiuni</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in employees %}
+        <tr>
+          <td>{{ e.legacy_userid|default:e.id }}</td>
+          <td>{{ e.full_name }}</td>
+          <td>{{ e.card_number }}</td>
+          <td>{{ e.dept_id }}</td>
+          <td>{{ e.mobile_phone }}</td>
+          <td>
+            <a href="{% url 'crud-employee-edit' e.id %}">Editează</a>
+            <a href="{% url 'crud-employee-delete' e.id %}">Șterge</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6">Nu există rezultate.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Departamente -->
+<section id="tab-departments" class="hidden">
+  <div class="action-bar">
+    <a href="{% url 'crud-dept-create' %}">Adaugă Departament</a>
+    <a href="{% url 'crud-depts-list' %}" target="_blank">Deschide listă completă</a>
+  </div>
+  <div class="search-row">
+    <input type="text" id="dept-search" placeholder="Caută după nume" />
+    <button type="button" id="dept-refresh">Reîncarcă</button>
+  </div>
+  <div class="list" id="dept-container">
+    <table>
+      <thead><tr><th>ID</th><th>Nume</th><th>Acțiuni</th></tr></thead>
+      <tbody id="dept-tbody"><tr><td colspan="3">Încărcare...</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Carduri -->
+<section id="tab-cards" class="hidden">
+  <div class="action-bar">
+    <a href="{% url 'crud-issuecard-create' %}">Emite Card</a>
+    <a href="{% url 'crud-issuecards-list' %}" target="_blank">Deschide listă completă</a>
+  </div>
+  <div class="search-row">
+    <input type="text" id="card-search" placeholder="Caută card sau angajat" />
+    <button type="button" id="card-refresh">Reîncarcă</button>
+  </div>
+  <div class="list" id="card-container">
+    <table>
+      <thead><tr><th>ID</th><th>Card</th><th>Angajat</th><th>Stare</th><th>Acțiuni</th></tr></thead>
+      <tbody id="card-tbody"><tr><td colspan="5">Încărcare...</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Log Evenimente -->
+<section id="tab-logs" class="hidden">
+  <div class="action-bar">
+    <button type="button" id="logs-refresh">Reîncarcă</button>
+    <a href="#" id="logs-export">Exportă vizualizare</a>
+  </div>
+  <div class="search-row">
+    <input type="date" id="logs-from" />
+    <input type="date" id="logs-to" />
+    <input type="text" id="logs-person" placeholder="Angajat/ID" />
+    <input type="text" id="logs-device" placeholder="Dispozitiv" />
+    <button type="button" id="logs-filter">Filtrează</button>
+  </div>
+  <div class="list">
+    <table>
+      <thead><tr><th>Data</th><th>Angajat</th><th>Eveniment</th><th>Detalii</th></tr></thead>
+      <tbody id="logs-tbody"><tr><td colspan="4">Selectează filtre pentru a vedea rezultate.</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
+<script>
+  // Tabs
+  const btns = document.querySelectorAll('.tab-btn');
+  const sections = {
+    'tab-employees': document.getElementById('tab-employees'),
+    'tab-departments': document.getElementById('tab-departments'),
+    'tab-cards': document.getElementById('tab-cards'),
+    'tab-logs': document.getElementById('tab-logs')
+  };
+  btns.forEach(b=>b.addEventListener('click', ()=>{
+    btns.forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    Object.values(sections).forEach(s=>s.classList.add('hidden'));
+    sections[b.dataset.tab].classList.remove('hidden');
+    document.getElementById('tab-status').textContent = 'Tab: ' + b.textContent;
+  }));
+
+  // Departments inline loader (uses existing JSON endpoints if available)
+  async function loadDepts(q) {
+    const tbody = document.getElementById('dept-tbody');
+    tbody.innerHTML = '<tr><td colspan="3">Încărcare...</td></tr>';
+    try {
+      const url = q ? (`{% url 'crud-depts-search-json' %}?q=${encodeURIComponent(q)}`) : `{% url 'crud-depts-tree-json' %}`;
+      const res = await fetch(url, { headers: { 'Accept':'application/json' } });
+      const data = await res.json();
+      const rows = [];
+      const list = Array.isArray(data) ? data : (data.nodes || []);
+      for (const d of list) {
+        const id = d.id || d.pk || d.value || '-';
+        const name = d.name || d.title || d.text || d.label || '';
+        rows.push(`<tr><td>${id}</td><td>${name}</td><td>
+          <a href="{% url 'crud-dept-edit' 0 %}`.replace('0', id)+`">Editează</a>
+        </td></tr>`);
+      }
+      tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="3">Niciun rezultat.</td></tr>';
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="3">Eroare la încărcare.</td></tr>';
+    }
+  }
+  document.getElementById('dept-refresh').addEventListener('click', ()=>loadDepts(document.getElementById('dept-search').value));
+  document.getElementById('dept-search').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); loadDepts(e.target.value); } });
+  // Prime load (not blocking if URL missing)
+  try { loadDepts(''); } catch {}
+
+  // Cards inline loader (expects a JSON list endpoint)
+  async function loadCards(q) {
+    const tbody = document.getElementById('card-tbody');
+    tbody.innerHTML = '<tr><td colspan="5">Încărcare...</td></tr>';
+    try {
+      const base = `{% url 'crud-issuecards-list' %}`;
+      const res = await fetch(base + (q?`?q=${encodeURIComponent(q)}`:''), { headers: { 'Accept':'application/json' } });
+      const data = await res.json();
+      const rows = [];
+      const list = Array.isArray(data) ? data : (data.items || []);
+      for (const c of list) {
+        const id = c.id || c.pk || '-';
+        rows.push(`<tr><td>${id}</td><td>${c.card||c.card_number||''}</td><td>${c.employee||c.person||''}</td><td>${c.status||''}</td><td>
+          <a href="{% url 'crud-issuecard-edit' 0 %}`.replace('0', id)+`">Editează</a>
+        </td></tr>`);
+      }
+      tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="5">Niciun rezultat.</td></tr>';
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="5">Eroare la încărcare.</td></tr>';
+    }
+  }
+  document.getElementById('card-refresh').addEventListener('click', ()=>loadCards(document.getElementById('card-search').value));
+  document.getElementById('card-search').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); loadCards(e.target.value); } });
+  try { loadCards(''); } catch {}
+
+  // Logs - placeholder wiring, expects JSON endpoint later
+  async function loadLogs(params) {
+    const tbody = document.getElementById('logs-tbody');
+    tbody.innerHTML = '<tr><td colspan="4">Încărcare...</td></tr>';
+    try {
+      const qs = new URLSearchParams(params).toString();
+      const res = await fetch(`/agent/logs/view?${qs}`, { headers: { 'Accept':'application/json' } });
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : (data.items || []);
+      const rows = list.map(l=>`<tr><td>${l.datetime||l.time||''}</td><td>${l.employee||l.user||''}</td><td>${l.event||l.type||''}</td><td>${l.details||''}</td></tr>`);
+      tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="4">Niciun rezultat.</td></tr>';
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="4">Endpoint lipsă sau eroare.</td></tr>';
+    }
+  }
+  document.getElementById('logs-filter').addEventListener('click', ()=>{
+    loadLogs({
+      from: document.getElementById('logs-from').value,
+      to: document.getElementById('logs-to').value,
+      person: document.getElementById('logs-person').value,
+      device: document.getElementById('logs-device').value,
+    });
+  });
+  document.getElementById('logs-refresh').addEventListener('click', ()=>{
+    loadLogs({});
+  });
+</script>
+
+{% endblock %}

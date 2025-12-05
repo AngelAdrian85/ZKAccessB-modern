@@ -1,231 +1,236 @@
 <style>
-/* Tight two-column layout to match legacy modal spacing */
- .emp-grid { display: grid; grid-template-columns: 1fr 360px; gap: 12px 28px; padding:22px 32px; font-size:12px; align-items:start; max-width:1160px; margin:0 auto; }
-.emp-field { display:flex; align-items:center; gap:10px; min-height:26px; }
-.emp-field label { color:#0b4f86; font-weight:600; font-size:12px; width:130px; margin:0; text-align:left; }
-.emp-field > *:not(label) { flex:1 1 auto; }
-.employee-quick-form > form { background: #ffffff; color: #0b1720; padding:8px; }
-.emp-field input[type=text], .emp-field input[type=email], .emp-field input[type=number], .emp-field input[type=date], .emp-field select, .emp-field textarea { background:#ffffff; border:1px solid #c6d6e6; color:#0b1720; padding:4px 6px; border-radius:3px; height:20px; box-sizing:border-box; font-size:12px; width:100%; }
-.emp-field .left-input { max-width: 360px; }
-.emp-field .right-input { max-width: 260px; }
-.emp-field textarea { height:56px; }
+/* Modern ultra-compact grid, blue theme */
+.emp-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 120px;
+  gap: 2px 14px;
+  padding: 0 15px 8px 15px;
+  font-size: 10px;
+  align-items: start;
+  background: #fff;
+  border: 1px solid #b8c6d4;
+  border-radius: 4px;
+  box-shadow: none;
+}
+.emp-field {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 18px;
+  margin: 0;
+  padding: 1px 0;
+}
+.emp-field label {
+  color: #3da5d9;
+  font-weight: 500;
+  font-size: 10px;
+  width: 95px;
+  margin: 0;
+  text-align: right;
+  padding-right: 4px;
+  white-space: nowrap;
+}
+.emp-field > *:not(label) { flex: 1 1 auto; }
+.employee-quick-form > form {
+  background: #f7fbff;
+  color: #222;
+  padding: 0;
+  margin: 0;
+}
+.emp-field input[type=text],
+.emp-field input[type=email],
+.emp-field input[type=number],
+.emp-field input[type=date],
+.emp-field select,
+.emp-field textarea {
+  background: #fff;
+  border: 1px solid #b8c6d4;
+  color: #222;
+  padding: 1px 2px;
+  border-radius: 2px;
+  height: 18px;
+  box-sizing: border-box;
+  font-size: 10px;
+  width: 100%;
+  max-width: 200px;
+  font-family: Tahoma, Arial, sans-serif;
+}
+.emp-field textarea { height: 36px; resize: vertical; }
+.emp-field select { height: 19px; }
 .emp-full { grid-column: 1 / -1; }
-.emp-actions { padding:10px 14px; display:flex; justify-content:flex-end; gap:10px; background:transparent; border-top:1px solid rgba(0,0,0,0.03); }
-.field-errors { color:#b22; font-size:11px; margin-left:114px; min-height:14px; }
-.access-levels-select { height:120px; }
-.emp-grid h4 { margin:10px 0 8px 0; font-size:13px; color:#0b4f86; width:100%; }
-.photo-box { width:120px; height:140px; border:1px solid #c6d6e6; background:#f7fbff; display:flex;align-items:center;justify-content:center;border-radius:4px; }
-@media (max-width: 1280px) { .emp-grid { grid-template-columns: 1fr; } .emp-field label { width:120px; } .field-errors { margin-left:0; } }
+.emp-actions { display: none; }
+.field-errors { display: none; }
+.access-levels-select { height: 90px; }
+.emp-grid h4 {
+  margin: 6px 0 2px 0;
+  font-size: 11px;
+  color: #3da5d9;
+  width: 100%;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.emp-grid h4::before {
+  content: "◆";
+  color: #3da5d9;
+  font-size: 8px;
+}
+.photo-box {
+  width: 100px;
+  height: 120px;
+  border: 1px solid #b8c6d4;
+  background: linear-gradient(135deg, #e8f4ff 0%, #d0e8ff 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  color: #999;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  margin-left: 8px;
+}
+.photo-actions {
+  text-align: center;
+  width: 100px;
+  font-size: 9px;
+  margin-left: 8px;
+}
+.photo-actions label {
+  font-size: 9px;
+  color: #3da5d9;
+  cursor: pointer;
+  text-decoration: underline;
+  display: block;
+  margin-bottom: 2px;
+}
+.photo-actions input[type=file] { display: none; }
+.photo-actions .hint {
+  font-size: 8px;
+  color: #ff6600;
+  font-style: italic;
+}
+.info-box {
+  background: #e8f4ff;
+  border: 1px solid #99ccff;
+  padding: 5px 7px;
+  margin: 0 0 6px 0;
+  font-size: 9px;
+  color: #234;
+  line-height: 1.3;
+}
+.access-block { display: flex; gap: 4px; align-items: flex-start; }
+.access-block label { width: 110px; align-self: flex-start; padding-top: 2px; }
+@media (max-width: 1280px) {
+  .emp-grid { grid-template-columns: 1fr; }
+  .emp-field label { width: 90px; text-align: left; }
+}
 </style>
 
 <div class="employee-quick-form">
-  <form id="employeeQuickForm">
+  <form id="employeeQuickForm" method="post" action="/agent/crud/employees/new/" onsubmit="return validateQuickFormSubmit(event)">
     {% csrf_token %}
+    <div class="info-box" style="margin:0 0 6px 0;">Informațiile despre personal sunt informațiile de bază ale sistemului, astfel încât Nr. și departamentul sunt elemente necesare. Înregistrarea amprentei necesită un scanner de amprentă! Dacă nu ați instalat încă un astfel de driver, descărcați unul mai întâi! Un panou de control acces acceptă doar parole de 6 cifre. Dacă o parolă depășește lungimea specificată, sistemul o va trunchia automat!<br/>Notă: Numărul cardului fără specificare apare oriunde cu excepția acestei pagini înseamnă numărul intern al cardului.</div>
     <div class="emp-grid">
-      <!-- add a small right-side photo area similar to legacy: -->
-      <!-- photo area already exists further down; ensure spacing aligns -->
-      <div class="emp-full" style="font-size:12px;color:#345;line-height:1.3;padding:6px 0 10px 0;">
-        <div style="background:#f0f7fb;border:1px solid #d8eaf6;padding:8px 10px;border-radius:4px;color:#234;">Personnel information is the system's basic information, so No. and department are required items. Fingerprint registration needs to be driven by a fingerprint scanner. If you have not installed such a driver yet, download one first!</div>
-      </div>
-      <div class="emp-full" style="margin-bottom:6px;"><strong style="color:#0b5394;font-size:13px;">Personnel Profile</strong></div>
-      <!-- Row 1 -->
-      <div class="emp-field">
-        <label for="id_legacy_userid">Personnel No. :</label>
-        <div style="display:flex;gap:8px;align-items:center; width:100%;"><div style="flex:1">{{ form.legacy_userid }}</div><button type="button" onclick="checkPersonnelNo()" style="padding:4px 6px;">Check</button></div>
-        <div class="field-errors">{{ form.legacy_userid.errors }}</div>
-      </div>
-      <div class="emp-field">
-        <label for="id_city">City:</label>
-        {{ form.city }}
-        <div class="field-errors">{{ form.city.errors }}</div>
-      </div>
+      <!-- Titlu -->
+      <div class="emp-full" style="grid-column:1/4;"><h4 style="color:#3da5d9;margin:0;font-size:11px;font-weight:700;">◆ Profil Personal</h4></div>
+      
+      <!-- Câmpuri pe două coloane, poza pe coloana 3 - Ordinea din aplicația veche -->
+      <div class="emp-field"><label for="id_legacy_userid">*Nr. Personal:</label><div style="display:flex;gap:2px;align-items:center;flex:1;"><div style="flex:1">{{ form.legacy_userid }}</div><button type="button" onclick="checkPersonnelNo()" style="padding:2px 6px;font-size:10px;border:1px solid #999;background:#f0f0f0;border-radius:2px;cursor:pointer;white-space:nowrap;">Verifică</button><span id="personnelCheckmarkModal" style="color:#0c4;font-size:12px;font-weight:bold;display:none;padding:0 4px;white-space:nowrap;">✓</span></div></div>
+      <div class="emp-field"><label for="id_city">Oraș:</label>{{ form.city }}</div>
+      <div class="photo-box" style="grid-row:2/16;grid-column:3;margin:0;">Fără Poză<div class="photo-actions" style="margin:6px 0 0 0;"><label for="photoUpload">Încarcă Poză Personal<br/><span class="hint">(Dimensiune Optimă 120x140 Pixel)</span></label><input type="file" id="photoUpload" name="photo" accept="image/*"></div></div>
+      
+      <div class="emp-field"><label for="id_first_name">Prenume:</label>{{ form.first_name }}</div>
+      <div class="emp-field"><label for="id_ssn">CNP:</label>{{ form.ssn }}</div>
+      
+      <div class="emp-field"><label for="id_last_name">Nume:</label>{{ form.last_name }}</div>
+      <div class="emp-field"><label for="id_phone">Telefon Birou:</label>{{ form.phone }}</div>
+      
+      <div class="emp-field"><label for="id_gender">Gen:</label>{{ form.gender }}</div>
+      <div class="emp-field"><label for="id_hiretype">Tip Angajare:</label>{{ form.hiretype }}</div>
+      
+      <div class="emp-field"><label for="id_card_type">Tip Card:</label>{{ form.card_type }}</div>
+      <div class="emp-field"><label for="id_emptype">Tip Personal:</label>{{ form.emptype }}</div>
+      
+      <div class="emp-field"><label for="id_card_number">*Nr. Card Principal:</label><div style="display:flex;gap:2px;align-items:center;flex:1;"><div style="flex:1">{{ form.card_number }}</div><span id="primaryCardCheckmarkModal" style="color:#0c4;font-size:12px;font-weight:bold;display:none;padding:0 4px;white-space:nowrap;">✓</span></div></div>
+      <div class="emp-field"><label for="id_home_phone">Telefon Acasă:</label>{{ form.home_phone }}</div>
+      
+      <div class="emp-field"><label for="id_secondary_card_number">*Card Secundar:</label><div style="display:flex;gap:2px;align-items:center;flex:1;"><div style="flex:1">{{ form.secondary_card_number }}</div><span id="secondaryCardCheckmarkModal" style="color:#0c4;font-size:12px;font-weight:bold;display:none;padding:0 4px;white-space:nowrap;">✓</span></div></div>
+      <div class="emp-field"><label for="id_mobile_phone">Telefon Mobil:</label>{{ form.mobile_phone }}</div>
+      
+      <div class="emp-field"><label for="id_password_on_record">Parolă:</label>{{ form.password_on_record }}</div>
+      <div class="emp-field"><label for="id_birthday">Data Nașterii:</label>{{ form.birthday }}</div>
+      
+      <div class="emp-field"><label for="id_dept">*Departament:</label>{{ form.dept }}</div>
+      <div class="emp-field"><label for="id_birthday">Data Nașterii:</label>{{ form.birthday }}</div>
+      
+      <div class="emp-field"><label for="id_delayed_door_open">Deschidere Întârziată:</label>{{ form.delayed_door_open }}</div>
+      <div class="emp-field"><label for="id_email">Email:</label>{{ form.email }}</div>
+      
+      <div class="emp-field"><label for="id_extend_time">Timp Extins:</label>{{ form.extend_time }}</div>
+      <div class="emp-field"><label for="id_hire_date">Data Angajării:</label>{{ form.hire_date }}</div>
+      
+      <div class="emp-field"><label for="id_role_on_device">Rol Dispozitiv:</label>{{ form.role_on_device }}</div>
+      <div class="emp-field"><label for="id_homeaddress">Adresă Domiciliu:</label>{{ form.homeaddress }}</div>
+      
+      <div class="emp-field"><label for="id_reservation_password">Parolă Rezervare:</label>{{ form.reservation_password }}</div>
+      <div class="emp-field"><label for="id_identitycard">Adresă Serviciu:</label>{{ form.identitycard }}</div>
+      
+      <div class="emp-field"><label>Înregistrare Amprentă:</label><div><a href="#" style="color:#3da5d9;font-size:10px;text-decoration:underline;" onclick="alert('Înregistrarea amprentei nu este implementată');return false;">Înregistrează</a> <a href="#" style="color:#3da5d9;font-size:10px;text-decoration:underline;margin-left:8px;" onclick="alert('Ai nevoie de ajutor?');return false;">Ajutor?</a></div></div>
+      <div class="emp-field"></div>
 
-      <!-- Row 2 -->
-      <div class="emp-field">
-        <label for="id_first_name">First name:</label>
-        {{ form.first_name }}
-        <div class="field-errors">{{ form.first_name.errors }}</div>
-      </div>
-      <div class="emp-field">
-        <label for="id_last_name">Last name:</label>
-        {{ form.last_name }}
-        <div class="field-errors">{{ form.last_name.errors }}</div>
-      </div>
+      <div class="emp-full"><h4 style="color:#3da5d9;margin:6px 0 4px 0;font-size:11px;font-weight:700;">◆ Setări Control Acces și Lift</h4></div>
 
-      <!-- Row 3 -->
-      <div class="emp-field">
-        <label for="id_ssn">Social Security Number:</label>
-        {{ form.ssn }}
-        <div class="field-errors">{{ form.ssn.errors }}</div>
-      </div>
-      <div class="emp-field">
-        <label for="id_gender">Gender:</label>
-        {{ form.gender }}
-        <div class="field-errors">{{ form.gender.errors }}</div>
-      </div>
+      <div class="emp-field"><label for="id_access_superuser">Superuser Acces:</label>{{ form.access_superuser }}</div>
+      <div class="emp-field"><label for="id_elevator_superuser">Superuser Lift:</label>{{ form.elevator_superuser }}</div>
 
-      <!-- Row 4 -->
-      <div class="emp-field">
-        <label for="id_card_number">Card number:</label>
-        {{ form.card_number }}
-        <div class="field-errors">{{ form.card_number.errors }}</div>
-      </div>
-      <div class="emp-field">
-        <label for="id_card_type">Card Number Type:</label>
-        {{ form.card_type }}
-        <div class="field-errors">{{ form.card_type.errors }}</div>
-      </div>
-
-      <!-- Row 5 -->
-      <div class="emp-field">
-        <label for="id_password_on_record">Password:</label>
-        {{ form.password_on_record }}
-        <div class="field-errors">{{ form.password_on_record.errors }}</div>
-      </div>
-      <div class="emp-field">
-        <label for="id_identitycard">C.I.:</label>
-        {{ form.identitycard }}
-        <div class="field-errors">{{ form.identitycard.errors }}</div>
-      </div>
-
-      <!-- Row 6 -->
-      <div class="emp-field">
-        <label for="id_dept">Department:</label>
-        {{ form.dept }}
-        <div class="field-errors">{{ form.dept.errors }}</div>
-      </div>
-      <div class="emp-field">
-        <label for="id_hire_date">Employment Date:</label>
-        {{ form.hire_date }}
-        <div class="field-errors">{{ form.hire_date.errors }}</div>
-      </div>
-
-      <!-- Row 7 -->
-      <div class="emp-field">
-        <label for="id_secondary_card_number">Secondary Card:</label>
-        {{ form.secondary_card_number }}
-        <div class="field-errors">{{ form.secondary_card_number.errors }}</div>
-      </div>
-      <div class="emp-field">
-        <label for="id_reservation_password">Reservation Password:</label>
-        {{ form.reservation_password }}
-        <div class="field-errors">{{ form.reservation_password.errors }}</div>
-      </div>
-
-      <!-- Row 8 -->
-      <div class="emp-field">
-        <label for="id_extend_time">Extensie timp (min):</label>
-        {{ form.extend_time }}
-        <div class="field-errors">{{ form.extend_time.errors }}</div>
-      </div>
-      <div class="emp-field">
-        <label for="id_delayed_door_open">Delayed Door Open:</label>
-        {{ form.delayed_door_open }}
-        <div class="field-errors">{{ form.delayed_door_open.errors }}</div>
-      </div>
-
-      <!-- Row 9 -->
-      <div class="emp-field">
-        <label for="id_role_on_device">Role On Device:</label>
-        {{ form.role_on_device }}
-        <div class="field-errors">{{ form.role_on_device.errors }}</div>
-      </div>
-      <div class="emp-field">
-        <label for="id_hiretype">Employment Type:</label>
-        {{ form.hiretype }}
-        <div class="field-errors">{{ form.hiretype.errors }}</div>
-      </div>
-
-      <!-- Row 10 -->
-      <div class="emp-field">
-        <label for="id_phone">Office Telephone:</label>
-        {{ form.phone }}
-        <div class="field-errors">{{ form.phone.errors }}</div>
-      </div>
-      <div class="emp-field">
-        <label for="id_home_phone">Home Telephone:</label>
-        {{ form.home_phone }}
-        <div class="field-errors">{{ form.home_phone.errors }}</div>
-      </div>
-
-      <!-- Row 11 -->
-      <div class="emp-field">
-        <label for="id_mobile_phone">Mobile Phone:</label>
-        {{ form.mobile_phone }}
-        <div class="field-errors">{{ form.mobile_phone.errors }}</div>
-      </div>
-      <div class="emp-field">
-        <label for="id_birthday">Birthday:</label>
-        {{ form.birthday }}
-        <div class="field-errors">{{ form.birthday.errors }}</div>
-      </div>
-
-      <!-- Row 12: Email + Photo -->
-      <div class="emp-field">
-        <label for="id_email">Email:</label>
-        {{ form.email }}
-        <div class="field-errors">{{ form.email.errors }}</div>
-      </div>
-      <div class="emp-field photo-field" style="flex-direction:column;align-items:center;">
-        <div class="photo-box">No Photo</div>
-        <div style="font-size:11px;color:#666;margin-top:6px;text-align:center;">Upload Personal Photo<br/>(Optimal Size 120x140 Pixel)</div>
-        <div style="margin-top:6px;"><input type="file" name="photo" disabled></div>
-      </div>
- 
-
-      <div class="emp-field emp-full"><h4>Access And Elevator Control Settings</h4></div>
-
-      <div class="emp-field">
-        <label for="id_access_superuser">Access superuser:</label>
-        {{ form.access_superuser }}
-        <div class="field-errors">{{ form.access_superuser.errors }}</div>
-      </div>
-      <div class="emp-field">
-        <label for="id_elevator_superuser">Elevator superuser:</label>
-        {{ form.elevator_superuser }}
-        <div class="field-errors">{{ form.elevator_superuser.errors }}</div>
-      </div>
-
-      <div class="emp-field emp-full access-block">
-        <label for="id_access_levels">Access levels:</label>
-        <div class="access-block-inner" style="display:flex;gap:16px;align-items:flex-start;width:100%;">
-          <div class="left" style="flex:1;">
-            <div class="available-title" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-              <div style="font-size:12px;color:#0b5394;font-weight:600">Available</div>
-              <label style="font-size:12px"><input type="checkbox" id="select_all_access_levels"> Select all</label>
-            </div>
-            <div class="access-box" style="border:1px solid #c7d3e0;padding:8px;height:220px;overflow:auto;background:#fff;">
-              {% for checkbox in form.access_levels %}
-                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">{{ checkbox.tag }} <span style="margin-left:6px">{{ checkbox.choice_label }}</span></div>
-              {% endfor %}
-            </div>
+      <div class="emp-field" style="grid-column:1;align-items:flex-start;"><label for="id_access_levels" style="align-self:flex-start;padding-top:4px;">Niveluri Acces:</label>
+        <div style="flex:1;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+            <span style="font-size:10px;color:#3da5d9;font-weight:600;">Disponibil</span>
+            <label style="font-size:10px;margin:0;"><input type="checkbox" id="select_all_access_levels" style="margin:0 3px 0 0;"> Selectează tot</label>
           </div>
-          <div class="right" style="width:260px;">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;"><div style="width:120px;font-size:12px;color:#0b5394;">Elevator Level:</div><div style="flex:1">{{ form.elevator_level }}</div></div>
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><div style="width:120px;font-size:12px;color:#0b5394;">Set Validity:</div><div style="flex:1">{{ form.set_validity }}</div></div>
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;"><div style="width:120px;font-size:12px;color:#0b5394;">Multi-Card Groups:</div><div style="flex:1">{{ form.multi_card_group }}</div></div>
-            <div class="field-errors">{{ form.elevator_level.errors }} {{ form.set_validity.errors }} {{ form.multi_card_group.errors }}</div>
+          <div style="border:1px solid #aaa;padding:3px;height:120px;overflow:auto;background:#fff;font-size:10px;">
+            {{ form.access_levels }}
           </div>
         </div>
-        <div class="field-errors">{{ form.access_levels.errors }}</div>
+      </div>
+      
+      <div class="emp-field" style="grid-column:2;align-items:flex-start;"><label style="align-self:flex-start;padding-top:4px;">Nivel Lift:</label>
+        <div style="flex:1;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+            <span style="font-size:10px;color:#3da5d9;font-weight:600;visibility:hidden;">.</span>
+            <label style="font-size:10px;margin:0;"><input type="checkbox" style="margin:0 3px 0 0;"> Selectează tot</label>
+          </div>
+          <div style="border:1px solid #aaa;padding:3px;height:120px;overflow:auto;background:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;color:#ff6600;">
+            Niciun nivel de lift disponibil .
+          </div>
+        </div>
       </div>
 
-      <div class="emp-field">
-        <label for="id_active">&nbsp;</label>
-        <div style="display:flex;align-items:center;gap:8px;"><label style="color:#0b5394;font-weight:600">{{ form.active }} Active</label></div>
-        <div class="field-errors">{{ form.active.errors }}</div>
+      <div class="emp-field"><label><input type="checkbox" name="set_validity" style="margin:0 4px 0 0;">Setează Validitate:</label></div>
+      <div class="emp-field"><label for="id_multi_card_group">Grupuri Personal Multi-Card:</label>{{ form.multi_card_group }}</div>
+
+      <div class="emp-full" style="display:flex;align-items:center;gap:8px;padding:4px 0;">
+        <label style="color:#3da5d9;font-weight:600;font-size:11px;display:flex;align-items:center;gap:4px;margin:0;">{{ form.active }} Activ</label>
       </div>
 
     </div>
 
-    <div class="emp-actions">
-      <button type="button" onclick="closeEmployeeModal()" style="background:#3d6a8b;color:#e8f0f8;border:none;padding:8px 12px;border-radius:4px;">Anulează</button>
-      <button type="submit" id="employeeQuickSave" style="background:#3da5d9;color:#fff;border:none;padding:8px 12px;border-radius:4px;">Salvează</button>
+    <div style="padding: 8px 12px; text-align: right; border-top: 1px solid #ddd; background: #f5f5f5; display: flex; justify-content: flex-end; gap: 8px;">
+      <button type="submit" id="employeeQuickSave" style="background:#0066cc;color:#fff;border:1px solid #0052a3;padding:4px 16px;font-size:11px;cursor:pointer;min-width:60px;">OK</button>
+      <button type="button" onclick="closeEmployeeModal()" style="background:#f0f0f0;color:#333;border:1px solid #999;padding:4px 16px;font-size:11px;cursor:pointer;min-width:60px;">Anulează</button>
     </div>
-    <div id="employeeQuickStatus" style="padding:8px 12px; font-size:12px; color:#e8f0f8;"></div>
+    <div id="employeeQuickStatus" style="padding:6px 12px; font-size:11px; color:#333; background:#fff;"></div>
   </form>
 </div>
 <script>
+  let lastCheckedQuickPersonnelNo = null;
+  let lastCheckedQuickPrimaryCard = null;
+  let lastCheckedQuickSecondaryCard = null;
+  let lastQuickPersonnelResult = null;
+  let lastQuickPrimaryCardResult = null;
+  let lastQuickSecondaryCardResult = null;
+
   // Select/deselect all access levels in the injected fragment
   (function(){
     const root = document.getElementById('employeeModalBody') || document;
@@ -236,8 +241,471 @@
         checks.forEach(c => c.checked = toggle.checked);
       });
     }
-    window.checkPersonnelNo = function(){
-      alert('Check Personnel No. not implemented in this demo.');
+    
+    // DEFINEȘTE FUNCȚIILE ÎNAINTE de a le folosi în event listeners!
+    // Funcții separate pentru fiecare checkmark - nu se afectează între ele
+    window.updateQuickPersonnelCheckmark = function() {
+      const personnelInput = document.querySelector('#id_legacy_userid');
+      const personnelCheckmark = document.getElementById('personnelCheckmarkModal');
+      if(!personnelInput || !personnelCheckmark) return;
+      
+      const personnelValue = personnelInput.value.trim();
+      if(personnelValue && lastCheckedQuickPersonnelNo === personnelValue) {
+        if(lastQuickPersonnelResult === true) {
+          personnelCheckmark.textContent = '✓';
+          personnelCheckmark.style.color = '#0c4';
+          personnelCheckmark.style.display = 'inline';
+        } else if(lastQuickPersonnelResult === false) {
+          personnelCheckmark.textContent = '✗';
+          personnelCheckmark.style.color = '#f44';
+          personnelCheckmark.style.display = 'inline';
+        } else {
+          personnelCheckmark.style.display = 'none';
+        }
+      } else {
+        personnelCheckmark.style.display = 'none';
+      }
+    };
+    
+    window.updateQuickPrimaryCardCheckmark = function() {
+      const primaryCard = document.querySelector('#id_card_number');
+      const primaryCheckmark = document.getElementById('primaryCardCheckmarkModal');
+      if(!primaryCard || !primaryCheckmark) return;
+      
+      const primaryValue = primaryCard.value.trim();
+      if(primaryValue && lastCheckedQuickPrimaryCard === primaryValue) {
+        if(lastQuickPrimaryCardResult === true) {
+          primaryCheckmark.textContent = '✓';
+          primaryCheckmark.style.color = '#0c4';
+          primaryCheckmark.style.display = 'inline';
+        } else if(lastQuickPrimaryCardResult === false) {
+          primaryCheckmark.textContent = '✗';
+          primaryCheckmark.style.color = '#f44';
+          primaryCheckmark.style.display = 'inline';
+        } else {
+          primaryCheckmark.style.display = 'none';
+        }
+      } else {
+        primaryCheckmark.style.display = 'none';
+      }
+    };
+    
+    window.updateQuickSecondaryCardCheckmark = function() {
+      const secondaryCard = document.querySelector('#id_secondary_card_number');
+      const secondaryCheckmark = document.getElementById('secondaryCardCheckmarkModal');
+      if(!secondaryCard || !secondaryCheckmark) return;
+      
+      const secondaryValue = secondaryCard.value.trim();
+      if(secondaryValue && lastCheckedQuickSecondaryCard === secondaryValue) {
+        if(lastQuickSecondaryCardResult === true) {
+          secondaryCheckmark.textContent = '✓';
+          secondaryCheckmark.style.color = '#0c4';
+          secondaryCheckmark.style.display = 'inline';
+        } else if(lastQuickSecondaryCardResult === false) {
+          secondaryCheckmark.textContent = '✗';
+          secondaryCheckmark.style.color = '#f44';
+          secondaryCheckmark.style.display = 'inline';
+        } else {
+          secondaryCheckmark.style.display = 'none';
+        }
+      } else {
+        secondaryCheckmark.style.display = 'none';
+      }
+    };
+    
+    // Add listeners for card field changes to update checkmarks
+    setTimeout(() => {
+      const personnelInput = root.querySelector('#id_legacy_userid');
+      const primaryCardInput = root.querySelector('#id_card_number');
+      const secondaryCardInput = root.querySelector('#id_secondary_card_number');
+      
+      if(personnelInput) personnelInput.addEventListener('change', updateQuickPersonnelCheckmark);
+      if(primaryCardInput) primaryCardInput.addEventListener('change', updateQuickPrimaryCardCheckmark);
+      if(secondaryCardInput) secondaryCardInput.addEventListener('change', updateQuickSecondaryCardCheckmark);
+      
+      // Auto-verify carduri pe blur în modal
+      window.autoVerifyQuickCards = function() {
+        const primaryCard = root.querySelector('#id_card_number').value.trim();
+        const secondaryCard = root.querySelector('#id_secondary_card_number').value.trim();
+        
+        // Resetează valorile pentru câmpurile goale
+        if(!primaryCard) {
+          lastCheckedQuickPrimaryCard = null;
+          lastQuickPrimaryCardResult = null;
+          updateQuickPrimaryCardCheckmark();
+        }
+        if(!secondaryCard) {
+          lastCheckedQuickSecondaryCard = null;
+          lastQuickSecondaryCardResult = null;
+          updateQuickSecondaryCardCheckmark();
+        }
+        
+        if(!primaryCard && !secondaryCard) return;
+        
+        let checkUrl = '/agent/crud/employees/check-cards/';
+        let params = [];
+        
+        if(primaryCard) params.push('primary=' + encodeURIComponent(primaryCard));
+        if(secondaryCard) params.push('secondary=' + encodeURIComponent(secondaryCard));
+        
+        if(params.length > 0) {
+          checkUrl += '?' + params.join('&');
+        }
+        
+        fetch(checkUrl, {
+          method: 'GET',
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(r => r.json())
+        .then(data => {
+          console.log('Modal card check response:', data);
+          if(primaryCard) {
+            lastCheckedQuickPrimaryCard = primaryCard;
+            lastQuickPrimaryCardResult = data.primary_available === true ? true : false;
+            console.log(`Modal Primary: ${primaryCard}, Available: ${data.primary_available}, Result: ${lastQuickPrimaryCardResult}`);
+            updateQuickPrimaryCardCheckmark();
+          }
+          if(secondaryCard) {
+            lastCheckedQuickSecondaryCard = secondaryCard;
+            lastQuickSecondaryCardResult = data.secondary_available === true ? true : false;
+            console.log(`Modal Secondary: ${secondaryCard}, Available: ${data.secondary_available}, Result: ${lastQuickSecondaryCardResult}`);
+            updateQuickSecondaryCardCheckmark();
+          }
+        })
+        .catch(err => console.error('Card check error:', err));
+      };
+      
+      // Debounce timer pentru input event
+      window.cardCheckQuickTimeout = null;
+      
+      window.autoVerifyQuickCardsDebounced = function() {
+        clearTimeout(window.cardCheckQuickTimeout);
+        window.cardCheckQuickTimeout = setTimeout(window.autoVerifyQuickCards, 500);
+      };
+      
+      // Auto-verify pentru Nr. Personal în modal
+      window.personnelCheckQuickTimeout = null;
+      
+      window.autoVerifyQuickPersonnel = function() {
+        const personnelInput = root.querySelector('#id_legacy_userid');
+        if(!personnelInput) return;
+        
+        const personnelNo = personnelInput.value.trim();
+        if(!personnelNo) {
+          lastCheckedQuickPersonnelNo = null;
+          lastQuickPersonnelResult = null;
+          updateQuickPersonnelCheckmark();
+          return;
+        }
+        
+        let checkUrl = '/agent/crud/employees/check-personnel-no/?check=' + encodeURIComponent(personnelNo);
+        
+        fetch(checkUrl, {
+          method: 'GET',
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(r => r.json())
+        .then(data => {
+          lastCheckedQuickPersonnelNo = personnelNo;
+          lastQuickPersonnelResult = data.is_available === true ? true : false;
+          updateQuickPersonnelCheckmark();
+        })
+        .catch(err => {
+          console.error('Personnel check error:', err);
+        });
+      };
+      
+      window.autoVerifyQuickPersonnelDebounced = function() {
+        clearTimeout(window.personnelCheckQuickTimeout);
+        window.personnelCheckQuickTimeout = setTimeout(window.autoVerifyQuickPersonnel, 500);
+      };
+      
+      // Attach listeners pentru toate câmpurile
+      if(personnelInput) {
+        personnelInput.addEventListener('blur', window.autoVerifyQuickPersonnel);
+        personnelInput.addEventListener('input', window.autoVerifyQuickPersonnelDebounced);
+      }
+      if(primaryCardInput) {
+        primaryCardInput.addEventListener('blur', window.autoVerifyQuickCards);
+        primaryCardInput.addEventListener('input', window.autoVerifyQuickCardsDebounced);
+      }
+      if(secondaryCardInput) {
+        secondaryCardInput.addEventListener('blur', window.autoVerifyQuickCards);
+        secondaryCardInput.addEventListener('input', window.autoVerifyQuickCardsDebounced);
+      }
+    }, 100);
+    
+    window.validateQuickFormSubmit = function(event) {
+      const personnelInput = document.querySelector('#id_legacy_userid');
+      const primaryCardInput = document.querySelector('#id_card_number');
+      const secondaryCardInput = document.querySelector('#id_secondary_card_number');
+      
+      const personnelValue = personnelInput.value.trim();
+      const primaryCardValue = primaryCardInput.value.trim();
+      const secondaryCardValue = secondaryCardInput.value.trim();
+      
+      // Verifică Nr. Personal
+      if(personnelValue) {
+        if(lastCheckedQuickPersonnelNo !== personnelValue || lastQuickPersonnelResult !== true) {
+          event.preventDefault();
+          checkAndValidateQuickPersonnelNo(personnelValue, primaryCardValue, secondaryCardValue);
+          return false;
+        }
+      }
+      
+      // Verifică cardurile dacă sunt completate
+      if(primaryCardValue || secondaryCardValue) {
+        if(primaryCardValue && secondaryCardValue && primaryCardValue === secondaryCardValue) {
+          event.preventDefault();
+          const statusDiv = document.getElementById('employeeQuickStatus');
+          statusDiv.innerHTML = `<strong style="color:#cc0000;">✗ EROARE - Carduri Identice:</strong><br/>Nr. Card Principal și Card Secundar nu pot fi aceleași!<br/>Te rog să alegi numere diferite.`;
+          statusDiv.style.color = '#cc0000';
+          statusDiv.style.background = '#ffe8e8';
+          statusDiv.style.borderLeft = '4px solid #f44';
+          statusDiv.style.padding = '6px 12px';
+          return false;
+        }
+        
+        if((primaryCardValue && (lastCheckedQuickPrimaryCard !== primaryCardValue || lastQuickPrimaryCardResult !== true)) ||
+           (secondaryCardValue && (lastCheckedQuickSecondaryCard !== secondaryCardValue || lastQuickSecondaryCardResult !== true))) {
+          event.preventDefault();
+          checkAndValidateQuickCardNumbers(primaryCardValue, secondaryCardValue);
+          return false;
+        }
+      }
+      
+      return true;
+    };
+    
+    window.checkAndValidateQuickCardNumbers = function(primaryCard, secondaryCard) {
+      const statusDiv = document.getElementById('employeeQuickStatus');
+      
+      if(primaryCard && secondaryCard && primaryCard === secondaryCard) {
+        statusDiv.innerHTML = `<strong style="color:#cc0000;">✗ EROARE - Carduri Identice:</strong><br/>Nu pot fi aceleași!`;
+        statusDiv.style.color = '#cc0000';
+        statusDiv.style.background = '#ffe8e8';
+        statusDiv.style.borderLeft = '4px solid #f44';
+        statusDiv.style.padding = '6px 12px';
+        lastQuickPrimaryCardResult = false;
+        lastQuickSecondaryCardResult = false;
+        return;
+      }
+      
+      let checkUrl = '/agent/crud/employees/check-cards/';
+      let params = [];
+      
+      if(primaryCard) params.push('primary=' + encodeURIComponent(primaryCard));
+      if(secondaryCard) params.push('secondary=' + encodeURIComponent(secondaryCard));
+      
+      if(params.length > 0) {
+        checkUrl += '?' + params.join('&');
+      }
+      
+      statusDiv.textContent = 'Verificare carduri...';
+      statusDiv.style.color = '#666';
+      statusDiv.style.background = '#fffacd';
+      statusDiv.style.padding = '6px 12px';
+      
+      fetch(checkUrl, {
+        method: 'GET',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      })
+      .then(r => r.json())
+      .then(data => {
+        let hasError = false;
+        let errorText = '';
+        
+        if(primaryCard && data.primary_available === false) {
+          hasError = true;
+          errorText += `<strong>Nr. Card Principal ${primaryCard}</strong> este deja folosit de:<br/><strong>${data.primary_used_by || 'Un alt angajat'}</strong><br/><br/>`;
+          lastQuickPrimaryCardResult = false;
+        } else if(primaryCard && data.primary_available === true) {
+          lastCheckedQuickPrimaryCard = primaryCard;
+          lastQuickPrimaryCardResult = true;
+        }
+        
+        if(secondaryCard && data.secondary_available === false) {
+          hasError = true;
+          errorText += `<strong>Card Secundar ${secondaryCard}</strong> este deja folosit de:<br/><strong>${data.secondary_used_by || 'Un alt angajat'}</strong><br/><br/>`;
+          lastQuickSecondaryCardResult = false;
+        } else if(secondaryCard && data.secondary_available === true) {
+          lastCheckedQuickSecondaryCard = secondaryCard;
+          lastQuickSecondaryCardResult = true;
+        }
+        
+        if(hasError) {
+          statusDiv.innerHTML = `<strong style="color:#cc0000;">✗ EROARE - Card Duplicat:</strong><br/>${errorText}Te rog să alegi alte numere de card.`;
+          statusDiv.style.color = '#cc0000';
+          statusDiv.style.background = '#ffe8e8';
+          statusDiv.style.borderLeft = '4px solid #f44';
+          statusDiv.style.padding = '6px 12px';
+        } else {
+          lastCheckedQuickPrimaryCard = primaryCard;
+          lastQuickPrimaryCardResult = true;
+          lastCheckedQuickSecondaryCard = secondaryCard;
+          lastQuickSecondaryCardResult = true;
+          updateQuickPrimaryCardCheckmark();
+          updateQuickSecondaryCardCheckmark();
+          document.querySelector('#employeeQuickForm').submit();
+        }
+      })
+      .catch(err => {
+        statusDiv.innerHTML = `<strong style="color:#cc0000;">✗ Eroare la verificare carduri:</strong><br/>${err.message}`;
+        statusDiv.style.color = '#cc0000';
+        statusDiv.style.background = '#ffe8e8';
+        statusDiv.style.padding = '6px 12px';
+        lastQuickPrimaryCardResult = false;
+        lastQuickSecondaryCardResult = false;
+      });
+    };
+    
+    window.checkAndValidateQuickPersonnelNo = function(personnelNo, primaryCard, secondaryCard) {
+      const statusDiv = document.getElementById('employeeQuickStatus');
+      
+      statusDiv.textContent = 'Verificare Nr. Personal...';
+      statusDiv.style.color = '#666';
+      statusDiv.style.background = '#fffacd';
+      statusDiv.style.padding = '6px 12px';
+      
+      fetch('/agent/crud/employees/check-personnel-no/?check=' + encodeURIComponent(personnelNo), {
+        method: 'GET',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' }
+      })
+      .then(r => r.json())
+      .then(data => {
+        if(data.is_available === false) {
+          statusDiv.innerHTML = `<strong style="color:#cc0000;">✗ EROARE - Nr. Personal Utilizat:</strong><br/><strong>Nr. Personal ${personnelNo}</strong> este deja folosit de:<br/><strong>${data.used_by || 'Un alt angajat'}</strong><br/><br/>Următorul disponibil: <strong>${data.available}</strong>`;
+          statusDiv.style.color = '#cc0000';
+          statusDiv.style.background = '#ffe8e8';
+          statusDiv.style.borderLeft = '4px solid #f44';
+          statusDiv.style.padding = '6px 12px';
+          lastQuickPersonnelResult = false;
+        } else if(data.is_available === true) {
+          lastCheckedQuickPersonnelNo = personnelNo;
+          lastQuickPersonnelResult = true;
+          updateQuickPersonnelCheckmark();
+          
+          // Verifica cardurile dacă sunt completate
+          if(primaryCard || secondaryCard) {
+            if(primaryCard && secondaryCard && primaryCard === secondaryCard) {
+              statusDiv.innerHTML = `<strong style="color:#cc0000;">✗ EROARE - Carduri Identice:</strong><br/>Nu pot fi aceleași!`;
+              statusDiv.style.color = '#cc0000';
+              statusDiv.style.background = '#ffe8e8';
+              statusDiv.style.borderLeft = '4px solid #f44';
+              statusDiv.style.padding = '6px 12px';
+              lastQuickPrimaryCardResult = false;
+              lastQuickSecondaryCardResult = false;
+            } else if((primaryCard && (lastCheckedQuickPrimaryCard !== primaryCard || lastQuickPrimaryCardResult !== true)) ||
+                      (secondaryCard && (lastCheckedQuickSecondaryCard !== secondaryCard || lastQuickSecondaryCardResult !== true))) {
+              checkAndValidateQuickCardNumbers(primaryCard, secondaryCard);
+            } else {
+              document.querySelector('#employeeQuickForm').submit();
+            }
+          } else {
+            document.querySelector('#employeeQuickForm').submit();
+          }
+        }
+      })
+      .catch(err => {
+        statusDiv.innerHTML = `<strong style="color:#cc0000;">✗ Eroare la verificare:</strong><br/>${err.message}`;
+        statusDiv.style.color = '#cc0000';
+        statusDiv.style.background = '#ffe8e8';
+        statusDiv.style.padding = '6px 12px';
+        lastQuickPersonnelResult = false;
+      });
+    };
+    
+    window.checkPersonnelNo = async function(){
+      const input = document.querySelector('#id_legacy_userid');
+      const statusDiv = document.getElementById('employeeQuickStatus');
+      if(!input){
+        alert('Câmpul Nr. Personal nu a fost găsit.');
+        return;
+      }
+      
+      const currentValue = input.value.trim();
+      
+      statusDiv.textContent = 'Verificare în curs...';
+      statusDiv.style.color = '#666';
+      statusDiv.style.background = '#fffacd';
+      statusDiv.style.padding = '6px 12px';
+      
+      try {
+        let checkUrl = '/agent/crud/employees/check-personnel-no/';
+        if(currentValue) {
+          checkUrl += '?check=' + encodeURIComponent(currentValue);
+        }
+        
+        const response = await fetch(checkUrl, {
+          method: 'GET',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest'
+          }
+        });
+        
+        if(!response.ok) throw new Error('Eroare server: ' + response.status);
+        
+        const data = await response.json();
+        
+        if(currentValue && data.is_available === false) {
+          // Numărul introdus este deja folosit
+          input.style.border = '2px solid #f44';
+          input.style.color = '#f44';
+          input.style.background = '#fff';
+          statusDiv.innerHTML = `✗ Nr. ${currentValue} este deja folosit${data.used_by ? ' de <strong>' + data.used_by + '</strong>' : ''}!<br/>Următorul disponibil: <strong>${data.available}</strong>`;
+          statusDiv.style.color = '#cc0000';
+          statusDiv.style.background = '#ffe8e8';
+          statusDiv.style.borderLeft = '4px solid #f44';
+          statusDiv.style.padding = '6px 12px';
+        } else if(currentValue && data.is_available === true) {
+          // Numărul introdus este disponibil
+          input.style.border = '2px solid #00cc00';
+          input.style.color = '#00cc00';
+          input.style.background = '#fff';
+          statusDiv.textContent = `✓ Nr. ${currentValue} este disponibil și poate fi folosit.`;
+          statusDiv.style.color = '#00aa00';
+          statusDiv.style.background = '#e8ffe8';
+          statusDiv.style.borderLeft = '4px solid #00cc00';
+          statusDiv.style.padding = '6px 12px';
+          lastCheckedQuickPersonnelNo = currentValue;
+          lastQuickPersonnelResult = true;
+          updateQuickPersonnelCheckmark();
+          setTimeout(() => {
+            input.style.border = '1px solid #b8c6d4';
+            input.style.color = '#222';
+            statusDiv.textContent = '';
+            statusDiv.style.background = '#fff';
+          }, 3000);
+        } else if(data.ok && data.available !== undefined && data.available > 0){
+          // Nu a fost introdus număr, returnează primul disponibil
+          input.value = data.available;
+          input.style.border = '2px solid #00cc00';
+          input.style.color = '#00cc00';
+          input.style.background = '#fff';
+          statusDiv.textContent = `✓ Nr. ${data.available} este disponibil și a fost autocompletat.`;
+          statusDiv.style.color = '#00aa00';
+          statusDiv.style.background = '#e8ffe8';
+          statusDiv.style.borderLeft = '4px solid #00cc00';
+          statusDiv.style.padding = '6px 12px';
+          lastCheckedQuickPersonnelNo = data.available;
+          lastQuickPersonnelResult = true;
+          updateQuickPersonnelCheckmark();
+          setTimeout(() => {
+            input.style.border = '1px solid #b8c6d4';
+            input.style.color = '#222';
+            statusDiv.textContent = '';
+            statusDiv.style.background = '#fff';
+          }, 3000);
+        } else {
+          statusDiv.textContent = 'Nu există numere disponibile. Verificați baza de date.';
+          statusDiv.style.color = '#cc0000';
+          statusDiv.style.background = '#ffe8e8';
+        }
+      } catch(err) {
+        statusDiv.textContent = 'Eroare la verificare: ' + err.message;
+        statusDiv.style.color = '#cc0000';
+        statusDiv.style.background = '#ffe8e8';
+      }
     }
   })();
 </script>

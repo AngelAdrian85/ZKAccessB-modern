@@ -1,18 +1,105 @@
 {% extends 'agent/base_legacy.html' %}
 {% block title %}Devices{% endblock %}
 {% block content %}
+<style>
+body { background: #1a3a52; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; padding: 20px; }
+.panel { 
+  background: #1e4a6b; 
+  border: 1px solid #3d6a8b; 
+  padding: 16px; 
+  border-radius: 4px; 
+  color: #e8f0f8;
+}
+.panel h2 { 
+  font-size: 14px; 
+  color: #7db3d9; 
+  border-bottom: 2px solid #3da5d9; 
+  padding-bottom: 8px; 
+  margin: 0 0 12px 0;
+}
+.panel ul { 
+  list-style: none; 
+  padding: 0; 
+  margin: 0; 
+}
+.panel li { 
+  margin: 6px 0; 
+}
+.op { 
+  display: inline-block; 
+  padding: 8px 12px; 
+  background: #2d5a7b; 
+  color: #7db3d9; 
+  border: 1px solid #3d6a8b; 
+  border-radius: 3px; 
+  text-decoration: none; 
+  font-size: 12px; 
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.op:hover { 
+  background: #3d7a9b; 
+  border-color: #4d8aab; 
+  color: #9fd2f1;
+}
+.accent { background: #0f2433; border: 1px solid #2d5a7b; }
+.footer { 
+  padding: 16px; 
+  text-align: center; 
+  color: #7db3d9; 
+  font-size: 11px; 
+  border-top: 1px solid #3d6a8b;
+  margin-top: 12px;
+}
+</style>
+
 <div class='grid'>
-  <section class='panel'><h2>Device Operations</h2><ul>
-    <li><a class='op' title='Adaugă un dispozitiv nou' href='/agent/devices/'>Add Device</a></li>
-    <li><a class='op' title='Scanează rețeaua pentru dispozitive compatibile' href='/agent/devices/'>Discover Network Devices</a></li>
-    <li><a class='op' title='Creează backup pentru datele dispozitivului' href='/agent/control/'>Backup Device Data</a></li>
-    <li><a class='op' title='Monitorizare evenimente în timp real (deschide în tab nou)' href='/agent/monitor/' target='_blank'>Monitor Realtime</a></li>
-    <li><a class='op' title='Jurnal acces pentru analiză rapidă' href='/agent/crud/access-logs/'>Access Logs</a></li>
-  </ul></section>
-  <section class='panel accent'><h2>Status & Sync</h2><ul>
-    <li><a class='op' title='Sincronizează ora pe dispozitive' href='/agent/control/'>Sync Time</a></li>
-    <li><a class='op' title='Actualizează statusul dispozitivelor' href='/agent/status/'>Refresh Status</a></li>
-    <li><a class='op' title='Trimite modificările de personal către dispozitive' href='/agent/control/'>Push Personnel Changes</a></li>
-  </ul></section>
-<footer class='footer'>Device module (modernized).</footer>
+  <!-- SECTION 1: Device Operations -->
+  <section class='panel'>
+    <h2>📟 Device Operations</h2>
+    <ul>
+      <li><a class='op' title='Adaugă un dispozitiv nou' href='{% url "crud-device-create" %}'>➕ Add Device</a></li>
+      <li><a class='op' title='Scanează rețeaua pentru dispozitive compatibile' href='{% url "device-discover" %}'>🔎 Discover Network</a></li>
+      <li><a class='op' title='Afișează lista tuturor device-urilor' href='{% url "crud-devices-list" %}'>📋 Device List</a></li>
+      <li><a class='op' title='Monitorizare evenimente în timp real' href='{% url "agent-monitor" %}' target='_blank'>📡 Monitor Realtime</a></li>
+      <li><a class='op' title='Jurnal acces pentru analiză rapidă' href='{% url "crud-access-logs-list" %}'>📊 Access Logs</a></li>
+    </ul>
+  </section>
+
+  <!-- SECTION 2: Device Management & Sync -->
+  <section class='panel accent'>
+    <h2>⚙️ Management & Sync</h2>
+    <ul>
+      <li><a class='op' title='Sincronizează ora pe dispozitive' href='{% url "agent-control-center" %}'>🕐 Sync Time</a></li>
+      <li><a class='op' title='Actualizează statusul dispozitivelor' href='{% url "agent-status-summary" %}'>🔄 Refresh Status</a></li>
+      <li><a class='op' title='Trimite modificările de personal către dispozitive' href='{% url "agent-control-center" %}'>📤 Push Personnel</a></li>
+      <li><a class='op' title='Backup și restore date dispozitiv' href='{% url "agent-control-center" %}'>💾 Backup/Restore</a></li>
+    </ul>
+  </section>
+
+  <!-- SECTION 3: Access Control & Configuration -->
+  <section class='panel'>
+    <h2>🔐 Access Control Configuration</h2>
+    <ul>
+      <li><a class='op' title='Gestionează ușile de acces' href='{% url "crud-doors-list" %}'>🚪 Doors</a></li>
+      <li><a class='op' title='Gestionează nivelurile de acces' href='{% url "crud-access-levels-list" %}'>🔑 Access Levels</a></li>
+      <li><a class='op' title='Gestionează segmentele de timp' href='{% url "crud-segments-list" %}'>⏰ Time Segments</a></li>
+      <li><a class='op' title='Gestionează zile de holiday' href='{% url "crud-holidays-list" %}'>🎄 Holidays</a></li>
+    </ul>
+  </section>
+
+  <!-- SECTION 4: Personnel Management -->
+  <section class='panel accent'>
+    <h2>👥 Personnel Management</h2>
+    <ul>
+      <li><a class='op' title='Gestionează angajații și cartelele' href='{% url "crud-employees-list" %}'>👤 Employees</a></li>
+      <li><a class='op' title='Gestionează departamentele' href='{% url "crud-depts-list" %}'>🏢 Departments</a></li>
+      <li><a class='op' title='Gestionează zonele de acces' href='{% url "crud-areas-list" %}'>📍 Areas</a></li>
+      <li><a class='op' title='Gestionează emiterea cartelelor' href='{% url "crud-issuecards-list" %}'>🎫 Issue Cards</a></li>
+    </ul>
+  </section>
+</div>
+
+<footer class='footer'>🔧 Device Module - Complete Control Panel (v2025.1)</footer>
 {% endblock %}

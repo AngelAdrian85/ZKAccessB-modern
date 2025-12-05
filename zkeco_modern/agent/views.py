@@ -190,33 +190,235 @@ def device_ping(request: HttpRequest):
     ip = request.GET.get('ip')
     if not ip:
         return JsonResponse({'ok': False,'error':'missing-ip'}, status=400)
-    import subprocess, sys
-    cmd = ['ping','-n','1','-w','500', ip] if sys.platform.startswith('win') else ['ping','-c','1','-W','1', ip]
+    import subprocess, sys, platform
+    
+    # Windows vs Linux/Mac ping command
+    if platform.system() == 'Windows':
+        cmd = ['ping', '-n', '1', '-w', '1000', ip]
+    else:
+        cmd = ['ping', '-c', '1', '-W', '2', ip]
+    
     try:
-        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=2)
-        alive = 'TTL=' in proc.stdout or 'bytes from' in proc.stdout
-        return JsonResponse({'ok': True,'alive': alive})
+        proc = subprocess.run(
+            cmd, 
+            stdout=subprocess.PIPE, 
+            stderr=subprocess.STDOUT, 
+            text=True, 
+            timeout=3
+        )
+        # Check for success markers
+        alive = ('TTL=' in proc.stdout or 'bytes from' in proc.stdout or 
+                 'time=' in proc.stdout or '0% packet loss' in proc.stdout)
+        return JsonResponse({
+            'ok': True,
+            'alive': alive,
+            'ip': ip,
+            'output': proc.stdout[:200] if not alive else ''
+        })
+    except subprocess.TimeoutExpired:
+        return JsonResponse({'ok': True, 'alive': False, 'ip': ip, 'error': 'timeout'})
     except Exception as e:
-        return JsonResponse({'ok': False,'error': str(e)}, status=400)
+        return JsonResponse({'ok': True, 'alive': False, 'ip': ip, 'error': str(e)})
+
+def device_port_test(request: HttpRequest):
+    """
+    Test TCP port connectivity to a device
+    Usage: /agent/devices/port-test/?ip=100.51.101.95&port=4370
+    Returns: {ok: true, open: true/false, ip: "...", port: 4370}
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': 'unauth'}, status=403)
+    
+    ip = request.GET.get('ip', '').strip()
+    port_str = request.GET.get('port', '4370').strip()
+    
+    if not ip:
+        return JsonResponse({'ok': False, 'error': 'missing-ip'}, status=400)
+    
+    try:
+        port = int(port_str)
+        if port < 1 or port > 65535:
+            return JsonResponse({'ok': False, 'error': 'invalid-port-range'}, status=400)
+    except ValueError:
+        return JsonResponse({'ok': False, 'error': 'invalid-port-format'}, status=400)
+    
+    import socket
+    
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(2)  # 2 second timeout
+        result = sock.connect_ex((ip, port))
+        sock.close()
+        
+        port_open = (result == 0)
+        
+        return JsonResponse({
+            'ok': True,
+            'open': port_open,
+            'ip': ip,
+            'port': port,
+            'status': 'reachable' if port_open else 'unreachable',
+            'message': f'Port {port} is {"OPEN ✓" if port_open else "CLOSED or FILTERED ✗"}'
+        })
+    except socket.gaierror:
+        return JsonResponse({
+            'ok': True,
+            'open': False,
+            'ip': ip,
+            'port': port,
+            'error': 'hostname-resolution-failed'
+        })
+    except socket.timeout:
+        return JsonResponse({
+            'ok': True,
+            'open': False,
+            'ip': ip,
+            'port': port,
+            'error': 'connection-timeout'
+        })
+    except Exception as e:
+        return JsonResponse({
+            'ok': True,
+            'open': False,
+            'ip': ip,
+            'port': port,
+            'error': str(e)
+        })
+
 
 def device_discover(request: HttpRequest):
+    """
+    Network device discovery - scans subnet range for responsive IPs
+    Expected: base=100.51.101 or base=100.51.101.0/24
+    Scans from .1 to .254 in the given subnet
+    
+    Uses:
+    1. ICMP Ping (fast but may be blocked by firewall)
+    2. TCP port scan fallback (ports 4370, 8080, 80 - common device ports)
+    """
     if not request.user.is_authenticated:
         return JsonResponse({'ok': False,'error':'unauth'}, status=403)
-    base = request.GET.get('base')  # e.g. 192.168.1
+    
+    base = request.GET.get('base', '').strip()
     if not base:
         return JsonResponse({'ok': False,'error':'missing-base'}, status=400)
-    import subprocess, sys
-    results = []
-    for last in range(1, 11):  # small scan first 10 hosts
-        ip = f"{base}.{last}"
-        cmd = ['ping','-n','1','-w','400', ip] if sys.platform.startswith('win') else ['ping','-c','1','-W','1', ip]
+    
+    # Remove /24 or similar if provided
+    if '/' in base:
+        base = base.split('/')[0]
+        # If it's a full IP, strip last octet
+        if base.count('.') == 3:
+            base = '.'.join(base.split('.')[:3])
+    
+    # Validate base format (should be XXX.XXX.XXX or XXX.XXX.XXX.0)
+    parts = base.split('.')
+    if len(parts) == 4 and parts[3] == '0':
+        base = '.'.join(parts[:3])
+    elif len(parts) != 3:
+        return JsonResponse({
+            'ok': False,
+            'error': 'invalid-base-format',
+            'example': '100.51.101 or 192.168.1'
+        }, status=400)
+    
+    import subprocess, socket, threading, time
+    from platform import system
+    
+    results = {'responsive': [], 'method': 'ping', 'scanned': 0, 'start_time': time.time()}
+    
+    def ping_single(ip):
+        """Try ICMP ping first"""
         try:
-            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=1.5)
-            if 'TTL=' in proc.stdout or 'bytes from' in proc.stdout:
-                results.append(ip)
-        except Exception:
+            if system() == 'Windows':
+                cmd = ['ping', '-n', '1', '-w', '300', ip]
+            else:
+                cmd = ['ping', '-c', '1', '-W', '1', ip]
+            
+            proc = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=1.2
+            )
+            if 'TTL=' in proc.stdout or 'bytes from' in proc.stdout or 'time=' in proc.stdout:
+                results['responsive'].append(ip)
+                results['scanned'] += 1
+                return True
+        except (subprocess.TimeoutExpired, Exception):
             pass
-    return JsonResponse({'ok': True,'responsive': results})
+        return False
+    
+    def tcp_port_scan(ip, ports=[4370, 8080, 80, 22, 23]):
+        """Fallback: Try TCP connection to common device ports"""
+        for port in ports:
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(0.3)
+                result = sock.connect_ex((ip, port))
+                sock.close()
+                if result == 0:  # Port is open
+                    if ip not in results['responsive']:
+                        results['responsive'].append(ip)
+                    results['method'] = 'tcp'
+                    results['scanned'] += 1
+                    return True
+            except (socket.error, OSError):
+                pass
+        results['scanned'] += 1
+        return False
+    
+    # Phase 1: Try ICMP ping on all addresses
+    threads = []
+    batch_size = 30  # Parallel threads
+    
+    for last in range(1, 255):
+        ip = f"{base}.{last}"
+        thread = threading.Thread(target=ping_single, args=(ip,), daemon=True)
+        thread.start()
+        threads.append(thread)
+        
+        if len(threads) >= batch_size:
+            for t in threads:
+                t.join(timeout=1.5)
+            threads = []
+    
+    # Wait for remaining ping threads
+    for t in threads:
+        t.join(timeout=1.5)
+    
+    # Phase 2: If no results from ping, try TCP port scanning
+    if not results['responsive']:
+        results['method'] = 'tcp-fallback'
+        threads = []
+        
+        for last in range(1, 255):
+            ip = f"{base}.{last}"
+            thread = threading.Thread(target=tcp_port_scan, args=(ip,), daemon=True)
+            thread.start()
+            threads.append(thread)
+            
+            if len(threads) >= batch_size:
+                for t in threads:
+                    t.join(timeout=1)
+                threads = []
+        
+        # Wait for remaining TCP threads
+        for t in threads:
+            t.join(timeout=1)
+    
+    elapsed = time.time() - results['start_time']
+    
+    return JsonResponse({
+        'ok': True,
+        'responsive': sorted(results['responsive']),
+        'scanned': results['scanned'],
+        'base': base,
+        'method': results['method'],
+        'elapsed_seconds': round(elapsed, 2),
+        'count': len(results['responsive']),
+        'note': 'If no results, check firewall ICMP rules or try TCP scan'
+    })
 
 def device_create(request: HttpRequest):
     if not request.user.is_authenticated or not request.user.is_staff:
@@ -238,6 +440,10 @@ def device_create(request: HttpRequest):
             return render(request,'agent/device_form.html',{'form': form})
     else:
         form = DeviceExtendedForm()
+        # ✅ ADAUGĂ SUPORT AJAX PENTRU MODAL
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        if is_ajax:
+            return render(request, 'agent/device_form_fragment.html', {'form': form})
     return render(request,'agent/device_form.html',{'form': form})
 
 def device_edit(request: HttpRequest, pk: int):
@@ -311,7 +517,33 @@ def menu_personnel(request: HttpRequest):
     if not request.user.is_authenticated:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
-    return render(request, 'agent/menu_personnel.html')
+    # Embed employees list with filters directly in the personnel menu
+    employees_qs = Employee.objects.order_by('last_name','first_name')
+    legacy_userid = request.GET.get('legacy_userid')
+    card_number = request.GET.get('card_number')
+    mobile_phone = request.GET.get('mobile_phone')
+    dept_name = request.GET.get('dept_name')
+    if legacy_userid:
+        try:
+            employees_qs = employees_qs.filter(legacy_userid__icontains=str(legacy_userid).strip())
+        except Exception:
+            employees_qs = employees_qs.filter(legacy_userid=str(legacy_userid).strip())
+    if card_number:
+        employees_qs = employees_qs.filter(card_number__icontains=card_number.strip())
+    if mobile_phone:
+        employees_qs = employees_qs.filter(mobile_phone__icontains=mobile_phone.strip())
+    if dept_name:
+        try:
+            filtered_ids = [e.id for e in employees_qs if getattr(getattr(e, 'dept', None), 'DeptName', '') and dept_name.lower() in e.dept.DeptName.lower()]
+            employees_qs = Employee.objects.filter(id__in=filtered_ids).order_by('last_name','first_name')
+        except Exception:
+            pass
+    response = render(request, 'agent/menu_personnel.html', {'employees': employees_qs})
+    # Previne cache-ul browser pentru date fresh
+    response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response['Pragma'] = 'no-cache'
+    response['Expires'] = '0'
+    return response
 
 def menu_device(request: HttpRequest):
     if not request.user.is_authenticated:
@@ -510,7 +742,9 @@ def depts_tree_json(request: HttpRequest):
         for n in by_parent.get(pid, []):
             out.append({'id': n['id'], 'name': n['DeptName'], 'children': build(n['id'])})
         return out
-    return JsonResponse({'ok': True, 'tree': build(None)})
+    # Also provide a flat "nodes" for simple list consumption
+    flat = [{'id': n['id'], 'name': n['DeptName'], 'parent_id': n['parent_id']} for n in nodes]
+    return JsonResponse({'ok': True, 'tree': build(None), 'nodes': flat})
 
 def depts_search_json(request: HttpRequest):
     if not request.user.is_authenticated:
@@ -523,7 +757,9 @@ def depts_search_json(request: HttpRequest):
         from django.db.models import Q
         qs = qs.filter(Q(DeptName__icontains=q) | Q(code__icontains=q))
     rows = list(qs.values('id','DeptName','code')[:200])
-    return JsonResponse({'ok': True,'rows': rows})
+    # Return simple array for easier front-end consumption
+    simple = [{'id': r['id'], 'name': r['DeptName'], 'code': r['code']} for r in rows]
+    return JsonResponse(simple, safe=False)
 
 def depts_update_parent_json(request: HttpRequest):
     if request.method != 'POST' or not request.user.is_authenticated or not request.user.is_staff:
@@ -659,6 +895,18 @@ def issuecards_list(request: HttpRequest):
                 return resp
             except Exception:
                 pass
+    # If JSON requested, return lightweight list
+    if request.headers.get('Accept','').lower().startswith('application/json'):
+        items = list(qs.values('id','cardno','cardstatus','userid__userid','userid__firstname','userid__lastname')[:500])
+        out = []
+        for r in items:
+            out.append({
+                'id': r['id'],
+                'card': r['cardno'],
+                'status': r['cardstatus'],
+                'employee': f"{r['userid__userid'] or ''} {r['userid__firstname'] or ''} {r['userid__lastname'] or ''}".strip()
+            })
+        return JsonResponse({'items': out})
     page = _paginate(qs, request)
     return render(request,'agent/issuecards_crud_list.html',{'page': page})
 
@@ -767,10 +1015,97 @@ def access_logs_list(request: HttpRequest):
                 return resp
             except Exception:
                 pass
+    # JSON inline response for unified Logs tab
+    if request.headers.get('Accept','').lower().startswith('application/json'):
+        items = list(qs.values('timestamp','userid__userid','cardno','door__name','device__device_name','event_type','result','info')[:200])
+        out = []
+        for r in items:
+            out.append({
+                'datetime': r['timestamp'],
+                'employee': r['userid__userid'],
+                'event': r['event_type'],
+                'details': (r['info'] or '')[:120],
+            })
+        return JsonResponse({'items': out})
     per_page = int(request.GET.get('per_page') or 50)
     per_page = max(10, min(per_page, 200))
     page = _paginate(qs, request, per_page=per_page)
     return render(request,'agent/access_logs_list.html',{'form': form, 'page': page})
+
+def access_logs_view_module(request: HttpRequest):
+    """JSON endpoint for module-based logs filtering with unified output for Personnel menu."""
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'unauthorized'}, status=403)
+    if not LegacyAccessLog:
+        return JsonResponse({'items': []})
+    
+    # Get filter parameters from query string
+    module = request.GET.get('module', 'all').lower()
+    date_from = request.GET.get('from', '')
+    date_to = request.GET.get('to', '')
+    person = request.GET.get('person', '')
+    device = request.GET.get('device', '')
+    event = request.GET.get('event', '')
+    
+    # Start with all logs
+    qs = LegacyAccessLog.objects.all().order_by('-timestamp')
+    
+    # Module-based filtering
+    # Access logs are tied to doors/devices. We'll infer module based on related records.
+    # For now, store a prefix or field that indicates the module.
+    # Assumption: info field or other markers can help identify the module context.
+    if module == 'personnel':
+        # Filter logs related to personnel (employees accessing doors)
+        qs = qs.filter(userid__isnull=False)
+    elif module == 'department':
+        # Filter logs related to departments (e.g., logs about dept changes or dept-level access)
+        qs = qs.filter(door__area__isnull=False)  # Example: areas tied to depts
+    elif module == 'issuecard':
+        # Filter logs related to issue card (card-level events)
+        qs = qs.filter(cardno__isnull=False)
+    
+    # Date range filtering
+    if date_from:
+        try:
+            from datetime import datetime
+            dt_from = datetime.fromisoformat(date_from + ' 00:00:00')
+            qs = qs.filter(timestamp__gte=dt_from)
+        except:
+            pass
+    if date_to:
+        try:
+            from datetime import datetime
+            dt_to = datetime.fromisoformat(date_to + ' 23:59:59')
+            qs = qs.filter(timestamp__lte=dt_to)
+        except:
+            pass
+    
+    # Text-based filtering
+    if person:
+        qs = qs.filter(userid__userid__icontains=person) | qs.filter(cardno__icontains=person)
+    if device:
+        qs = qs.filter(device__device_name__icontains=device)
+    if event:
+        qs = qs.filter(event_type__icontains=event)
+    
+    # Fetch and format
+    items = list(qs.values(
+        'timestamp', 'userid__userid', 'cardno', 'door__name', 'device__device_name',
+        'event_type', 'result', 'info'
+    )[:200])
+    
+    out = []
+    for r in items:
+        out.append({
+            'datetime': r['timestamp'].isoformat() if r['timestamp'] else '',
+            'module': 'Personnel',  # Inferred context
+            'entity': r['door__name'] or '-',
+            'employee': r['userid__userid'] or r['cardno'] or '-',
+            'event': r['event_type'] or '-',
+            'details': (r['info'] or '')[:120],
+        })
+    
+    return JsonResponse({'items': out})
 
 # ---------------- Diagnostics -----------------
 def model_diff(request: HttpRequest):
@@ -1256,7 +1591,36 @@ def employees_list(request: HttpRequest):
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
     qs = Employee.objects.order_by('last_name','first_name')
-    return render(request,'agent/employees_crud_list.html',{'employees': qs})
+    # Apply legacy-style filters
+    legacy_userid = request.GET.get('legacy_userid')
+    card_number = request.GET.get('card_number')
+    mobile_phone = request.GET.get('mobile_phone')
+    dept_name = request.GET.get('dept_name')
+    if legacy_userid:
+        try:
+            qs = qs.filter(legacy_userid__icontains=str(legacy_userid).strip())
+        except Exception:
+            qs = qs.filter(legacy_userid=str(legacy_userid).strip())
+    if card_number:
+        qs = qs.filter(card_number__icontains=card_number.strip())
+    if mobile_phone:
+        qs = qs.filter(mobile_phone__icontains=mobile_phone.strip())
+    # Department name bridge: only if Employee has attribute 'dept' from legacy bridge
+    if dept_name:
+        try:
+            qs = [e for e in qs if getattr(getattr(e, 'dept', None), 'DeptName', '') and dept_name.lower() in e.dept.DeptName.lower()]
+        except Exception:
+            pass
+    # If dept filter produced a list, convert back to queryset-like by id
+    if isinstance(qs, list):
+        ids = [e.id for e in qs]
+        qs = Employee.objects.filter(id__in=ids).order_by('last_name','first_name')
+    response = render(request,'agent/employees_crud_list.html',{'employees': qs})
+    # Previne cache-ul browser pentru date fresh
+    response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response['Pragma'] = 'no-cache'
+    response['Expires'] = '0'
+    return response
 
 def employee_inline_update(request: HttpRequest, pk: int):
     if not request.user.is_authenticated or not request.user.is_staff or request.method != 'POST':
@@ -1393,13 +1757,177 @@ def employee_create(request: HttpRequest):
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
     from .forms import EmployeeExtendedForm
+    
+    # AJAX request for modal fragment
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    
     if request.method == 'POST':
         form = EmployeeExtendedForm(request.POST)
         if form.is_valid():
-            form.save(); return render(request,'agent/employee_saved.html',{'obj': form.instance,'created': True})
+            emp = form.save()
+            if is_ajax:
+                return JsonResponse({'ok': True, 'id': emp.id, 'name': str(emp)})
+            return render(request,'agent/employee_saved.html',{'obj': emp,'created': True})
+        else:
+            if is_ajax:
+                return JsonResponse({'ok': False, 'errors': form.errors})
     else:
         form = EmployeeExtendedForm()
-    return render(request,'agent/employee_form.html',{'form': form})
+    
+    # Return ultra-compact fragment for AJAX modal, full page otherwise
+    template = 'agent/employee_form_fragment.html' if is_ajax else 'agent/employee_form.html'
+    
+    # Get available access levels for the fragment
+    available_access_levels = AccessLevel.objects.all()
+    
+    return render(request, template, {
+        'form': form,
+        'available_access_levels': available_access_levels
+    })
+
+def check_personnel_no(request: HttpRequest):
+    """Verifică disponibilitatea unui număr de personal (legacy_userid).
+    
+    Parametri GET:
+    - check: numărul specific de verificat (opțional)
+    - exclude_id: ID-ul angajatului curent de excludere din verificare (opțional)
+    
+    Returns JSON:
+    - is_available: True/False dacă numărul verificat este disponibil
+    - available: următorul număr disponibil
+    - used_by: numele angajatului care folosește numărul (dacă e folosit)
+    """
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    
+    check_num = request.GET.get('check')
+    exclude_id = request.GET.get('exclude_id')
+    
+    # Get all existing legacy_userid values
+    existing = Employee.objects.filter(legacy_userid__isnull=False)
+    
+    # Exclude curent employee dacă se editează
+    if exclude_id:
+        try:
+            existing = existing.exclude(id=int(exclude_id))
+        except (ValueError, TypeError):
+            pass
+    
+    existing_nums = set(existing.values_list('legacy_userid', flat=True))
+    
+    response_data = {'ok': True}
+    
+    # Dacă se verifică un număr specific
+    if check_num:
+        try:
+            check_num = int(check_num)
+            if check_num in existing_nums:
+                # Numărul este folosit - găsește cine îl folosește
+                user = existing.filter(legacy_userid=check_num).first()
+                response_data['is_available'] = False
+                response_data['used_by'] = f'{user.first_name} {user.last_name}' if user else 'Un alt angajat'
+            else:
+                # Numărul este disponibil
+                response_data['is_available'] = True
+        except (ValueError, TypeError):
+            response_data['is_available'] = False
+            response_data['error'] = 'Număr invalid'
+    
+    # Găsește întotdeauna următorul disponibil
+    candidate = 1
+    while candidate in existing_nums:
+        candidate += 1
+    response_data['available'] = candidate
+    
+    return JsonResponse(response_data)
+
+def check_card_numbers(request: HttpRequest):
+    """Verifică disponibilitatea card-urilor (principal și secundar).
+    
+    Parametri GET:
+    - primary: card principal de verificat
+    - secondary: card secundar de verificat (opțional)
+    - exclude_id: ID-ul angajatului curent (pentru edit, opțional)
+    
+    Returns JSON:
+    - primary_available: True/False
+    - secondary_available: True/False
+    - primary_used_by: cine folosește primary (dacă duplicat)
+    - secondary_used_by: cine folosește secondary (dacă duplicat)
+    """
+    try:
+        if not request.user.is_authenticated or not request.user.is_staff:
+            return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+        
+        primary = request.GET.get('primary', '').strip()
+        secondary = request.GET.get('secondary', '').strip()
+        exclude_id = request.GET.get('exclude_id')
+        
+        import sys
+        print(f'DEBUG check_card_numbers: primary={primary}, secondary={secondary}, exclude_id={exclude_id}', file=sys.stderr)
+        
+        response_data = {'ok': True}
+        
+        # Verifică dacă primary și secondary sunt aceeași
+        if primary and secondary and primary == secondary:
+            response_data['primary_available'] = False
+            response_data['secondary_available'] = False
+            response_data['error'] = 'Card principal și secundar nu pot fi aceeași'
+            return JsonResponse(response_data)
+        
+        # Verifică primary card - caută în AMBELE câmpuri (card_number SAU secondary_card_number)
+        if primary:
+            from .models import Employee
+            from django.db.models import Q
+            existing_primary = Employee.objects.filter(
+                Q(card_number=primary) | Q(secondary_card_number=primary)
+            )
+            if exclude_id:
+                existing_primary = existing_primary.exclude(id=exclude_id)
+            
+            if existing_primary.exists():
+                user = existing_primary.first()
+                response_data['primary_available'] = False
+                response_data['primary_used_by'] = f'{user.first_name} {user.last_name}'
+            else:
+                response_data['primary_available'] = True
+        else:
+            response_data['primary_available'] = True
+        
+        print(f'DEBUG primary result: {response_data.get("primary_available")}', file=sys.stderr)
+        
+        # Verifică secondary card - caută în AMBELE câmpuri (card_number SAU secondary_card_number)
+        if secondary:
+            from .models import Employee
+            from django.db.models import Q
+            existing_secondary = Employee.objects.filter(
+                Q(card_number=secondary) | Q(secondary_card_number=secondary)
+            )
+            if exclude_id:
+                existing_secondary = existing_secondary.exclude(id=exclude_id)
+            
+            if existing_secondary.exists():
+                user = existing_secondary.first()
+                response_data['secondary_available'] = False
+                response_data['secondary_used_by'] = f'{user.first_name} {user.last_name}'
+            else:
+                response_data['secondary_available'] = True
+        else:
+            response_data['secondary_available'] = True
+        
+        print(f'DEBUG secondary result: {response_data.get("secondary_available")}', file=sys.stderr)
+        print(f'DEBUG final response: {response_data}', file=sys.stderr)
+        
+        return JsonResponse(response_data)
+    
+    except Exception as e:
+        import traceback
+        return JsonResponse({
+            'ok': False, 
+            'error': str(e),
+            'trace': traceback.format_exc()
+        }, status=500)
+
 
 def employee_edit(request: HttpRequest, pk: int):
     if not request.user.is_authenticated or not request.user.is_staff:
@@ -1410,10 +1938,30 @@ def employee_edit(request: HttpRequest, pk: int):
     if request.method == 'POST':
         form = EmployeeExtendedForm(request.POST, instance=emp)
         if form.is_valid():
-            form.save(); return render(request,'agent/employee_saved.html',{'obj': form.instance,'created': False})
+            if form.has_changed():
+                saved_emp = form.save()
+                # Reîncarcă obiectul fresh din DB pentru a afișa datele actualizate
+                saved_emp.refresh_from_db()
+                # Recreează formularul cu obiectul fresh
+                fresh_form = EmployeeExtendedForm(instance=saved_emp)
+                response = render(request,'agent/employee_form.html',{'form': fresh_form,'obj': saved_emp, 'saved': True})
+                # Previne cache-ul browser pentru a afișa mereu date fresh
+                response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+                response['Pragma'] = 'no-cache'
+                response['Expires'] = '0'
+                return response
+            else:
+                from django.shortcuts import redirect
+                return_url = request.POST.get('return_url', '/agent/menu/personnel/')
+                return redirect(return_url)
     else:
         form = EmployeeExtendedForm(instance=emp)
-    return render(request,'agent/employee_form.html',{'form': form,'obj': emp})
+    response = render(request,'agent/employee_form.html',{'form': form,'obj': emp})
+    # Previne cache-ul și pentru GET
+    response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response['Pragma'] = 'no-cache'
+    response['Expires'] = '0'
+    return response
 
 def employee_delete(request: HttpRequest, pk: int):
     if not request.user.is_authenticated or not request.user.is_staff or request.method != 'POST':

@@ -1,40 +1,640 @@
 {% extends 'agent/base_legacy.html' %}
-{% block title %}Employee{% endblock %}
+{% block title %}{% if obj %}Editare Angajat{% else %}Adăugare Angajat{% endif %}{% endblock %}
 {% block content %}
-<h2>{% if obj %}Edit Employee{% else %}Create Employee{% endif %}</h2>
-<form method='post' title='Formular angajat – câmpuri esențiale + extinse dacă există date legacy'>
-  {% csrf_token %}
-  {{ form.as_p }}
-  {% if form.legacy_userid %}
-  <fieldset style='border:1px solid #999;padding:8px;margin-top:12px' title='Date suplimentare moștenite din sistemul vechi'>
-    <legend style='font-weight:bold'>Câmpuri Legacy (Opțional)</legend>
-    <div class='legacy-fields'>
-      <p title='Identificator numeric vechi'>{{ form.legacy_userid.label_tag }} {{ form.legacy_userid }}</p>
-      <p title='Departament asignat'>{{ form.dept.label_tag }} {{ form.dept }}</p>
-      <p title='Genul angajatului'>{{ form.gender.label_tag }} {{ form.gender }}</p>
-      <p title='Data angajării'>{{ form.hire_date.label_tag }} {{ form.hire_date }}</p>
-      <p title='Email'>{{ form.email.label_tag }} {{ form.email }}</p>
-      <p title='Telefon'>{{ form.phone.label_tag }} {{ form.phone }}</p>
-      <p title='Nivel privilegiu/rol'>{{ form.privilege.label_tag }} {{ form.privilege }}</p>
-      <p title='Act identitate'>{{ form.identitycard.label_tag }} {{ form.identitycard }}</p>
-      <p title='Cod site card'>{{ form.site_code.label_tag }} {{ form.site_code }}</p>
-      <p title='Adresă domiciliu'>{{ form.homeaddress.label_tag }} {{ form.homeaddress }}</p>
-      <p title='Stradă / detaliu adresă'>{{ form.street.label_tag }} {{ form.street }}</p>
-      <p title='Acces valabil de la'>{{ form.acc_startdate.label_tag }} {{ form.acc_startdate }}</p>
-      <p title='Acces valabil până la'>{{ form.acc_enddate.label_tag }} {{ form.acc_enddate }}</p>
-      <p title='Extensie timp'>{{ form.extend_time.label_tag }} {{ form.extend_time }}</p>
-      <p title='Întârziere ușă'>{{ form.delayed_door_open.label_tag }} {{ form.delayed_door_open }}</p>
-      <p title='Tip angajare'>{{ form.hiretype.label_tag }} {{ form.hiretype }}</p>
-      <p title='Tip personal'>{{ form.emptype.label_tag }} {{ form.emptype }}</p>
-      <p title='Parolă self'>{{ form.selfpassword.label_tag }} {{ form.selfpassword }}</p>
-      <p title='Parolă rezervare'>{{ form.reservation_password.label_tag }} {{ form.reservation_password }}</p>
-      <p title='Rol pe dispozitiv'>{{ form.role_on_device.label_tag }} {{ form.role_on_device }}</p>
-      <p title='Elevator superuser'>{{ form.elevator_superuser.label_tag }} {{ form.elevator_superuser }}</p>
-      <p title='Nivel lift'>{{ form.elevator_level.label_tag }} {{ form.elevator_level }}</p>
+<style>
+.emp-edit-form { max-width:850px; margin:0 auto; background:#1e3a52; padding:12px; border-radius:6px; }
+.emp-edit-form h2 { color:#9fd2f1; font-size:14px; margin:0 0 10px 0; }
+.emp-grid { display:grid; grid-template-columns:1fr 1fr 110px; gap:2px 8px; font-size:10px; }
+.emp-field { display:flex; align-items:center; gap:2px; min-height:18px; margin:0; padding:1px 0; }
+.emp-field label { color:#9fd2f1; font-weight:500; font-size:10px; width:90px; text-align:right; padding-right:3px; white-space:nowrap; }
+.emp-field input[type=text], .emp-field input[type=email], .emp-field input[type=number], .emp-field input[type=date], .emp-field select, .emp-field textarea { background:#163247; border:1px solid #3d6a8b; color:#e8f0f8; padding:1px 3px; border-radius:2px; height:18px; box-sizing:border-box; font-size:10px; width:100%; max-width:220px; }
+.emp-field textarea { height:40px; resize:vertical; }
+.emp-field input[type=checkbox] { width:auto; }
+.emp-full { grid-column:1/3; }
+.emp-wide { grid-column:1/-1; }
+.emp-section-title { color:#9fd2f1; font-weight:700; font-size:11px; margin:8px 0 4px 0; grid-column:1/-1; border-bottom:1px solid #3d6a8b; padding-bottom:2px; }
+.emp-actions { grid-column:1/-1; text-align:right; margin-top:8px; }
+.emp-actions button, .emp-actions a { background:#3da5d9; color:#fff; padding:6px 12px; border:1px solid #2c8ec0; border-radius:4px; font-size:10px; cursor:pointer; text-decoration:none; margin-left:6px; }
+.emp-actions a { background:#2d5a7b; border-color:#3d6a8b; }
+.photo-box { width:100px; height:120px; border:1px solid #3d6a8b; background:linear-gradient(135deg,#2d5a7b 0%,#1a3a52 100%); display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:9px; color:#9fd2f1; grid-row:2/16; grid-column:3; margin:0; }
+.photo-actions { text-align:center; width:100px; font-size:9px; margin-top:6px; }
+.photo-actions label { font-size:9px; color:#9fd2f1; cursor:pointer; text-decoration:underline; display:block; margin-bottom:2px; }
+.photo-actions input[type=file] { display:none; }
+.photo-actions .hint { font-size:8px; color:#ff9966; font-style:italic; }
+.success-modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center; }
+.success-modal.show { display:flex; }
+.success-box { background:#1e3a52; border:2px solid #0c4; padding:20px; border-radius:6px; text-align:center; color:#0c4; font-size:14px; }
+.error-modal { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center; }
+.error-modal.show { display:flex; }
+.error-box { background:#1e3a52; border:2px solid #f44; padding:20px; border-radius:6px; text-align:center; color:#f66; font-size:14px; min-width:300px; }
+.error-box h3 { color:#f66; margin:0 0 10px 0; font-size:16px; }
+.error-box p { margin:8px 0; font-size:12px; }
+.error-box button { background:#f44; color:#fff; border:1px solid #d00; padding:8px 16px; border-radius:4px; font-size:11px; cursor:pointer; margin-top:12px; }
+.error-box button:hover { background:#d00; }
+</style>
+<div id="successModal" class="success-modal"><div class="success-box">✓ Datele au fost actualizate cu succes!</div></div>
+<div id="errorModal" class="error-modal">
+  <div class="error-box">
+    <h3 id="errorTitle">✗ EROARE</h3>
+    <p id="errorMessage"></p>
+    <button onclick="document.getElementById('errorModal').classList.remove('show')">Înțeleg</button>
+  </div>
+</div>
+<div class="emp-edit-form">
+  <h2>{% if obj %}Editare Angajat{% else %}Adăugare Angajat{% endif %}</h2>
+  <form method='post' onsubmit="return validateBeforeSubmit(event)">
+    {% csrf_token %}
+    <input type="hidden" name="return_url" value="{{ request.GET.return_url|default:'/agent/menu/personnel/' }}">
+    {% if obj %}<input type="hidden" name="obj_id" value="{{ obj.id }}">{% endif %}
+    <div class="emp-grid">
+      <div class="emp-section-title">◆ Profil Personal</div>
+      <div class="emp-field"><label for="id_legacy_userid">*Nr. Personal:</label><div style="display:flex;gap:2px;align-items:center;flex:1;"><div style="flex:1">{{ form.legacy_userid }}</div><button type="button" onclick="checkPersonnelNo()" style="padding:2px 6px;font-size:10px;border:1px solid #3d6a8b;background:#2d5a7b;color:#9fd2f1;border-radius:2px;cursor:pointer;white-space:nowrap;">Verifică</button><span id="personnelCheckmark" style="color:#0c4;font-size:12px;font-weight:bold;display:none;padding:0 4px;white-space:nowrap;">✓</span></div></div>
+      <div class="emp-field"><label for="id_city">Oraș:</label>{{ form.city }}</div>
+      <div class="photo-box">Fără Poză<div class="photo-actions"><label for="photoUpload">Încarcă Poză Personal<br/><span class="hint">(Dimensiune Optimă 120x140 Pixel)</span></label><input type="file" id="photoUpload" name="photo" accept="image/*"></div></div>
+      <div class="emp-field"><label for="id_first_name">Prenume:</label>{{ form.first_name }}</div>
+      <div class="emp-field"><label for="id_ssn">CNP:</label>{{ form.ssn }}</div>
+      <div class="emp-field"><label for="id_last_name">Nume:</label>{{ form.last_name }}</div>
+      <div class="emp-field"><label for="id_phone">Telefon Birou:</label>{{ form.phone }}</div>
+      <div class="emp-field"><label for="id_gender">Gen:</label>{{ form.gender }}</div>
+      <div class="emp-field"><label for="id_hiretype">Tip Angajare:</label>{{ form.hiretype }}</div>
+      <div class="emp-field"><label for="id_card_type">Tip Card:</label>{{ form.card_type }}</div>
+      <div class="emp-field"><label for="id_emptype">Tip Personal:</label>{{ form.emptype }}</div>
+      <div class="emp-field"><label for="id_card_number">*Nr. Card Principal:</label><div style="display:flex;gap:2px;align-items:center;flex:1;"><div style="flex:1">{{ form.card_number }}</div><span id="primaryCardCheckmark" style="color:#0c4;font-size:12px;font-weight:bold;display:none;padding:0 4px;white-space:nowrap;">✓</span></div></div>
+      <div class="emp-field"><label for="id_home_phone">Telefon Acasă:</label>{{ form.home_phone }}</div>
+      <div class="emp-field"><label for="id_secondary_card_number">*Card Secundar:</label><div style="display:flex;gap:2px;align-items:center;flex:1;"><div style="flex:1">{{ form.secondary_card_number }}</div><span id="secondaryCardCheckmark" style="color:#0c4;font-size:12px;font-weight:bold;display:none;padding:0 4px;white-space:nowrap;">✓</span></div></div>
+      <div class="emp-field"><label for="id_mobile_phone">Telefon Mobil:</label>{{ form.mobile_phone }}</div>
+      <div class="emp-field"><label for="id_password_on_record">Parolă:</label>{{ form.password_on_record }}</div>
+      <div class="emp-field"><label for="id_birthday">Data Nașterii:</label>{{ form.birthday }}</div>
+      <div class="emp-field"><label for="id_dept">*Departament:</label>{{ form.dept }}</div>
+      <div class="emp-field"><label for="id_email">Email:</label>{{ form.email }}</div>
+      <div class="emp-field"><label for="id_delayed_door_open">Deschidere Întârziată:</label>{{ form.delayed_door_open }}</div>
+      <div class="emp-field"><label for="id_hire_date">Data Angajării:</label>{{ form.hire_date }}</div>
+      <div class="emp-field"><label for="id_extend_time">Timp Extins:</label>{{ form.extend_time }}</div>
+      <div class="emp-field"><label for="id_homeaddress">Adresă Domiciliu:</label>{{ form.homeaddress }}</div>
+      <div class="emp-field"><label for="id_role_on_device">Rol Dispozitiv:</label>{{ form.role_on_device }}</div>
+      <div class="emp-field"><label for="id_identitycard">Adresă Serviciu:</label>{{ form.identitycard }}</div>
+      <div class="emp-field"><label for="id_reservation_password">Parolă Rezervare:</label>{{ form.reservation_password }}</div>
+      <div class="emp-field"><label for="id_street">Stradă:</label>{{ form.street }}</div>
+      
+      <div class="emp-field"><label>Înregistrare Amprentă:</label><div><a href="#" style="color:#3da5d9;font-size:10px;text-decoration:underline;" onclick="alert('Înregistrarea amprentei nu este implementată');return false;">Înregistrează</a> <a href="#" style="color:#3da5d9;font-size:10px;text-decoration:underline;margin-left:8px;" onclick="alert('Ai nevoie de ajutor?');return false;">Ajutor?</a></div></div>
+      <div class="emp-field"></div>
+      
+      <div class="emp-section-title">◆ Setări Control Acces și Lift</div>
+      <div class="emp-field"><label for="id_access_superuser">Superuser Acces:</label>{{ form.access_superuser }}</div>
+      <div class="emp-field"><label for="id_elevator_superuser">Superuser Lift:</label>{{ form.elevator_superuser }}</div>
+      
+      <div class="emp-field" style="grid-column:1;align-items:flex-start;"><label for="id_access_levels" style="align-self:flex-start;padding-top:4px;">Niveluri Acces:</label>
+        <div style="flex:1;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+            <span style="font-size:10px;color:#9fd2f1;font-weight:600;">Disponibil</span>
+            <label style="font-size:10px;margin:0;color:#9fd2f1;"><input type="checkbox" id="select_all_access_levels" style="margin:0 3px 0 0;"> Selectează tot</label>
+          </div>
+          <div style="border:1px solid #3d6a8b;padding:3px;height:120px;overflow:auto;background:#163247;font-size:10px;">{{ form.access_levels }}</div>
+        </div>
+      </div>
+      
+      <div class="emp-field" style="grid-column:2;align-items:flex-start;"><label style="align-self:flex-start;padding-top:4px;">Nivel Lift:</label>
+        <div style="flex:1;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+            <span style="font-size:10px;color:#9fd2f1;font-weight:600;visibility:hidden;">.</span>
+            <label style="font-size:10px;margin:0;color:#9fd2f1;"><input type="checkbox" style="margin:0 3px 0 0;"> Selectează tot</label>
+          </div>
+          <div style="border:1px solid #3d6a8b;padding:3px;height:120px;overflow:auto;background:#163247;font-size:10px;display:flex;align-items:center;justify-content:center;color:#ff9966;">
+            Niciun nivel de lift disponibil .
+          </div>
+        </div>
+      </div>
+      
+      <div class="emp-field"><label for="id_set_validity">Setează Validitate:</label>{{ form.set_validity }}</div>
+      <div class="emp-field"><label for="id_multi_card_group">Grupuri Multi-Card:</label>{{ form.multi_card_group }}</div>
+      <div class="emp-field"><label for="id_acc_startdate">Acces de la:</label>{{ form.acc_startdate }}</div>
+      <div class="emp-field"><label for="id_acc_enddate">Acces până la:</label>{{ form.acc_enddate }}</div>
+      <div class="emp-field"><label for="id_active">Activ:</label>{{ form.active }}</div>
+      <div class="emp-actions">
+        <button type='submit'>OK</button>
+        <a href="{{ request.GET.return_url|default:'/agent/menu/personnel/' }}" id="cancelBtn">Anulează</a>
+      </div>
     </div>
-  </fieldset>
+  </form>
+</div>
+<div id="employeeStatus" style="padding:6px 12px;font-size:11px;color:#333;background:#1e3a52;margin-top:8px;border-radius:4px;display:none;"></div>
+<script>
+// Variabilă globală pentru a memora dacă ID-ul curent a fost verificat ca disponibil
+let lastCheckedId = null;
+let lastCheckResult = null;
+let lastCheckedPrimaryCard = null;
+let lastPrimaryCardResult = null;
+let lastCheckedSecondaryCard = null;
+let lastSecondaryCardResult = null;
+
+function validateBeforeSubmit(event) {
+  const personnelInput = document.querySelector('#id_legacy_userid');
+  const primaryCardInput = document.querySelector('#id_card_number');
+  const secondaryCardInput = document.querySelector('#id_secondary_card_number');
+  
+  const personnelValue = personnelInput.value.trim();
+  const primaryCardValue = primaryCardInput.value.trim();
+  const secondaryCardValue = secondaryCardInput.value.trim();
+  
+  // Verifică Nr. Personal
+  if(personnelValue) {
+    if(lastCheckedId !== personnelValue || lastCheckResult !== true) {
+      event.preventDefault();
+      checkAndValidatePersonnelNo(personnelValue);
+      return false;
+    }
+  }
+  
+  // Verifică cardurile dacă sunt completate
+  if(primaryCardValue || secondaryCardValue) {
+    // Dacă cardurile sunt aceleași, verifică
+    if(primaryCardValue && secondaryCardValue && primaryCardValue === secondaryCardValue) {
+      event.preventDefault();
+      const errorModal = document.getElementById('errorModal');
+      const errorTitle = document.getElementById('errorTitle');
+      const errorMessage = document.getElementById('errorMessage');
+      errorTitle.textContent = '✗ EROARE - Carduri Identice';
+      errorMessage.innerHTML = `<strong>Nr. Card Principal</strong> și <strong>Card Secundar</strong> nu pot fi aceleași!<br/><br/>Te rog să alegi numere diferite.`;
+      errorModal.classList.add('show');
+      return false;
+    }
+    
+    // Dacă oricare dintre carduri nu a fost verificat ca disponibil, verifica
+    if(primaryCardValue && (lastCheckedPrimaryCard !== primaryCardValue || lastPrimaryCardResult !== true)) {
+      event.preventDefault();
+      checkAndValidateCardNumbers(primaryCardValue, secondaryCardValue);
+      return false;
+    }
+    
+    if(secondaryCardValue && (lastCheckedSecondaryCard !== secondaryCardValue || lastSecondaryCardResult !== true)) {
+      event.preventDefault();
+      checkAndValidateCardNumbers(primaryCardValue, secondaryCardValue);
+      return false;
+    }
+  }
+  
+  return true;
+}
+
+function checkAndValidateCardNumbers(primaryCard, secondaryCard) {
+  const errorModal = document.getElementById('errorModal');
+  const errorTitle = document.getElementById('errorTitle');
+  const errorMessage = document.getElementById('errorMessage');
+  
+  // Dacă ambele carduri sunt la fel, afișează eroare
+  if(primaryCard && secondaryCard && primaryCard === secondaryCard) {
+    errorTitle.textContent = '✗ EROARE - Carduri Identice';
+    errorMessage.innerHTML = `<strong>Nr. Card Principal</strong> și <strong>Card Secundar</strong> nu pot fi aceleași!<br/><br/>Te rog să alegi numere diferite.`;
+    errorModal.classList.add('show');
+    lastPrimaryCardResult = false;
+    lastSecondaryCardResult = false;
+    return;
+  }
+  
+  let checkUrl = '/agent/crud/employees/check-cards/';
+  let params = [];
+  
+  if(primaryCard) params.push('primary=' + encodeURIComponent(primaryCard));
+  if(secondaryCard) params.push('secondary=' + encodeURIComponent(secondaryCard));
+  
+  {% if obj %}
+  params.push('exclude_id={{ obj.id }}');
   {% endif %}
-  <button type='submit' class='op' data-tip='Salvează modificările angajatului'>Save</button>
-  <a class='op' data-tip='Înapoi la lista angajaților' href='{% url "crud-employees-list" %}'>Back</a>
-</form>
+  
+  if(params.length > 0) {
+    checkUrl += '?' + params.join('&');
+  }
+  
+  fetch(checkUrl, {
+    method: 'GET',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  })
+  .then(r => r.json())
+  .then(data => {
+    let hasError = false;
+    let errorText = '';
+    
+    // Verifica Primary Card
+    if(primaryCard && data.primary_available === false) {
+      hasError = true;
+      errorText += `<strong>Nr. Card Principal ${primaryCard}</strong> este deja folosit de:<br/><strong>${data.primary_used_by || 'Un alt angajat'}</strong><br/><br/>`;
+      lastPrimaryCardResult = false;
+    } else if(primaryCard && data.primary_available === true) {
+      lastCheckedPrimaryCard = primaryCard;
+      lastPrimaryCardResult = true;
+    }
+    
+    // Verifica Secondary Card
+    if(secondaryCard && data.secondary_available === false) {
+      hasError = true;
+      errorText += `<strong>Card Secundar ${secondaryCard}</strong> este deja folosit de:<br/><strong>${data.secondary_used_by || 'Un alt angajat'}</strong><br/><br/>`;
+      lastSecondaryCardResult = false;
+    } else if(secondaryCard && data.secondary_available === true) {
+      lastCheckedSecondaryCard = secondaryCard;
+      lastSecondaryCardResult = true;
+    }
+    
+    if(hasError) {
+      errorTitle.textContent = '✗ EROARE - Card Duplicat';
+      errorMessage.innerHTML = errorText + 'Te rog să alegi alte numere de card.';
+      errorModal.classList.add('show');
+    } else {
+      lastCheckedPrimaryCard = primaryCard;
+      lastPrimaryCardResult = true;
+      lastCheckedSecondaryCard = secondaryCard;
+      lastSecondaryCardResult = true;
+      updateCardCheckmarks();
+      // Resubmit form-ul
+      document.querySelector('form').submit();
+    }
+  })
+  .catch(err => {
+    errorTitle.textContent = '✗ EROARE - Verificare Eșuată';
+    errorMessage.textContent = 'Eroare la verificare carduri: ' + err.message;
+    errorModal.classList.add('show');
+    lastPrimaryCardResult = false;
+    lastSecondaryCardResult = false;
+  });
+}
+
+// Funcții separate pentru fiecare checkmark - nu se afectează între ele
+function updatePersonnelCheckmark() {
+  const personnelValue = document.querySelector('#id_legacy_userid').value.trim();
+  const personnelCheckmark = document.getElementById('personnelCheckmark');
+  
+  if(personnelValue && lastCheckedId === personnelValue) {
+    if(lastCheckResult === true) {
+      personnelCheckmark.textContent = '✓';
+      personnelCheckmark.style.color = '#0c4';
+      personnelCheckmark.style.display = 'inline';
+    } else if(lastCheckResult === false) {
+      personnelCheckmark.textContent = '✗';
+      personnelCheckmark.style.color = '#f44';
+      personnelCheckmark.style.display = 'inline';
+    } else {
+      personnelCheckmark.style.display = 'none';
+    }
+  } else {
+    personnelCheckmark.style.display = 'none';
+  }
+}
+
+function updatePrimaryCardCheckmark() {
+  const primaryCard = document.querySelector('#id_card_number').value.trim();
+  const primaryCheckmark = document.getElementById('primaryCardCheckmark');
+  
+  if(primaryCard && lastCheckedPrimaryCard === primaryCard) {
+    if(lastPrimaryCardResult === true) {
+      primaryCheckmark.textContent = '✓';
+      primaryCheckmark.style.color = '#0c4';
+      primaryCheckmark.style.display = 'inline';
+    } else if(lastPrimaryCardResult === false) {
+      primaryCheckmark.textContent = '✗';
+      primaryCheckmark.style.color = '#f44';
+      primaryCheckmark.style.display = 'inline';
+    } else {
+      primaryCheckmark.style.display = 'none';
+    }
+  } else {
+    primaryCheckmark.style.display = 'none';
+  }
+}
+
+function updateSecondaryCardCheckmark() {
+  const secondaryCard = document.querySelector('#id_secondary_card_number').value.trim();
+  const secondaryCheckmark = document.getElementById('secondaryCardCheckmark');
+  
+  if(secondaryCard && lastCheckedSecondaryCard === secondaryCard) {
+    if(lastSecondaryCardResult === true) {
+      secondaryCheckmark.textContent = '✓';
+      secondaryCheckmark.style.color = '#0c4';
+      secondaryCheckmark.style.display = 'inline';
+    } else if(lastSecondaryCardResult === false) {
+      secondaryCheckmark.textContent = '✗';
+      secondaryCheckmark.style.color = '#f44';
+      secondaryCheckmark.style.display = 'inline';
+    } else {
+      secondaryCheckmark.style.display = 'none';
+    }
+  } else {
+    secondaryCheckmark.style.display = 'none';
+  }
+}
+
+// Event listeners - fiecare câmp își controlează propria bifa
+document.querySelector('#id_legacy_userid').addEventListener('change', updatePersonnelCheckmark);
+document.querySelector('#id_card_number').addEventListener('change', updatePrimaryCardCheckmark);
+document.querySelector('#id_secondary_card_number').addEventListener('change', updateSecondaryCardCheckmark);
+
+// Auto-verify carduri - Debounce timer pentru input event
+let cardCheckTimeout = null;
+
+function autoVerifyCards() {
+  const primaryCard = document.querySelector('#id_card_number').value.trim();
+  const secondaryCard = document.querySelector('#id_secondary_card_number').value.trim();
+  
+  console.log('autoVerifyCards called - Primary:', primaryCard, 'Secondary:', secondaryCard);
+  
+  // Resetează valorile pentru câmpurile goale
+  if(!primaryCard) {
+    lastCheckedPrimaryCard = null;
+    lastPrimaryCardResult = null;
+    updatePrimaryCardCheckmark();
+  }
+  if(!secondaryCard) {
+    lastCheckedSecondaryCard = null;
+    lastSecondaryCardResult = null;
+    updateSecondaryCardCheckmark();
+  }
+  
+  if(!primaryCard && !secondaryCard) return;
+  
+  let checkUrl = '/agent/crud/employees/check-cards/';
+  let params = [];
+  
+  if(primaryCard) params.push('primary=' + encodeURIComponent(primaryCard));
+  if(secondaryCard) params.push('secondary=' + encodeURIComponent(secondaryCard));
+  
+  // Exclude curent employee dacă e edit
+  {% if obj %}
+    params.push('exclude_id={{ obj.id }}');
+  {% endif %}
+  
+  if(params.length > 0) {
+    checkUrl += '?' + params.join('&');
+  }
+  
+  console.log('Sending card verification request to:', checkUrl);
+  
+  fetch(checkUrl, {
+    method: 'GET',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  })
+  .then(r => r.json())
+  .then(data => {
+    console.log('Card check response:', data);
+    if(primaryCard) {
+      lastCheckedPrimaryCard = primaryCard;
+      lastPrimaryCardResult = data.primary_available === true ? true : false;
+      console.log(`Primary: ${primaryCard}, Available: ${data.primary_available}, Result: ${lastPrimaryCardResult}`);
+      updatePrimaryCardCheckmark();
+    }
+    if(secondaryCard) {
+      lastCheckedSecondaryCard = secondaryCard;
+      lastSecondaryCardResult = data.secondary_available === true ? true : false;
+      console.log(`Secondary: ${secondaryCard}, Available: ${data.secondary_available}, Result: ${lastSecondaryCardResult}`);
+      updateSecondaryCardCheckmark();
+    }
+  })
+  .catch(err => {
+    console.error('Card check error:', err);
+  });
+}
+
+function autoVerifyCardsDebounced() {
+  clearTimeout(cardCheckTimeout);
+  cardCheckTimeout = setTimeout(autoVerifyCards, 500);
+}
+
+// Auto-verify pentru Nr. Personal
+let personnelCheckTimeout = null;
+
+function autoVerifyPersonnel() {
+  const personnelInput = document.querySelector('#id_legacy_userid');
+  const personnelNo = personnelInput.value.trim();
+  
+  if(!personnelNo) {
+    lastCheckedId = null;
+    lastCheckResult = null;
+    updatePersonnelCheckmark();
+    return;
+  }
+  
+  let checkUrl = '/agent/crud/employees/check-personnel-no/?check=' + encodeURIComponent(personnelNo);
+  
+  {% if obj %}
+    checkUrl += '&exclude_id={{ obj.id }}';
+  {% endif %}
+  
+  fetch(checkUrl, {
+    method: 'GET',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  })
+  .then(r => r.json())
+  .then(data => {
+    lastCheckedId = personnelNo;
+    lastCheckResult = data.is_available === true ? true : false;
+    updatePersonnelCheckmark();
+  })
+  .catch(err => {
+    console.error('Personnel check error:', err);
+  });
+}
+
+function autoVerifyPersonnelDebounced() {
+  clearTimeout(personnelCheckTimeout);
+  personnelCheckTimeout = setTimeout(autoVerifyPersonnel, 500);
+}
+
+// Attach listeners - TREBUIE SA FIE DUPA DEFINITIA FUNCTIILOR
+setTimeout(function() {
+  const personnelInput = document.querySelector('#id_legacy_userid');
+  const primaryInput = document.querySelector('#id_card_number');
+  const secondaryInput = document.querySelector('#id_secondary_card_number');
+  
+  if(personnelInput) {
+    personnelInput.addEventListener('blur', autoVerifyPersonnel);
+    personnelInput.addEventListener('input', autoVerifyPersonnelDebounced);
+  }
+  if(primaryInput) {
+    primaryInput.addEventListener('blur', autoVerifyCards);
+    primaryInput.addEventListener('input', autoVerifyCardsDebounced);
+  }
+  if(secondaryInput) {
+    secondaryInput.addEventListener('blur', autoVerifyCards);
+    secondaryInput.addEventListener('input', autoVerifyCardsDebounced);
+  }
+}, 100);
+
+function checkAndValidatePersonnelNo(personnelNo) {
+  const errorModal = document.getElementById('errorModal');
+  const errorTitle = document.getElementById('errorTitle');
+  const errorMessage = document.getElementById('errorMessage');
+  
+  let checkUrl = '/agent/crud/employees/check-personnel-no/?check=' + encodeURIComponent(personnelNo);
+  
+  // Exclude curent employee dacă e edit
+  {% if obj %}
+    checkUrl += '&exclude_id={{ obj.id }}';
+  {% endif %}
+  
+  fetch(checkUrl, {
+    method: 'GET',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  })
+  .then(r => r.json())
+  .then(data => {
+    if(data.is_available === false) {
+      // Numărul e folosit - afișează modal de eroare
+      errorTitle.textContent = '✗ EROARE - Nr. Personal Utilizat';
+      errorMessage.innerHTML = `<strong>Nr. Personal ${personnelNo}</strong> este deja folosit de:<br/><strong>${data.used_by || 'Un alt angajat'}</strong><br/><br/>Te rog să alegi alt număr sau folosește butonul "Verifică" pentru a găsi unul disponibil.<br/><br/>Următorul disponibil: <strong>${data.available}</strong>`;
+      errorModal.classList.add('show');
+      lastCheckResult = false;
+      updatePersonnelCheckmark();
+    } else if(data.is_available === true) {
+      // Numărul e disponibil - lasă submit-ul
+      lastCheckedId = personnelNo;
+      lastCheckResult = true;
+      updatePersonnelCheckmark();
+      // Verifica și cardurile dacă sunt completate
+      const primaryCard = document.querySelector('#id_card_number').value.trim();
+      const secondaryCard = document.querySelector('#id_secondary_card_number').value.trim();
+      
+      if(primaryCard || secondaryCard) {
+        if(primaryCard && secondaryCard && primaryCard === secondaryCard) {
+          errorTitle.textContent = '✗ EROARE - Carduri Identice';
+          errorMessage.innerHTML = `<strong>Nr. Card Principal</strong> și <strong>Card Secundar</strong> nu pot fi aceleași!<br/><br/>Te rog să alegi numere diferite.`;
+          errorModal.classList.add('show');
+          lastPrimaryCardResult = false;
+          lastSecondaryCardResult = false;
+        } else if((primaryCard && (lastCheckedPrimaryCard !== primaryCard || lastPrimaryCardResult !== true)) ||
+                  (secondaryCard && (lastCheckedSecondaryCard !== secondaryCard || lastSecondaryCardResult !== true))) {
+          checkAndValidateCardNumbers(primaryCard, secondaryCard);
+        } else {
+          document.querySelector('form').submit();
+        }
+      } else {
+        document.querySelector('form').submit();
+      }
+    }
+  })
+  .catch(err => {
+    errorTitle.textContent = '✗ EROARE - Verificare Eșuată';
+    errorMessage.textContent = 'Eroare la verificare: ' + err.message;
+    errorModal.classList.add('show');
+    lastCheckResult = false;
+  });
+}
+
+function checkPersonnelNo() {
+  const input = document.querySelector('#id_legacy_userid');
+  const statusDiv = document.getElementById('employeeStatus');
+  if(!input) {
+    alert('Câmpul Nr. Personal nu a fost găsit.');
+    return;
+  }
+  
+  const currentValue = input.value.trim();
+  
+  statusDiv.textContent = 'Verificare în curs...';
+  statusDiv.style.color = '#9fd2f1';
+  statusDiv.style.background = '#2d5a7b';
+  statusDiv.style.display = 'block';
+  
+  // Verifică dacă numărul curent este disponibil
+  let checkUrl = '/agent/crud/employees/check-personnel-no/';
+  if(currentValue) {
+    checkUrl += '?check=' + encodeURIComponent(currentValue);
+  }
+  // Adaugă exclude_id dacă suntem în mod edit
+  const objIdField = document.querySelector('[name="obj_id"]');
+  if(objIdField && objIdField.value) {
+    checkUrl += '&exclude_id=' + objIdField.value;
+  }
+  
+  fetch(checkUrl, {
+    method: 'GET',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  })
+  .then(r => r.json())
+  .then(data => {
+    if(currentValue && data.is_available === false) {
+      // Numărul introdus este deja folosit
+      input.style.border = '2px solid #f44';
+      input.style.color = '#f44';
+      input.style.background = '#163247';
+      statusDiv.innerHTML = `✗ Nr. ${currentValue} este deja folosit${data.used_by ? ' de <strong>' + data.used_by + '</strong>' : ''}!<br/>Următorul disponibil: <strong>${data.available}</strong>`;
+      statusDiv.style.color = '#f66';
+      statusDiv.style.background = '#3a1a1a';
+      statusDiv.style.borderLeft = '4px solid #f44';
+      lastCheckedId = currentValue;
+      lastCheckResult = false;
+      updatePersonnelCheckmark();
+    } else if(currentValue && data.is_available === true) {
+      // Numărul introdus este disponibil
+      input.style.border = '2px solid #0c4';
+      input.style.color = '#0c4';
+      input.style.background = '#163247';
+      statusDiv.textContent = `✓ Nr. ${currentValue} este disponibil și poate fi folosit.`;
+      statusDiv.style.color = '#0c4';
+      statusDiv.style.background = '#1a3a52';
+      statusDiv.style.borderLeft = '4px solid #0c4';
+      lastCheckedId = currentValue;
+      lastCheckResult = true;
+      updatePersonnelCheckmark();
+      setTimeout(() => {
+        input.style.border = '1px solid #3d6a8b';
+        input.style.color = '#e8f0f8';
+        statusDiv.style.display = 'none';
+      }, 3000);
+    } else if(data.ok && data.available !== undefined && data.available > 0) {
+      // Nu a fost introdus număr, returnează primul disponibil
+      input.value = data.available;
+      input.style.border = '2px solid #0c4';
+      input.style.color = '#0c4';
+      input.style.background = '#163247';
+      statusDiv.textContent = `✓ Nr. ${data.available} este disponibil și a fost autocompletat.`;
+      statusDiv.style.color = '#0c4';
+      statusDiv.style.background = '#1a3a52';
+      statusDiv.style.borderLeft = '4px solid #0c4';
+      lastCheckedId = data.available;
+      lastCheckResult = true;
+      updatePersonnelCheckmark();
+      setTimeout(() => {
+        input.style.border = '1px solid #3d6a8b';
+        input.style.color = '#e8f0f8';
+        statusDiv.style.display = 'none';
+      }, 3000);
+    } else {
+      statusDiv.textContent = 'Nu există numere disponibile.';
+      statusDiv.style.color = '#f66';
+      statusDiv.style.background = '#3a1a1a';
+      lastCheckResult = false;
+    }
+  })
+  .catch(err => {
+    statusDiv.textContent = 'Eroare la verificare: ' + err.message;
+    statusDiv.style.color = '#f66';
+    statusDiv.style.background = '#3a1a1a';
+    lastCheckResult = false;
+  });
+}
+
+const toggle = document.querySelector('#select_all_access_levels');
+if(toggle) {
+  toggle.addEventListener('change', function() {
+    const checks = document.querySelectorAll('input[type=checkbox][name*="access_levels"]');
+    checks.forEach(c => c.checked = toggle.checked);
+  });
+}
+
+// Initialize checkmarks on page load for existing values
+window.addEventListener('DOMContentLoaded', function() {
+  updateCardCheckmarks();
+});
+
+{% if saved %}
+  window.addEventListener('DOMContentLoaded', function() {
+    const modal = document.getElementById('successModal');
+    modal.classList.add('show');
+    setTimeout(function() {
+      modal.classList.remove('show');
+      setTimeout(function() {
+        const returnUrl = document.querySelector('input[name="return_url"]')?.value || '/agent/menu/personnel/';
+        window.location.href = returnUrl;
+      }, 300);
+    }, 1500);
+  });
+{% endif %}
+</script>
 {% endblock %}

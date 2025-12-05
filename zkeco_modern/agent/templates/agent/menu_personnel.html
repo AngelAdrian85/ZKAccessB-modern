@@ -1,20 +1,1181 @@
-{% extends 'agent/base_legacy.html' %}
-{% block title %}Personnel{% endblock %}
+{% extends "agent/base_legacy.html" %}
+{% load static %}
+
+{% block title %}Personal – Module Unificat{% endblock %}
+
 {% block content %}
-<div class='grid'>
-  <section class='panel'><h2>People</h2><ul>
-    <li><a class='op' title='Adaugă un angajat nou' href='/agent/crud/employees/new/'>Add Employee</a></li>
-    <li><a class='op' title='Importă angajați din fișier' href='/agent/crud/employees/import/'>Import Employees</a></li>
-    <li><a class='op' title='Înregistrează amprente (pagina angajaților)' href='/agent/crud/employees/'>Fingerprint Registration</a></li>
-    <li><a class='op' title='Emite sau actualizează cardul angajatului' href='/agent/crud/issuecards/'>Issue Cards</a></li>
-    <li><a class='op' title='Gestionează cardurile emise' href='/agent/crud/issuecards/'>Card List</a></li>
-    <li><a class='op' title='Departamente organizație' href='/agent/crud/depts/'>Departments</a></li>
-    <li><a class='op' title='Zone fizice / arii' href='/agent/crud/areas/'>Areas</a></li>
-  </ul></section>
-  <section class='panel accent'><h2>Quick Actions</h2><ul>
-    <li><a class='op' title='Dezactivează cardul unui angajat' href='/agent/crud/employees/'>Deactivate Card</a></li>
-    <li><a class='op' title='Resetează codul/PIN pentru acces' href='/agent/crud/employees/'>Reset PIN</a></li>
-    <li><a class='op' title='Sincronizează modificările către dispozitive' href='/agent/control/'>Sync to Devices</a></li>
-  </ul></section>
-<footer class='footer'>Personnel module (modernized).</footer>
+<style>
+  /* Dashboard color palette */
+  :root {
+    --bg-primary: #0f2a47;      /* Dark blue - main bg */
+    --bg-secondary: #1a3a52;    /* Slightly lighter blue */
+    --bg-tertiary: #2a4a62;     /* Lighter blue for sections */
+    --bg-light: #e8f1f8;        /* Light blue - backgrounds */
+    --color-primary: #1e90ff;   /* Bright blue - headers, buttons */
+    --color-primary-dark: #1573d6;
+    --color-accent: #2ebf96;    /* Teal/green accent */
+    --color-warning: #ff9800;   /* Orange */
+    --color-danger: #f44336;    /* Red */
+    --text-light: #e8f1f8;      /* Light text */
+    --text-muted: #a8c5d8;      /* Muted text */
+    --border-color: #3a5a72;    /* Border color */
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    background: var(--bg-primary);
+    color: var(--text-light);
+  }
+
+  .personnel-container {
+    margin: 15px;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  }
+
+  h2 {
+    color: var(--text-light);
+    margin: 0;
+    padding: 15px;
+    border-bottom: 2px solid var(--border-color);
+  }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    padding: 0 10px;
+  }
+
+  .tab-btn {
+    padding: 12px 16px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-weight: 500;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s ease;
+  }
+
+  .tab-btn:hover {
+    color: var(--color-primary);
+    background: rgba(30, 144, 255, 0.1);
+  }
+
+  .tab-btn.active {
+    color: var(--color-primary);
+    border-bottom-color: var(--color-primary);
+    background: rgba(30, 144, 255, 0.05);
+  }
+
+  .tab-status {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--text-muted);
+    padding: 12px 16px;
+    align-self: center;
+  }
+
+  /* Tab content */
+  section {
+    padding: 15px;
+    background: var(--bg-secondary);
+  }
+
+  .action-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 12px 0;
+  }
+
+  .action-bar button,
+  .action-bar a {
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    color: var(--text-light);
+    text-decoration: none;
+    cursor: pointer;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+
+  .action-bar button:hover,
+  .action-bar a:hover {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: white;
+  }
+
+  /* Search filters */
+  .search-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+    padding: 10px;
+    background: rgba(30, 144, 255, 0.05);
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+  }
+
+  .search-row input,
+  .search-row select {
+    padding: 6px 8px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-light);
+    border-radius: 3px;
+    font-size: 12px;
+  }
+
+  .search-row button {
+    padding: 6px 10px;
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: 3px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .search-row button:hover {
+    background: var(--color-primary-dark);
+  }
+
+  /* Table */
+  .list {
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+
+  th {
+    background: var(--color-primary);
+    color: white;
+    padding: 8px;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid var(--border-color);
+  }
+
+  td {
+    padding: 6px 8px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-light);
+  }
+
+  tbody tr:hover {
+    background: rgba(30, 144, 255, 0.1);
+    transition: all 0.1s ease;
+  }
+
+  .action-links {
+    display: flex;
+    gap: 4px;
+  }
+
+  .action-links a {
+    padding: 3px 6px;
+    font-size: 11px;
+    color: var(--color-primary);
+    text-decoration: none;
+    border: 1px solid var(--border-color);
+    border-radius: 2px;
+    transition: all 0.2s ease;
+  }
+
+  .action-links a:hover {
+    background: var(--color-primary);
+    color: white;
+    border-color: var(--color-primary);
+  }
+
+  .action-links .delete-link {
+    color: var(--color-danger);
+    border-color: var(--color-danger);
+  }
+
+  .action-links .delete-link:hover {
+    background: var(--color-danger);
+    color: white;
+    border-color: var(--color-danger);
+  }
+
+  .hidden {
+    display: none;
+  }
+
+  .empty-state {
+    padding: 20px;
+    text-align: center;
+    color: var(--text-muted);
+  }
+
+  /* Modal */
+  .modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.7);
+    animation: fadeIn 0.2s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .modal-content {
+    background: var(--bg-secondary);
+    margin: 5% auto;
+    padding: 0;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    width: 90%;
+    max-width: 500px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+    animation: slideDown 0.2s ease;
+  }
+
+  @keyframes slideDown {
+    from { transform: translateY(-30px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+
+  .modal-header {
+    padding: 12px 15px;
+    background: var(--color-primary);
+    color: white;
+    font-weight: 600;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .modal-header .close {
+    color: white;
+    font-size: 24px;
+    font-weight: bold;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+    border: none;
+    background: none;
+  }
+
+  .modal-header .close:hover {
+    opacity: 0.8;
+  }
+
+  .modal-body {
+    padding: 15px;
+  }
+
+  .form-group {
+    margin-bottom: 10px;
+  }
+
+  .form-group label {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--text-light);
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .form-group input,
+  .form-group select,
+  .form-group textarea {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-light);
+    border-radius: 3px;
+    font-size: 12px;
+    font-family: inherit;
+  }
+
+  .form-group textarea {
+    resize: vertical;
+    min-height: 60px;
+  }
+
+  .form-group input:focus,
+  .form-group select:focus,
+  .form-group textarea:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    background: rgba(30, 144, 255, 0.1);
+  }
+
+  .modal-footer {
+    padding: 12px 15px;
+    background: var(--bg-tertiary);
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .modal-footer button {
+    padding: 6px 12px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    color: var(--text-light);
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+
+  .modal-footer button:hover {
+    background: var(--border-color);
+  }
+
+  .modal-footer .btn-primary {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: white;
+  }
+
+  .modal-footer .btn-primary:hover {
+    background: var(--color-primary-dark);
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border: 2px solid var(--border-color);
+    border-top-color: var(--color-primary);
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .logs-filters {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+    padding: 10px;
+    background: rgba(30, 144, 255, 0.05);
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+  }
+
+  .logs-filters input,
+  .logs-filters select {
+    padding: 6px 8px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-light);
+    border-radius: 3px;
+    font-size: 12px;
+  }
+
+  .logs-filters button {
+    padding: 6px 10px;
+    background: var(--color-primary);
+    color: white;
+    border: none;
+    border-radius: 3px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .logs-filters button:hover {
+    background: var(--color-primary-dark);
+  }
+</style>
+
+<div class="personnel-container">
+
+<h2>🛂 Personal – Gestionare Unificată</h2>
+
+<div class="tabs">
+  <button class="tab-btn active" data-tab="tab-employees">👤 Angajați</button>
+  <button class="tab-btn" data-tab="tab-departments">🏢 Departamente</button>
+  <button class="tab-btn" data-tab="tab-cards">🎫 Carduri</button>
+  <button class="tab-btn" data-tab="tab-logs">📋 Log Evenimente</button>
+  <div class="tab-status" id="tab-status">✓</div>
+</div>
+
+<!-- Angajați -->
+<section id="tab-employees">
+  <div class="action-bar">
+    <button type="button" id="emp-add-btn">➕ Adaugă</button>
+    <button type="button" id="emp-edit-selected">✏️ Editează</button>
+    <button type="button" id="emp-logs-open">📝 Jurnal</button>
+    <button type="button" id="emp-export">💾 Export</button>
+    <button type="button" id="emp-import">📤 Import</button>
+  </div>
+  <div class="search-row">
+    <input type="text" id="emp-q-userid" placeholder="ID/Legacy" />
+    <input type="text" id="emp-q-card" placeholder="Card" />
+    <input type="text" id="emp-q-dept" placeholder="Dept" />
+    <input type="text" id="emp-q-phone" placeholder="Telefon" />
+    <button type="button" id="emp-search-btn">🔍</button>
+  </div>
+  <div class="list">
+    <table>
+      <thead>
+        <tr>
+          <th>Sel</th>
+          <th>ID</th>
+          <th>Nume</th>
+          <th>Card</th>
+          <th>Dept</th>
+          <th>Tel</th>
+          <th>Gen</th>
+          <th>Validare</th>
+          <th>Acț</th>
+        </tr>
+      </thead>
+      <tbody id="emp-tbody">
+        {% for e in employees %}
+        <tr data-emp-id="{{ e.id }}">
+          <td><input type="radio" name="emp_select" value="{{ e.id }}" /></td>
+          <td>{{ e.legacy_userid|default:e.id }}</td>
+          <td>{{ e.first_name|default:"-" }} {{ e.last_name|default:"-" }}</td>
+          <td>{{ e.card_number|default:"-" }}</td>
+          <td>{{ e.dept_id|default:"-" }}</td>
+          <td>{{ e.mobile_phone|default:"-" }}</td>
+          <td>{{ e.gender|default:"-" }}</td>
+          <td>{{ e.validity|default:"-" }}</td>
+          <td class="action-links">
+            <a href="#" class="edit-link" data-emp-edit="{{ e.id }}">✏️</a>
+            <a href="#" class="delete-link" data-emp-delete="{{ e.id }}">🗑️</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="9" class="empty-state">Niciun angajat</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Departamente -->
+<section id="tab-departments" class="hidden" data-dept-edit-base="{% url 'crud-dept-edit' 0 %}">
+  <div class="action-bar">
+    <button type="button" id="dept-add-btn">➕ Adaugă</button>
+    <button type="button" id="dept-refresh">🔄 Reîncarcă</button>
+    <input type="text" id="dept-search" placeholder="Caută..." style="flex: 1; max-width: 200px;" />
+  </div>
+  <div class="list" id="dept-container" data-dept-search-url="{% url 'crud-depts-search' %}" data-dept-tree-url="{% url 'crud-depts-tree' %}">
+    <table>
+      <thead><tr><th>ID</th><th>Denumire</th><th>Cod</th><th>Dept. Părinte</th><th>Acț</th></tr></thead>
+      <tbody id="dept-tbody"><tr><td colspan="5">Încărcare...</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Carduri -->
+<section id="tab-cards" class="hidden" data-card-edit-base="{% url 'crud-issuecard-edit' 0 %}">
+  <div class="action-bar">
+    <button type="button" id="card-add-btn">➕ Emite</button>
+    <button type="button" id="card-refresh">🔄 Reîncarcă</button>
+    <input type="text" id="card-search" placeholder="Caută..." style="flex: 1; max-width: 200px;" />
+  </div>
+  <div class="list" id="card-container" data-card-list-url="{% url 'crud-issuecards-list' %}">
+    <table>
+      <thead><tr><th>ID</th><th>Card #</th><th>Angajat</th><th>Stare</th><th>Valid</th><th>Acț</th></tr></thead>
+      <tbody id="card-tbody"><tr><td colspan="6">Încărcare...</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Log Evenimente -->
+<section id="tab-logs" class="hidden">
+  <div class="action-bar">
+    <button type="button" id="logs-refresh">🔄 Reîncarcă</button>
+    <button type="button" id="logs-export">💾 Export</button>
+  </div>
+  <div class="logs-filters">
+    <select id="logs-module">
+      <option value="all">Toate</option>
+      <option value="personnel">Personnel</option>
+      <option value="department">Dept</option>
+      <option value="issuecard">Card</option>
+    </select>
+    <input type="date" id="logs-from" />
+    <input type="date" id="logs-to" />
+    <input type="text" id="logs-person" placeholder="Pers/ID" />
+    <input type="text" id="logs-device" placeholder="Device" />
+    <input type="text" id="logs-event" placeholder="Event" />
+    <button type="button" id="logs-filter">🔍</button>
+  </div>
+  <div class="list">
+    <table>
+      <thead>
+        <tr>
+          <th>Data & Oră</th>
+          <th>Modul</th>
+          <th>Entitate</th>
+          <th>Pers/ID</th>
+          <th>Eveniment</th>
+          <th>Detalii</th>
+        </tr>
+      </thead>
+      <tbody id="logs-tbody">
+        <tr><td colspan="6" class="empty-state">Filtrează pentru a vedea loguri</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+</div> <!-- personnel-container -->
+
+<!-- MODALS -->
+
+<!-- Modal: Adaugă Departament -->
+<div id="deptModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <span>🏢 Adaugă Departament</span>
+      <button class="close" data-modal="deptModal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="deptForm">
+        <div class="form-group">
+          <label>Cod *</label>
+          <input type="text" name="code" required placeholder="ex: 10" />
+        </div>
+        <div class="form-group">
+          <label>Denumire *</label>
+          <input type="text" name="name" required placeholder="ex: B.T.I.C" />
+        </div>
+        <div class="form-group">
+          <label>Dept. Părinte</label>
+          <select name="parent_id">
+            <option value="">-- Fără --</option>
+          </select>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button type="button" data-modal="deptModal">Anulează</button>
+      <button type="button" class="btn-primary" id="deptFormSubmit">Salvează</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Emite Card -->
+<div id="cardModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <span>🎫 Emite Card</span>
+      <button class="close" data-modal="cardModal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="cardForm">
+        <div class="form-group">
+          <label>Angajat *</label>
+          <select name="employee_id" required>
+            <option value="">-- Selectează --</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Card # *</label>
+          <input type="text" name="card_number" required placeholder="1234567890" />
+        </div>
+        <div class="form-group">
+          <label>Stare *</label>
+          <select name="status" required>
+            <option value="Active">Active</option>
+            <option value="Inactive">Inactive</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Valabil până</label>
+          <input type="date" name="validity_date" />
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button type="button" data-modal="cardModal">Anulează</button>
+      <button type="button" class="btn-primary" id="cardFormSubmit">Salvează</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Adaugă Angajat -->
+<div id="empModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <span>👤 Adaugă Angajat</span>
+      <button class="close" data-modal="empModal">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="empForm">
+        <div class="form-group">
+          <label>ID Personal *</label>
+          <input type="text" name="legacy_userid" required placeholder="000000001" />
+        </div>
+        <div class="form-group">
+          <label>Nume *</label>
+          <input type="text" name="first_name" required />
+        </div>
+        <div class="form-group">
+          <label>Prenume *</label>
+          <input type="text" name="last_name" required />
+        </div>
+        <div class="form-group">
+          <label>Card #</label>
+          <input type="text" name="card_number" />
+        </div>
+        <div class="form-group">
+          <label>Departament</label>
+          <select name="dept_id">
+            <option value="">-- Selectează --</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Telefon</label>
+          <input type="text" name="mobile_phone" />
+        </div>
+        <div class="form-group">
+          <label>Gen</label>
+          <select name="gender">
+            <option value="">--</option>
+            <option value="M">Masculin</option>
+            <option value="F">Feminin</option>
+          </select>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button type="button" data-modal="empModal">Anulează</button>
+      <button type="button" class="btn-primary" id="empFormSubmit">Salvează</button>
+    </div>
+  </div>
+</div>
+
+
+<script>
+  // ===== MODAL HANDLING =====
+  function openModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) modal.style.display = 'block';
+  }
+  function closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) modal.style.display = 'none';
+  }
+  document.querySelectorAll('.close').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const modalId = btn.getAttribute('data-modal');
+      closeModal(modalId);
+    });
+  });
+  document.querySelectorAll('[data-modal]').forEach(btn => {
+    if (btn.classList.contains('close')) return;
+    btn.addEventListener('click', (e) => {
+      const modalId = btn.getAttribute('data-modal');
+      closeModal(modalId);
+    });
+  });
+  window.addEventListener('click', (e) => {
+    if (e.target.classList.contains('modal')) {
+      e.target.style.display = 'none';
+    }
+  });
+
+  // ===== TABS =====
+  const btns = document.querySelectorAll('.tab-btn');
+  const sections = {
+    'tab-employees': document.getElementById('tab-employees'),
+    'tab-departments': document.getElementById('tab-departments'),
+    'tab-cards': document.getElementById('tab-cards'),
+    'tab-logs': document.getElementById('tab-logs')
+  };
+  btns.forEach(b=>b.addEventListener('click', ()=>{
+    btns.forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    Object.values(sections).forEach(s=>s.classList.add('hidden'));
+    sections[b.dataset.tab].classList.remove('hidden');
+  }));
+
+  // ===== DEPARTMENTS: Inline loader =====
+  async function loadDepts(q) {
+    const tbody = document.getElementById('dept-tbody');
+    tbody.innerHTML = '<tr><td colspan="5"><span class="spinner"></span></td></tr>';
+    try {
+      const cont = document.getElementById('dept-container');
+      const searchUrl = cont.getAttribute('data-dept-search-url');
+      const treeUrl = cont.getAttribute('data-dept-tree-url');
+      const chosen = q && searchUrl ? (searchUrl + `?q=${encodeURIComponent(q)}`) : treeUrl;
+      if (!chosen) { tbody.innerHTML = '<tr><td colspan="5">Endpoint lipsă</td></tr>'; return; }
+      const res = await fetch(chosen, { headers: { 'Accept':'application/json' } });
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : (data.nodes || []);
+      const rows = [];
+      for (const d of list) {
+        const id = d.id || d.pk || d.value || '-';
+        const name = d.name || d.title || d.text || '-';
+        const code = d.code || '-';
+        const parent = d.parent || '-';
+        rows.push(`<tr><td>${id}</td><td>${name}</td><td>${code}</td><td>${parent}</td><td class="action-links">
+          <a href="#" class="dept-edit" data-dept-id="${id}">✏️</a>
+          <a href="#" class="delete-link" data-dept-delete="${id}">🗑️</a>
+        </td></tr>`);
+      }
+      tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="5">Niciun rezultat</td></tr>';
+    } catch (e) {
+      console.error(e);
+      tbody.innerHTML = '<tr><td colspan="5">Eroare</td></tr>';
+    }
+  }
+  document.getElementById('dept-refresh').addEventListener('click', ()=>loadDepts(document.getElementById('dept-search').value));
+  document.getElementById('dept-search').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); loadDepts(e.target.value); } });
+  document.getElementById('dept-add-btn').addEventListener('click', ()=>openModal('deptModal'));
+  sections['tab-departments'].addEventListener('click', ()=>{ if(document.getElementById('dept-tbody').innerHTML.includes('Încărcare')) loadDepts(''); }, {once:true});
+
+  // ===== CARDS: Inline loader =====
+  async function loadCards(q) {
+    const tbody = document.getElementById('card-tbody');
+    tbody.innerHTML = '<tr><td colspan="6"><span class="spinner"></span></td></tr>';
+    try {
+      const cont = document.getElementById('card-container');
+      const base = cont.getAttribute('data-card-list-url');
+      if (!base) { tbody.innerHTML = '<tr><td colspan="6">Endpoint lipsă</td></tr>'; return; }
+      const url = base + (q ? `?q=${encodeURIComponent(q)}` : '');
+      const res = await fetch(url, { headers: { 'Accept':'application/json' } });
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : (data.items || []);
+      const rows = [];
+      for (const c of list) {
+        const id = c.id || c.pk || '-';
+        const cardNum = c.card || c.card_number || '-';
+        const emp = c.employee || c.person || c.userid || '-';
+        const stat = c.status || '-';
+        const valid = c.validity || '-';
+        rows.push(`<tr><td>${id}</td><td>${cardNum}</td><td>${emp}</td><td>${stat}</td><td>${valid}</td><td class="action-links">
+          <a href="#" class="card-edit" data-card-id="${id}">✏️</a>
+          <a href="#" class="delete-link" data-card-delete="${id}">🗑️</a>
+        </td></tr>`);
+      }
+      tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="6">Niciun rezultat</td></tr>';
+    } catch (e) {
+      console.error(e);
+      tbody.innerHTML = '<tr><td colspan="6">Eroare</td></tr>';
+    }
+  }
+  document.getElementById('card-refresh').addEventListener('click', ()=>loadCards(document.getElementById('card-search').value));
+  document.getElementById('card-search').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); loadCards(e.target.value); } });
+  document.getElementById('card-add-btn').addEventListener('click', ()=>openModal('cardModal'));
+  sections['tab-cards'].addEventListener('click', ()=>{ if(document.getElementById('card-tbody').innerHTML.includes('Încărcare')) loadCards(''); }, {once:true});
+
+  // ===== LOGS: Module-based filtering =====
+  async function loadLogs(params) {
+    const tbody = document.getElementById('logs-tbody');
+    tbody.innerHTML = '<tr><td colspan="6"><span class="spinner"></span></td></tr>';
+    try {
+      const qs = new URLSearchParams(params).toString();
+      const res = await fetch(`{% url 'agent-logs-view-module' %}?${qs}`, { headers: { 'Accept':'application/json' } });
+      if (!res.ok) { tbody.innerHTML = '<tr><td colspan="6">Eroare</td></tr>'; return; }
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : (data.items || []);
+      const rows = list.map(l=>{
+        const dt = (l.datetime || l.timestamp || l.time || '').substring(0, 16);
+        const mod = l.module || '-';
+        const ent = l.entity || '-';
+        const emp = l.employee || '-';
+        const evt = l.event || '-';
+        const det = (l.details || '').substring(0, 50);
+        return `<tr><td>${dt}</td><td>${mod}</td><td>${ent}</td><td>${emp}</td><td>${evt}</td><td>${det}</td></tr>`;
+      });
+      tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="6">Niciun rezultat</td></tr>';
+    } catch (e) {
+      console.error(e);
+      tbody.innerHTML = '<tr><td colspan="6">Eroare</td></tr>';
+    }
+  }
+  document.getElementById('logs-filter').addEventListener('click', ()=>{
+    loadLogs({
+      module: document.getElementById('logs-module').value,
+      from: document.getElementById('logs-from').value,
+      to: document.getElementById('logs-to').value,
+      person: document.getElementById('logs-person').value,
+      device: document.getElementById('logs-device').value,
+      event: document.getElementById('logs-event').value,
+    });
+  });
+  document.getElementById('logs-refresh').addEventListener('click', ()=>loadLogs({}));
+  document.getElementById('logs-export').addEventListener('click', ()=>{
+    const rows = Array.from(document.querySelectorAll('#logs-tbody tr'))
+      .map(tr => Array.from(tr.querySelectorAll('td')).map(td => '"' + td.textContent.trim().replace(/"/g,'""') + '"'));
+    const csv = ['Data,Modul,Entitate,Pers,Eveniment,Detalii'].concat(rows.map(r=>r.join(','))).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'logs.csv'; a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // ===== EMPLOYEES: Actions =====
+  function getSelectedEmpId() {
+    const r = document.querySelector('input[name="emp_select"]:checked');
+    return r ? r.value : null;
+  }
+  document.getElementById('emp-add-btn').addEventListener('click', ()=>{
+    window.location.href = `{% url 'crud-employee-create' %}`;
+  });
+  document.getElementById('emp-search-btn').addEventListener('click', ()=>{
+    const q = document.getElementById('emp-q-userid').value;
+    window.location.href = `?q_userid=${encodeURIComponent(q)}`;
+  });
+  document.getElementById('emp-edit-selected').addEventListener('click', ()=>{
+    const id = getSelectedEmpId();
+    if (!id) { alert('Selectează angajat'); return; }
+    window.location.href = `{% url 'crud-employee-edit' 0 %}`.replace('0', id);
+  });
+  document.getElementById('emp-logs-open').addEventListener('click', ()=>{
+    const id = getSelectedEmpId();
+    document.querySelector('[data-tab="tab-logs"]').click();
+    const personInput = document.getElementById('logs-person');
+    const moduleSelect = document.getElementById('logs-module');
+    if (moduleSelect) moduleSelect.value = 'personnel';
+    if (personInput && id) personInput.value = id;
+    loadLogs({ module: 'personnel', person: id || '' });
+  });
+  document.getElementById('emp-export').addEventListener('click', ()=>{
+    try { window.location.href = `{% url 'crud-employee-export' %}`; return; } catch (e) {
+      const rows = Array.from(document.querySelectorAll('#emp-tbody tr'))
+        .map(tr => Array.from(tr.querySelectorAll('td')).slice(0,9).map(td => '"' + td.textContent.trim().replace(/"/g,'""') + '"'));
+      const csv = ['Sel,ID,Nume,Card,Dept,Tel,Gen,Valid,Acț'].concat(rows.map(r=>r.join(','))).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'employees.csv'; a.click();
+      URL.revokeObjectURL(url);
+    }
+  });
+  document.getElementById('emp-import').addEventListener('click', ()=>{
+    try { window.location.href = `{% url 'crud-employee-import' %}`; } catch (e) { alert('Import: Endpoint nedisponibil'); }
+  });
+
+  // ===== Row actions: Edit =====
+  document.getElementById('dept-tbody').addEventListener('click', (e)=>{
+    const a = e.target.closest('a.dept-edit'); if (!a) return;
+    e.preventDefault(); const id = a.getAttribute('data-dept-id');
+    const base = document.getElementById('tab-departments').getAttribute('data-dept-edit-base');
+    if (id && base) window.location.href = base.replace('/0/', `/${id}/`);
+  });
+  document.getElementById('card-tbody').addEventListener('click', (e)=>{
+    const a = e.target.closest('a.card-edit'); if (!a) return;
+    e.preventDefault(); const id = a.getAttribute('data-card-id');
+    const base = document.getElementById('tab-cards').getAttribute('data-card-edit-base');
+    if (id && base) window.location.href = base.replace('/0/', `/${id}/`);
+  });
+
+  // ===== Row actions: Delete =====
+  function getCookie(name) {
+    let v = null;
+    if (document.cookie) {
+      document.cookie.split(';').forEach(c=>{
+        const [n,val] = c.trim().split('=');
+        if (n === name) v = decodeURIComponent(val);
+      });
+    }
+    return v;
+  }
+  document.getElementById('emp-tbody').addEventListener('click', (e)=>{
+    const a = e.target.closest('a[data-emp-delete]'); if (!a) return;
+    e.preventDefault(); const id = a.getAttribute('data-emp-delete');
+    if (confirm('Ștergi angajatul?')) {
+      fetch(`{% url 'crud-employee-delete' 0 %}`.replace('0', id), { method:'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') } })
+        .then(r=>r.ok ? location.reload() : alert('Eroare'))
+        .catch(e => alert('Eroare: '+e));
+    }
+  });
+  document.getElementById('dept-tbody').addEventListener('click', (e)=>{
+    const a = e.target.closest('a[data-dept-delete]'); if (!a) return;
+    e.preventDefault(); const id = a.getAttribute('data-dept-delete');
+    if (confirm('Ștergi departamentul?')) {
+      fetch(`{% url 'crud-dept-delete' 0 %}`.replace('0', id), { method:'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') } })
+        .then(r=>r.ok ? loadDepts('') : alert('Eroare'))
+        .catch(e => alert('Eroare: '+e));
+    }
+  });
+  document.getElementById('card-tbody').addEventListener('click', (e)=>{
+    const a = e.target.closest('a[data-card-delete]'); if (!a) return;
+    e.preventDefault(); const id = a.getAttribute('data-card-delete');
+    if (confirm('Ștergi cardul?')) {
+      fetch(`{% url 'crud-issuecard-delete' 0 %}`.replace('0', id), { method:'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') } })
+        .then(r=>r.ok ? loadCards('') : alert('Eroare'))
+        .catch(e => alert('Eroare: '+e));
+    }
+  });
+
+  // ===== FORM SUBMISSIONS =====
+  document.getElementById('deptFormSubmit').addEventListener('click', ()=>{
+    const form = document.getElementById('deptForm');
+    if (!form.checkValidity()) { alert('Completează câmpurile obligatorii'); return; }
+    const data = new FormData(form);
+    fetch(`{% url 'crud-dept-create' %}`, { method:'POST', body: data, headers: { 'X-CSRFToken': getCookie('csrftoken') } })
+      .then(r => r.ok ? (closeModal('deptModal'), loadDepts('')) : alert('Eroare salvare'))
+      .catch(e => alert('Eroare: '+e));
+  });
+  document.getElementById('cardFormSubmit').addEventListener('click', ()=>{
+    const form = document.getElementById('cardForm');
+    if (!form.checkValidity()) { alert('Completează câmpurile obligatorii'); return; }
+    const data = new FormData(form);
+    fetch(`{% url 'crud-issuecard-create' %}`, { method:'POST', body: data, headers: { 'X-CSRFToken': getCookie('csrftoken') } })
+      .then(r => r.ok ? (closeModal('cardModal'), loadCards('')) : alert('Eroare salvare'))
+      .catch(e => alert('Eroare: '+e));
+  });
+  document.getElementById('empFormSubmit').addEventListener('click', ()=>{
+    const form = document.getElementById('empForm');
+    if (!form.checkValidity()) { alert('Completează câmpurile obligatorii'); return; }
+    const data = new FormData(form);
+    fetch(`{% url 'crud-employee-create' %}`, { method:'POST', body: data, headers: { 'X-CSRFToken': getCookie('csrftoken') } })
+      .then(r => r.ok ? (closeModal('empModal'), location.reload()) : alert('Eroare salvare'))
+      .catch(e => alert('Eroare: '+e));
+  });
+  
+  async function loadDepts(q) {
+    const tbody = document.getElementById('dept-tbody');
+    tbody.innerHTML = '<tr><td colspan="3"><span class="spinner"></span> Încărcare...</td></tr>';
+    try {
+      const cont = document.getElementById('dept-container');
+      const searchUrl = cont.getAttribute('data-dept-search-url');
+      const treeUrl = cont.getAttribute('data-dept-tree-url');
+      const chosen = q && searchUrl ? (searchUrl + `?q=${encodeURIComponent(q)}`) : treeUrl;
+      if (!chosen) { tbody.innerHTML = '<tr><td colspan="3">Endpoint indisponibil.</td></tr>'; return; }
+      const res = await fetch(chosen, { headers: { 'Accept':'application/json' } });
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : (data.nodes || []);
+      const rows = [];
+      for (const d of list) {
+        const id = d.id || d.pk || d.value || '-';
+        const name = d.name || d.title || d.text || d.label || '';
+        rows.push(`<tr><td>${id}</td><td>${name}</td><td class="action-links">
+          <a href="#" class="dept-edit" data-dept-id="${id}">Editează</a>
+          <a href="#" class="delete-link" data-dept-delete="${id}">Șterge</a>
+        </td></tr>`);
+      }
+      tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="3" class="empty-state">Niciun rezultat.</td></tr>';
+    } catch (e) {
+      console.error(e);
+      tbody.innerHTML = '<tr><td colspan="3">Eroare la încărcare.</td></tr>';
+    }
+  }
+  document.getElementById('dept-refresh').addEventListener('click', ()=>loadDepts(document.getElementById('dept-search').value));
+  document.getElementById('dept-search').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); loadDepts(e.target.value); } });
+  // Load on tab init
+  sections['tab-departments'].addEventListener('click', ()=>{ if(!document.getElementById('dept-tbody').textContent.includes('Niciun')) loadDepts(''); }, {once:true});
+
+  // ===== CARDS: Inline loader =====
+  async function loadCards(q) {
+    const tbody = document.getElementById('card-tbody');
+    tbody.innerHTML = '<tr><td colspan="5"><span class="spinner"></span> Încărcare...</td></tr>';
+    try {
+      const cont = document.getElementById('card-container');
+      const base = cont.getAttribute('data-card-list-url');
+      if (!base) { tbody.innerHTML = '<tr><td colspan="5">Endpoint indisponibil.</td></tr>'; return; }
+      const url = base + (q ? `?q=${encodeURIComponent(q)}` : '');
+      const res = await fetch(url, { headers: { 'Accept':'application/json' } });
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : (data.items || []);
+      const rows = [];
+      for (const c of list) {
+        const id = c.id || c.pk || '-';
+        const cardNum = c.card || c.card_number || '-';
+        const emp = c.employee || c.person || c.userid || '-';
+        const stat = c.status || 'Unknown';
+        rows.push(`<tr><td>${id}</td><td>${cardNum}</td><td>${emp}</td><td><span style="color:${stat==='Active'?'green':'orange'}">${stat}</span></td><td class="action-links">
+          <a href="#" class="card-edit" data-card-id="${id}">Editează</a>
+          <a href="#" class="delete-link" data-card-delete="${id}">Șterge</a>
+        </td></tr>`);
+      }
+      tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="5" class="empty-state">Niciun rezultat.</td></tr>';
+    } catch (e) {
+      console.error(e);
+      tbody.innerHTML = '<tr><td colspan="5">Eroare la încărcare.</td></tr>';
+    }
+  }
+  document.getElementById('card-refresh').addEventListener('click', ()=>loadCards(document.getElementById('card-search').value));
+  document.getElementById('card-search').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); loadCards(e.target.value); } });
+  sections['tab-cards'].addEventListener('click', ()=>{ if(!document.getElementById('card-tbody').textContent.includes('Niciun')) loadCards(''); }, {once:true});
+
+  // ===== LOGS: Module-based filtering =====
+  async function loadLogs(params) {
+    const tbody = document.getElementById('logs-tbody');
+    tbody.innerHTML = '<tr><td colspan="6"><span class="spinner"></span> Încărcare...</td></tr>';
+    try {
+      const qs = new URLSearchParams(params).toString();
+      const res = await fetch(`{% url 'agent-logs-view-module' %}?${qs}`, { headers: { 'Accept':'application/json' } });
+      if (!res.ok) { tbody.innerHTML = '<tr><td colspan="6">Eroare: ' + res.status + '</td></tr>'; return; }
+      const data = await res.json();
+      const list = Array.isArray(data) ? data : (data.items || []);
+      const rows = list.map(l=>{
+        const dt = l.datetime || l.timestamp || l.time || '-';
+        const mod = l.module || l.type_module || '-';
+        const ent = l.entity || l.object || '-';
+        const emp = l.employee || l.user || l.userid || '-';
+        const evt = l.event || l.action || '-';
+        const det = l.details || l.info || '';
+        return `<tr><td>${dt}</td><td>${mod}</td><td>${ent}</td><td>${emp}</td><td>${evt}</td><td>${det}</td></tr>`;
+      });
+      tbody.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="6" class="empty-state">Niciun rezultat.</td></tr>';
+    } catch (e) {
+      console.error(e);
+      tbody.innerHTML = '<tr><td colspan="6">Eroare la încărcare loguri.</td></tr>';
+    }
+  }
+  document.getElementById('logs-filter').addEventListener('click', ()=>{
+    loadLogs({
+      module: document.getElementById('logs-module').value,
+      from: document.getElementById('logs-from').value,
+      to: document.getElementById('logs-to').value,
+      person: document.getElementById('logs-person').value,
+      device: document.getElementById('logs-device').value,
+      event: document.getElementById('logs-event').value,
+    });
+  });
+  document.getElementById('logs-refresh').addEventListener('click', ()=>loadLogs({}));
+  document.getElementById('logs-export').addEventListener('click', ()=>{
+    const rows = Array.from(document.querySelectorAll('#logs-tbody tr'))
+      .map(tr => Array.from(tr.querySelectorAll('td')).map(td => '"' + td.textContent.trim().replace(/"/g,'""') + '"'));
+    const csv = ['Data,Modul,Entitate,Angajat,Eveniment,Detalii'].concat(rows.map(r=>r.join(','))).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = 'logs_export_' + new Date().toISOString().split('T')[0] + '.csv'; a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // ===== EMPLOYEES: Actions =====
+  function getSelectedEmpId() {
+    const r = document.querySelector('input[name="emp_select"]:checked');
+    return r ? r.value : null;
+  }
+  document.getElementById('emp-search-btn').addEventListener('click', ()=>{
+    const q = document.getElementById('emp-q-userid').value;
+    window.location.href = `?q_userid=${encodeURIComponent(q)}`;
+  });
+  document.getElementById('emp-edit-selected').addEventListener('click', ()=>{
+    const id = getSelectedEmpId();
+    if (!id) { alert('Selectează un angajat din listă.'); return; }
+    window.location.href = `{% url 'crud-employee-edit' 0 %}`.replace('0', id);
+  });
+  document.getElementById('emp-logs-open').addEventListener('click', ()=>{
+    const id = getSelectedEmpId();
+    document.querySelector('[data-tab="tab-logs"]').click();
+    const personInput = document.getElementById('logs-person');
+    const moduleSelect = document.getElementById('logs-module');
+    if (moduleSelect) moduleSelect.value = 'personnel';
+    if (personInput && id) { personInput.value = id; }
+    loadLogs({ module: 'personnel', person: id || '' });
+  });
+  document.getElementById('emp-export').addEventListener('click', ()=>{
+    try {
+      const u = `{% url 'crud-employee-export' %}`; window.location.href = u; return;
+    } catch (e) {
+      const rows = Array.from(document.querySelectorAll('#emp-tbody tr'))
+        .map(tr => Array.from(tr.querySelectorAll('td')).slice(0,9).map(td => '"' + td.textContent.trim().replace(/"/g,'""') + '"'));
+      const csv = ['Sel,ID,Nume,Prenume,Card,Dept,Gen,Telefon,Valid'].concat(rows.map(r=>r.join(','))).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = 'employees_export.csv'; a.click();
+      URL.revokeObjectURL(url);
+    }
+  });
+  document.getElementById('emp-import').addEventListener('click', ()=>{
+    try {
+      const u = `{% url 'crud-employee-import' %}`; window.location.href = u;
+    } catch (e) {
+      alert('Funcția de import va fi activată când endpointul este disponibil.');
+    }
+  });
+
+  // ===== Row actions: Edit =====
+  document.getElementById('dept-tbody').addEventListener('click', (e)=>{
+    const a = e.target.closest('a.dept-edit'); if (!a) return;
+    e.preventDefault(); const id = a.getAttribute('data-dept-id');
+    const base = document.getElementById('tab-departments').getAttribute('data-dept-edit-base');
+    if (id && base) { window.location.href = base.replace('/0/', `/${id}/`); }
+  });
+  document.getElementById('card-tbody').addEventListener('click', (e)=>{
+    const a = e.target.closest('a.card-edit'); if (!a) return;
+    e.preventDefault(); const id = a.getAttribute('data-card-id');
+    const base = document.getElementById('tab-cards').getAttribute('data-card-edit-base');
+    if (id && base) { window.location.href = base.replace('/0/', `/${id}/`); }
+  });
+
+  // ===== Row actions: Delete (confirmation) =====
+  document.getElementById('emp-tbody').addEventListener('click', (e)=>{
+    const a = e.target.closest('a[data-emp-delete]'); if (!a) return;
+    e.preventDefault(); const id = a.getAttribute('data-emp-delete');
+    if (confirm('Ești sigur? Ștergi angajatul ID ' + id + '?')) {
+      fetch(`{% url 'crud-employee-delete' 0 %}`.replace('0', id), { method:'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') } })
+        .then(r=>r.ok ? location.reload() : alert('Eroare la ștergere'))
+        .catch(e => alert('Eroare: '+e));
+    }
+  });
+  document.getElementById('dept-tbody').addEventListener('click', (e)=>{
+    const a = e.target.closest('a[data-dept-delete]'); if (!a) return;
+    e.preventDefault(); const id = a.getAttribute('data-dept-delete');
+    if (confirm('Ești sigur? Ștergi departamentul ID ' + id + '?')) {
+      fetch(`{% url 'crud-dept-delete' 0 %}`.replace('0', id), { method:'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') } })
+        .then(r=>r.ok ? loadDepts('') : alert('Eroare la ștergere'))
+        .catch(e => alert('Eroare: '+e));
+    }
+  });
+  document.getElementById('card-tbody').addEventListener('click', (e)=>{
+    const a = e.target.closest('a[data-card-delete]'); if (!a) return;
+    e.preventDefault(); const id = a.getAttribute('data-card-delete');
+    if (confirm('Ești sigur? Ștergi cardul ID ' + id + '?')) {
+      fetch(`{% url 'crud-issuecard-delete' 0 %}`.replace('0', id), { method:'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') } })
+        .then(r=>r.ok ? loadCards('') : alert('Eroare la ștergere'))
+        .catch(e => alert('Eroare: '+e));
+    }
+  });
+
+  function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+      const cookies = document.cookie.split(';');
+      for (let i = 0; i < cookies.length; i++) {
+        const cookie = cookies[i].trim();
+        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+          break;
+        }
+      }
+    }
+    return cookieValue;
+  }
+</script>
+
+
 {% endblock %}

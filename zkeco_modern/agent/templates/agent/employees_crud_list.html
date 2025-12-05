@@ -1,61 +1,62 @@
 {% extends 'agent/base_legacy.html' %}
-{% block title %}Employees CRUD{% endblock %}
+{% block title %}Personnel › Employee{% endblock %}
 {% block content %}
-<h2 style="color: #3da5d9; padding-bottom: 10px;">👥 Employees Management</h2>
-<p style="margin-top: 10px;">
-  <a class='op' data-tip='Adaugă un angajat nou' href='{% url "crud-employee-create" %}' style="background: #3da5d9; color: #fff; padding: 6px 12px; border-radius: 4px; text-decoration: none;">+ Add Employee</a> |
-  <a class='op' data-tip='Importă mai mulți angajați dintr-un fișier' href='{% url "crud-employee-import" %}' style="background: #3da5d9; color: #fff; padding: 6px 12px; border-radius: 4px; text-decoration: none;">⬆ Bulk Import</a> |
-  <a class='op' data-tip='Exportă lista în format CSV' href='{% url "crud-employee-export" %}?format=csv' style="background: #3da5d9; color: #fff; padding: 6px 12px; border-radius: 4px; text-decoration: none;">⬇ Export CSV</a>
-</p>
-<table class='status-box' style='width:100%;border-collapse:collapse;background:#2d5a7b;border:1px solid #3d6a8b;'>
-<tr style="background: linear-gradient(90deg, #1a3a52 0%, #3da5d9 100%); color: #fff; font-weight: 600;"><th style="padding:10px;border:1px solid #3d6a8b;">First</th><th style="padding:10px;border:1px solid #3d6a8b;">Last</th><th style="padding:10px;border:1px solid #3d6a8b;">Card</th><th style="padding:10px;border:1px solid #3d6a8b;">Levels</th><th style="padding:10px;border:1px solid #3d6a8b;">Active</th><th style="padding:10px;border:1px solid #3d6a8b;">Actions</th></tr>
-{% for e in employees %}
-<tr data-emp-id='{{ e.id }}' style="border-bottom: 1px solid #3d6a8b; background: #2d5a7b; color: #e8f0f8;">
-  <td class='inline-edit' data-field='first_name' style="padding: 8px; border-right: 1px solid #3d6a8b;">{{ e.first_name }}</td>
-  <td class='inline-edit' data-field='last_name' style="padding: 8px; border-right: 1px solid #3d6a8b;">{{ e.last_name }}</td>
-  <td class='inline-edit' data-field='card_number' style="padding: 8px; border-right: 1px solid #3d6a8b;">{{ e.card_number }}</td>
-  <td style="padding: 8px; border-right: 1px solid #3d6a8b;">{{ e.access_levels.all|join:", " }}</td>
-  <td class='inline-edit' data-field='active' style="padding: 8px; border-right: 1px solid #3d6a8b;">{{ e.active }}</td>
-  <td style="padding: 8px;"><a class='op' data-tip='Editează acest angajat' href='{% url "crud-employee-edit" e.id %}' style="background: #3da5d9; color: #fff; padding: 4px 8px; border-radius: 3px; text-decoration: none; font-size: 12px;">Edit</a>
-    <form method='post' action='{% url "crud-employee-delete" e.id %}' style='display:inline' onsubmit='return confirm("Delete employee?")' title='Șterge definitiv angajatul'>
-      {% csrf_token %}<button class='op' data-tip='Șterge angajatul' style='background:#d97e4a; color: #fff; padding: 4px 8px; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;'>Del</button>
+<div style="background:#fff;border:1px solid #b8c6d4;border-radius:4px;padding:8px;">
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+    <strong>Current Window: Personnel → Personnel</strong>
+  </div>
+  <div style="border:1px solid #b8c6d4;padding:6px;margin-bottom:8px;background:#f7fbff;">
+    <span style="font-weight:600;color:#3da5d9;">Search</span>
+    <form method="get" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:6px;">
+      <label>Personnel No.:<input type="text" name="legacy_userid" value="{{ request.GET.legacy_userid }}" style="width:100%;border:1px solid #b8c6d4;height:20px;"></label>
+      <label>Card Number:<input type="text" name="card_number" value="{{ request.GET.card_number }}" style="width:100%;border:1px solid #b8c6d4;height:20px;"></label>
+      <label>Mobile Phone:<input type="text" name="mobile_phone" value="{{ request.GET.mobile_phone }}" style="width:100%;border:1px solid #b8c6d4;height:20px;"></label>
+      <label>Department Name:<input type="text" name="dept_name" value="{{ request.GET.dept_name }}" style="width:100%;border:1px solid #b8c6d4;height:20px;"></label>
+      <div style="grid-column:1/-1;text-align:right;margin-top:4px;">
+        <button type="submit" class="op" style="background:#3da5d9;color:#fff;padding:4px 10px;border-radius:3px;border:1px solid #2c8ec0;">Search</button>
+        <a href="?" class="op" style="background:#eee;color:#333;padding:4px 10px;border-radius:3px;border:1px solid #bbb;text-decoration:none;margin-left:4px;">Clear</a>
+      </div>
     </form>
-    <input type='number' min='1' placeholder='Door ID' class='door-check-input' style='width:70px;padding:4px;border:1px solid #3d6a8b;border-radius:3px;background:#1a3a52;color:#e8f0f8;'>
-    <button type='button' class='op check-access-btn' data-tip='Verifică dacă angajatul are acces la ușa indicată' style="background: #2da44e; color: #fff; padding: 4px 8px; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;">Check</button>
-    <span class='access-indicator' style='margin-left:4px;font-weight:bold;color:#3da5d9'></span>
-  </td>
-</tr>
-{% empty %}<tr><td colspan='6' style="padding: 10px; text-align: center; color: #5a7a90;">No employees</td></tr>{% endfor %}
-</table>
+  </div>
+  <table style="width:100%;border-collapse:collapse;border:1px solid #b8c6d4;background:#fff;">
+    <thead style="background:#e8f4ff;color:#234;">
+      <tr>
+        <th style="padding:6px;border:1px solid #b8c6d4;">Personnel No.</th>
+        <th style="padding:6px;border:1px solid #b8c6d4;">First Name</th>
+        <th style="padding:6px;border:1px solid #b8c6d4;">Last Name</th>
+        <th style="padding:6px;border:1px solid #b8c6d4;">Department Name</th>
+        <th style="padding:6px;border:1px solid #b8c6d4;">Gender</th>
+        <th style="padding:6px;border:1px solid #b8c6d4;">Mobile Phone</th>
+        <th style="padding:6px;border:1px solid #b8c6d4;">Set Validity</th>
+        <th style="padding:6px;border:1px solid #b8c6d4;">Start Date</th>
+        <th style="padding:6px;border:1px solid #b8c6d4;">End Date</th>
+        <th style="padding:6px;border:1px solid #b8c6d4;">Card Number</th>
+        <th style="padding:6px;border:1px solid #b8c6d4;">Related operation</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in employees %}
+      <tr>
+        <td style="padding:6px;border:1px solid #b8c6d4;">{{ e.legacy_userid|default:"" }}</td>
+        <td style="padding:6px;border:1px solid #b8c6d4;">{{ e.first_name }}</td>
+        <td style="padding:6px;border:1px solid #b8c6d4;">{{ e.last_name }}</td>
+        <td style="padding:6px;border:1px solid #b8c6d4;">{{ e.dept.DeptName|default:"" }}</td>
+        <td style="padding:6px;border:1px solid #b8c6d4;">{{ e.gender|default:"" }}</td>
+        <td style="padding:6px;border:1px solid #b8c6d4;">{{ e.mobile_phone|default:"" }}</td>
+        <td style="padding:6px;border:1px solid #b8c6d4;">{% if e.set_validity %}Valid{% endif %}</td>
+        <td style="padding:6px;border:1px solid #b8c6d4;">{{ e.acc_startdate|date:"Y-m-d" }}</td>
+        <td style="padding:6px;border:1px solid #b8c6d4;">{{ e.acc_enddate|date:"Y-m-d" }}</td>
+        <td style="padding:6px;border:1px solid #b8c6d4;">{{ e.card_number }}</td>
+        <td style="padding:6px;border:1px solid #b8c6d4;">
+          <a href='{% url "crud-employee-edit" e.id %}?return_url={{ request.get_full_path|urlencode }}'>Edit</a>
+          <a href='{% url "crud-employee-delete" e.id %}' onclick='return confirm("Delete?")'>Delete</a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="11" style="padding:8px;text-align:center;color:#777;">No employees</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
 {% endblock %}
-{% block extra_js %}
-<script>
-function getCSRF(){ const m=document.cookie.match(/csrftoken=([^;]+)/); return m?m[1]:''; }
-document.querySelectorAll('td.inline-edit').forEach(td=>{
-  document.querySelectorAll('.check-access-btn').forEach(btn=>{
-    btn.addEventListener('click',()=>{
-      const tr = btn.closest('tr');
-      const empId = tr.getAttribute('data-emp-id');
-      const doorId = tr.querySelector('.door-check-input').value.trim();
-      const indicator = tr.querySelector('.access-indicator');
-      if(!doorId){ indicator.textContent='Door?'; indicator.style.color='#e09'; return; }
-      indicator.textContent='...'; indicator.style.color='#999';
-      fetch(`/agent/api/access/check/?employee=${empId}&door=${doorId}`)
-        .then(r=>r.json()).then(d=>{
-          if(!d.ok){ indicator.textContent='ERR'; indicator.style.color='#e00'; return; }
-          indicator.textContent= d.allowed ? 'ALLOW' : 'DENY';
-          indicator.style.color = d.allowed ? '#0c4' : '#d33';
-          indicator.title = d.reason + (d.cached? ' (cached)':'');
-        }).catch(()=>{ indicator.textContent='ERR'; indicator.style.color='#e00'; });
-    });
-  });
-  td.contentEditable=true;
-  td.addEventListener('blur',()=>{
-    const tr=td.closest('tr'); const id=tr.getAttribute('data-emp-id'); const field=td.getAttribute('data-field');
-    let value=td.innerText.trim(); if(field==='active'){ value=(value.toLowerCase().startsWith('t')||value==='1'); }
-    fetch(`/agent/crud/employees/${id}/inline/`, {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCSRF()}, body:JSON.stringify({field,value})})
-      .then(r=>r.json()).then(d=>{ if(!d.ok){ console.warn('Inline update failed', d); }});
-  });
-});
-</script>
-{% endblock %}
+{% block extra_js %}{% endblock %}
