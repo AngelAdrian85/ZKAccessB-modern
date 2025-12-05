@@ -1,0 +1,1019 @@
+{% extends "agent/base_legacy.html" %}
+{% load static %}
+
+{% block title %}Personal – Modul Unificat{% endblock %}
+
+{% block content %}
+<style>
+/* EXACT COLOR PALETTE from Dashboard & Device/Employee Forms */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { 
+  background: #1a3a52; 
+  color: #e8f0f8; 
+  font-family: Tahoma, Arial, sans-serif; 
+  font-size: 10px; 
+}
+
+.personnel-container { 
+  max-width: 98%; 
+  margin: 6px auto; 
+  background: #1e4a6b;
+  padding: 6px;
+  border-radius: 2px;
+  border: 2px solid #3da5d9;
+}
+
+.personnel-container h2 {
+  color: #7db3d9;
+  border-bottom: 1px solid #3da5d9;
+  padding-bottom: 4px;
+  margin: 0 0 6px 0;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+/* Tabs - Compact & Modern */
+.tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid #3d6a8b;
+}
+
+.tab {
+  padding: 4px 12px;
+  background: #163247;
+  border: 1px solid #3d6a8b;
+  border-bottom: none;
+  color: #9fd2f1;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  border-radius: 2px 2px 0 0;
+  transition: all 0.2s;
+}
+
+.tab:hover {
+  background: #1e4a6b;
+  color: #7db3d9;
+}
+
+.tab.active {
+  background: #3da5d9;
+  color: #fff;
+  border-color: #3da5d9;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* Section Headers - Ultra Compact */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 6px;
+  background: #163247;
+  border: 1px solid #3d6a8b;
+  margin-bottom: 4px;
+  border-radius: 2px;
+}
+
+.section-title {
+  font-size: 10px;
+  font-weight: bold;
+  color: #7db3d9;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.section-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.btn {
+  padding: 3px 8px;
+  background: #3da5d9;
+  color: #fff;
+  border: 1px solid #2c8ec0;
+  border-radius: 2px;
+  font-size: 9px;
+  cursor: pointer;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  transition: all 0.2s;
+}
+
+.btn:hover {
+  background: #2c8ec0;
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: #2d5a7b;
+  border-color: #3d6a8b;
+}
+
+.btn-secondary:hover {
+  background: #3d6a8b;
+}
+
+.btn-danger {
+  background: #d94a3d;
+  border-color: #b03a2e;
+}
+
+.btn-danger:hover {
+  background: #b03a2e;
+}
+
+/* Ultra-Compact Table */
+.compact-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9px;
+  background: #163247;
+}
+
+.compact-table thead {
+  background: linear-gradient(to bottom, #3da5d9 0%, #2d7ba5 100%);
+  color: #fff;
+}
+
+.compact-table thead th {
+  padding: 3px 4px;
+  text-align: left;
+  font-weight: 600;
+  border-right: 1px solid #2d7ba5;
+  white-space: nowrap;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.2px;
+}
+
+.compact-table thead th:last-child {
+  border-right: none;
+}
+
+.compact-table tbody tr {
+  border-bottom: 1px solid #3d6a8b;
+  transition: background 0.1s;
+}
+
+.compact-table tbody tr:hover {
+  background: #1e4a6b;
+}
+
+.compact-table tbody tr:nth-child(even) {
+  background: #0f2433;
+}
+
+.compact-table tbody tr:nth-child(even):hover {
+  background: #1e4a6b;
+}
+
+.compact-table tbody td {
+  padding: 2px 4px;
+  border-right: 1px solid #3d6a8b;
+  color: #e8f0f8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+.compact-table tbody td:last-child {
+  border-right: none;
+}
+
+/* Action Links in Table */
+.action-cell {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.action-link {
+  color: #3da5d9;
+  text-decoration: none;
+  font-size: 9px;
+  padding: 2px 4px;
+  border-radius: 2px;
+  transition: all 0.2s;
+}
+
+.action-link:hover {
+  background: #3da5d9;
+  color: #fff;
+}
+
+.action-link.delete {
+  color: #d94a3d;
+}
+
+.action-link.delete:hover {
+  background: #d94a3d;
+  color: #fff;
+}
+
+/* Modal - Same Style as Device Form */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 9999;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  align-items: center;
+  justify-content: center;
+}
+
+.modal.show {
+  display: flex;
+}
+
+.modal-content {
+  background: linear-gradient(135deg, #1e4a6b 0%, #2d5a7b 50%, #1e4a6b 100%);
+  padding: 3px;
+  border-radius: 6px;
+  max-width: 500px;
+  width: 90%;
+}
+
+.modal-inner {
+  background: #1e4a6b;
+  border: 1px solid #7db3d9;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.modal-header {
+  background: linear-gradient(to bottom, #3da5d9 0%, #2d7ba5 100%);
+  color: #ffffff;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.modal-header::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  background: #1e4a6b;
+  border: 1px solid #5a9dc9;
+  display: inline-block;
+  margin-right: 6px;
+}
+
+.modal-close {
+  background: #d97e4a;
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.modal-close:hover {
+  background: #b03a2e;
+}
+
+.modal-body {
+  padding: 10px;
+}
+
+.modal-footer {
+  padding: 8px 10px;
+  text-align: right;
+  border-top: 1px solid #3d6a8b;
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+/* Form Fields in Modal */
+.form-field {
+  margin-bottom: 8px;
+}
+
+.form-field label {
+  display: block;
+  color: #9fd2f1;
+  font-weight: 600;
+  font-size: 9px;
+  margin-bottom: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.2px;
+}
+
+.form-field input[type="text"],
+.form-field input[type="number"],
+.form-field select {
+  width: 100%;
+  padding: 3px 5px;
+  border: 1px solid #3d6a8b;
+  border-radius: 2px;
+  font-size: 10px;
+  background: #163247;
+  color: #e8f0f8;
+  font-family: Tahoma, Arial, sans-serif;
+}
+
+.form-field input:focus,
+.form-field select:focus {
+  outline: none;
+  border-color: #3da5d9;
+  box-shadow: 0 0 2px #3da5d9;
+}
+
+/* Search & Filter Bar */
+.filter-bar {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  background: #163247;
+  border: 1px solid #3d6a8b;
+  margin-bottom: 4px;
+  border-radius: 2px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.filter-field {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.filter-field label {
+  font-size: 9px;
+  color: #9fd2f1;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.filter-field input,
+.filter-field select {
+  padding: 2px 4px;
+  border: 1px solid #3d6a8b;
+  border-radius: 2px;
+  font-size: 9px;
+  background: #0f2433;
+  color: #e8f0f8;
+  min-width: 80px;
+}
+
+/* Checkbox in Table */
+input[type="checkbox"] {
+  cursor: pointer;
+  width: 12px;
+  height: 12px;
+}
+
+/* Empty State */
+.empty-state {
+  text-align: center;
+  padding: 20px;
+  color: #7db3d9;
+  font-style: italic;
+  font-size: 10px;
+}
+
+/* Status Badges */
+.badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 2px;
+  font-size: 8px;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.badge-active {
+  background: #0c4;
+  color: #fff;
+}
+
+.badge-inactive {
+  background: #d94a3d;
+  color: #fff;
+}
+
+.badge-pending {
+  background: #ff9800;
+  color: #fff;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #163247;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3d6a8b;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #3da5d9;
+}
+</style>
+
+<div class="personnel-container">
+  <h2>📋 PERSONAL – Modul Unificat</h2>
+  
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" data-tab="employees">👥 Angajați</div>
+    <div class="tab" data-tab="departments">🏢 Departamente</div>
+    <div class="tab" data-tab="cards">💳 Carduri</div>
+    <div class="tab" data-tab="logs">📊 Loguri</div>
+  </div>
+
+  <!-- TAB: Employees -->
+  <div class="tab-content active" id="tab-employees">
+    <div class="section-header">
+      <span class="section-title">Lista Angajați</span>
+      <div class="section-actions">
+        <a href="{% url 'crud-employee-create' %}" class="btn">➕ Adaugă Angajat</a>
+        <button class="btn btn-secondary" onclick="location.reload()">🔄 Reîncarcă</button>
+        <button class="btn btn-secondary" onclick="exportEmployees()">📥 Export</button>
+      </div>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="filter-bar">
+      <div class="filter-field">
+        <label>Caută:</label>
+        <input type="text" id="emp-search" placeholder="Nume, Card, ID...">
+      </div>
+      <div class="filter-field">
+        <label>Departament:</label>
+        <select id="emp-dept-filter">
+          <option value="">Toate</option>
+          <!-- Populated by JS -->
+        </select>
+      </div>
+      <div class="filter-field">
+        <label>Status:</label>
+        <select id="emp-status-filter">
+          <option value="">Toate</option>
+          <option value="active">Activ</option>
+          <option value="inactive">Inactiv</option>
+        </select>
+      </div>
+      <button class="btn" onclick="filterEmployees()">🔍 Filtrează</button>
+      <button class="btn btn-secondary" onclick="clearFilters()">✖ Resetează</button>
+    </div>
+
+    <!-- Ultra-Compact Table -->
+    <div style="overflow-x: auto; max-height: 600px; overflow-y: auto;">
+      <table class="compact-table">
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="select-all-emp"></th>
+            <th>ID</th>
+            <th>Nr. Pers</th>
+            <th>Nume</th>
+            <th>Prenume</th>
+            <th>Card Principal</th>
+            <th>Card Sec.</th>
+            <th>Departament</th>
+            <th>Gen</th>
+            <th>Telefon</th>
+            <th>Email</th>
+            <th>Oraș</th>
+            <th>Data Angajării</th>
+            <th>Tip Angajare</th>
+            <th>Tip Personal</th>
+            <th>Acces Start</th>
+            <th>Acces End</th>
+            <th>Superuser</th>
+            <th>Activ</th>
+            <th>Acțiuni</th>
+          </tr>
+        </thead>
+        <tbody id="emp-tbody">
+          {% for emp in employees %}
+          <tr data-emp-id="{{ emp.id }}">
+            <td><input type="checkbox" class="emp-check" value="{{ emp.id }}"></td>
+            <td>{{ emp.id }}</td>
+            <td>{{ emp.legacy_userid|default:"-" }}</td>
+            <td>{{ emp.last_name }}</td>
+            <td>{{ emp.first_name }}</td>
+            <td>{{ emp.card_number }}</td>
+            <td>{{ emp.secondary_card_number|default:"-" }}</td>
+            <td>{{ emp.dept_id|default:"-" }}</td>
+            <td>{{ emp.gender|default:"-" }}</td>
+            <td>{{ emp.mobile_phone|default:"-" }}</td>
+            <td>{{ emp.email|default:"-" }}</td>
+            <td>{{ emp.city|default:"-" }}</td>
+            <td>{{ emp.hire_date|date:"d.m.Y"|default:"-" }}</td>
+            <td>{{ emp.hiretype|default:"-" }}</td>
+            <td>{{ emp.emptype|default:"-" }}</td>
+            <td>{{ emp.acc_startdate|date:"d.m.Y"|default:"-" }}</td>
+            <td>{{ emp.acc_enddate|date:"d.m.Y"|default:"-" }}</td>
+            <td>{% if emp.access_superuser %}<span class="badge badge-active">DA</span>{% else %}-{% endif %}</td>
+            <td>{% if emp.active %}<span class="badge badge-active">ACTIV</span>{% else %}<span class="badge badge-inactive">INACTIV</span>{% endif %}</td>
+            <td class="action-cell">
+              <a href="{% url 'crud-employee-edit' emp.id %}" class="action-link">✏️ Edit</a>
+              <a href="#" class="action-link delete" onclick="deleteEmployee({{ emp.id }}); return false;">🗑️ Șterge</a>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="20" class="empty-state">Nu există angajați în baza de date.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB: Departments -->
+  <div class="tab-content" id="tab-departments">
+    <div class="section-header">
+      <span class="section-title">Lista Departamente</span>
+      <div class="section-actions">
+        <button class="btn" onclick="openDeptModal()">➕ Adaugă Departament</button>
+        <button class="btn btn-secondary" onclick="loadDepartments()">🔄 Reîncarcă</button>
+      </div>
+    </div>
+
+    <div style="overflow-x: auto; max-height: 600px; overflow-y: auto;">
+      <table class="compact-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Cod</th>
+            <th>Denumire</th>
+            <th>Departament Părinte</th>
+            <th>Acțiuni</th>
+          </tr>
+        </thead>
+        <tbody id="dept-tbody">
+          <tr><td colspan="5" class="empty-state">Încărcare...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB: Cards -->
+  <div class="tab-content" id="tab-cards">
+    <div class="section-header">
+      <span class="section-title">Lista Carduri Emise</span>
+      <div class="section-actions">
+        <button class="btn" onclick="alert('Funcție în dezvoltare')">➕ Emite Card</button>
+        <button class="btn btn-secondary" onclick="loadCards()">🔄 Reîncarcă</button>
+      </div>
+    </div>
+
+    <div style="overflow-x: auto; max-height: 600px; overflow-y: auto;">
+      <table class="compact-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Nr. Card</th>
+            <th>Angajat</th>
+            <th>Stare</th>
+            <th>Data Emiterii</th>
+            <th>Valabil Până</th>
+            <th>Acțiuni</th>
+          </tr>
+        </thead>
+        <tbody id="cards-tbody">
+          <tr><td colspan="7" class="empty-state">Încărcare...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB: Logs -->
+  <div class="tab-content" id="tab-logs">
+    <div class="section-header">
+      <span class="section-title">Loguri Activitate Personal</span>
+      <div class="section-actions">
+        <button class="btn btn-secondary" onclick="loadLogs()">🔄 Reîncarcă</button>
+        <button class="btn btn-secondary" onclick="exportLogs()">📥 Export</button>
+      </div>
+    </div>
+
+    <!-- Filter Bar for Logs -->
+    <div class="filter-bar">
+      <div class="filter-field">
+        <label>Modul:</label>
+        <select id="log-module-filter">
+          <option value="">Toate</option>
+          <option value="personnel">Personal</option>
+          <option value="department">Departamente</option>
+          <option value="cards">Carduri</option>
+        </select>
+      </div>
+      <div class="filter-field">
+        <label>De la:</label>
+        <input type="date" id="log-date-from">
+      </div>
+      <div class="filter-field">
+        <label>Până la:</label>
+        <input type="date" id="log-date-to">
+      </div>
+      <button class="btn" onclick="filterLogs()">🔍 Filtrează</button>
+    </div>
+
+    <div style="overflow-x: auto; max-height: 600px; overflow-y: auto;">
+      <table class="compact-table">
+        <thead>
+          <tr>
+            <th>Data/Ora</th>
+            <th>Modul</th>
+            <th>Acțiune</th>
+            <th>Utilizator</th>
+            <th>Entitate</th>
+            <th>Detalii</th>
+          </tr>
+        </thead>
+        <tbody id="logs-tbody">
+          <tr><td colspan="6" class="empty-state">Încărcare...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Add Department -->
+<div class="modal" id="dept-modal">
+  <div class="modal-content">
+    <div class="modal-inner">
+      <div class="modal-header">
+        <span>Adaugă Departament Nou</span>
+        <button class="modal-close" onclick="closeDeptModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <form id="dept-form">
+          {% csrf_token %}
+          <div class="form-field">
+            <label for="dept-code">Cod Departament *</label>
+            <input type="text" id="dept-code" name="code" required placeholder="ex: IT, HR, FIN">
+          </div>
+          <div class="form-field">
+            <label for="dept-name">Denumire *</label>
+            <input type="text" id="dept-name" name="name" required placeholder="ex: Departament IT">
+          </div>
+          <div class="form-field">
+            <label for="dept-parent">Departament Părinte</label>
+            <select id="dept-parent" name="parent_id">
+              <option value="">Niciun Părinte (Rădăcină)</option>
+              <!-- Populated by JS -->
+            </select>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeDeptModal()">Anulează</button>
+        <button class="btn" onclick="submitDepartment()">💾 Salvează</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Tab Switching
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    const targetId = tab.getAttribute('data-tab');
+    
+    // Update tabs
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    
+    // Update content
+    document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+    document.getElementById('tab-' + targetId).classList.add('active');
+    
+    // Load data for specific tabs
+    if (targetId === 'departments' && document.getElementById('dept-tbody').textContent.includes('Încărcare')) {
+      loadDepartments();
+    }
+    if (targetId === 'cards' && document.getElementById('cards-tbody').textContent.includes('Încărcare')) {
+      loadCards();
+    }
+    if (targetId === 'logs' && document.getElementById('logs-tbody').textContent.includes('Încărcare')) {
+      loadLogs();
+    }
+  });
+});
+
+// Department Modal
+function openDeptModal() {
+  document.getElementById('dept-modal').classList.add('show');
+  loadDepartmentParents();
+}
+
+function closeDeptModal() {
+  document.getElementById('dept-modal').classList.remove('show');
+  document.getElementById('dept-form').reset();
+}
+
+function loadDepartmentParents() {
+  // Populate parent dropdown
+  fetch('/agent/crud/departments/tree/')
+    .then(r => r.json())
+    .then(data => {
+      const select = document.getElementById('dept-parent');
+      select.innerHTML = '<option value="">Niciun Părinte (Rădăcină)</option>';
+      (data.nodes || data || []).forEach(dept => {
+        const option = document.createElement('option');
+        option.value = dept.id || dept.pk;
+        option.textContent = dept.name || dept.title || dept.text;
+        select.appendChild(option);
+      });
+    })
+    .catch(e => console.error('Error loading parents:', e));
+}
+
+function submitDepartment() {
+  const form = document.getElementById('dept-form');
+  const formData = new FormData(form);
+  
+  fetch('/agent/crud/departments/new/', {
+    method: 'POST',
+    body: formData,
+    headers: {
+      'X-CSRFToken': getCookie('csrftoken')
+    }
+  })
+  .then(r => {
+    if (r.ok) {
+      closeDeptModal();
+      loadDepartments();
+      alert('Departament adăugat cu succes!');
+    } else {
+      alert('Eroare la salvare! Verifică datele introduse.');
+    }
+  })
+  .catch(e => {
+    console.error('Error:', e);
+    alert('Eroare de rețea!');
+  });
+}
+
+// Load Departments
+function loadDepartments() {
+  const tbody = document.getElementById('dept-tbody');
+  tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Încărcare...</td></tr>';
+  
+  fetch('/agent/crud/departments/tree/')
+    .then(r => r.json())
+    .then(data => {
+      const depts = data.nodes || data || [];
+      if (depts.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nu există departamente.</td></tr>';
+        return;
+      }
+      
+      tbody.innerHTML = depts.map(d => `
+        <tr>
+          <td>${d.id || d.pk || '-'}</td>
+          <td>${d.code || '-'}</td>
+          <td>${d.name || d.title || d.text || '-'}</td>
+          <td>${d.parent_name || '-'}</td>
+          <td class="action-cell">
+            <a href="/agent/crud/departments/${d.id}/edit/" class="action-link">✏️ Edit</a>
+            <a href="#" class="action-link delete" onclick="deleteDept(${d.id}); return false;">🗑️ Șterge</a>
+          </td>
+        </tr>
+      `).join('');
+    })
+    .catch(e => {
+      console.error('Error:', e);
+      tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Eroare la încărcare!</td></tr>';
+    });
+}
+
+function deleteDept(id) {
+  if (!confirm('Sigur ștergi acest departament?')) return;
+  
+  fetch(`/agent/crud/departments/${id}/delete/`, {
+    method: 'POST',
+    headers: {
+      'X-CSRFToken': getCookie('csrftoken')
+    }
+  })
+  .then(r => {
+    if (r.ok) {
+      loadDepartments();
+      alert('Departament șters!');
+    } else {
+      alert('Eroare la ștergere!');
+    }
+  })
+  .catch(e => alert('Eroare de rețea!'));
+}
+
+// Load Cards
+function loadCards() {
+  const tbody = document.getElementById('cards-tbody');
+  tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Încărcare...</td></tr>';
+  
+  fetch('/agent/crud/issuecards/')
+    .then(r => r.json())
+    .then(data => {
+      const cards = data.items || data || [];
+      if (cards.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nu există carduri emise.</td></tr>';
+        return;
+      }
+      
+      tbody.innerHTML = cards.map(c => `
+        <tr>
+          <td>${c.id || '-'}</td>
+          <td>${c.card_number || c.card || '-'}</td>
+          <td>${c.employee_name || c.employee || c.userid || '-'}</td>
+          <td><span class="badge ${c.status === 'Active' ? 'badge-active' : 'badge-pending'}">${c.status || 'Unknown'}</span></td>
+          <td>${c.issue_date || '-'}</td>
+          <td>${c.valid_until || '-'}</td>
+          <td class="action-cell">
+            <a href="/agent/crud/issuecards/${c.id}/edit/" class="action-link">✏️ Edit</a>
+            <a href="#" class="action-link delete" onclick="deleteCard(${c.id}); return false;">🗑️ Șterge</a>
+          </td>
+        </tr>
+      `).join('');
+    })
+    .catch(e => {
+      console.error('Error:', e);
+      tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Eroare la încărcare!</td></tr>';
+    });
+}
+
+function deleteCard(id) {
+  if (!confirm('Sigur ștergi acest card?')) return;
+  
+  fetch(`/agent/crud/issuecards/${id}/delete/`, {
+    method: 'POST',
+    headers: {
+      'X-CSRFToken': getCookie('csrftoken')
+    }
+  })
+  .then(r => {
+    if (r.ok) {
+      loadCards();
+      alert('Card șters!');
+    } else {
+      alert('Eroare la ștergere!');
+    }
+  })
+  .catch(e => alert('Eroare de rețea!'));
+}
+
+// Load Logs
+function loadLogs() {
+  const tbody = document.getElementById('logs-tbody');
+  tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Încărcare...</td></tr>';
+  
+  const module = document.getElementById('log-module-filter').value;
+  const dateFrom = document.getElementById('log-date-from').value;
+  const dateTo = document.getElementById('log-date-to').value;
+  
+  const params = new URLSearchParams();
+  if (module) params.append('module', module);
+  if (dateFrom) params.append('from', dateFrom);
+  if (dateTo) params.append('to', dateTo);
+  
+  fetch(`/agent/logs/view/?${params}`)
+    .then(r => r.json())
+    .then(data => {
+      const logs = data.items || data || [];
+      if (logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nu există loguri.</td></tr>';
+        return;
+      }
+      
+      tbody.innerHTML = logs.map(l => `
+        <tr>
+          <td>${l.datetime || l.timestamp || '-'}</td>
+          <td>${l.module || '-'}</td>
+          <td>${l.action || l.event || '-'}</td>
+          <td>${l.user || l.employee || '-'}</td>
+          <td>${l.entity || l.object || '-'}</td>
+          <td>${l.details || l.info || '-'}</td>
+        </tr>
+      `).join('');
+    })
+    .catch(e => {
+      console.error('Error:', e);
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Eroare la încărcare!</td></tr>';
+    });
+}
+
+function filterLogs() {
+  loadLogs();
+}
+
+// Employee Functions
+function deleteEmployee(id) {
+  if (!confirm('Sigur ștergi acest angajat? Acțiunea este ireversibilă!')) return;
+  
+  fetch(`/agent/crud/employees/${id}/delete/`, {
+    method: 'POST',
+    headers: {
+      'X-CSRFToken': getCookie('csrftoken')
+    }
+  })
+  .then(r => {
+    if (r.ok) {
+      location.reload();
+      alert('Angajat șters!');
+    } else {
+      alert('Eroare la ștergere!');
+    }
+  })
+  .catch(e => alert('Eroare de rețea!'));
+}
+
+function filterEmployees() {
+  const search = document.getElementById('emp-search').value.toLowerCase();
+  const dept = document.getElementById('emp-dept-filter').value;
+  const status = document.getElementById('emp-status-filter').value;
+  
+  document.querySelectorAll('#emp-tbody tr[data-emp-id]').forEach(row => {
+    const text = row.textContent.toLowerCase();
+    const deptMatch = !dept || row.querySelector('td:nth-child(8)').textContent === dept;
+    const statusMatch = !status || 
+      (status === 'active' && row.querySelector('.badge-active')) ||
+      (status === 'inactive' && row.querySelector('.badge-inactive'));
+    const searchMatch = !search || text.includes(search);
+    
+    row.style.display = (deptMatch && statusMatch && searchMatch) ? '' : 'none';
+  });
+}
+
+function clearFilters() {
+  document.getElementById('emp-search').value = '';
+  document.getElementById('emp-dept-filter').value = '';
+  document.getElementById('emp-status-filter').value = '';
+  filterEmployees();
+}
+
+function exportEmployees() {
+  window.location.href = '/agent/crud/employees/export/';
+}
+
+function exportLogs() {
+  const rows = Array.from(document.querySelectorAll('#logs-tbody tr'))
+    .map(tr => Array.from(tr.querySelectorAll('td')).map(td => `"${td.textContent.trim()}"`).join(','));
+  const csv = 'Data/Ora,Modul,Acțiune,Utilizator,Entitate,Detalii\n' + rows.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'logs_' + new Date().toISOString().split('T')[0] + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Select All Checkboxes
+document.getElementById('select-all-emp').addEventListener('change', function() {
+  document.querySelectorAll('.emp-check').forEach(cb => cb.checked = this.checked);
+});
+
+// CSRF Token Helper
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    const cookies = document.cookie.split(';');
+    for (let i = 0; i < cookies.length; i++) {
+      const cookie = cookies[i].trim();
+      if (cookie.substring(0, name.length + 1) === (name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
+</script>
+
+{% endblock %}

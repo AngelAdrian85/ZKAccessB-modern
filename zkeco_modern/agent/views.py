@@ -538,7 +538,7 @@ def menu_personnel(request: HttpRequest):
             employees_qs = Employee.objects.filter(id__in=filtered_ids).order_by('last_name','first_name')
         except Exception:
             pass
-    response = render(request, 'agent/menu_personnel.html', {'employees': employees_qs})
+    response = render(request, 'agent/menu_personnel_modern.html', {'employees': employees_qs})
     # Previne cache-ul browser pentru date fresh
     response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response['Pragma'] = 'no-cache'
