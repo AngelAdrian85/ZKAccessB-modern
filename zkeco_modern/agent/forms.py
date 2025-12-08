@@ -2,18 +2,14 @@ from django import forms
 from .models import Door, TimeSegment, Holiday, AccessLevel, Employee, EmployeeCard, Device
 try:
     from legacy_models.models import (
-        Employee as LegacyEmployee,
-        Dept as LegacyDept,
         Area as LegacyArea,
-        IssueCard as LegacyIssueCard,
         AccessLog as LegacyAccessLog,
+        Dept,
     )
 except Exception:  # pragma: no cover
-    LegacyEmployee = None
-    LegacyDept = None
     LegacyArea = None
-    LegacyIssueCard = None
     LegacyAccessLog = None
+    Dept = None
 
 
 class DoorForm(forms.ModelForm):
@@ -131,7 +127,7 @@ class EmployeeExtendedForm(EmployeeForm):
     legacy_userid = forms.IntegerField(required=False, label="Nr. Personal", widget=forms.NumberInput(attrs={"class": "txt", "title": "Identificator numeric unic (Personnel No.)", "placeholder": "ex: 1, 2, 3..."}))
     dept = forms.ModelChoiceField(
         required=False,
-        queryset=LegacyDept.objects.all() if LegacyDept else LegacyDept.objects.none(),
+        queryset=Dept.objects.all(),
         label="Departament",
         widget=forms.Select(attrs={"title": "Departamentul angajatului"}),
         empty_label="----------"
@@ -192,9 +188,9 @@ class EmployeeExtendedForm(EmployeeForm):
                 self.initial.setdefault("secondary_card_number", existing_card.card_number)
             
             # Preload department from dept_id
-            if self.instance.dept_id and LegacyDept:
+            if self.instance.dept_id:
                 try:
-                    dept_obj = LegacyDept.objects.get(id=self.instance.dept_id)
+                    dept_obj = Dept.objects.get(id=self.instance.dept_id)
                     self.initial['dept'] = dept_obj
                 except Exception:
                     pass
@@ -236,47 +232,6 @@ class EmployeeExtendedForm(EmployeeForm):
             for k, v in employee_values.items():
                 if v is not None and v != '':  # Doar dacă există valoare în Employee
                     self.initial[k] = v
-                
-        # Legacy fallback - DOAR pentru câmpuri care NU au valoare în Employee
-        if LegacyEmployee and self.instance and self.instance.pk:
-            # Match by card_number -> legacy.card_number or badgenumber
-            card = self.instance.card_number
-            if card:
-                try:
-                    self._legacy_obj = LegacyEmployee.objects.filter(card_number=card).first() or LegacyEmployee.objects.filter(badgenumber=card).first()
-                except Exception:
-                    self._legacy_obj = None
-            if self._legacy_obj:
-                # Folosim setdefault() - setează DOAR dacă nu există deja în initial
-                legacy_fallback = {
-                    'legacy_userid': self._legacy_obj.userid,
-                    'gender': self._legacy_obj.gender,
-                    'hire_date': self._legacy_obj.hiredday,
-                    'email': self._legacy_obj.email,
-                    'phone': self._legacy_obj.FPHONE,
-                    'privilege': self._legacy_obj.Privilege,
-                    'identitycard': self._legacy_obj.identitycard,
-                    'site_code': self._legacy_obj.site_code,
-                    'homeaddress': self._legacy_obj.homeaddress,
-                    'street': self._legacy_obj.street,
-                    'acc_startdate': self._legacy_obj.acc_startdate,
-                    'acc_enddate': self._legacy_obj.acc_enddate,
-                    'extend_time': self._legacy_obj.extend_time,
-                    'delayed_door_open': self._legacy_obj.delayed_door_open,
-                    'hiretype': self._legacy_obj.hiretype,
-                    'emptype': self._legacy_obj.emptype,
-                    'selfpassword': self._legacy_obj.selfpassword,
-                    'reservation_password': getattr(self._legacy_obj,'reservation_password', None),
-                    'role_on_device': getattr(self._legacy_obj,'role_on_device', None),
-                    'elevator_superuser': getattr(self._legacy_obj,'elevator_superuser', None),
-                    'elevator_level': getattr(self._legacy_obj,'elevator_level', None),
-                }
-                # setdefault = setează DOAR dacă nu există deja
-                for k,v in legacy_fallback.items():
-                    if v is not None and v != '':
-                        self.initial.setdefault(k, v)
-                if self._legacy_obj.defaultdept:
-                    self.initial.setdefault('dept', self._legacy_obj.defaultdept)
 
     def clean_legacy_userid(self):
         """Validare legacy_userid pentru a preveni duplicate."""
@@ -363,46 +318,7 @@ class EmployeeExtendedForm(EmployeeForm):
         if lvl and lvl not in allowed_levels:
             self.add_error('elevator_level', f'Nivel invalid. Acceptat: {", ".join(sorted(allowed_levels))}')
         
-        # Legacy database sync (best-effort, optional)
-        if LegacyEmployee:
-            try:
-                # Update or create legacy record
-                leg = self._legacy_obj
-                if not leg:
-                    # Try by provided legacy_userid else create new
-                    uid = self.cleaned_data.get('legacy_userid')
-                    if uid:
-                        leg = LegacyEmployee.objects.filter(userid=uid).first()
-                if not leg:
-                    # create minimal if we have identifying info
-                    leg = LegacyEmployee(
-                        userid=self.cleaned_data.get('legacy_userid') or emp.pk,
-                        badgenumber=emp.card_number,
-                        firstname=emp.first_name,
-                        lastname=emp.last_name,
-                    )
-                # Sync fields
-                leg.firstname = emp.first_name
-                leg.lastname = emp.last_name
-                leg.badgenumber = emp.card_number
-                leg.card_number = emp.card_number
-                leg.gender = self.cleaned_data.get('gender') or leg.gender
-                leg.hiredday = self.cleaned_data.get('hire_date') or leg.hiredday
-                leg.email = self.cleaned_data.get('email') or leg.email
-                leg.FPHONE = self.cleaned_data.get('phone') or leg.FPHONE
-                leg.Privilege = self.cleaned_data.get('privilege') or leg.Privilege
-                # Extended sync
-                for f in ['identitycard','site_code','homeaddress','street','acc_startdate','acc_enddate','extend_time','delayed_door_open','hiretype','emptype','selfpassword','reservation_password','role_on_device','elevator_superuser','elevator_level']:
-                    val = self.cleaned_data.get(f)
-                    if val is not None:
-                        setattr(leg, f, val)
-                dept = self.cleaned_data.get('dept')
-                if dept:
-                    leg.defaultdept = dept
-                if commit:
-                    leg.save()
-            except Exception:
-                pass
+        # Legacy database sync REMOVED - now using only agent.Employee
         
         return emp
 
@@ -461,7 +377,7 @@ class TimeSegmentFormWithDays(TimeSegmentForm):
 
 class DeptForm(forms.ModelForm):
     class Meta:
-        model = LegacyDept  # type: ignore
+        model = Dept  # Using agent.Dept instead of legacy_models.Dept
         fields = ['DeptName', 'code']
         widgets = {
             'DeptName': forms.TextInput(attrs={'class': 'txt', 'title': 'Nume departament'}),
@@ -478,37 +394,7 @@ class AreaForm(forms.ModelForm):
         }
 
 
-class IssueCardForm(forms.ModelForm):
-    """Form robustă pentru IssueCard.
-
-    Include câmpurile opționale `card_type` și `valid_until` doar dacă
-    acestea există efectiv pe modelul legacy importat. Astfel evităm
-    FieldError când rulăm în medii unde schema legacy nu are încă
-    aceste coloane.
-    """
-    # Declarăm manual câmpurile opționale dacă lipsesc din model
-    if LegacyIssueCard and not hasattr(LegacyIssueCard, 'valid_until'):
-        valid_until = forms.DateField(required=False, widget=forms.DateInput(attrs={'type':'date','title':'Valabil până la'}))
-    if LegacyIssueCard and not hasattr(LegacyIssueCard, 'card_type'):
-        card_type = forms.CharField(required=False, widget=forms.TextInput(attrs={'class':'txt','title':'Tip card'}))
-
-    class Meta:
-        model = LegacyIssueCard  # type: ignore
-        _base = ['cardno','cardstatus','userid']
-        _optional = []
-        if LegacyIssueCard:
-            for fname in ['card_type','valid_until']:
-                if hasattr(LegacyIssueCard, fname):
-                    _optional.append(fname)
-        fields = _base + _optional
-        widgets = {
-            'cardno': forms.TextInput(attrs={'class': 'txt', 'title': 'Număr card'}),
-            'cardstatus': forms.TextInput(attrs={'class': 'txt', 'title': 'Status card'}),
-        }
-        if LegacyIssueCard and hasattr(LegacyIssueCard,'card_type'):
-            widgets['card_type'] = forms.TextInput(attrs={'class': 'txt', 'title': 'Tip card'})
-        if LegacyIssueCard and hasattr(LegacyIssueCard,'valid_until'):
-            widgets['valid_until'] = forms.DateInput(attrs={'type': 'date', 'title': 'Valabil până la'})
+# IssueCardForm REMOVED - now using EmployeeCard from agent.models instead
 
 
 class AccessLogFilterForm(forms.Form):

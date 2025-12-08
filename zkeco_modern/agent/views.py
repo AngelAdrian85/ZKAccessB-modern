@@ -6,17 +6,19 @@ from django.db.models import Max
 
 from .models import DeviceRealtimeLog, DeviceEventLog, DeviceStatus, Device
 from .models import Door, TimeSegment, Holiday, AccessLevel, Employee
-from .models import CommandLog, EmployeeAccessCache
+from .models import CommandLog, EmployeeAccessCache, EmployeeCard
 from .forms import (DoorForm, TimeSegmentFormWithDays, HolidayForm, AccessLevelForm,
                     EmployeeForm, EmployeeExtendedForm, DeptForm, AreaForm,
-                    IssueCardForm, AccessLogFilterForm, DeviceExtendedForm)
+                    AccessLogFilterForm, DeviceExtendedForm)
 try:
-    from legacy_models.models import Dept as LegacyDept, Area as LegacyArea, IssueCard as LegacyIssueCard, AccessLog as LegacyAccessLog
+    from legacy_models.models import Area as LegacyArea, AccessLog as LegacyAccessLog, Dept
 except Exception:  # pragma: no cover
-    LegacyDept = None
     LegacyArea = None
-    LegacyIssueCard = None
     LegacyAccessLog = None
+    Dept = None
+
+# LegacyIssueCard was removed - set to None to disable related views
+LegacyIssueCard = None
 from .state import DeviceStateStore
 
 try:
@@ -517,32 +519,95 @@ def menu_personnel(request: HttpRequest):
     if not request.user.is_authenticated:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
-    # Embed employees list with filters directly in the personnel menu
-    employees_qs = Employee.objects.order_by('last_name','first_name')
+    
+    # Use agent.Employee model - the SINGLE source of truth
+    employees_qs = Employee.objects.order_by('last_name', 'first_name')
+    
+    # Filters
     legacy_userid = request.GET.get('legacy_userid')
     card_number = request.GET.get('card_number')
     mobile_phone = request.GET.get('mobile_phone')
     dept_name = request.GET.get('dept_name')
+    
     if legacy_userid:
         try:
             employees_qs = employees_qs.filter(legacy_userid__icontains=str(legacy_userid).strip())
         except Exception:
-            employees_qs = employees_qs.filter(legacy_userid=str(legacy_userid).strip())
+            pass
     if card_number:
         employees_qs = employees_qs.filter(card_number__icontains=card_number.strip())
     if mobile_phone:
         employees_qs = employees_qs.filter(mobile_phone__icontains=mobile_phone.strip())
+    
+    # Convert to list and pre-load departments
+    employees_list = list(employees_qs)
+    
+    # Pre-load all needed departments in one query
+    try:
+        from legacy_models.models import Dept
+        dept_ids = [emp.dept_id for emp in employees_list if emp.dept_id]
+        dept_map = {d.id: d for d in Dept.objects.filter(id__in=dept_ids)} if dept_ids else {}
+        
+        # Attach dept objects to employees
+        for emp in employees_list:
+            if emp.dept_id in dept_map:
+                emp.dept_obj = dept_map[emp.dept_id]
+            else:
+                emp.dept_obj = None
+    except Exception:
+        for emp in employees_list:
+            emp.dept_obj = None
+    
     if dept_name:
-        try:
-            filtered_ids = [e.id for e in employees_qs if getattr(getattr(e, 'dept', None), 'DeptName', '') and dept_name.lower() in e.dept.DeptName.lower()]
-            employees_qs = Employee.objects.filter(id__in=filtered_ids).order_by('last_name','first_name')
-        except Exception:
-            pass
-    response = render(request, 'agent/menu_personnel_modern.html', {'employees': employees_qs})
+        # Filter by dept_name using pre-loaded depts
+        employees_list = [emp for emp in employees_list if emp.dept_obj and dept_name.lower() in emp.dept_obj.DeptName.lower()]
+    
+    # Preload departments for the Departments tab (server-side fallback)
+    departments_list = []
+    try:
+        from legacy_models.models import Dept
+        departments_list = list(Dept.objects.all().order_by('DeptName'))
+    except Exception:
+        departments_list = []
+
+    # Preload cards (EmployeeCard) for Cards tab
+    try:
+        cards_list = list(EmployeeCard.objects.select_related('employee').order_by('-created_at'))
+    except Exception:
+        cards_list = []
+
+    # Preload logs for Logs tab (prefer agent.AuditLog; fallback to LegacyAccessLog)
+    try:
+        audit_logs = list(AuditLog.objects.all()[:200])
+    except Exception:
+        audit_logs = []
+    legacy_logs = []
+    try:
+        from legacy_models.models import AccessLog as LegacyAccessLog
+        legacy_logs = list(LegacyAccessLog.objects.all().order_by('-timestamp')[:200])
+    except Exception:
+        legacy_logs = []
+
+    # Compute next Department ID for UI hint
+    try:
+        from legacy_models.models import Dept as LDept
+        next_dept_id = (LDept.objects.order_by('-id').first().id + 1) if LDept.objects.exists() else 1
+    except Exception:
+        next_dept_id = None
+
+    response = render(request, 'agent/menu_personnel_modern.html', {
+        'employees': employees_list,
+        'departments': departments_list,
+        'cards': cards_list,
+        'audit_logs': audit_logs,
+        'legacy_logs': legacy_logs,
+        'next_dept_id': next_dept_id,
+    })
     # Previne cache-ul browser pentru date fresh
     response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     response['Pragma'] = 'no-cache'
     response['Expires'] = '0'
+    return response
     return response
 
 def menu_device(request: HttpRequest):
@@ -721,38 +786,40 @@ def depts_list(request: HttpRequest):
     if not request.user.is_authenticated:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
-    if not LegacyDept:
-        return render(request,'agent/depts_crud_list.html',{'page': None, 'missing': True})
-    qs = LegacyDept.objects.order_by('DeptName')
+    qs = Dept.objects.order_by('DeptName')
     page = _paginate(qs, request)
     return render(request,'agent/depts_crud_list.html',{'page': page})
 
 def depts_tree_json(request: HttpRequest):
     if not request.user.is_authenticated:
         return JsonResponse({'ok': False,'error':'unauth'}, status=403)
-    if not LegacyDept:
-        return JsonResponse({'ok': False,'error':'missing-model'}, status=404)
     # Build tree from parent relations
-    nodes = list(LegacyDept.objects.all().values('id','DeptName','parent_id'))
+    nodes = list(Dept.objects.all().values('id','DeptName','code','parent_id'))
     by_parent = {}
     for n in nodes:
         by_parent.setdefault(n['parent_id'], []).append(n)
     def build(pid):
         out = []
         for n in by_parent.get(pid, []):
-            out.append({'id': n['id'], 'name': n['DeptName'], 'children': build(n['id'])})
+            out.append({'id': n['id'], 'name': n['DeptName'], 'code': n.get('code'), 'children': build(n['id'])})
         return out
     # Also provide a flat "nodes" for simple list consumption
-    flat = [{'id': n['id'], 'name': n['DeptName'], 'parent_id': n['parent_id']} for n in nodes]
+    # Map parent names
+    parent_name = {}
+    try:
+        parent_name = {n['id']: n['DeptName'] for n in nodes}
+    except Exception:
+        parent_name = {}
+    flat = [{'id': n['id'], 'name': n['DeptName'], 'code': n.get('code'), 'parent_id': n['parent_id'], 'parent_name': parent_name.get(n['parent_id'])} for n in nodes]
     return JsonResponse({'ok': True, 'tree': build(None), 'nodes': flat})
 
 def depts_search_json(request: HttpRequest):
     if not request.user.is_authenticated:
         return JsonResponse({'ok': False,'error':'unauth'}, status=403)
-    if not LegacyDept:
+    if not Dept:
         return JsonResponse({'ok': False,'error':'missing-model'}, status=404)
     q = request.GET.get('q','').strip()
-    qs = LegacyDept.objects.all()
+    qs = Dept.objects.all()
     if q:
         from django.db.models import Q
         qs = qs.filter(Q(DeptName__icontains=q) | Q(code__icontains=q))
@@ -764,15 +831,15 @@ def depts_search_json(request: HttpRequest):
 def depts_update_parent_json(request: HttpRequest):
     if request.method != 'POST' or not request.user.is_authenticated or not request.user.is_staff:
         return JsonResponse({'ok': False,'error':'unauth'}, status=403)
-    if not LegacyDept:
+    if not Dept:
         return JsonResponse({'ok': False,'error':'missing-model'}, status=404)
     import json
     try:
         payload = json.loads(request.body.decode('utf-8'))
         child_id = int(payload.get('child'))
         parent_id = int(payload.get('parent')) if payload.get('parent') else None
-        child = LegacyDept.objects.get(pk=child_id)
-        parent = LegacyDept.objects.get(pk=parent_id) if parent_id else None
+        child = Dept.objects.get(pk=child_id)
+        parent = Dept.objects.get(pk=parent_id) if parent_id else None
         if parent and parent.pk == child.pk:
             return JsonResponse({'ok': False,'error':'self-parent'}, status=400)
         child.parent = parent
@@ -785,12 +852,25 @@ def dept_create(request: HttpRequest):
     if not request.user.is_authenticated or not request.user.is_staff:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
-    if not LegacyDept:
+    if not Dept:
         return render(request,'agent/dept_form.html',{'form': None, 'missing': True})
     if request.method == 'POST':
         form = DeptForm(request.POST)
         if form.is_valid():
-            form.save(); return render(request,'agent/dept_saved.html',{'obj': form.instance, 'created': True})
+            obj = form.save()
+            try:
+                from .models import AuditLog
+                AuditLog.objects.create(
+                    module='department',
+                    action='create',
+                    entity_id=getattr(obj, 'id', None) or getattr(obj, 'pk', None) or 0,
+                    entity_name=getattr(obj, 'DeptName', None) or getattr(obj, 'name', None) or '-',
+                    user=getattr(request.user, 'username', None),
+                    details=f"code={getattr(obj,'code', '')}"
+                )
+            except Exception:
+                pass
+            return render(request,'agent/dept_saved.html',{'obj': obj, 'created': True})
     else: form = DeptForm()
     return render(request,'agent/dept_form.html',{'form': form})
 
@@ -798,21 +878,56 @@ def dept_edit(request: HttpRequest, pk: int):
     if not request.user.is_authenticated or not request.user.is_staff:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
-    if not LegacyDept:
+    if not Dept:
         return render(request,'agent/dept_form.html',{'form': None, 'missing': True})
-    obj = LegacyDept.objects.get(pk=pk)
+    obj = Dept.objects.get(pk=pk)
     if request.method == 'POST':
         form = DeptForm(request.POST, instance=obj)
-        if form.is_valid(): form.save(); return render(request,'agent/dept_saved.html',{'obj': form.instance, 'created': False})
+        if form.is_valid():
+            obj = form.save()
+            try:
+                from .models import AuditLog
+                AuditLog.objects.create(
+                    module='department',
+                    action='update',
+                    entity_id=getattr(obj, 'id', None) or getattr(obj, 'pk', None) or 0,
+                    entity_name=getattr(obj, 'DeptName', None) or getattr(obj, 'name', None) or '-',
+                    user=getattr(request.user, 'username', None),
+                    details=f"code={getattr(obj,'code', '')}"
+                )
+            except Exception:
+                pass
+            return render(request,'agent/dept_saved.html',{'obj': obj, 'created': False})
     else: form = DeptForm(instance=obj)
     return render(request,'agent/dept_form.html',{'form': form, 'obj': obj})
 
 def dept_delete(request: HttpRequest, pk: int):
     if not request.user.is_authenticated or not request.user.is_staff or request.method != 'POST':
         return JsonResponse({'ok': False,'error':'unauthorized'}, status=403)
-    if not LegacyDept:
+    if not Dept:
         return JsonResponse({'ok': False,'error':'missing-model'}, status=400)
-    try: LegacyDept.objects.filter(pk=pk).delete(); return JsonResponse({'ok': True})
+    try:
+        # capture name for log
+        name = '-' 
+        try:
+            d = Dept.objects.get(pk=pk)
+            name = getattr(d,'DeptName', None) or getattr(d,'name', None) or '-'
+        except Exception:
+            pass
+        Dept.objects.filter(pk=pk).delete()
+        try:
+            from .models import AuditLog
+            AuditLog.objects.create(
+                module='department',
+                action='delete',
+                entity_id=pk,
+                entity_name=name,
+                user=getattr(request.user, 'username', None),
+                details=''
+            )
+        except Exception:
+            pass
+        return JsonResponse({'ok': True})
     except Exception as e: return JsonResponse({'ok': False,'error': str(e)}, status=400)
 
 def areas_list(request: HttpRequest):
@@ -928,7 +1043,7 @@ def issuecard_edit(request: HttpRequest, pk: int):
         return redirect_to_login(request.get_full_path())
     if not LegacyIssueCard:
         return render(request,'agent/issuecard_form.html',{'form': None, 'missing': True})
-    obj = LegacyIssueCard.objects.get(pk=pk)
+    obj = EmployeeCard.objects.get(pk=pk)
     if request.method == 'POST':
         form = IssueCardForm(request.POST, instance=obj)
         if form.is_valid(): form.save(); return render(request,'agent/issuecard_saved.html',{'obj': form.instance, 'created': False})
@@ -940,7 +1055,7 @@ def issuecard_delete(request: HttpRequest, pk: int):
         return JsonResponse({'ok': False,'error':'unauthorized'}, status=403)
     if not LegacyIssueCard:
         return JsonResponse({'ok': False,'error':'missing-model'}, status=400)
-    try: LegacyIssueCard.objects.filter(pk=pk).delete(); return JsonResponse({'ok': True})
+    try: EmployeeCard.objects.filter(pk=pk).delete(); return JsonResponse({'ok': True})
     except Exception as e: return JsonResponse({'ok': False,'error': str(e)}, status=400)
 
 def issuecard_deactivate(request: HttpRequest, pk: int):
@@ -949,7 +1064,7 @@ def issuecard_deactivate(request: HttpRequest, pk: int):
     if not LegacyIssueCard:
         return JsonResponse({'ok': False,'error':'missing-model'}, status=400)
     try:
-        obj = LegacyIssueCard.objects.get(pk=pk)
+        obj = EmployeeCard.objects.get(pk=pk)
         obj.cardstatus = 'Inactive'
         obj.save()
         return JsonResponse({'ok': True,'status': obj.cardstatus})
@@ -962,7 +1077,7 @@ def issuecard_reissue(request: HttpRequest, pk: int):
     if not LegacyIssueCard:
         return JsonResponse({'ok': False,'error':'missing-model'}, status=400)
     try:
-        obj = LegacyIssueCard.objects.get(pk=pk)
+        obj = EmployeeCard.objects.get(pk=pk)
         from datetime import date, timedelta
         obj.valid_until = (date.today() + timedelta(days=365))
         obj.cardstatus = 'Valid'
@@ -1033,7 +1148,114 @@ def access_logs_list(request: HttpRequest):
     return render(request,'agent/access_logs_list.html',{'form': form, 'page': page})
 
 def access_logs_view_module(request: HttpRequest):
-    """JSON endpoint for module-based logs filtering with unified output for Personnel menu."""
+    """JSON endpoint for module-based audit logs for Personnel menu.
+    
+    Returns audit trail from AuditLog model showing create/update/delete operations
+    on Employee, Dept, and IssueCard entities.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'error': 'unauthorized'}, status=403)
+    
+    try:
+        from .models import AuditLog
+    except ImportError:
+        return JsonResponse({'items': []})
+
+    
+    # Get filter parameters from query string
+    module = request.GET.get('module', 'all').lower()
+    date_from = request.GET.get('from', '')
+    date_to = request.GET.get('to', '')
+    entity_id = request.GET.get('entity_id', '')  # For specific employee/dept/card
+    action = request.GET.get('action', '')  # create/update/delete
+    
+    # Start with all audit logs
+    qs = AuditLog.objects.all().order_by('-timestamp')
+    
+    # Module filtering
+    if module and module != 'all':
+        # Map frontend module names to database values
+        module_map = {
+            'employees': 'employee',
+            'employee': 'employee',
+            'departments': 'department',
+            'department': 'department',
+            'cards': 'issuecard',
+            'issuecard': 'issuecard',
+        }
+        db_module = module_map.get(module, module)
+        qs = qs.filter(module=db_module)
+    
+    # Entity ID filtering (for specific employee/dept/card journal)
+    if entity_id:
+        try:
+            qs = qs.filter(entity_id=int(entity_id))
+        except ValueError:
+            pass
+    
+    # Date range filtering
+    if date_from:
+        try:
+            from datetime import datetime
+            dt_from = datetime.fromisoformat(date_from.replace('T', ' '))
+            qs = qs.filter(timestamp__gte=dt_from)
+        except:
+            pass
+    if date_to:
+        try:
+            from datetime import datetime
+            dt_to = datetime.fromisoformat(date_to.replace('T', ' '))
+            qs = qs.filter(timestamp__lte=dt_to)
+        except:
+            pass
+    
+    # Action filtering
+    if action:
+        qs = qs.filter(action=action)
+    
+    # Fetch and format (limit to 500 most recent)
+    items = list(qs.values(
+        'timestamp', 'user', 'module', 'action', 'entity_id', 'entity_name', 'details', 'ip_address'
+    )[:500])
+    
+    out = []
+    for r in items:
+        # Format action for display
+        action_map = {
+            'create': 'Creat',
+            'update': 'Modificat',
+            'delete': 'Șters'
+        }
+        action_display = action_map.get(r['action'], r['action'])
+        
+        # Format module for display
+        module_map_display = {
+            'employee': 'Angajat',
+            'department': 'Departament',
+            'issuecard': 'Card'
+        }
+        module_display = module_map_display.get(r['module'], r['module'])
+        
+        out.append({
+            'datetime': r['timestamp'].isoformat() if r['timestamp'] else '',
+            'module': module_display,
+            'entity': r['entity_name'] or f"ID: {r['entity_id']}",
+            'employee': r['user'] or 'system',
+            'event': action_display,
+            'details': (r['details'] or '')[:200],  # Truncate long details
+            'ip': r['ip_address'] or '-'
+        })
+    
+    return JsonResponse({'items': out})
+
+
+# Legacy access logs view (kept for backwards compatibility)
+def access_logs_view_module_legacy(request: HttpRequest):
+    """JSON endpoint for physical access logs (door access events).
+    
+    This is the OLD implementation showing AccessLog (door access).
+    Kept for reference but not used by Personnel module anymore.
+    """
     if not request.user.is_authenticated:
         return JsonResponse({'error': 'unauthorized'}, status=403)
     if not LegacyAccessLog:

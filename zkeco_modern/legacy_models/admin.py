@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Dept, Area, Employee, IssueCard, Device, Door
+from .models import Area, Device, Door, Dept
 
 
 @admin.register(Dept)
@@ -10,17 +10,6 @@ class DeptAdmin(admin.ModelAdmin):
 @admin.register(Area)
 class AreaAdmin(admin.ModelAdmin):
     list_display = ('id', 'areaname')
-
-
-@admin.register(Employee)
-class EmployeeAdmin(admin.ModelAdmin):
-    list_display = ('userid', 'badgenumber', 'firstname', 'lastname', 'defaultdept')
-    search_fields = ('firstname', 'lastname', 'badgenumber')
-
-
-@admin.register(IssueCard)
-class IssueCardAdmin(admin.ModelAdmin):
-    list_display = ('cardno', 'cardstatus', 'userid')
 
 
 @admin.register(Device)

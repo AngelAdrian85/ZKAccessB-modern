@@ -17,8 +17,8 @@ urlpatterns = [
     path("", RedirectView.as_view(url="/agent/dashboard/", permanent=False)),
     # Convenience short /dashboard/ route
     path("dashboard/", RedirectView.as_view(url="/agent/dashboard/", permanent=False)),
-    # Use fully-qualified module path to avoid app_label mismatch when a root 'agent' shim exists
-    path("agent/", include("zkeco_modern.agent.urls")),
+    # Agent app URLs
+    path("agent/", include("agent.urls")),
     path('accounts/', include('django.contrib.auth.urls')),
 ]
 

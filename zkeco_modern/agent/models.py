@@ -266,7 +266,17 @@ class Employee(models.Model):
 
     def __str__(self):  # pragma: no cover
         return f"Employee {self.first_name} {self.last_name}"[:80]
-
+    
+    @property
+    def dept(self):
+        """Get Department object from legacy_models.Dept by dept_id"""
+        if not self.dept_id:
+            return None
+        try:
+            from legacy_models.models import Dept
+            return Dept.objects.get(id=self.dept_id)
+        except Exception:
+            return None
 
 class EmployeeCard(models.Model):
     employee = models.ForeignKey(
@@ -314,3 +324,29 @@ class EmployeeAccessCache(models.Model):
 
     def __str__(self):  # pragma: no cover
         return f"Cache emp={self.employee_id} door={self.door_id} {self.allowed}"[:80]
+
+
+class AuditLog(models.Model):
+    """Audit trail for CRUD operations on Personnel, Departments, and Cards.
+    
+    Stores who did what, when, on which entity, with details about changes.
+    Used by Personnel module Journal feature to show modification history.
+    """
+    timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
+    user = models.CharField(max_length=128, blank=True, null=True)  # Username who made the change
+    module = models.CharField(max_length=32, db_index=True)  # 'employee', 'department', 'issuecard'
+    action = models.CharField(max_length=32)  # 'create', 'update', 'delete'
+    entity_id = models.IntegerField(db_index=True)  # ID of the affected record (legacy_userid for Employee)
+    entity_name = models.CharField(max_length=256, blank=True, null=True)  # Name/description for display
+    details = models.TextField(blank=True, null=True)  # JSON or text with change details
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    
+    class Meta:
+        app_label = 'agent'
+        ordering = ['-timestamp']
+        indexes = [
+            models.Index(fields=['module', 'entity_id', '-timestamp']),
+        ]
+    
+    def __str__(self):
+        return f"{self.timestamp.strftime('%Y-%m-%d %H:%M')} | {self.module} | {self.action} | {self.entity_name or self.entity_id}"

@@ -49,7 +49,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "legacy_models",  # legacy shim
     "django_extensions",
-    "zkeco_modern.agent",  # use fully-qualified path to avoid ModuleNotFoundError 'agent'
+    "agent",  # Changed from zkeco_modern.agent to agent
     "channels",
 ]
 
@@ -81,6 +81,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "agent.middleware.AuditMiddleware",  # Track user for audit logging
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]

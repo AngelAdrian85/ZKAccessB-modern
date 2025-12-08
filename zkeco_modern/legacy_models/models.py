@@ -2,6 +2,7 @@ from django.db import models
 
 
 class Dept(models.Model):
+    """Department model - temporarily kept in legacy_models until full migration to agent.Dept"""
     code = models.CharField(max_length=32, blank=True, null=True)
     DeptName = models.CharField(max_length=128)
     parent = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True)
@@ -15,54 +16,6 @@ class Area(models.Model):
 
     def __str__(self):
         return self.areaname
-
-
-class Employee(models.Model):
-    userid = models.IntegerField(unique=True)
-    badgenumber = models.CharField(max_length=32, blank=True, null=True)
-    firstname = models.CharField(max_length=64, blank=True, null=True)
-    lastname = models.CharField(max_length=64, blank=True, null=True)
-    gender = models.CharField(max_length=16, blank=True, null=True)
-    defaultdept = models.ForeignKey(Dept, on_delete=models.SET_NULL, null=True, blank=True)
-    card_number = models.CharField(max_length=64, blank=True, null=True)
-    site_code = models.CharField(max_length=32, blank=True, null=True)
-    pager = models.CharField(max_length=32, blank=True, null=True)
-    hiredday = models.DateField(null=True, blank=True)
-    # Additional fields inferred from legacy exports/templates
-    Password = models.CharField(max_length=128, blank=True, null=True)
-    identitycard = models.CharField(max_length=64, blank=True, null=True)
-    FPHONE = models.CharField(max_length=32, blank=True, null=True)
-    email = models.EmailField(blank=True, null=True)
-    homeaddress = models.CharField(max_length=256, blank=True, null=True)
-    street = models.CharField(max_length=256, blank=True, null=True)
-    acc_startdate = models.DateField(null=True, blank=True)
-    acc_enddate = models.DateField(null=True, blank=True)
-    extend_time = models.IntegerField(null=True, blank=True)
-    delayed_door_open = models.BooleanField(default=False)
-    Privilege = models.CharField(max_length=64, blank=True, null=True)
-    selfpassword = models.CharField(max_length=64, blank=True, null=True)
-    hiretype = models.CharField(max_length=32, blank=True, null=True)
-    emptype = models.CharField(max_length=32, blank=True, null=True)
-    # Newly added extended fields bridging legacy UI requirements
-    reservation_password = models.CharField(max_length=64, blank=True, null=True)
-    role_on_device = models.CharField(max_length=64, blank=True, null=True)
-    elevator_superuser = models.BooleanField(default=False)
-    elevator_level = models.CharField(max_length=64, blank=True, null=True)
-
-    def __str__(self):
-        return f"{self.userid} - {self.firstname or ''} {self.lastname or ''}".strip()
-
-
-class IssueCard(models.Model):
-    cardno = models.CharField(max_length=64, unique=False)
-    cardstatus = models.CharField(max_length=32, blank=True, null=True)
-    userid = models.ForeignKey(Employee, on_delete=models.CASCADE, null=True, blank=True)
-    # possible additional attributes
-    card_type = models.CharField(max_length=64, blank=True, null=True)
-    valid_until = models.DateField(null=True, blank=True)
-
-    def __str__(self):
-        return self.cardno
 
 
 class Device(models.Model):
@@ -100,7 +53,7 @@ class AccessLog(models.Model):
     and by ETL imports when action/event history is imported.
     """
     timestamp = models.DateTimeField(null=True, blank=True)
-    userid = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, blank=True)
+    userid = models.IntegerField(null=True, blank=True)  # Changed from FK to integer to avoid legacy.Employee reference
     cardno = models.CharField(max_length=64, blank=True, null=True)
     door = models.ForeignKey(Door, on_delete=models.SET_NULL, null=True, blank=True)
     device = models.ForeignKey(Device, on_delete=models.SET_NULL, null=True, blank=True)
