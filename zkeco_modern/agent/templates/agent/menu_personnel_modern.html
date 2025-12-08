@@ -444,6 +444,20 @@ input[type="checkbox"] {
 }
 </style>
 
+<style>
+/* Field inline status badges (green/red checks) */
+.field-status {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.status-ok { color: #16c47f; }
+.status-bad { color: #d94a3d; }
+.status-ok::before { content: '✔'; margin-right: 3px; }
+.status-bad::before { content: '✖'; margin-right: 3px; }
+</style>
+
 <div class="personnel-container">
   <h2>📋 PERSONAL – Modul Unificat</h2>
   
@@ -454,6 +468,7 @@ input[type="checkbox"] {
     <div class="tab" data-tab="cards">💳 Carduri</div>
     <div class="tab" data-tab="logs">📊 Loguri</div>
   </div>
+  <div id="toast" style="display:none; position: fixed; right: 12px; bottom: 12px; background: #163247; color: #cfe9ff; border: 1px solid #3d6a8b; padding: 8px 12px; border-radius: 2px; font-size: 11px; box-shadow: 0 2px 6px rgba(0,0,0,.3); z-index: 9999;">OK</div>
 
   <!-- TAB: Employees -->
   <div class="tab-content active" id="tab-employees">
@@ -461,8 +476,10 @@ input[type="checkbox"] {
       <span class="section-title">Lista Angajați</span>
       <div class="section-actions">
         <a href="{% url 'crud-employee-create' %}" class="btn">➕ Adaugă Angajat</a>
-        <button class="btn btn-secondary" onclick="location.reload()">🔄 Reîncarcă</button>
+        <button class="btn btn-secondary" onclick="importEmployees()">📂 Import</button>
         <button class="btn btn-secondary" onclick="exportEmployees()">📥 Export</button>
+        <button class="btn btn-secondary" onclick="showEmployeeJournal()">📋 Jurnal Evenimente</button>
+        <button class="btn btn-secondary" onclick="location.reload()">🔄 Reîncarcă</button>
       </div>
     </div>
 
@@ -520,15 +537,15 @@ input[type="checkbox"] {
         </thead>
         <tbody id="emp-tbody">
           {% for emp in employees %}
-          <tr data-emp-id="{{ emp.id }}">
-            <td><input type="checkbox" class="emp-check" value="{{ emp.id }}"></td>
+          <tr data-emp-id="{{ emp.legacy_userid }}">
+            <td><input type="checkbox" class="emp-check" value="{{ emp.legacy_userid }}"></td>
             <td>{{ emp.id }}</td>
             <td>{{ emp.legacy_userid|default:"-" }}</td>
-            <td>{{ emp.last_name }}</td>
-            <td>{{ emp.first_name }}</td>
-            <td>{{ emp.card_number }}</td>
-            <td>{{ emp.secondary_card_number|default:"-" }}</td>
-            <td>{{ emp.dept_id|default:"-" }}</td>
+            <td>{{ emp.last_name|default:"-" }}</td>
+            <td>{{ emp.first_name|default:"-" }}</td>
+            <td>{{ emp.card_number|default:"-" }}</td>
+            <td>{{ emp.cards.first.card_number|default:"-" }}</td>
+            <td>{% if emp.dept_obj %}{{ emp.dept_obj.DeptName }}{% elif emp.dept %}{{ emp.dept.DeptName }}{% else %}-{% endif %}</td>
             <td>{{ emp.gender|default:"-" }}</td>
             <td>{{ emp.mobile_phone|default:"-" }}</td>
             <td>{{ emp.email|default:"-" }}</td>
@@ -539,10 +556,24 @@ input[type="checkbox"] {
             <td>{{ emp.acc_startdate|date:"d.m.Y"|default:"-" }}</td>
             <td>{{ emp.acc_enddate|date:"d.m.Y"|default:"-" }}</td>
             <td>{% if emp.access_superuser %}<span class="badge badge-active">DA</span>{% else %}-{% endif %}</td>
-            <td>{% if emp.active %}<span class="badge badge-active">ACTIV</span>{% else %}<span class="badge badge-inactive">INACTIV</span>{% endif %}</td>
+            <td id="status-{{ emp.id }}" class="status-cell">
+              <script>
+                (function() {
+                  const empId = {{ emp.id }};
+                  const endDate = "{{ emp.acc_enddate|date:'Y-m-d' }}";
+                  const cell = document.getElementById('status-' + empId);
+                  if (!cell) return;
+                  if (!endDate) { cell.innerHTML = '<span class="badge badge-inactive">INACTIV</span>'; return; }
+                  const today = new Date().toISOString().split('T')[0];
+                  const isActive = endDate >= today;
+                  cell.innerHTML = isActive ? '<span class="badge badge-active">ACTIV</span>' : '<span class="badge badge-inactive">INACTIV</span>';
+                })();
+              </script>
+            </td>
             <td class="action-cell">
               <a href="{% url 'crud-employee-edit' emp.id %}" class="action-link">✏️ Edit</a>
-              <a href="#" class="action-link delete" onclick="deleteEmployee({{ emp.id }}); return false;">🗑️ Șterge</a>
+              <a href="#" class="action-link delete" onclick="deleteEmployee({{ emp.legacy_userid }}); return false;">🗑️ Șterge</a>
+              <a href="#" class="action-link" onclick="showEmpJournal({{ emp.legacy_userid }}); return false;">📋 Jurnal</a>
             </td>
           </tr>
           {% empty %}
@@ -555,29 +586,73 @@ input[type="checkbox"] {
 
   <!-- TAB: Departments -->
   <div class="tab-content" id="tab-departments">
-    <div class="section-header">
-      <span class="section-title">Lista Departamente</span>
-      <div class="section-actions">
-        <button class="btn" onclick="openDeptModal()">➕ Adaugă Departament</button>
-        <button class="btn btn-secondary" onclick="loadDepartments()">🔄 Reîncarcă</button>
-      </div>
-    </div>
+    <div style="display: grid; grid-template-columns: 1fr 350px; gap: 8px;">
+      <!-- Left: Table -->
+      <div>
+        <div class="section-header">
+          <span class="section-title">Lista Departamente</span>
+          <div class="section-actions">
+            <button class="btn" onclick="openDeptModal()">➕ Adaugă Departament</button>
+            <button class="btn btn-secondary" onclick="importDepartments()">📂 Import</button>
+            <button class="btn btn-secondary" onclick="exportDepartments()">📥 Export</button>
+            <button class="btn btn-secondary" onclick="showDeptJournal()">📋 Jurnal</button>
+            <button class="btn btn-secondary" onclick="loadDepartments()">🔄 Reîncarcă</button>
+          </div>
+        </div>
 
-    <div style="overflow-x: auto; max-height: 600px; overflow-y: auto;">
-      <table class="compact-table">
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Cod</th>
-            <th>Denumire</th>
-            <th>Departament Părinte</th>
-            <th>Acțiuni</th>
-          </tr>
-        </thead>
-        <tbody id="dept-tbody">
-          <tr><td colspan="5" class="empty-state">Încărcare...</td></tr>
-        </tbody>
-      </table>
+        <!-- Search Bar -->
+        <div class="filter-bar">
+          <div class="filter-field">
+            <label>Caută Departament:</label>
+            <input type="text" id="dept-search" placeholder="Cod sau Denumire..." onkeyup="filterDepartments()">
+          </div>
+          <button class="btn btn-secondary" onclick="clearDeptSearch()">✖ Resetează</button>
+        </div>
+
+        <div style="overflow-x: auto; max-height: 600px; overflow-y: auto;">
+          <table class="compact-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Cod</th>
+                <th>Denumire</th>
+                <th>Departament Părinte</th>
+                <th>Acțiuni</th>
+              </tr>
+            </thead>
+            <tbody id="dept-tbody">
+              {% if departments %}
+                {% for d in departments %}
+                <tr>
+                  <td>{{ d.id }}</td>
+                  <td>{% if d.code %}{{ d.code }}{% elif d.DeptCode %}{{ d.DeptCode }}{% elif d.deptcode %}{{ d.deptcode }}{% else %}-{% endif %}</td>
+                  <td>{{ d.DeptName|default:"-" }}</td>
+                  <td>{% if d.parent %}{{ d.parent.DeptName }}{% else %}-{% endif %}</td>
+                  <td class="action-cell">
+                    <a href="/agent/crud/departments/{{ d.id }}/edit/" class="action-link">✏️ Edit</a>
+                    <a href="#" class="action-link delete" onclick="deleteDept({{ d.id }}); return false;">🗑️ Șterge</a>
+                  </td>
+                </tr>
+                {% endfor %}
+              {% else %}
+                <tr><td colspan="5" class="empty-state">Nu există departamente.</td></tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Right: Tree View -->
+      <div>
+        <div class="section-header">
+          <span class="section-title">Structura Organizatorică</span>
+        </div>
+        <div style="background: #163247; border: 1px solid #3d6a8b; padding: 8px; border-radius: 2px; max-height: 650px; overflow-y: auto;">
+          <div id="dept-tree" style="font-size: 10px; line-height: 1.6;">
+            <div style="color: #7db3d9; text-align: center; padding: 20px;">Încărcare structură...</div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -587,8 +662,29 @@ input[type="checkbox"] {
       <span class="section-title">Lista Carduri Emise</span>
       <div class="section-actions">
         <button class="btn" onclick="alert('Funcție în dezvoltare')">➕ Emite Card</button>
+        <button class="btn btn-secondary" onclick="importCards()">📂 Import</button>
+        <button class="btn btn-secondary" onclick="exportCards()">📥 Export</button>
+        <button class="btn btn-secondary" onclick="showCardsJournal()">📋 Jurnal</button>
         <button class="btn btn-secondary" onclick="loadCards()">🔄 Reîncarcă</button>
       </div>
+    </div>
+
+    <!-- Search Bar -->
+    <div class="filter-bar">
+      <div class="filter-field">
+        <label>Caută Card:</label>
+        <input type="text" id="card-search" placeholder="Nr. Card sau Angajat..." onkeyup="filterCards()">
+      </div>
+      <div class="filter-field">
+        <label>Stare:</label>
+        <select id="card-status-filter" onchange="filterCards()">
+          <option value="">Toate</option>
+          <option value="Active">Activ</option>
+          <option value="Inactive">Inactiv</option>
+          <option value="Suspended">Suspendat</option>
+        </select>
+      </div>
+      <button class="btn btn-secondary" onclick="clearCardFilters()">✖ Resetează</button>
     </div>
 
     <div style="overflow-x: auto; max-height: 600px; overflow-y: auto;">
@@ -605,7 +701,24 @@ input[type="checkbox"] {
           </tr>
         </thead>
         <tbody id="cards-tbody">
-          <tr><td colspan="7" class="empty-state">Încărcare...</td></tr>
+          {% if cards %}
+            {% for c in cards %}
+            <tr>
+              <td>{{ c.id }}</td>
+              <td>{{ c.card_number }}</td>
+              <td>{{ c.employee.last_name }} {{ c.employee.first_name }}</td>
+              <td><span class="badge badge-active">Activ</span></td>
+              <td>{{ c.created_at|date:"Y-m-d" }}</td>
+              <td>-</td>
+              <td class="action-cell">
+                <a href="/agent/crud/issuecards/{{ c.id }}/edit/" class="action-link">✏️ Edit</a>
+                <a href="#" class="action-link delete" onclick="deleteCard({{ c.id }}); return false;">🗑️ Șterge</a>
+              </td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="7" class="empty-state">Nu există carduri emise.</td></tr>
+          {% endif %}
         </tbody>
       </table>
     </div>
@@ -656,7 +769,31 @@ input[type="checkbox"] {
           </tr>
         </thead>
         <tbody id="logs-tbody">
-          <tr><td colspan="6" class="empty-state">Încărcare...</td></tr>
+          {% if audit_logs %}
+            {% for log in audit_logs %}
+            <tr>
+              <td>{{ log.timestamp|date:"Y-m-d H:i" }}</td>
+              <td>{{ log.module }}</td>
+              <td>{{ log.action }}</td>
+              <td>{{ log.user|default:"-" }}</td>
+              <td>{{ log.entity_name|default:log.entity_id }}</td>
+              <td>{{ log.details|default:"-" }}</td>
+            </tr>
+            {% endfor %}
+          {% elif legacy_logs %}
+            {% for l in legacy_logs %}
+            <tr>
+              <td>{{ l.timestamp|date:"Y-m-d H:i" }}</td>
+              <td>access</td>
+              <td>{{ l.event|default:"-" }}</td>
+              <td>{{ l.userid|default:"-" }}</td>
+              <td>{{ l.device|default:"-" }}</td>
+              <td>{{ l.detail|default:"-" }}</td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="6" class="empty-state">Nu există loguri.</td></tr>
+          {% endif %}
         </tbody>
       </table>
     </div>
@@ -676,11 +813,17 @@ input[type="checkbox"] {
           {% csrf_token %}
           <div class="form-field">
             <label for="dept-code">Cod Departament *</label>
-            <input type="text" id="dept-code" name="code" required placeholder="ex: IT, HR, FIN">
+            <div style="display:flex; align-items:center; gap:6px;">
+              <input type="text" id="dept-code" name="code" required placeholder="ex: IT, HR, FIN" style="flex:1;">
+              <span id="dept-code-status" class="field-status" aria-label="status"></span>
+            </div>
           </div>
           <div class="form-field">
             <label for="dept-name">Denumire *</label>
-            <input type="text" id="dept-name" name="name" required placeholder="ex: Departament IT">
+            <div style="display:flex; align-items:center; gap:6px;">
+              <input type="text" id="dept-name" name="DeptName" required placeholder="ex: Departament IT" style="flex:1;">
+              <span id="dept-name-status" class="field-status" aria-label="status"></span>
+            </div>
           </div>
           <div class="form-field">
             <label for="dept-parent">Departament Părinte</label>
@@ -689,6 +832,17 @@ input[type="checkbox"] {
               <!-- Populated by JS -->
             </select>
           </div>
+          <div class="form-field">
+            <label>ID nou (următorul disponibil):</label>
+            <input type="text" id="dept-next-id" value="{{ next_dept_id|default:'-' }}" readonly>
+          </div>
+          <div class="form-field" style="display:flex; align-items:center; gap:8px;">
+            <label style="margin:0;">Verifică duplicatele</label>
+            <input type="checkbox" id="dept-auto-check" checked>
+            <button type="button" class="btn btn-secondary" onclick="checkDeptDuplicates()">🔎 Verifică</button>
+            <label title="Activează potrivire strictă (egalitate exactă)"><input type="checkbox" id="dept-strict-match" checked> Potrivire exactă</label>
+          </div>
+          <div id="dept-check-result" class="empty-state" style="display:none; padding:6px;">Rezultat verificare va apărea aici.</div>
         </form>
       </div>
       <div class="modal-footer">
@@ -715,7 +869,8 @@ document.querySelectorAll('.tab').forEach(tab => {
     
     // Load data for specific tabs
     if (targetId === 'departments' && document.getElementById('dept-tbody').textContent.includes('Încărcare')) {
-      loadDepartments();
+        loadDepartments();
+        loadDeptTree();
     }
     if (targetId === 'cards' && document.getElementById('cards-tbody').textContent.includes('Încărcare')) {
       loadCards();
@@ -726,10 +881,45 @@ document.querySelectorAll('.tab').forEach(tab => {
   });
 });
 
+// Initial data load for Departments tab so list shows immediately
+document.addEventListener('DOMContentLoaded', () => {
+  // Preload departments list and tree on first render
+  loadDepartments();
+  loadDeptTree();
+});
+
 // Department Modal
 function openDeptModal() {
   document.getElementById('dept-modal').classList.add('show');
   loadDepartmentParents();
+}
+
+function loadDeptTree() {
+  const tree = document.getElementById('dept-tree');
+  if (!tree) return;
+  tree.innerHTML = '<div style="color: #7db3d9; text-align: center; padding: 20px;">Încărcare structură...</div>';
+  fetch('/agent/crud/depts/tree/')
+    .then(r => r.json())
+    .then(data => {
+      const nodes = data.nodes || data || [];
+      if (!nodes.length) {
+        tree.innerHTML = '<div style="color:#88a7bf; text-align:center; padding: 6px;">Nu există departamente în structura.</div>';
+        return;
+      }
+      // Simple flat render (can be upgraded to hierarchical)
+      tree.innerHTML = nodes.map(d => `<div style="padding:2px 4px;">• ${d.name || d.title || d.text || ('Dept ' + (d.id||'-'))}</div>`).join('');
+    })
+    .catch(() => {
+      tree.innerHTML = '<div style="color:#ffb3b3; text-align:center; padding: 6px;">Eroare la încărcare structură!</div>';
+    });
+}
+
+function showToast(text) {
+  const t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = text;
+  t.style.display = 'block';
+  setTimeout(() => { t.style.display = 'none'; }, 1800);
 }
 
 function closeDeptModal() {
@@ -739,7 +929,7 @@ function closeDeptModal() {
 
 function loadDepartmentParents() {
   // Populate parent dropdown
-  fetch('/agent/crud/departments/tree/')
+  fetch('/agent/crud/depts/tree/')
     .then(r => r.json())
     .then(data => {
       const select = document.getElementById('dept-parent');
@@ -758,7 +948,7 @@ function submitDepartment() {
   const form = document.getElementById('dept-form');
   const formData = new FormData(form);
   
-  fetch('/agent/crud/departments/new/', {
+  fetch('/agent/crud/depts/new/', {
     method: 'POST',
     body: formData,
     headers: {
@@ -769,7 +959,8 @@ function submitDepartment() {
     if (r.ok) {
       closeDeptModal();
       loadDepartments();
-      alert('Departament adăugat cu succes!');
+      loadDeptTree();
+      showToast('Departament adăugat cu succes');
     } else {
       alert('Eroare la salvare! Verifică datele introduse.');
     }
@@ -780,12 +971,103 @@ function submitDepartment() {
   });
 }
 
+function checkDeptDuplicates() {
+  const code = document.getElementById('dept-code').value.trim();
+  const name = document.getElementById('dept-name').value.trim();
+  const box = document.getElementById('dept-check-result');
+  box.style.display = 'block';
+  box.textContent = 'Verificare...';
+
+  // Run two separate checks like person modal (primary/secondary cards)
+  const fetchBy = (qVal) => fetch('/agent/crud/depts/search/?' + new URLSearchParams({ q: qVal }).toString()).then(r => r.json());
+
+  const promises = [];
+  if (code) promises.push(fetchBy(code).then(res => ({ field: 'code', items: res || [] })));
+  if (name) promises.push(fetchBy(name).then(res => ({ field: 'name', items: res || [] })));
+
+  if (!promises.length) {
+    box.textContent = 'Introduceți cod sau denumire pentru verificare.';
+    box.style.color = '#ffd166';
+    return;
+  }
+
+  Promise.all(promises)
+    .then(results => {
+      const dupCode = results.find(r => r.field === 'code')?.items || [];
+      const dupName = results.find(r => r.field === 'name')?.items || [];
+
+      // Refine detection: treat duplicates only on exact (case-insensitive) equality
+      const strict = document.getElementById('dept-strict-match')?.checked ?? true;
+      const eq = (a,b) => String(a||'').trim().toLowerCase() === String(b||'').trim().toLowerCase();
+      const exactDupCode = code ? dupCode.filter(x => eq(x.code || x.DeptCode || x.deptcode, code)) : [];
+      const exactDupName = name ? dupName.filter(x => eq(x.name || x.DeptName, name)) : [];
+      const similarCode = code ? dupCode.filter(x => !exactDupCode.includes(x)) : [];
+      const similarName = name ? dupName.filter(x => !exactDupName.includes(x)) : [];
+      const hasDup = (exactDupCode.length > 0) || (exactDupName.length > 0);
+
+      // Update inline green/red checkmarks next to fields
+      const codeStatus = document.getElementById('dept-code-status');
+      const nameStatus = document.getElementById('dept-name-status');
+      if (codeStatus) {
+        codeStatus.className = 'field-status ' + (code ? (exactDupCode.length ? 'status-bad' : 'status-ok') : '');
+        codeStatus.textContent = code ? (exactDupCode.length ? 'Nu este OK' : 'OK') : '';
+      }
+      if (nameStatus) {
+        nameStatus.className = 'field-status ' + (name ? (exactDupName.length ? 'status-bad' : 'status-ok') : '');
+        nameStatus.textContent = name ? (exactDupName.length ? 'Nu este OK' : 'OK') : '';
+      }
+
+      if (!hasDup) {
+        box.textContent = 'Nu s-au găsit duplicate.';
+        box.style.color = '#a6e3a1'; // green
+      } else {
+        let html = '';
+        if (exactDupCode.length) {
+          html += `<div style=\"color:#ffd166; margin-bottom:4px;\">Duplicate pe Cod (${exactDupCode.length}):</div>` +
+                  exactDupCode.map(x => `<div>• [${x.id}] ${x.code || '-'} — ${x.name || x.DeptName || '-'}</div>`).join('');
+        }
+        if (exactDupName.length) {
+          if (html) html += '<div style=\"height:6px\"></div>';
+          html += `<div style=\"color:#ffd166; margin-bottom:4px;\">Duplicate pe Denumire (${exactDupName.length}):</div>` +
+                  exactDupName.map(x => `<div>• [${x.id}] ${x.code || '-'} — ${x.name || x.DeptName || '-'}</div>`).join('');
+        }
+        if (!strict && (similarCode.length || similarName.length)) {
+          if (html) html += '<div style=\"height:6px\"></div>';
+          html += `<div style=\"color:#88a7bf; margin-bottom:4px;\">Potriviri similare:</div>` +
+                  [...similarCode, ...similarName].map(x => `<div>• [${x.id}] ${x.code || '-'} — ${x.name || x.DeptName || '-'}</div>`).join('');
+        }
+        box.innerHTML = html;
+        box.style.color = '#e8f0f8';
+      }
+    })
+    .catch(() => { box.textContent = 'Eroare la verificare'; box.style.color = '#ffb3b3'; });
+}
+
+// Auto-check on input when enabled
+['dept-code','dept-name'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) {
+    el.addEventListener('input', () => {
+      if (document.getElementById('dept-auto-check').checked) {
+        checkDeptDuplicates();
+      }
+    });
+    // Clear status when field cleared
+    el.addEventListener('blur', () => {
+      if (!el.value.trim()) {
+        const statusEl = document.getElementById(id + '-status');
+        if (statusEl) { statusEl.className = 'field-status'; statusEl.textContent = ''; }
+      }
+    });
+  }
+});
+
 // Load Departments
 function loadDepartments() {
   const tbody = document.getElementById('dept-tbody');
   tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Încărcare...</td></tr>';
   
-  fetch('/agent/crud/departments/tree/')
+  fetch('/agent/crud/depts/tree/')
     .then(r => r.json())
     .then(data => {
       const depts = data.nodes || data || [];
@@ -801,7 +1083,7 @@ function loadDepartments() {
           <td>${d.name || d.title || d.text || '-'}</td>
           <td>${d.parent_name || '-'}</td>
           <td class="action-cell">
-            <a href="/agent/crud/departments/${d.id}/edit/" class="action-link">✏️ Edit</a>
+            <a href="/agent/crud/depts/${d.id}/edit/" class="action-link">✏️ Edit</a>
             <a href="#" class="action-link delete" onclick="deleteDept(${d.id}); return false;">🗑️ Șterge</a>
           </td>
         </tr>
@@ -816,7 +1098,7 @@ function loadDepartments() {
 function deleteDept(id) {
   if (!confirm('Sigur ștergi acest departament?')) return;
   
-  fetch(`/agent/crud/departments/${id}/delete/`, {
+  fetch(`/agent/crud/depts/${id}/delete/`, {
     method: 'POST',
     headers: {
       'X-CSRFToken': getCookie('csrftoken')
@@ -825,7 +1107,8 @@ function deleteDept(id) {
   .then(r => {
     if (r.ok) {
       loadDepartments();
-      alert('Departament șters!');
+      loadDeptTree();
+      showToast('Departament șters');
     } else {
       alert('Eroare la ștergere!');
     }
@@ -998,6 +1281,286 @@ function exportLogs() {
 document.getElementById('select-all-emp').addEventListener('change', function() {
   document.querySelectorAll('.emp-check').forEach(cb => cb.checked = this.checked);
 });
+
+// ===== NEW FUNCTIONS FOR MISSING FEATURES =====
+
+// Employee Functions
+function importEmployees() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.csv,.xlsx';
+  input.onchange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    fetch('/agent/crud/employees/import/', {
+      method: 'POST',
+      body: formData,
+      headers: { 'X-CSRFToken': getCookie('csrftoken') }
+    })
+    .then(r => r.ok ? (alert('Import reușit!'), location.reload()) : alert('Eroare la import!'))
+    .catch(e => alert('Eroare: ' + e));
+  };
+  input.click();
+}
+
+function showEmployeeJournal() {
+  openJournalModal('employees', 'Jurnal Evenimente Angajați');
+}
+
+function showEmpJournal(empId) {
+  openJournalModal('employees', `Jurnal Angajat ID: ${empId}`, empId);
+}
+
+// Department Functions
+function filterDepartments() {
+  const search = document.getElementById('dept-search').value.toLowerCase();
+  document.querySelectorAll('#dept-tbody tr').forEach(row => {
+    const text = row.textContent.toLowerCase();
+    row.style.display = text.includes(search) ? '' : 'none';
+  });
+}
+
+function clearDeptSearch() {
+  document.getElementById('dept-search').value = '';
+  filterDepartments();
+}
+
+function importDepartments() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.csv,.xlsx';
+  input.onchange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    fetch('/agent/crud/depts/import/', {
+      method: 'POST',
+      body: formData,
+      headers: { 'X-CSRFToken': getCookie('csrftoken') }
+    })
+    .then(r => r.ok ? (alert('Import reușit!'), loadDepartments()) : alert('Eroare la import!'))
+    .catch(e => alert('Eroare: ' + e));
+  };
+  input.click();
+}
+
+function exportDepartments() {
+  fetch('/agent/crud/depts/tree/')
+    .then(r => r.json())
+    .then(data => {
+      const depts = data.nodes || data || [];
+      const rows = depts.map(d => `"${d.id}","${d.code || ''}","${d.name || d.title || ''}","${d.parent_name || ''}"`);
+      const csv = 'ID,Cod,Denumire,Părinte\n' + rows.join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'departamente_' + new Date().toISOString().split('T')[0] + '.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    })
+    .catch(e => alert('Eroare la export!'));
+}
+
+function showDeptJournal() {
+  openJournalModal('departments', 'Jurnal Evenimente Departamente');
+}
+
+function buildDepartmentTree(depts) {
+  const tree = document.getElementById('dept-tree');
+  const rootDepts = depts.filter(d => !d.parent_id && !d.parent);
+  
+  function renderNode(dept, level = 0) {
+    const indent = '&nbsp;'.repeat(level * 4);
+    const icon = level === 0 ? '🏢' : '📁';
+    const children = depts.filter(d => (d.parent_id || d.parent) == dept.id);
+    const hasChildren = children.length > 0;
+    
+    let html = `<div style="margin: 2px 0; color: ${level === 0 ? '#7db3d9' : '#e8f0f8'};">
+      ${indent}${icon} <strong>${dept.name || dept.title || dept.text}</strong> ${dept.code ? `(${dept.code})` : ''}
+    </div>`;
+    
+    if (hasChildren) {
+      children.forEach(child => {
+        html += renderNode(child, level + 1);
+      });
+    }
+    
+    return html;
+  }
+  
+  if (rootDepts.length === 0) {
+    tree.innerHTML = '<div style="color: #7db3d9; text-align: center; padding: 20px;">Nu există departamente</div>';
+  } else {
+    tree.innerHTML = rootDepts.map(d => renderNode(d)).join('');
+  }
+}
+
+// Card Functions
+function filterCards() {
+  const search = document.getElementById('card-search').value.toLowerCase();
+  const status = document.getElementById('card-status-filter').value;
+  
+  document.querySelectorAll('#cards-tbody tr[data-card-id]').forEach(row => {
+    const text = row.textContent.toLowerCase();
+    const statusCell = row.querySelector('td:nth-child(4)');
+    const cardStatus = statusCell ? statusCell.textContent.trim() : '';
+    
+    const searchMatch = !search || text.includes(search);
+    const statusMatch = !status || cardStatus === status;
+    
+    row.style.display = (searchMatch && statusMatch) ? '' : 'none';
+  });
+}
+
+function clearCardFilters() {
+  document.getElementById('card-search').value = '';
+  document.getElementById('card-status-filter').value = '';
+  filterCards();
+}
+
+function importCards() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.csv,.xlsx';
+  input.onchange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+    fetch('/agent/crud/issuecards/import/', {
+      method: 'POST',
+      body: formData,
+      headers: { 'X-CSRFToken': getCookie('csrftoken') }
+    })
+    .then(r => r.ok ? (alert('Import reușit!'), loadCards()) : alert('Eroare la import!'))
+    .catch(e => alert('Eroare: ' + e));
+  };
+  input.click();
+}
+
+function exportCards() {
+  fetch('/agent/crud/issuecards/')
+    .then(r => r.json())
+    .then(data => {
+      const cards = data.items || data || [];
+      const rows = cards.map(c => `"${c.id}","${c.card_number || c.card}","${c.employee_name || c.employee}","${c.status}","${c.issue_date || ''}","${c.valid_until || ''}"`);
+      const csv = 'ID,Nr. Card,Angajat,Stare,Data Emiterii,Valabil Până\n' + rows.join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'carduri_' + new Date().toISOString().split('T')[0] + '.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    })
+    .catch(e => alert('Eroare la export!'));
+}
+
+function showCardsJournal() {
+  openJournalModal('cards', 'Jurnal Evenimente Carduri');
+}
+
+// Generic Journal Modal
+function openJournalModal(module, title, entityId = null) {
+  const modal = document.createElement('div');
+  modal.className = 'modal show';
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width: 900px;">
+      <div class="modal-inner">
+        <div class="modal-header">
+          <span>${title}</span>
+          <button class="modal-close" onclick="this.closest('.modal').remove()">×</button>
+        </div>
+        <div class="modal-body" style="max-height: 500px; overflow-y: auto;">
+          <table class="compact-table">
+            <thead>
+              <tr>
+                <th>Data/Ora</th>
+                <th>Acțiune</th>
+                <th>Utilizator</th>
+                <th>Entitate</th>
+                <th>Detalii</th>
+              </tr>
+            </thead>
+            <tbody id="journal-tbody">
+              <tr><td colspan="5" class="empty-state">Încărcare...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  
+  // Load journal data
+  const params = new URLSearchParams({ module });
+  if (entityId) params.append('entity_id', entityId);
+  
+  fetch(`/agent/logs/view/?${params}`)
+    .then(r => r.json())
+    .then(data => {
+      const logs = data.items || data || [];
+      const tbody = modal.querySelector('#journal-tbody');
+      if (logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nu există evenimente înregistrate.</td></tr>';
+        return;
+      }
+      tbody.innerHTML = logs.map(l => `
+        <tr>
+          <td>${l.datetime || l.timestamp || '-'}</td>
+          <td>${l.action || l.event || '-'}</td>
+          <td>${l.user || l.employee || '-'}</td>
+          <td>${l.entity || l.object || '-'}</td>
+          <td>${l.details || l.info || '-'}</td>
+        </tr>
+      `).join('');
+    })
+    .catch(e => {
+      modal.querySelector('#journal-tbody').innerHTML = '<tr><td colspan="5" class="empty-state">Eroare la încărcare!</td></tr>';
+    });
+}
+
+// Update loadDepartments to also build tree
+const originalLoadDepartments = loadDepartments;
+loadDepartments = function() {
+  const tbody = document.getElementById('dept-tbody');
+  tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Încărcare...</td></tr>';
+  
+  fetch('/agent/crud/depts/tree/')
+    .then(r => r.json())
+    .then(data => {
+      const depts = data.nodes || data || [];
+      if (depts.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Nu există departamente.</td></tr>';
+        document.getElementById('dept-tree').innerHTML = '<div style="color: #7db3d9; text-align: center; padding: 20px;">Nu există departamente</div>';
+        return;
+      }
+      
+      tbody.innerHTML = depts.map(d => `
+        <tr>
+          <td>${d.id || d.pk || '-'}</td>
+          <td>${d.code || '-'}</td>
+          <td>${d.name || d.title || d.text || '-'}</td>
+          <td>${d.parent_name || '-'}</td>
+          <td class="action-cell">
+            <a href="/agent/crud/depts/${d.id}/edit/" class="action-link">✏️ Edit</a>
+            <a href="#" class="action-link delete" onclick="deleteDept(${d.id}); return false;">🗑️ Șterge</a>
+          </td>
+        </tr>
+      `).join('');
+      
+      // Build tree view
+      buildDepartmentTree(depts);
+    })
+    .catch(e => {
+      console.error('Error:', e);
+      tbody.innerHTML = '<tr><td colspan="5" class="empty-state">Eroare la încărcare!</td></tr>';
+    });
+};
 
 // CSRF Token Helper
 function getCookie(name) {
