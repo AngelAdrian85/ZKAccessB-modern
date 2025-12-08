@@ -57,6 +57,7 @@ urlpatterns = [
     path("crud/depts/", views.depts_list, name="crud-depts-list"),
     path("crud/depts/new/", views.dept_create, name="crud-dept-create"),
     path("crud/depts/<int:pk>/edit/", views.dept_edit, name="crud-dept-edit"),
+    path("crud/depts/<int:pk>/update/", views.dept_update_json, name="crud-dept-update"),
     path("crud/depts/<int:pk>/delete/", views.dept_delete, name="crud-dept-delete"),
     path("crud/depts/tree/", views.depts_tree_json, name="crud-depts-tree"),
     path("crud/depts/search/", views.depts_search_json, name="crud-depts-search"),

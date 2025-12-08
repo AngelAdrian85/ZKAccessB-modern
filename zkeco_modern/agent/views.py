@@ -930,6 +930,84 @@ def dept_delete(request: HttpRequest, pk: int):
         return JsonResponse({'ok': True})
     except Exception as e: return JsonResponse({'ok': False,'error': str(e)}, status=400)
 
+def dept_update_json(request: HttpRequest, pk: int):
+    """Update a department via JSON POST (for modal edit in Personnel module)."""
+    if not request.user.is_authenticated or not request.user.is_staff or request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    if not Dept:
+        return JsonResponse({'ok': False, 'error': 'missing-model'}, status=400)
+    
+    try:
+        import json
+        payload = json.loads(request.body.decode('utf-8'))
+        
+        # Get the department to update
+        dept = Dept.objects.get(pk=pk)
+        
+        # Update fields from payload
+        code = payload.get('code', '').strip()
+        name = payload.get('DeptName', '').strip()
+        parent_id = payload.get('parent_id')
+        
+        if not code or not name:
+            return JsonResponse({'ok': False, 'error': 'code and DeptName are required'}, status=400)
+        
+        # Check for duplicates (excluding current department)
+        # Check code
+        if hasattr(dept, 'code'):
+            duplicate_code = Dept.objects.filter(code__iexact=code).exclude(pk=pk).first()
+            if duplicate_code:
+                return JsonResponse({'ok': False, 'error': f'code "{code}" already exists'}, status=400)
+        
+        # Check name (DeptName)
+        if hasattr(dept, 'DeptName'):
+            duplicate_name = Dept.objects.filter(DeptName__iexact=name).exclude(pk=pk).first()
+            if duplicate_name:
+                return JsonResponse({'ok': False, 'error': f'name "{name}" already exists'}, status=400)
+        
+        # Update parent if provided
+        if parent_id:
+            try:
+                parent = Dept.objects.get(pk=int(parent_id))
+                if parent.pk == dept.pk:
+                    return JsonResponse({'ok': False, 'error': 'cannot set department as its own parent'}, status=400)
+                dept.parent = parent
+            except Dept.DoesNotExist:
+                return JsonResponse({'ok': False, 'error': f'parent with id {parent_id} not found'}, status=400)
+        else:
+            dept.parent = None
+        
+        # Update code and name
+        if hasattr(dept, 'code'):
+            dept.code = code
+        if hasattr(dept, 'DeptName'):
+            dept.DeptName = name
+        
+        dept.save()
+        
+        # Log the update
+        try:
+            from .models import AuditLog
+            AuditLog.objects.create(
+                module='department',
+                action='update',
+                entity_id=dept.pk,
+                entity_name=name,
+                user=getattr(request.user, 'username', None),
+                details=f"code={code}"
+            )
+        except Exception:
+            pass
+        
+        return JsonResponse({'ok': True, 'id': dept.pk, 'code': code, 'name': name})
+        
+    except Dept.DoesNotExist:
+        return JsonResponse({'ok': False, 'error': 'department not found'}, status=404)
+    except json.JSONDecodeError:
+        return JsonResponse({'ok': False, 'error': 'invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=400)
+
 def areas_list(request: HttpRequest):
     if not request.user.is_authenticated:
         from django.contrib.auth.views import redirect_to_login

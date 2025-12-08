@@ -629,7 +629,7 @@ input[type="checkbox"] {
                   <td>{{ d.DeptName|default:"-" }}</td>
                   <td>{% if d.parent %}{{ d.parent.DeptName }}{% else %}-{% endif %}</td>
                   <td class="action-cell">
-                    <a href="/agent/crud/departments/{{ d.id }}/edit/" class="action-link">✏️ Edit</a>
+                    <a href="#" class="action-link" onclick="editDeptModal({{ d.id }}, '{% if d.code %}{{ d.code }}{% elif d.DeptCode %}{{ d.DeptCode }}{% elif d.deptcode %}{{ d.deptcode }}{% endif %}', '{{ d.DeptName }}', {% if d.parent %}{{ d.parent.id }}{% else %}null{% endif %}); return false;">✏️ Edit</a>
                     <a href="#" class="action-link delete" onclick="deleteDept({{ d.id }}); return false;">🗑️ Șterge</a>
                   </td>
                 </tr>
@@ -853,6 +853,56 @@ input[type="checkbox"] {
   </div>
 </div>
 
+<!-- Modal: Edit Department -->
+<div class="modal" id="edit-dept-modal">
+  <div class="modal-content">
+    <div class="modal-inner">
+      <div class="modal-header">
+        <span>Editează Departament</span>
+        <button class="modal-close" onclick="closeEditDeptModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <form id="edit-dept-form">
+          {% csrf_token %}
+          <input type="hidden" id="edit-dept-id" value="">
+          <div class="form-field">
+            <label for="edit-dept-code">Cod Departament *</label>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <input type="text" id="edit-dept-code" name="code" required placeholder="ex: IT, HR, FIN" style="flex:1;">
+              <span id="edit-dept-code-status" class="field-status" aria-label="status"></span>
+            </div>
+          </div>
+          <div class="form-field">
+            <label for="edit-dept-name">Denumire *</label>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <input type="text" id="edit-dept-name" name="DeptName" required placeholder="ex: Departament IT" style="flex:1;">
+              <span id="edit-dept-name-status" class="field-status" aria-label="status"></span>
+            </div>
+          </div>
+          <div class="form-field">
+            <label for="edit-dept-parent">Departament Părinte</label>
+            <select id="edit-dept-parent" name="parent_id">
+              <option value="">Niciun Părinte (Rădăcină)</option>
+              <!-- Populated by JS -->
+            </select>
+          </div>
+          <div class="form-field" style="display:flex; align-items:center; gap:8px;">
+            <label style="margin:0;">Verifică duplicatele</label>
+            <input type="checkbox" id="edit-dept-auto-check" checked>
+            <button type="button" class="btn btn-secondary" onclick="checkEditDeptDuplicates()">🔎 Verifică</button>
+            <label title="Activează potrivire strictă (egalitate exactă)"><input type="checkbox" id="edit-dept-strict-match" checked> Potrivire exactă</label>
+          </div>
+          <div id="edit-dept-check-result" class="empty-state" style="display:none; padding:6px;">Rezultat verificare va apărea aici.</div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeEditDeptModal()">Anulează</button>
+        <button class="btn" onclick="submitEditDepartment()">💾 Salvează Modificări</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 // Tab Switching
 document.querySelectorAll('.tab').forEach(tab => {
@@ -926,6 +976,191 @@ function closeDeptModal() {
   document.getElementById('dept-modal').classList.remove('show');
   document.getElementById('dept-form').reset();
 }
+
+// Edit Department Modal
+function editDeptModal(id, code, name, parentId) {
+  // Set the hidden ID field
+  document.getElementById('edit-dept-id').value = id;
+  
+  // Populate form fields with current data
+  document.getElementById('edit-dept-code').value = code;
+  document.getElementById('edit-dept-name').value = name;
+  
+  // Clear status indicators
+  document.getElementById('edit-dept-code-status').className = 'field-status';
+  document.getElementById('edit-dept-code-status').textContent = '';
+  document.getElementById('edit-dept-name-status').className = 'field-status';
+  document.getElementById('edit-dept-name-status').textContent = '';
+  document.getElementById('edit-dept-check-result').style.display = 'none';
+  document.getElementById('edit-dept-check-result').textContent = '';
+  
+  // Load parent options and set selected parent
+  loadEditDepartmentParents(parentId);
+  
+  // Show the modal
+  document.getElementById('edit-dept-modal').classList.add('show');
+}
+
+function closeEditDeptModal() {
+  document.getElementById('edit-dept-modal').classList.remove('show');
+  document.getElementById('edit-dept-form').reset();
+  document.getElementById('edit-dept-id').value = '';
+}
+
+function loadEditDepartmentParents(parentId) {
+  // Populate parent dropdown for edit modal
+  fetch('/agent/crud/depts/tree/')
+    .then(r => r.json())
+    .then(data => {
+      const select = document.getElementById('edit-dept-parent');
+      select.innerHTML = '<option value="">Niciun Părinte (Rădăcină)</option>';
+      (data.nodes || data || []).forEach(dept => {
+        const option = document.createElement('option');
+        option.value = dept.id || dept.pk;
+        option.textContent = dept.name || dept.title || dept.text;
+        if (parentId && (dept.id === parentId || dept.pk === parentId)) {
+          option.selected = true;
+        }
+        select.appendChild(option);
+      });
+    })
+    .catch(e => console.error('Error loading parents:', e));
+}
+
+function checkEditDeptDuplicates() {
+  const code = document.getElementById('edit-dept-code').value.trim();
+  const name = document.getElementById('edit-dept-name').value.trim();
+  const currentId = parseInt(document.getElementById('edit-dept-id').value, 10);
+  const box = document.getElementById('edit-dept-check-result');
+  box.style.display = 'block';
+  box.textContent = 'Verificare...';
+
+  const fetchBy = (qVal) => fetch('/agent/crud/depts/search/?' + new URLSearchParams({ q: qVal }).toString()).then(r => r.json());
+
+  const promises = [];
+  if (code) promises.push(fetchBy(code).then(res => ({ field: 'code', items: res || [] })));
+  if (name) promises.push(fetchBy(name).then(res => ({ field: 'name', items: res || [] })));
+
+  if (!promises.length) {
+    box.textContent = 'Introduceți cod sau denumire pentru verificare.';
+    box.style.color = '#ffd166';
+    return;
+  }
+
+  Promise.all(promises)
+    .then(results => {
+      const dupCode = results.find(r => r.field === 'code')?.items || [];
+      const dupName = results.find(r => r.field === 'name')?.items || [];
+
+      // Exclude current department from duplicates (since it's being edited)
+      const strict = document.getElementById('edit-dept-strict-match')?.checked ?? true;
+      const eq = (a,b) => String(a||'').trim().toLowerCase() === String(b||'').trim().toLowerCase();
+      
+      const exactDupCode = code ? dupCode.filter(x => (x.id !== currentId && x.pk !== currentId) && eq(x.code || x.DeptCode || x.deptcode, code)) : [];
+      const exactDupName = name ? dupName.filter(x => (x.id !== currentId && x.pk !== currentId) && eq(x.name || x.DeptName, name)) : [];
+      const similarCode = code ? dupCode.filter(x => !exactDupCode.includes(x) && (x.id !== currentId && x.pk !== currentId)) : [];
+      const similarName = name ? dupName.filter(x => !exactDupName.includes(x) && (x.id !== currentId && x.pk !== currentId)) : [];
+      const hasDup = (exactDupCode.length > 0) || (exactDupName.length > 0);
+
+      const codeStatus = document.getElementById('edit-dept-code-status');
+      const nameStatus = document.getElementById('edit-dept-name-status');
+      if (codeStatus) {
+        codeStatus.className = 'field-status ' + (code ? (exactDupCode.length ? 'status-bad' : 'status-ok') : '');
+        codeStatus.textContent = code ? (exactDupCode.length ? 'Nu este OK' : 'OK') : '';
+      }
+      if (nameStatus) {
+        nameStatus.className = 'field-status ' + (name ? (exactDupName.length ? 'status-bad' : 'status-ok') : '');
+        nameStatus.textContent = name ? (exactDupName.length ? 'Nu este OK' : 'OK') : '';
+      }
+
+      if (!hasDup) {
+        box.textContent = 'Nu s-au găsit duplicate (alte variante).';
+        box.style.color = '#a6e3a1';
+      } else {
+        let html = '';
+        if (exactDupCode.length) {
+          html += `<div style=\"color:#ffd166; margin-bottom:4px;\">Duplicate pe Cod (${exactDupCode.length}):</div>` +
+                  exactDupCode.map(x => `<div>• [${x.id}] ${x.code || '-'} — ${x.name || x.DeptName || '-'}</div>`).join('');
+        }
+        if (exactDupName.length) {
+          if (html) html += '<div style=\"height:6px\"></div>';
+          html += `<div style=\"color:#ffd166; margin-bottom:4px;\">Duplicate pe Denumire (${exactDupName.length}):</div>` +
+                  exactDupName.map(x => `<div>• [${x.id}] ${x.code || '-'} — ${x.name || x.DeptName || '-'}</div>`).join('');
+        }
+        if (!strict && (similarCode.length || similarName.length)) {
+          if (html) html += '<div style=\"height:6px\"></div>';
+          html += `<div style=\"color:#88a7bf; margin-bottom:4px;\">Potriviri similare:</div>` +
+                  [...similarCode, ...similarName].map(x => `<div>• [${x.id}] ${x.code || '-'} — ${x.name || x.DeptName || '-'}</div>`).join('');
+        }
+        box.innerHTML = html;
+        box.style.color = '#e8f0f8';
+      }
+    })
+    .catch(() => { box.textContent = 'Eroare la verificare'; box.style.color = '#ffb3b3'; });
+}
+
+// Auto-check on input when enabled (edit modal)
+['edit-dept-code','edit-dept-name'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) {
+    el.addEventListener('input', () => {
+      if (document.getElementById('edit-dept-auto-check')?.checked) {
+        checkEditDeptDuplicates();
+      }
+    });
+    el.addEventListener('blur', () => {
+      if (!el.value.trim()) {
+        const statusEl = document.getElementById(id + '-status');
+        if (statusEl) { statusEl.className = 'field-status'; statusEl.textContent = ''; }
+      }
+    });
+  }
+});
+
+function submitEditDepartment() {
+  const id = document.getElementById('edit-dept-id').value;
+  const form = document.getElementById('edit-dept-form');
+  const formData = new FormData(form);
+  
+  // Remove the csrf_token from formData (we'll pass it in headers)
+  formData.delete('csrfmiddlewaretoken');
+  
+  // Build a plain JSON object from formData
+  const data = {
+    code: document.getElementById('edit-dept-code').value.trim(),
+    DeptName: document.getElementById('edit-dept-name').value.trim(),
+    parent_id: document.getElementById('edit-dept-parent').value || null
+  };
+  
+  if (!data.code || !data.DeptName) {
+    alert('Cod și Denumire sunt obligatorii!');
+    return;
+  }
+  
+  fetch(`/agent/crud/depts/${id}/update/`, {
+    method: 'POST',
+    headers: {
+      'X-CSRFToken': getCookie('csrftoken'),
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(data)
+  })
+  .then(r => {
+    if (r.ok) {
+      closeEditDeptModal();
+      loadDepartments();
+      loadDeptTree();
+      showToast('Departament actualizat cu succes');
+    } else {
+      alert('Eroare la salvare! Verifică datele introduse.');
+    }
+  })
+  .catch(e => {
+    console.error('Error:', e);
+    alert('Eroare de rețea!');
+  });
+}
+
 
 function loadDepartmentParents() {
   // Populate parent dropdown
