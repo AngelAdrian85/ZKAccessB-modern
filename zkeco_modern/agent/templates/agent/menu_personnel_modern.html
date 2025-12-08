@@ -629,7 +629,7 @@ input[type="checkbox"] {
                   <td>{{ d.DeptName|default:"-" }}</td>
                   <td>{% if d.parent %}{{ d.parent.DeptName }}{% else %}-{% endif %}</td>
                   <td class="action-cell">
-                    <a href="#" class="action-link" onclick="editDeptModal({{ d.id }}, '{% if d.code %}{{ d.code }}{% elif d.DeptCode %}{{ d.DeptCode }}{% elif d.deptcode %}{{ d.deptcode }}{% endif %}', '{{ d.DeptName }}', {% if d.parent %}{{ d.parent.id }}{% else %}null{% endif %}); return false;">✏️ Edit</a>
+                    <a href="#" class="action-link" onclick="editDeptModal({{ d.id }}); return false;">✏️ Edit</a>
                     <a href="#" class="action-link delete" onclick="deleteDept({{ d.id }}); return false;">🗑️ Șterge</a>
                   </td>
                 </tr>
@@ -978,27 +978,44 @@ function closeDeptModal() {
 }
 
 // Edit Department Modal
-function editDeptModal(id, code, name, parentId) {
-  // Set the hidden ID field
-  document.getElementById('edit-dept-id').value = id;
-  
-  // Populate form fields with current data
-  document.getElementById('edit-dept-code').value = code;
-  document.getElementById('edit-dept-name').value = name;
-  
-  // Clear status indicators
-  document.getElementById('edit-dept-code-status').className = 'field-status';
-  document.getElementById('edit-dept-code-status').textContent = '';
-  document.getElementById('edit-dept-name-status').className = 'field-status';
-  document.getElementById('edit-dept-name-status').textContent = '';
-  document.getElementById('edit-dept-check-result').style.display = 'none';
-  document.getElementById('edit-dept-check-result').textContent = '';
-  
-  // Load parent options and set selected parent
-  loadEditDepartmentParents(parentId);
-  
-  // Show the modal
-  document.getElementById('edit-dept-modal').classList.add('show');
+function editDeptModal(id) {
+  // Fetch department data from server
+  fetch(`/agent/crud/depts/tree/`)
+    .then(r => r.json())
+    .then(data => {
+      const nodes = data.nodes || data || [];
+      const dept = nodes.find(d => (d.id || d.pk) == id);
+      
+      if (!dept) {
+        alert('Departament nu găsit!');
+        return;
+      }
+      
+      // Set the hidden ID field
+      document.getElementById('edit-dept-id').value = id;
+      
+      // Populate form fields with current data
+      document.getElementById('edit-dept-code').value = dept.code || dept.DeptCode || '';
+      document.getElementById('edit-dept-name').value = dept.name || dept.DeptName || '';
+      
+      // Clear status indicators
+      document.getElementById('edit-dept-code-status').className = 'field-status';
+      document.getElementById('edit-dept-code-status').textContent = '';
+      document.getElementById('edit-dept-name-status').className = 'field-status';
+      document.getElementById('edit-dept-name-status').textContent = '';
+      document.getElementById('edit-dept-check-result').style.display = 'none';
+      document.getElementById('edit-dept-check-result').textContent = '';
+      
+      // Load parent options and set selected parent
+      loadEditDepartmentParents(dept.parent_id || null);
+      
+      // Show the modal - MUST be done AFTER form population
+      document.getElementById('edit-dept-modal').classList.add('show');
+    })
+    .catch(e => {
+      console.error('Error loading dept:', e);
+      alert('Eroare la încărcarea departamentului!');
+    });
 }
 
 function closeEditDeptModal() {
