@@ -50,6 +50,29 @@ Write-Host "[TRAY] Pip install complete"
 # Start Card Reader Services (ACP & Elatec) if available
 Write-Host "[TRAY] Starting card reader services (ACP, Elatec)"
 $global:TrayChildPids = @()
+function Write-TrayStatusJson {
+  param(
+    [bool]$AcpOn,
+    [bool]$ElatecOn,
+    [string]$ServerState
+  )
+  $status = [ordered]@{
+    acp      = if($AcpOn){'ON'}else{'OPRIT'}
+    elatec   = if($ElatecOn){'ON'}else{'OPRIT'}
+    server   = $ServerState  # PORNESTE | OPRIT | PORNIT
+  }
+  $color = 'red'
+  if($status.acp -eq 'ON' -and $status.elatec -eq 'ON' -and $status.server -eq 'PORNIT'){
+    $color = 'green'
+  } elseif($status.acp -eq 'ON' -or $status.elatec -eq 'ON' -or $status.server -eq 'PORNIT'){
+    $color = 'yellow'
+  }
+  $status.color = $color
+  try {
+    $json = $status | ConvertTo-Json -Depth 3
+    Set-Content -Path (Join-Path $PWD 'tray_status.json') -Value $json -Encoding UTF8
+  } catch {}
+}
 try {
   # Optional config: scripts/card_readers.json
   $readerCfgPath = Join-Path 'scripts' 'card_readers.json'
@@ -107,6 +130,9 @@ try {
 } catch {
   Write-Warning "[TRAY] Could not start card reader services: $_"
 }
+
+# Initial status: readers based on enable flags, server getting ready
+try { Write-TrayStatusJson -AcpOn:$acpEnabled -ElatecOn:$elatecEnabled -ServerState 'PORNESTE' } catch {}
 
 # Automatic Django migration check & apply
 Write-Host "[TRAY] Checking migrations"
@@ -187,6 +213,8 @@ try {
 } catch {}
 
 Write-Host "[TRAY] Cleanup complete"
+# Final status: readers off, server off after cleanup
+try { Write-TrayStatusJson -AcpOn:$false -ElatecOn:$false -ServerState 'OPRIT' } catch {}
 # Exit code 15 is normal (user quit); exit codes 1-11 are errors, others are unexpected
 if($exitCode -eq 15){
   Write-Host "[TRAY] tray_agent exited normally (exit code 15)"
