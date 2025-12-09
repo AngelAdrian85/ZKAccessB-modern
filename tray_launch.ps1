@@ -178,8 +178,18 @@ Write-Host "[TRAY] Collecting static files"
 & $py $manage collectstatic --noinput > $null 2> collectstatic_errors.log
 if($LASTEXITCODE -ne 0){ Write-Warning "[TRAY] collectstatic reported errors; see collectstatic_errors.log" }
 Write-Host "[TRAY] Starting tray agent"
-& $py zkeco_modern/manage.py tray_agent @trayArgs
-$exitCode = $LASTEXITCODE
+try {
+  $trayProc = Start-Process -FilePath $py -ArgumentList @('zkeco_modern/manage.py','tray_agent') + $trayArgs -PassThru -WindowStyle Minimized
+  if ($trayProc -and $trayProc.HasExited -eq $false) {
+    try { Write-TrayStatusJson -AcpOn:$acpEnabled -ElatecOn:$elatecEnabled -ServerState 'PORNIT' } catch {}
+  }
+  # Wait until tray agent exits (blocking monitor)
+  if ($trayProc) { $trayProc.WaitForExit() }
+  $exitCode = if($trayProc){ $trayProc.ExitCode } else { $LASTEXITCODE }
+} catch {
+  Write-Error "[TRAY] Failed to start tray_agent: $_"
+  $exitCode = 1
+}
 
 # Cleanup after tray agent exits (regardless of exit code)
 Write-Host "[TRAY] Tray agent exited with code $exitCode, cleaning up..."
