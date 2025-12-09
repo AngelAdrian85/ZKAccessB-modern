@@ -179,7 +179,7 @@ Write-Host "[TRAY] Collecting static files"
 if($LASTEXITCODE -ne 0){ Write-Warning "[TRAY] collectstatic reported errors; see collectstatic_errors.log" }
 Write-Host "[TRAY] Starting tray agent"
 try {
-  $trayProc = Start-Process -FilePath $py -ArgumentList @('zkeco_modern/manage.py','tray_agent') + $trayArgs -PassThru -WindowStyle Minimized
+  $trayProc = Start-Process -FilePath $py -ArgumentList (@('zkeco_modern/manage.py','tray_agent') + $trayArgs) -PassThru -WindowStyle Minimized -WorkingDirectory $PWD
   if ($trayProc -and $trayProc.HasExited -eq $false) {
     try { Write-TrayStatusJson -AcpOn:$acpEnabled -ElatecOn:$elatecEnabled -ServerState 'PORNIT' } catch {}
   }
