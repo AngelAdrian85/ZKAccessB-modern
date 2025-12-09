@@ -13,6 +13,7 @@ import hashlib
 import logging
 import subprocess
 from datetime import datetime
+import json
 
 import django
 from django.core.management.base import BaseCommand
@@ -32,6 +33,7 @@ _SERVER_PROC = None
 _CENTER_THREAD = None
 _LAST_ICON_STATE = None  # (server_running, center_running)
 _LAST_ICON_STATE = None  # (server_running, center_running)
+_LISTENER_PROCS = []  # ACP/Elatec listener processes started by tray agent
 
 DEFAULT_HOST = '0.0.0.0'
 DEFAULT_PORT = 8000
@@ -211,6 +213,25 @@ def _show_help_ro():
 def _server_log_path() -> Path:
     return Path(getattr(settings, 'BASE_DIR', Path.cwd())) / 'server.log'
 
+def _tray_status_path() -> Path:
+    try:
+        base = Path(getattr(settings, 'BASE_DIR', Path.cwd()))
+        return base.parent / 'tray_status.json'
+    except Exception:
+        return Path('tray_status.json')
+
+def _read_tray_status() -> dict:
+    """Read tray_status.json written by tray_launch.ps1. Returns {} if missing/invalid.
+    Expected keys: acp (ON/OPRIT), elatec (ON/OPRIT), server (PORNESTE/PORNIT/OPRIT), color (green/yellow/red).
+    """
+    try:
+        p = _tray_status_path()
+        if p.exists():
+            return json.loads(p.read_text(encoding='utf-8')) or {}
+    except Exception:
+        pass
+    return {}
+
 def _read_first_error_from_log(max_bytes: int = 32768) -> str:
     """Return a concise last-error summary from server.log.
     Prefers the final line of the last Traceback block if present,
@@ -262,6 +283,136 @@ def _stop_comm_center():
     except Exception:
         pass
     _CENTER = None
+
+def _read_listeners_config():
+    try:
+        base = Path(getattr(settings, 'BASE_DIR', Path.cwd()))
+        cfg = (base.parent / 'scripts' / 'card_readers.json')
+        if cfg.exists():
+            import json
+            return json.loads(cfg.read_text(encoding='utf-8'))
+    except Exception:
+        pass
+    return {}
+
+def _start_listener(name: str):
+    """Start a single listener based on config: 'acp' or 'elatec'."""
+    global _LISTENER_PROCS
+    try:
+        cfg = _read_listeners_config()
+        base = Path(getattr(settings, 'BASE_DIR', Path.cwd()))
+        py = sys.executable
+        if name == 'acp':
+            acp = cfg.get('acp', {'enabled': True, 'port': 9001})
+            if acp.get('enabled', True):
+                script = str(base.parent / 'scripts' / 'card_reader_acp.py')
+                if Path(script).exists():
+                    port = str(acp.get('port', 9001))
+                    p = subprocess.Popen([py, script, port], cwd=str(base.parent))
+                    _LISTENER_PROCS.append(p)
+        elif name == 'elatec':
+            el = cfg.get('elatec', {'enabled': True, 'port': 'COM3'})
+            if el.get('enabled', True):
+                script = str(base.parent / 'scripts' / 'card_reader_elatec.py')
+                if Path(script).exists():
+                    com = str(el.get('port', 'COM3'))
+                    p = subprocess.Popen([py, script, com], cwd=str(base.parent))
+                    _LISTENER_PROCS.append(p)
+    except Exception:
+        pass
+
+def _stop_listener(name: str):
+    """Stop processes matching a listener script."""
+    target = 'card_reader_acp.py' if name == 'acp' else 'card_reader_elatec.py'
+    try:
+        # Stop tracked ones
+        global _LISTENER_PROCS
+        keep = []
+        for p in _LISTENER_PROCS:
+            try:
+                if p and (p.poll() is None):
+                    p.terminate()
+                    try:
+                        p.wait(timeout=2)
+                    except Exception:
+                        p.kill()
+                # Do not keep terminated
+            except Exception:
+                pass
+        _LISTENER_PROCS = keep
+        # Kill any OS processes by script name
+        subprocess.run(['powershell','-ExecutionPolicy','Bypass','-Command', f"Get-CimInstance Win32_Process | Where-Object {{ $_.CommandLine -like '*{target}*' }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force }}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+def _start_listeners():
+    global _LISTENER_PROCS
+    try:
+        cfg = _read_listeners_config()
+        base = Path(getattr(settings, 'BASE_DIR', Path.cwd()))
+        py = sys.executable
+        # ACP
+        try:
+            acp = cfg.get('acp', {'enabled': True, 'port': 9001})
+            if acp.get('enabled', True):
+                script = str(base.parent / 'scripts' / 'card_reader_acp.py')
+                if Path(script).exists():
+                    port = str(acp.get('port', 9001))
+                    p = subprocess.Popen([py, script, port], cwd=str(base.parent))
+                    _LISTENER_PROCS.append(p)
+        except Exception:
+            pass
+        # Elatec
+        try:
+            el = cfg.get('elatec', {'enabled': True, 'port': 'COM3'})
+            if el.get('enabled', True):
+                script = str(base.parent / 'scripts' / 'card_reader_elatec.py')
+                if Path(script).exists():
+                    com = str(el.get('port', 'COM3'))
+                    p = subprocess.Popen([py, script, com], cwd=str(base.parent))
+                    _LISTENER_PROCS.append(p)
+        except Exception:
+            pass
+    except Exception:
+        pass
+
+def _stop_listeners():
+    global _LISTENER_PROCS
+    # Gracefully stop processes we started
+    try:
+        for p in _LISTENER_PROCS:
+            try:
+                if p and (p.poll() is None):
+                    p.terminate()
+                    try:
+                        p.wait(timeout=3)
+                    except Exception:
+                        p.kill()
+            except Exception:
+                pass
+    except Exception:
+        pass
+    _LISTENER_PROCS = []
+    # Also attempt to kill any python processes running our listener scripts (started by tray_launch)
+    try:
+        # Use tasklist to enumerate and taskkill by window title-less processes with matching command line via wmic/powershell
+        # Fallback: taskkill by filter on script name strings
+        for name in ['card_reader_acp.py','card_reader_elatec.py']:
+            try:
+                subprocess.run(['powershell','-ExecutionPolicy','Bypass','-Command', f"Get-CimInstance Win32_Process | Where-Object { '{' } $_.CommandLine -like '*{name}*' { '}' } | ForEach-Object { '{' } Stop-Process -Id $_.ProcessId -Force { '}' }"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+def _listener_running(name: str) -> bool:
+    target = 'card_reader_acp.py' if name == 'acp' else 'card_reader_elatec.py'
+    try:
+        out = subprocess.run(['powershell','-ExecutionPolicy','Bypass','-Command', f"Get-CimInstance Win32_Process | Where-Object {{ $_.CommandLine -like '*{target}*' }} | Select-Object -First 1 -ExpandProperty ProcessId"], capture_output=True, text=True)
+        pid = (out.stdout or '').strip()
+        return bool(pid)
+    except Exception:
+        return False
 
 def _is_server_running(host='127.0.0.1', port=DEFAULT_PORT):
     import socket
@@ -370,6 +521,8 @@ def _shutdown(icon):
         _stop_server()
         logging.info('Stopping commcenter...')
         _stop_comm_center()
+        logging.info('Stopping card listeners...')
+        _stop_listeners()
         time.sleep(0.5)
     except Exception as e:
         logging.error('Error stopping server/commcenter: %s', e)
@@ -633,13 +786,64 @@ def _build_menu(icon, host, port):
         pystray.MenuItem('View Server Log', lambda: webbrowser.open(str(Path(getattr(settings, 'BASE_DIR', Path.cwd())) / 'server.log'))),
     )
 
+    def _run_toggle(target, action, value=None):
+        try:
+            base = Path(getattr(settings, 'BASE_DIR', Path.cwd()))
+            script = str(base.parent / 'scripts' / 'toggle_listeners.ps1')
+            if not Path(script).exists():
+                messagebox.showerror('Toggle', 'toggle_listeners.ps1 missing.')
+                return
+            args = ['powershell','-ExecutionPolicy','Bypass','-File', script, '-Target', target, '-Action', action]
+            if value is not None:
+                args += ['-Value', str(value)]
+            subprocess.Popen(args, cwd=str(base.parent))
+            messagebox.showinfo('Card Readers', 'Updated. Restart tray to apply changes.')
+        except Exception as e:
+            try:
+                messagebox.showerror('Card Readers', f'Failed: {e}')
+            except Exception:
+                pass
+
+    def _prompt_value(title, default=''):
+        val = {'value': None}
+        try:
+            win = tk.Tk(); win.title(title); win.geometry('320x140')
+            tk.Label(win, text=title).pack(pady=8)
+            entry = tk.Entry(win); entry.pack(); entry.insert(0, default)
+            def _save():
+                val['value'] = entry.get().strip(); win.destroy()
+            tk.Button(win, text='Save', command=_save).pack(pady=10)
+            tk.Button(win, text='Close', command=win.destroy).pack()
+            win.mainloop()
+        except Exception:
+            pass
+        return val['value']
+
+    def _card_readers_menu():
+        return pystray.Menu(
+            pystray.MenuItem('ACP: Enable', lambda: _run_toggle('acp','enable')),
+            pystray.MenuItem('ACP: Disable', lambda: _run_toggle('acp','disable')),
+            pystray.MenuItem('ACP: Set Port', lambda: (lambda v=_prompt_value('ACP Port','9001'): _run_toggle('acp','set', v))()),
+            pystray.MenuItem('ACP: Start', lambda: threading.Thread(target=_start_listener, args=('acp',), daemon=True).start()),
+            pystray.MenuItem('ACP: Stop', lambda: threading.Thread(target=_stop_listener, args=('acp',), daemon=True).start()),
+            pystray.MenuItem('ACP: Restart', lambda: threading.Thread(target=lambda: (_stop_listener('acp'), time.sleep(1), _start_listener('acp')), daemon=True).start()),
+            pystray.MenuItem('---', pystray.Menu()),
+            pystray.MenuItem('Elatec: Enable', lambda: _run_toggle('elatec','enable')),
+            pystray.MenuItem('Elatec: Disable', lambda: _run_toggle('elatec','disable')),
+            pystray.MenuItem('Elatec: Set COM', lambda: (lambda v=_prompt_value('Elatec COM','COM3'): _run_toggle('elatec','set', v))()),
+            pystray.MenuItem('Elatec: Start', lambda: threading.Thread(target=_start_listener, args=('elatec',), daemon=True).start()),
+            pystray.MenuItem('Elatec: Stop', lambda: threading.Thread(target=_stop_listener, args=('elatec',), daemon=True).start()),
+            pystray.MenuItem('Elatec: Restart', lambda: threading.Thread(target=lambda: (_stop_listener('elatec'), time.sleep(1), _start_listener('elatec')), daemon=True).start()),
+        )
+
     return pystray.Menu(
         pystray.MenuItem('Dashboard', lambda: _open_dashboard()),
         pystray.MenuItem('Web Server (ASGI)', django_server_menu),
         pystray.MenuItem('CommCenter', commcenter_menu),
+        pystray.MenuItem('Card Readers', _card_readers_menu()),
         pystray.MenuItem('---', pystray.Menu()),  # Separator
-        pystray.MenuItem('Stop All Services', lambda: threading.Thread(target=lambda: (_stop_server(), _stop_comm_center()), daemon=True).start()),
-        pystray.MenuItem('Start All Services', lambda: threading.Thread(target=lambda: (_start_server(host=host, port=port, asgi=True), _start_comm_center()), daemon=True).start()),
+        pystray.MenuItem('Stop All Services', lambda: threading.Thread(target=lambda: (_stop_server(), _stop_comm_center(), _stop_listeners()), daemon=True).start()),
+        pystray.MenuItem('Start All Services', lambda: threading.Thread(target=lambda: (_start_server(host=host, port=port, asgi=True), _start_comm_center(), _start_listeners()), daemon=True).start()),
         pystray.MenuItem('---', pystray.Menu()),  # Separator
         pystray.MenuItem('Ajutor (RO)', lambda: threading.Thread(target=_show_help_ro, daemon=True).start()),
         pystray.MenuItem('Admin Menu', legacy_menu),
@@ -731,28 +935,94 @@ class Command(BaseCommand):
             global _LAST_ICON_STATE
             while not _STOP_EVENT.is_set():
                 try:
-                    server_running = _SERVER_PROC is not None and _SERVER_PROC.poll() is None
+                    # Prefer state provided by tray_launch.ps1 if present
+                    status_json = _read_tray_status()
+                    acp_on_json = (status_json.get('acp') or '').upper() == 'ON'
+                    el_on_json = (status_json.get('elatec') or '').upper() == 'ON'
+                    srv_state = (status_json.get('server') or '').upper()  # PORNESTE | PORNIT | OPRIT
+                    server_running_json = srv_state in ('PORNIT','PORNESTE')
+                    color_json = (status_json.get('color') or '').lower()
+                    use_json = bool(status_json)
+
+                    # Probe server via TCP as ground truth; fall back to process state
+                    try:
+                        port_probe = int(_CONFIG.get('tray','port', fallback=str(port)))
+                    except Exception:
+                        port_probe = port
+                    server_running_probe = _is_server_running(host='127.0.0.1', port=port_probe)
+                    if not server_running_probe:
+                        server_running_probe = _SERVER_PROC is not None and _SERVER_PROC.poll() is None
                     center_running = _CENTER is not None
-                    any_running = server_running or center_running  # Green if ANY service runs
+                    # Choose final booleans
+                    server_running = server_running_json if use_json else server_running_probe
+                    acp_live = acp_on_json
+                    el_live = el_on_json
+                    any_running = (server_running or center_running or acp_live or el_live)
                     tip = []
+                    # Reader status summaries from JSON if present; fall back to config hints
+                    try:
+                        if use_json:
+                            tip.append('ACP:' + ('ON' if acp_live else 'OPRIT'))
+                            tip.append('Elatec:' + ('ON' if el_live else 'OPRIT'))
+                        else:
+                            cfg = _read_listeners_config()
+                            acp_cfg = (cfg or {}).get('acp') or {}
+                            el_cfg = (cfg or {}).get('elatec') or {}
+                            acp_en = bool(acp_cfg.get('enabled', True))
+                            el_en = bool(el_cfg.get('enabled', True))
+                            acp_live = _listener_running('acp')
+                            el_live = _listener_running('elatec')
+                            if acp_live:
+                                tip.append('ACP:ON')
+                            else:
+                                tip.append('ACP:OFF' + (f" (:{acp_cfg.get('port') or 9001}?)" if acp_en else ''))
+                            if el_live:
+                                tip.append('Elatec:ON')
+                            else:
+                                tip.append('Elatec:OFF' + (f" ({el_cfg.get('port') or 'COM?'}?)" if el_en else ''))
+                    except Exception:
+                        pass
+                    # Append last card read and access evaluation status
+                    try:
+                        from django.core.cache import cache as _cache
+                        last_card = _cache.get('agent:last_card_read') or {}
+                        last_eval = _cache.get('agent:last_access_eval') or {}
+                        el_err = _cache.get('agent:listener_error:elatec')
+                        if el_err:
+                            tip.append(f"Elatec ERR:{el_err}")
+                        if last_card.get('card_number'):
+                            tip.append(f"Card {last_card.get('card_number')} ({last_card.get('source','')})")
+                        if last_eval.get('card_number'):
+                            tip.append('Access ' + ('OK' if last_eval.get('ok') else 'DENY'))
+                            rs = last_eval.get('reasons') or []
+                            if rs:
+                                tip.append(','.join(rs[:2]))
+                    except Exception:
+                        pass
                     if center_running and _CENTER:
                         total = len(_CENTER.sessions)
                         online = sum(1 for s in _CENTER.sessions.values() if s.connected)
                         tip.append(f"Dispozitive {online}/{total}")
                         tip.append(f"Cicluri {_CENTER.cycles}")
                         tip.append(f"RT {_CENTER.total_rtlog_lines}")
-                    tip.append('Server:' + ('PORNEȘTE' if server_running else 'OPRIT'))
+                    if use_json:
+                        tip.append('Server:' + ( 'PORNIT' if srv_state=='PORNIT' else ('PORNEȘTE' if srv_state=='PORNESTE' else 'OPRIT') ))
+                    else:
+                        tip.append('Server:' + ('PORNEȘTE' if server_running else 'OPRIT'))
                     tip.append('CommCenter:' + ('PORNEȘTE' if center_running else 'OPRIT'))
                     tip.append(f'Licență:{_license_status()}')
                     tip.append('Click dreapta: meniu')
                     icon_ref.title = ' | '.join(tip)
-                    state = (server_running, center_running, any_running)
+                    state = (server_running, center_running, any_running, color_json if use_json else None)
                     if state != _LAST_ICON_STATE:
-                        # Green if any service running, yellow if partially, red if all off
-                        if any_running:
-                            color = (46, 204, 113) if (server_running and center_running) else (241, 196, 15)
+                        # Derive color: prefer JSON, else compute
+                        if use_json and color_json in ('green','yellow','red'):
+                            color = {'green': (46,204,113), 'yellow': (241,196,15), 'red': (231,76,60)}[color_json]
                         else:
-                            color = (231, 76, 60)
+                            if any_running:
+                                color = (46, 204, 113) if (server_running and center_running) else (241, 196, 15)
+                            else:
+                                color = (231, 76, 60)
                         new_img = _build_icon(color=color)
                         if new_img is not None:
                             icon_ref.icon = new_img
