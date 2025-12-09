@@ -47,6 +47,67 @@ Write-Host "[TRAY] Installing requirements (quiet)"
 if($LASTEXITCODE -ne 0){ Write-Warning "pip install reported errors; see pip_install_errors.log" }
 Write-Host "[TRAY] Pip install complete"
 
+# Start Card Reader Services (ACP & Elatec) if available
+Write-Host "[TRAY] Starting card reader services (ACP, Elatec)"
+$global:TrayChildPids = @()
+try {
+  # Optional config: scripts/card_readers.json
+  $readerCfgPath = Join-Path 'scripts' 'card_readers.json'
+  $ReaderCfg = $null
+  if (Test-Path $readerCfgPath) {
+    try { $ReaderCfg = Get-Content $readerCfgPath -Raw | ConvertFrom-Json } catch {}
+  }
+  $acpScript = Join-Path 'scripts' 'card_reader_acp.py'
+  if (Test-Path $acpScript) {
+    $acpEnabled = $true
+    $acpPort = '9001'
+    if ($ReaderCfg -and $ReaderCfg.acp) {
+      if ($ReaderCfg.acp.enabled -eq $false) { $acpEnabled = $false }
+      if ($ReaderCfg.acp.port) { $acpPort = [string]$ReaderCfg.acp.port }
+    }
+    if ($acpEnabled) {
+      Write-Host "[TRAY] Starting ACP listener on port $acpPort"
+      $p = Start-Process -FilePath $py -ArgumentList $acpScript, $acpPort -PassThru -WindowStyle Minimized
+      if ($p) { $global:TrayChildPids += $p.Id }
+    } else {
+      Write-Host "[TRAY] ACP listener disabled via config"
+    }
+  }
+  $elatecScript = Join-Path 'scripts' 'card_reader_elatec.py'
+  if (Test-Path $elatecScript) {
+    # Attempt to ensure pyserial is present quietly
+    & $py -m pip show pyserial > $null 2> $null
+    if ($LASTEXITCODE -ne 0) { & $py -m pip install pyserial -q > $null 2> $null }
+    $elatecEnabled = $true
+    $elatecPort = 'COM3'
+    if ($ReaderCfg -and $ReaderCfg.elatec) {
+      if ($ReaderCfg.elatec.enabled -eq $false) { $elatecEnabled = $false }
+      if ($ReaderCfg.elatec.port) { $elatecPort = [string]$ReaderCfg.elatec.port }
+    }
+    # Auto-disable if COM port not present
+    try {
+      $ports = (Get-CimInstance Win32_SerialPort | Select-Object -ExpandProperty DeviceID) 2> $null
+    } catch { $ports = @() }
+    if ($elatecEnabled -and (-not $ports -or ($ports -notcontains $elatecPort))) {
+      Write-Warning "[TRAY] Elatec port '$elatecPort' not found; disabling Elatec"
+      $elatecEnabled = $false
+    }
+    if ($elatecEnabled) {
+      Write-Host "[TRAY] Starting Elatec serial listener on $elatecPort"
+      try {
+        $p2 = Start-Process -FilePath $py -ArgumentList $elatecScript, $elatecPort -PassThru -WindowStyle Minimized
+        if ($p2) { $global:TrayChildPids += $p2.Id }
+      } catch {
+        Write-Warning "[ELATEC] Failed to start on '$elatecPort': $_"; $elatecEnabled = $false
+      }
+    } else {
+      Write-Host "[TRAY] Elatec listener disabled (no valid port or config)"
+    }
+  }
+} catch {
+  Write-Warning "[TRAY] Could not start card reader services: $_"
+}
+
 # Automatic Django migration check & apply
 Write-Host "[TRAY] Checking migrations"
 $manage = "zkeco_modern/manage.py"
@@ -108,6 +169,13 @@ try {
   }
   Write-Host "[TRAY] Scanning and killing processes on port $cfgPort"
   $pids = netstat -ano 2>$null | Select-String ":$cfgPort" | ForEach-Object { ($_ -split " +")[-1] } | Sort-Object -Unique
+  # Stop card reader services
+  if ($global:TrayChildPids) {
+    Write-Host "[TRAY] Stopping card reader services"
+    foreach($pid in $global:TrayChildPids){
+      try { Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue } catch {}
+    }
+  }
   foreach($pid in $pids){
     if($pid -match '^[0-9]+$'){
       try { 
