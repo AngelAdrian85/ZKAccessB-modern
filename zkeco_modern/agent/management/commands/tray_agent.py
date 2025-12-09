@@ -1154,17 +1154,21 @@ class Command(BaseCommand):
                             pass
                         # Handle explicit start/stop commands from UI
                         try:
-                            if st.get('cmd_start_acp'):
+                            acp_cmd_start = bool(st.get('cmd_start_acp'))
+                            acp_cmd_stop = bool(st.get('cmd_stop_acp'))
+                            el_cmd_start = bool(st.get('cmd_start_elatec'))
+                            el_cmd_stop = bool(st.get('cmd_stop_elatec'))
+                            if acp_cmd_start:
                                 logging.info('UI requested: start ACP listener')
                                 _start_listener('acp')
                                 time.sleep(0.2)
                                 acp_live = _listener_running('acp')
-                            if st.get('cmd_stop_acp'):
+                            if acp_cmd_stop:
                                 logging.info('UI requested: stop ACP listener')
                                 _stop_listener('acp')
                                 time.sleep(0.2)
                                 acp_live = _listener_running('acp')
-                            if st.get('cmd_start_elatec'):
+                            if el_cmd_start:
                                 logging.info('UI requested: start Elatec listener')
                                 if com_present:
                                     _start_listener('elatec')
@@ -1172,23 +1176,48 @@ class Command(BaseCommand):
                                 else:
                                     logging.info('Elatec COM missing; ignoring start')
                                 el_live = _listener_running('elatec')
-                            if st.get('cmd_stop_elatec'):
+                            if el_cmd_stop:
                                 logging.info('UI requested: stop Elatec listener')
                                 _stop_listener('elatec')
                                 time.sleep(0.2)
                                 el_live = _listener_running('elatec')
+                            # Clear one-shot command flags to reflect execution
+                            if any([acp_cmd_start, acp_cmd_stop, el_cmd_start, el_cmd_stop]):
+                                try:
+                                    st2 = dict(st)
+                                    for k in ['cmd_start_acp','cmd_stop_acp','cmd_start_elatec','cmd_stop_elatec']:
+                                        if st2.get(k):
+                                            st2.pop(k, None)
+                                    _write_tray_status(acp_live, el_live, ('PORNIT' if server_running else 'OPRIT'), center_running)
+                                    # Also write tray_status.json with flags cleared
+                                    p = _tray_status_path()
+                                    import json as _json
+                                    data = _read_tray_status()
+                                    for k in ['cmd_start_acp','cmd_stop_acp','cmd_start_elatec','cmd_stop_elatec']:
+                                        if k in data:
+                                            data.pop(k, None)
+                                    try:
+                                        (p.with_suffix('.tmp')).write_text(_json.dumps(data, ensure_ascii=False), encoding='utf-8')
+                                        tmp = p.with_suffix('.tmp')
+                                        if p.exists():
+                                            p.unlink()
+                                        tmp.replace(p)
+                                    except Exception:
+                                        pass
+                                except Exception:
+                                    pass
                         except Exception:
                             pass
 
-                        # Auto-restart listeners if enabled but not live
+                        # Auto-restart listeners if enabled but not live (skip if user requested stop)
                         try:
-                            if acp_en and not acp_live:
+                            if acp_en and not acp_live and not bool(st.get('cmd_stop_acp')):
                                 logging.info('ACP listener down; attempting auto-restart')
                                 _start_listener('acp')
                                 time.sleep(0.2)
                                 acp_live = _listener_running('acp')
-                            # Elatec only if enabled AND COM present
-                            if el_en and com_present and not el_live:
+                            # Elatec only if enabled AND COM present (skip if user requested stop)
+                            if el_en and com_present and not el_live and not bool(st.get('cmd_stop_elatec')):
                                 logging.info('Elatec listener down; attempting auto-restart')
                                 _start_listener('elatec')
                                 time.sleep(0.2)
