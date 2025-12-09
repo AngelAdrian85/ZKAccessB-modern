@@ -74,6 +74,7 @@
       content:""; position:absolute; left:50%; transform:translateX(-50%); bottom:-12px; width:0; height:0;
       border-left:6px solid transparent; border-right:6px solid transparent; border-top:6px solid #222; z-index:51;
     }
+    @keyframes pulse{0%{opacity:.7}50%{opacity:1}100%{opacity:.7}}
   </style>
 </head>
 <body>
@@ -125,7 +126,20 @@
         <span id="serverType">server: ...</span>
         <span id="backupInfo">backup: ...</span>
       </div>
-      <div class="meta"><a href="/admin/">Admin</a></div>
+      <div class="meta" style="display:flex;align-items:center;gap:10px;">
+        <div id="scannerStatus" style="display:flex;align-items:center;gap:10px;">
+          <span style="display:flex;align-items:center;gap:6px;" title="ACP">
+            <span id="dot-acp" style="width:10px;height:10px;border-radius:50%;background:#aaa;display:inline-block;"></span>
+            <span style="color:#cfe9f8;font-size:12px;">ACP</span>
+          </span>
+          <span style="display:flex;align-items:center;gap:6px;" title="Elatec">
+            <span id="dot-el" style="width:10px;height:10px;border-radius:50%;background:#aaa;display:inline-block;"></span>
+            <span style="color:#cfe9f8;font-size:12px;">Elatec</span>
+          </span>
+          <button id="btnCfgReaders" class="btn-secondary" style="padding:4px 8px;font-size:12px;">Configure</button>
+        </div>
+        <a href="/admin/">Admin</a>
+      </div>
     </div>
     <div class="main-wrap">
       {% block content %}{% endblock %}
@@ -165,6 +179,69 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 // Spinner animation
 const cssAnim=document.createElement('style'); cssAnim.textContent='@keyframes spin{to{transform:rotate(360deg)}}'; document.head.appendChild(cssAnim);
+
+// ======= Readers status widget & modal =======
+function _colorDot(el, state){
+  const green = '#2da44e', yellow = '#f1c40f', red = '#cf222e', gray = '#8b949e';
+  let color = gray;
+  if(state==='ON') color = green; else if(state==='OPRIT') color = red; else if(state==='PORNESTE' || state==='STOPPING') color = yellow;
+  el.style.background = color;
+  if(color===yellow){ el.style.animation='pulse 1s infinite'; } else { el.style.animation=''; }
+}
+async function refreshReaders(){
+  try{
+    const r = await fetch('/agent/api/readers/status');
+    const j = await r.json();
+    const st = j.status || {};
+    _colorDot(document.getElementById('dot-acp'), st.acp || (j.config?.acp?.enabled? 'ON':'OPRIT'));
+    _colorDot(document.getElementById('dot-el'), st.elatec || (j.config?.elatec?.enabled? 'ON':'OPRIT'));
+  }catch(e){ /* ignore */ }
+}
+setInterval(refreshReaders, 4000); refreshReaders();
+
+document.getElementById('btnCfgReaders').addEventListener('click', async ()=>{
+  let cfg = {acp:{name:'ACP TCP',port:9001,enabled:true}, elatec:{name:'Elatec Serial',port:'COM3',enabled:true}};
+  try{ const r=await fetch('/agent/api/readers/config'); cfg=(await r.json()).config||cfg; }catch(e){}
+  const overlay=document.createElement('div'); overlay.className='modal-overlay'; overlay.style='position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:1000;';
+  const panel=document.createElement('div'); panel.className='modal-panel'; panel.style='width:520px;padding:14px;border-radius:8px;';
+  panel.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;"><strong>Configure Card Readers</strong>
+      <button id='xClose' class='btn-secondary' style='padding:4px 8px;'>×</button></div>
+    <div style='display:grid;grid-template-columns:1fr 1fr;gap:10px;'>
+      <div class='panel accent' style='padding:10px;border-radius:6px;'>
+        <div style='font-weight:600;margin-bottom:6px;'>ACP TCP</div>
+        <label>Name</label><input id='acp_name' value='${cfg.acp?.name||"ACP TCP"}' />
+        <label style='margin-top:6px;'>Port</label><input id='acp_port' value='${cfg.acp?.port||9001}' />
+        <label style='display:flex;align-items:center;gap:8px;margin-top:6px;'><input id='acp_enabled' type='checkbox' ${cfg.acp?.enabled?"checked":""}/> Enabled</label>
+      </div>
+      <div class='panel accent' style='padding:10px;border-radius:6px;'>
+        <div style='font-weight:600;margin-bottom:6px;'>Elatec Serial</div>
+        <label>Name</label><input id='el_name' value='${cfg.elatec?.name||"Elatec Serial"}' />
+        <label style='margin-top:6px;'>Port</label><input id='el_port' value='${cfg.elatec?.port||"COM3"}' />
+        <label style='display:flex;align-items:center;gap:8px;margin-top:6px;'><input id='el_enabled' type='checkbox' ${cfg.elatec?.enabled?"checked":""}/> Enabled</label>
+      </div>
+    </div>
+    <div style='display:flex;justify-content:flex-end;gap:8px;margin-top:10px;'>
+      <button id='btnCancel' class='btn-secondary'>Cancel</button>
+      <button id='btnSave' class='btn-primary'>Save</button>
+    </div>`;
+  overlay.appendChild(panel); document.body.appendChild(overlay);
+  function close(){ document.body.removeChild(overlay); }
+  panel.querySelector('#xClose').onclick=close; panel.querySelector('#btnCancel').onclick=close;
+  panel.querySelector('#btnSave').onclick=async ()=>{
+    const payload={
+      acp:{ name: panel.querySelector('#acp_name').value, port: panel.querySelector('#acp_port').value, enabled: panel.querySelector('#acp_enabled').checked },
+      elatec:{ name: panel.querySelector('#el_name').value, port: panel.querySelector('#el_port').value, enabled: panel.querySelector('#el_enabled').checked }
+    };
+    try{
+      // Transition: set yellow while applying
+      document.getElementById('dot-acp').style.background='#f1c40f';
+      document.getElementById('dot-el').style.background='#f1c40f';
+      await fetch('/agent/api/readers/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+    }catch(e){}
+    close(); refreshReaders();
+  };
+});
 </script>
 </body>
 </html>

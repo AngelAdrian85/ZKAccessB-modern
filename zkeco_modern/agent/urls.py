@@ -36,6 +36,7 @@ urlpatterns = [
     path("crud/access-levels/<int:pk>/edit/", views.access_level_edit, name="crud-access-level-edit"),
     path("crud/access-levels/<int:pk>/delete/", views.access_level_delete, name="crud-access-level-delete"),
     path("crud/employees/", views.employees_list, name="crud-employees-list"),
+    path("crud/employees/json/", views.employees_json_list, name="crud-employees-json"),
     path("crud/employees/new/", views.employee_create, name="crud-employee-create"),
     path("crud/employees/check-personnel-no/", views.check_personnel_no, name="crud-employee-check-personnel"),
     path("crud/employees/check-cards/", views.check_card_numbers, name="crud-employee-check-cards"),
@@ -66,12 +67,16 @@ urlpatterns = [
     path("crud/areas/new/", views.area_create, name="crud-area-create"),
     path("crud/areas/<int:pk>/edit/", views.area_edit, name="crud-area-edit"),
     path("crud/areas/<int:pk>/delete/", views.area_delete, name="crud-area-delete"),
-    path("crud/issuecards/", views.issuecards_list, name="crud-issuecards-list"),
-    path("crud/issuecards/new/", views.issuecard_create, name="crud-issuecard-create"),
-    path("crud/issuecards/<int:pk>/edit/", views.issuecard_edit, name="crud-issuecard-edit"),
-    path("crud/issuecards/<int:pk>/delete/", views.issuecard_delete, name="crud-issuecard-delete"),
-    path("crud/issuecards/<int:pk>/deactivate/", views.issuecard_deactivate, name="crud-issuecard-deactivate"),
-    path("crud/issuecards/<int:pk>/reissue/", views.issuecard_reissue, name="crud-issuecard-reissue"),
+    # IssueCards JSON endpoints for modern UI
+    path("crud/issuecards/", views.issuecards_json_list, name="crud-issuecards-list"),
+    path("crud/issuecards/search/", views.issuecards_json_search, name="crud-issuecards-search"),
+    path("crud/issuecards/<str:pk>/detail/", views.issuecard_json_detail, name="crud-issuecard-detail"),
+    path("crud/issuecards/new/", views.issuecard_json_create, name="crud-issuecard-create"),
+    path("crud/issuecards/<str:pk>/update/", views.issuecard_json_update, name="crud-issuecard-update"),
+    # Card read API for hardware integrations
+    path("api/cards/read/push/", views.card_read_push, name="api-card-read-push"),
+    path("api/cards/read/wait/", views.card_read_wait, name="api-card-read-wait"),
+    path("api/listeners/error/", views.listener_error, name="api-listener-error"),
     path("crud/access-logs/", views.access_logs_list, name="crud-access-logs-list"),
     path("logs/view/", views.access_logs_view_module, name="agent-logs-view-module"),
     path("reports/employees/", views.employee_report, name="agent-report-employees"),
@@ -83,6 +88,7 @@ urlpatterns = [
     path("api/doors/<int:pk>/open/", views.door_pk_open, name="door-pk-open"),
     path("api/doors/<int:pk>/close/", views.door_pk_close, name="door-pk-close"),
     path("api/access/check/", views.access_check, name="access-check"),
+    path("api/access/evaluate-open/", views.access_evaluate_and_open, name="access-evaluate-open"),
     path("api/commands/recent/", views.command_recent, name="command-recent"),
     path("shutdown/", views.server_shutdown, name="agent-shutdown"),
     # Control Center (grouped operations & CommCenter management)
@@ -91,4 +97,7 @@ urlpatterns = [
     path("control/comm-center/start/", views.comm_center_start, name="comm-center-start"),
     path("control/comm-center/stop/", views.comm_center_stop, name="comm-center-stop"),
     path("diagnostics/model-diff/", views.model_diff, name="agent-model-diff"),
+    # Readers config/status API
+    path("api/readers/config", views.readers_config, name="agent-readers-config"),
+    path("api/readers/status", views.readers_status, name="agent-readers-status"),
 ]

@@ -1,0 +1,12 @@
+{
+  "acp": {
+    "enabled": true,
+    "port": "9001",
+    "name": "ACP TCP"
+  },
+  "elatec": {
+    "enabled": true,
+    "port": "COM3",
+    "name": "Elatec Serial"
+  }
+}

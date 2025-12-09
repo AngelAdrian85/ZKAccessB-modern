@@ -34,6 +34,8 @@ _CENTER_THREAD = None
 _LAST_ICON_STATE = None  # (server_running, center_running)
 _LAST_ICON_STATE = None  # (server_running, center_running)
 _LISTENER_PROCS = []  # ACP/Elatec listener processes started by tray agent
+_PID_FILE = Path.home() / 'zkeco_tray_agent.pid'
+_START_TS = time.time()
 
 DEFAULT_HOST = '0.0.0.0'
 DEFAULT_PORT = 8000
@@ -117,6 +119,15 @@ def _init_logging():
     log_path = Path(_CONFIG.get('tray','log_file', fallback=str(Path.home()/ 'zkeco_tray_errors.log')))
     try:
         logging.basicConfig(filename=log_path, level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+        # Also echo logs to stdout for terminal visibility
+        try:
+            sh = logging.StreamHandler(sys.stdout)
+            sh.setLevel(logging.INFO)
+            sh.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
+            root = logging.getLogger()
+            root.addHandler(sh)
+        except Exception:
+            pass
     except Exception:
         pass
     def _hook(exctype, value, tb):
@@ -172,6 +183,20 @@ def _build_icon(color=(52, 152, 219)):
     d.ellipse((8, 8, 56, 56), fill=color)
     d.text((20, 24), 'AC', fill=(255,255,255))
     return img
+
+def _set_icon_title(icon_obj, text: str):
+    """Set tray icon tooltip/title with safe truncation for Windows (<=128)."""
+    try:
+        if not text:
+            return
+        # Windows NOTIFYICONDATAW szTip max length is 128
+        safe = text[:128]
+        icon_obj.title = safe
+    except Exception:
+        try:
+            icon_obj.title = 'Access Control'
+        except Exception:
+            pass
 
 def _choose_icon_color(server_running: bool, center_running: bool):
     if server_running and center_running:
@@ -233,9 +258,9 @@ def _read_tray_status() -> dict:
     return {}
 
 def _write_tray_status(acp_on: bool, elatec_on: bool, server_state: str, center_on: bool):
-    """Write tray_status.json for full synchronization with tray_launch.ps1.
-    server_state in { 'PORNIT', 'PORNESTE', 'OPRIT' }
-    Color rules: green=all ON, red=all OFF, yellow otherwise.
+    """Write tray_status.json while preserving enabled flags.
+    Treat disabled readers as satisfied for color semantics.
+    server_state in { 'PORNIT', 'PORNESTE', 'OPRIT' }.
     """
     try:
         acp_on = bool(acp_on)
@@ -244,14 +269,21 @@ def _write_tray_status(acp_on: bool, elatec_on: bool, server_state: str, center_
         srv = (server_state or '').upper()
         if srv not in ('PORNIT','PORNESTE','OPRIT'):
             srv = 'OPRIT'
-        all_on = acp_on and elatec_on and center_on and (srv == 'PORNIT')
-        all_off = (not acp_on) and (not elatec_on) and (not center_on) and (srv == 'OPRIT')
-        color = 'green' if all_on else ('red' if all_off else 'yellow')
+        # Preserve existing enabled flags if present
+        st_prev = _read_tray_status()
+        acp_enabled = bool(st_prev.get('acp_enabled', True))
+        elatec_enabled = bool(st_prev.get('elatec_enabled', True))
+        # Color computation with enabled flags
+        all_ok = (srv == 'PORNIT') and center_on and ((not acp_enabled) or acp_on) and ((not elatec_enabled) or elatec_on)
+        any_running = (srv == 'PORNIT') or center_on or (acp_enabled and acp_on) or (elatec_enabled and elatec_on)
+        color = 'green' if all_ok else ('yellow' if any_running else 'red')
         data = {
             'acp': 'ON' if acp_on else 'OPRIT',
             'elatec': 'ON' if elatec_on else 'OPRIT',
             'commcenter': 'ON' if center_on else 'OPRIT',
             'server': srv,
+            'acp_enabled': acp_enabled,
+            'elatec_enabled': elatec_enabled,
             'color': color,
         }
         p = _tray_status_path()
@@ -342,7 +374,8 @@ def _start_listener(name: str):
                 script = str(base.parent / 'scripts' / 'card_reader_acp.py')
                 if Path(script).exists():
                     port = str(acp.get('port', 9001))
-                    p = subprocess.Popen([py, script, port], cwd=str(base.parent))
+                    cf = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+                    p = subprocess.Popen([py, script, port], cwd=str(base.parent), creationflags=cf)
                     _LISTENER_PROCS.append(p)
         elif name == 'elatec':
             el = cfg.get('elatec', {'enabled': True, 'port': 'COM3'})
@@ -350,7 +383,8 @@ def _start_listener(name: str):
                 script = str(base.parent / 'scripts' / 'card_reader_elatec.py')
                 if Path(script).exists():
                     com = str(el.get('port', 'COM3'))
-                    p = subprocess.Popen([py, script, com], cwd=str(base.parent))
+                    cf = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+                    p = subprocess.Popen([py, script, com], cwd=str(base.parent), creationflags=cf)
                     _LISTENER_PROCS.append(p)
     except Exception:
         pass
@@ -392,7 +426,8 @@ def _start_listeners():
                 script = str(base.parent / 'scripts' / 'card_reader_acp.py')
                 if Path(script).exists():
                     port = str(acp.get('port', 9001))
-                    p = subprocess.Popen([py, script, port], cwd=str(base.parent))
+                    cf = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+                    p = subprocess.Popen([py, script, port], cwd=str(base.parent), creationflags=cf)
                     _LISTENER_PROCS.append(p)
         except Exception:
             pass
@@ -403,7 +438,8 @@ def _start_listeners():
                 script = str(base.parent / 'scripts' / 'card_reader_elatec.py')
                 if Path(script).exists():
                     com = str(el.get('port', 'COM3'))
-                    p = subprocess.Popen([py, script, com], cwd=str(base.parent))
+                    cf = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+                    p = subprocess.Popen([py, script, com], cwd=str(base.parent), creationflags=cf)
                     _LISTENER_PROCS.append(p)
         except Exception:
             pass
@@ -439,12 +475,19 @@ def _stop_listeners():
     except Exception:
         pass
 
-def _listener_running(name: str) -> bool:
+def _listener_running(name: str, hb_threshold: float = 15.0, startup_grace: float = 30.0) -> bool:
     target = 'card_reader_acp.py' if name == 'acp' else 'card_reader_elatec.py'
     try:
         out = subprocess.run(['powershell','-ExecutionPolicy','Bypass','-Command', f"Get-CimInstance Win32_Process | Where-Object {{ $_.CommandLine -like '*{target}*' }} | Select-Object -First 1 -ExpandProperty ProcessId"], capture_output=True, text=True)
         pid = (out.stdout or '').strip()
-        return bool(pid)
+        if not pid:
+            return False
+        # Process presence is the primary liveness signal; avoid marking down solely on heartbeat age
+        # Heartbeat is used for diagnostics in tooltip, not for downing the listener
+        # Keep a small startup grace but otherwise return True if process exists
+        if (time.time() - _START_TS) <= startup_grace:
+            return True
+        return True
     except Exception:
         return False
 
@@ -503,7 +546,8 @@ def _start_server(host=DEFAULT_HOST, port=DEFAULT_PORT, asgi=True, retry_count=3
             
             log_path = _server_log_path()
             logf = open(log_path, 'ab')
-            _SERVER_PROC = subprocess.Popen(cmd, env=env, stdout=logf, stderr=subprocess.STDOUT, cwd=str(settings.BASE_DIR))
+            creationflags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+            _SERVER_PROC = subprocess.Popen(cmd, env=env, stdout=logf, stderr=subprocess.STDOUT, cwd=str(settings.BASE_DIR), creationflags=creationflags)
             logging.info('Server started (%s) pid=%s on %s:%s (attempt %d)', server_type, _SERVER_PROC.pid, host, port, attempt + 1)
             time.sleep(1.5)
             if _SERVER_PROC.poll() is not None:
@@ -560,6 +604,16 @@ def _shutdown(icon):
         time.sleep(0.5)
     except Exception as e:
         logging.error('Error stopping server/commcenter: %s', e)
+    # Write final OFF status and set icon red
+    try:
+        _write_tray_status(False, False, 'OPRIT', False)
+        if icon is not None:
+            red_img = _build_icon(color=(231,76,60))
+            if red_img is not None:
+                icon.icon = red_img
+            icon.title = 'ACP:OPRIT | Elatec:OPRIT | Server:OPRIT | CommCenter:OPRIT'
+    except Exception:
+        pass
     
     # Kill any lingering processes on configured port
     try:
@@ -567,18 +621,25 @@ def _shutdown(icon):
         cfg_port = _CONFIG.get('tray', 'port', fallback='8000')
         logging.info(f'Scanning for processes on port {cfg_port}')
         pids = subprocess.run(['netstat', '-ano'], capture_output=True, text=True)
+        seen = set()
         for line in pids.stdout.split('\n'):
             if f':{cfg_port}' in line:
                 parts = line.split()
-                if parts:
-                    pid = parts[-1]
-                    if pid.isdigit() and int(pid) != os.getpid():
-                        try:
-                            subprocess.run(['taskkill', '/PID', pid, '/F', '/T'], 
-                                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                            logging.info(f'Killed PID {pid} on port {cfg_port}')
-                        except Exception as e:
-                            logging.error(f'Failed to kill PID {pid}: {e}')
+                if not parts:
+                    continue
+                pid = parts[-1]
+                # Skip invalid or system PID 0 and current process
+                if (not pid.isdigit()) or (pid == '0') or (int(pid) == os.getpid()):
+                    continue
+                if pid in seen:
+                    continue
+                seen.add(pid)
+                try:
+                    subprocess.run(['taskkill', '/PID', pid, '/F', '/T'], 
+                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    logging.info(f'Killed PID {pid} on port {cfg_port}')
+                except Exception as e:
+                    logging.error(f'Failed to kill PID {pid}: {e}')
     except Exception as e:
         logging.error(f'Error cleaning up ports: {e}')
     
@@ -599,6 +660,11 @@ def _shutdown(icon):
         logging.info('===== SHUTDOWN COMPLETE =====')
         time.sleep(0.3)
         logging.info('Terminating process...')
+        try:
+            if _PID_FILE.exists():
+                _PID_FILE.unlink()
+        except Exception:
+            pass
         os.kill(os.getpid(), signal.SIGTERM)
     except Exception:
         pass
@@ -791,15 +857,15 @@ def _build_menu(icon, host, port):
 
     # Per-server submenus
     django_server_menu = pystray.Menu(
-        pystray.MenuItem('Start', lambda: threading.Thread(target=_start_server, args=(host, port, True), daemon=True).start()),
-        pystray.MenuItem('Stop', lambda: threading.Thread(target=_stop_server, daemon=True).start()),
-        pystray.MenuItem('Restart', lambda: threading.Thread(target=lambda: (_stop_server(), time.sleep(1), _start_server(host=host, port=port, asgi=True)), daemon=True).start()),
+        pystray.MenuItem('Start', lambda: threading.Thread(target=lambda: (_start_server(host, port, True), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
+        pystray.MenuItem('Stop', lambda: threading.Thread(target=lambda: (_stop_server(), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
+        pystray.MenuItem('Restart', lambda: threading.Thread(target=lambda: (_stop_server(), time.sleep(1), _start_server(host=host, port=port, asgi=True), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
     )
 
     commcenter_menu = pystray.Menu(
-        pystray.MenuItem('Start', lambda: threading.Thread(target=_start_comm_center, daemon=True).start()),
-        pystray.MenuItem('Stop', lambda: threading.Thread(target=_stop_comm_center, daemon=True).start()),
-        pystray.MenuItem('Restart', lambda: threading.Thread(target=lambda: (_stop_comm_center(), time.sleep(1), _start_comm_center()), daemon=True).start()),
+        pystray.MenuItem('Start', lambda: threading.Thread(target=lambda: (_start_comm_center(), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
+        pystray.MenuItem('Stop', lambda: threading.Thread(target=lambda: (_stop_comm_center(), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
+        pystray.MenuItem('Restart', lambda: threading.Thread(target=lambda: (_stop_comm_center(), time.sleep(1), _start_comm_center(), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
     )
 
     wsgi_fallback_menu = pystray.Menu(
@@ -858,17 +924,45 @@ def _build_menu(icon, host, port):
             pystray.MenuItem('ACP: Enable', lambda: _run_toggle('acp','enable')),
             pystray.MenuItem('ACP: Disable', lambda: _run_toggle('acp','disable')),
             pystray.MenuItem('ACP: Set Port', lambda: (lambda v=_prompt_value('ACP Port','9001'): _run_toggle('acp','set', v))()),
-            pystray.MenuItem('ACP: Start', lambda: threading.Thread(target=_start_listener, args=('acp',), daemon=True).start()),
-            pystray.MenuItem('ACP: Stop', lambda: threading.Thread(target=_stop_listener, args=('acp',), daemon=True).start()),
-            pystray.MenuItem('ACP: Restart', lambda: threading.Thread(target=lambda: (_stop_listener('acp'), time.sleep(1), _start_listener('acp')), daemon=True).start()),
+            pystray.MenuItem('ACP: Start', lambda: threading.Thread(target=lambda: (_start_listener('acp'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
+            pystray.MenuItem('ACP: Stop', lambda: threading.Thread(target=lambda: (_stop_listener('acp'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
+            pystray.MenuItem('ACP: Restart', lambda: threading.Thread(target=lambda: (_stop_listener('acp'), time.sleep(1), _start_listener('acp'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
             pystray.MenuItem('---', pystray.Menu()),
             pystray.MenuItem('Elatec: Enable', lambda: _run_toggle('elatec','enable')),
             pystray.MenuItem('Elatec: Disable', lambda: _run_toggle('elatec','disable')),
             pystray.MenuItem('Elatec: Set COM', lambda: (lambda v=_prompt_value('Elatec COM','COM3'): _run_toggle('elatec','set', v))()),
-            pystray.MenuItem('Elatec: Start', lambda: threading.Thread(target=_start_listener, args=('elatec',), daemon=True).start()),
-            pystray.MenuItem('Elatec: Stop', lambda: threading.Thread(target=_stop_listener, args=('elatec',), daemon=True).start()),
-            pystray.MenuItem('Elatec: Restart', lambda: threading.Thread(target=lambda: (_stop_listener('elatec'), time.sleep(1), _start_listener('elatec')), daemon=True).start()),
+            pystray.MenuItem('Elatec: Start', lambda: threading.Thread(target=lambda: (_start_listener('elatec'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
+            pystray.MenuItem('Elatec: Stop', lambda: threading.Thread(target=lambda: (_stop_listener('elatec'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
+            pystray.MenuItem('Elatec: Restart', lambda: threading.Thread(target=lambda: (_stop_listener('elatec'), time.sleep(1), _start_listener('elatec'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
         )
+
+    def _recompute_status_once():
+        try:
+            try:
+                port_probe = int(_CONFIG.get('tray','port', fallback='8000'))
+            except Exception:
+                port_probe = 8000
+            srv = _is_server_running(host='127.0.0.1', port=port_probe) or (_SERVER_PROC is not None and _SERVER_PROC.poll() is None)
+            cen = _CENTER is not None
+            acp_live = _listener_running('acp')
+            el_live = _listener_running('elatec')
+            # Respect enabled flags from tray_status.json
+            st = _read_tray_status()
+            acp_en = bool(st.get('acp_enabled', True))
+            el_en = bool(st.get('elatec_enabled', True))
+            _write_tray_status(acp_live, el_live, ('PORNIT' if srv else 'OPRIT'), cen)
+            # Nudge icon tooltip immediately
+            if icon is not None:
+                tip = []
+                tip.append('ACP:' + ('ON' if acp_live else ('OPRIT' if acp_en else 'DISABLED')))
+                tip.append('Elatec:' + ('ON' if el_live else ('OPRIT' if el_en else 'DISABLED')))
+                tip.append('Server:' + ('PORNIT' if srv else 'OPRIT'))
+                tip.append('CommCenter:' + ('PORNIT' if cen else 'OPRIT'))
+                tip.append(f'Licență:{_license_status()}')
+                tip.append('Click dreapta: meniu')
+                _set_icon_title(icon, ' | '.join(tip))
+        except Exception:
+            pass
 
     return pystray.Menu(
         pystray.MenuItem('Dashboard', lambda: _open_dashboard()),
@@ -876,8 +970,8 @@ def _build_menu(icon, host, port):
         pystray.MenuItem('CommCenter', commcenter_menu),
         pystray.MenuItem('Card Readers', _card_readers_menu()),
         pystray.MenuItem('---', pystray.Menu()),  # Separator
-        pystray.MenuItem('Stop All Services', lambda: threading.Thread(target=lambda: (_stop_server(), _stop_comm_center(), _stop_listeners()), daemon=True).start()),
-        pystray.MenuItem('Start All Services', lambda: threading.Thread(target=lambda: (_start_server(host=host, port=port, asgi=True), _start_comm_center(), _start_listeners()), daemon=True).start()),
+        pystray.MenuItem('Stop All Services', lambda: threading.Thread(target=lambda: (_stop_server(), _stop_comm_center(), _stop_listeners(), time.sleep(0.2), _recompute_status_once()), daemon=True).start()),
+        pystray.MenuItem('Start All Services', lambda: threading.Thread(target=lambda: (_start_server(host=host, port=port, asgi=True), _start_comm_center(), _start_listeners(), time.sleep(0.4), _recompute_status_once()), daemon=True).start()),
         pystray.MenuItem('---', pystray.Menu()),  # Separator
         pystray.MenuItem('Ajutor (RO)', lambda: threading.Thread(target=_show_help_ro, daemon=True).start()),
         pystray.MenuItem('Admin Menu', legacy_menu),
@@ -895,7 +989,7 @@ class Command(BaseCommand):
         parser.add_argument('--poll', type=float, default=1.5, help='CommCenter poll interval seconds')
         parser.add_argument('--driver', type=str, default='stub', choices=['stub','socket','sdk','auto'], help='CommCenter driver mode')
         parser.add_argument('--no-commcenter', action='store_true', help='Skip auto start of CommCenter')
-        parser.add_argument('--status-interval', type=float, default=2.5, help='Tray tooltip update interval seconds')
+        parser.add_argument('--status-interval', type=float, default=1.0, help='Tray tooltip update interval seconds')
         parser.add_argument('--auto-restart', action='store_true', help='Auto-restart server if process exits')
         parser.add_argument('--progress-test', action='store_true', help='Show a short demo progress window then exit')
         parser.add_argument('--self-test', action='store_true', help='Run tray diagnostics and exit')
@@ -904,6 +998,23 @@ class Command(BaseCommand):
         if pystray is None:
             self.stderr.write('pystray not available; install Pillow + pystray.')
             return 1
+        # Singleton guard: avoid multiple tray_agent instances
+        try:
+            if _PID_FILE.exists():
+                try:
+                    old = int(_PID_FILE.read_text().strip())
+                except Exception:
+                    old = None
+                if old and old != os.getpid():
+                    try:
+                        os.kill(old, 0)
+                        self.stdout.write(f'Tray agent already running (pid={old}); exiting.')
+                        return 0
+                    except Exception:
+                        pass
+            _PID_FILE.write_text(str(os.getpid()))
+        except Exception:
+            pass
         os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'zkeco_config.settings')
         django.setup()
         _init_logging()
@@ -928,8 +1039,12 @@ class Command(BaseCommand):
                 mode = 'ASGI' if options.get('asgi') else 'WSGI'
                 self.stdout.write(f'Started {mode} server on {host}:{port}.')
         if not options.get('no_commcenter'):
-            threading.Thread(target=_start_comm_center, args=(options['poll'], options['driver']), daemon=True).start()
-            self.stdout.write('CommCenter thread starting...')
+            try:
+                _start_comm_center(poll_interval=options['poll'], driver=options['driver'])
+                self.stdout.write('CommCenter started.')
+                self.stdout.flush()
+            except Exception as e:
+                self.stderr.write(f'CommCenter start failed: {e}')
         if options.get('progress_test'):
             # Demo progress: create temp file ~5MB and copy to another temp location
             import tempfile
@@ -967,6 +1082,25 @@ class Command(BaseCommand):
 
         def _status_loop(icon_ref):
             global _LAST_ICON_STATE
+            logging.info('Status loop started')
+            # Wait until the icon is actually visible, then force an immediate update
+            for _ in range(50):  # up to ~5s
+                try:
+                    if getattr(icon_ref, 'visible', False):
+                        break
+                except Exception:
+                    pass
+                time.sleep(0.1)
+            try:
+                # First update as soon as tray is visible
+                st0 = _read_tray_status()
+                srv0 = (st0.get('server') or '').upper()
+                acp0 = _listener_running('acp')
+                el0 = _listener_running('elatec')
+                cen0 = _CENTER is not None
+                _write_tray_status(acp0, el0, ('PORNIT' if _is_server_running('127.0.0.1', int(_CONFIG.get('tray','port', fallback='8000'))) else ('PORNESTE' if srv0=='PORNESTE' else 'OPRIT')), cen0)
+            except Exception:
+                pass
             while not _STOP_EVENT.is_set():
                 try:
                     # Prefer state provided by tray_launch.ps1 if present
@@ -984,6 +1118,13 @@ class Command(BaseCommand):
                     if not server_running:
                         server_running = _SERVER_PROC is not None and _SERVER_PROC.poll() is None
                     center_running = _CENTER is not None
+                    # Ensure CommCenter is started if server is running but center stopped
+                    if (not center_running) and server_running and (not options.get('no_commcenter')):
+                        try:
+                            _start_comm_center(poll_interval=options['poll'], driver=options['driver'])
+                            center_running = _CENTER is not None
+                        except Exception:
+                            pass
                     # Live reader state from processes (ground truth)
                     acp_live = _listener_running('acp')
                     el_live = _listener_running('elatec')
@@ -994,10 +1135,54 @@ class Command(BaseCommand):
                         cfg = _read_listeners_config()
                         acp_cfg = (cfg or {}).get('acp') or {}
                         el_cfg = (cfg or {}).get('elatec') or {}
-                        acp_en = bool(acp_cfg.get('enabled', True))
-                        el_en = bool(el_cfg.get('enabled', True))
-                        tip.append('ACP:' + ('ON' if acp_live else ('OFF' + (f" (:{acp_cfg.get('port') or 9001}?)" if acp_en else ''))))
-                        tip.append('Elatec:' + ('ON' if el_live else ('OFF' + (f" ({el_cfg.get('port') or 'COM?'}?)" if el_en else ''))))
+                        st = _read_tray_status()
+                        acp_en = bool(st.get('acp_enabled', acp_cfg.get('enabled', True)))
+                        el_en = bool(st.get('elatec_enabled', el_cfg.get('enabled', True)))
+                        # Hardware-aware check: detect Elatec COM presence and override enabled flag
+                        com_present = True
+                        try:
+                            import subprocess as _sp
+                            com_port = str(el_cfg.get('port','COM3'))
+                            cmd = ['powershell','-ExecutionPolicy','Bypass','-Command', "(Get-CimInstance Win32_SerialPort | Select-Object -ExpandProperty DeviceID) -join ','"]
+                            r = _sp.run(cmd, capture_output=True, text=True)
+                            ports = (r.stdout or '').strip().split(',') if r.returncode == 0 else []
+                            com_present = (not com_port) or (com_port in ports)
+                            if not com_present:
+                                el_en = False
+                        except Exception:
+                            # If COM detection fails, keep previous el_en value
+                            pass
+                        # Auto-restart listeners if enabled but not live
+                        try:
+                            if acp_en and not acp_live:
+                                logging.info('ACP listener down; attempting auto-restart')
+                                _start_listener('acp')
+                                time.sleep(0.2)
+                                acp_live = _listener_running('acp')
+                            # Elatec only if enabled AND COM present
+                            if el_en and com_present and not el_live:
+                                logging.info('Elatec listener down; attempting auto-restart')
+                                _start_listener('elatec')
+                                time.sleep(0.2)
+                                el_live = _listener_running('elatec')
+                        except Exception:
+                            pass
+                        # Heartbeat ages for diagnostics
+                        def _hb_age(path):
+                            try:
+                                d = json.loads(Path(path).read_text(encoding='utf-8'))
+                                ts = float(d.get('ts') or 0)
+                                return max(0, int(time.time() - ts))
+                            except Exception:
+                                return None
+                        acp_age = _hb_age(str(Path.home() / 'zkeco_reader_heartbeat_acp.json'))
+                        el_age = _hb_age(str(Path.home() / 'zkeco_reader_heartbeat_elatec.json'))
+                        tip.append('ACP:' + ('ON' if acp_live else ('OPRIT' if acp_en else 'DISABLED')))
+                        tip.append('Elatec:' + ('ON' if el_live else ('OPRIT' if el_en else 'DISABLED')))
+                        if acp_age is not None:
+                            tip.append(f"ACP HB:{acp_age}s")
+                        if el_age is not None:
+                            tip.append(f"Elatec HB:{el_age}s")
                     except Exception:
                         pass
                     # Append last card read and access evaluation status
@@ -1023,17 +1208,19 @@ class Command(BaseCommand):
                         tip.append(f"Dispozitive {online}/{total}")
                         tip.append(f"Cicluri {_CENTER.cycles}")
                         tip.append(f"RT {_CENTER.total_rtlog_lines}")
-                    tip.append('Server:' + ( 'PORNIT' if server_running else ('PORNEȘTE' if srv_state=='PORNESTE' else 'OPRIT') ))
-                    tip.append('CommCenter:' + ('PORNEȘTE' if center_running else 'OPRIT'))
+                    tip.append('Server:' + ( 'PORNIT' if server_running else ('PORNESTE' if srv_state=='PORNESTE' else 'OPRIT') ))
+                    tip.append('CommCenter:' + ('PORNIT' if center_running else 'OPRIT'))
                     tip.append(f'Licență:{_license_status()}')
                     tip.append('Click dreapta: meniu')
-                    icon_ref.title = ' | '.join(tip)
+                    _set_icon_title(icon_ref, ' | '.join(tip))
                     state = (server_running, center_running, any_running, color_json if use_json else None, acp_live, el_live)
                     if state != _LAST_ICON_STATE:
+                        logging.info('State change: srv=%s, cen=%s, acp=%s, el=%s', server_running, center_running, acp_live, el_live)
                         # Derive color: green when required services running
                         cfg = _read_listeners_config()
-                        acp_en = bool(((cfg or {}).get('acp') or {}).get('enabled', True))
-                        el_en = bool(((cfg or {}).get('elatec') or {}).get('enabled', True))
+                        st2 = _read_tray_status()
+                        acp_en = bool(st2.get('acp_enabled', ((cfg or {}).get('acp') or {}).get('enabled', True)))
+                        el_en = bool(st2.get('elatec_enabled', ((cfg or {}).get('elatec') or {}).get('enabled', True)))
                         all_on = server_running and center_running and ((not acp_en) or acp_live) and ((not el_en) or el_live)
                         if all_on:
                             color = (46,204,113)
@@ -1066,12 +1253,22 @@ class Command(BaseCommand):
                 except Exception:
                     _STOP_EVENT.wait(5.0)
 
-        icon = pystray.Icon('zkeco_access', _build_icon(color=_choose_icon_color(False, False)), 'Access Control', menu=_build_menu(None, host, port))
+        # Clear, unique tooltip to confirm the correct agent is running
+        icon = pystray.Icon('zkeco_access', _build_icon(color=_choose_icon_color(False, False)), 'Access Control — Django Tray Agent', menu=_build_menu(None, host, port))
         icon.menu = _build_menu(icon, host, port)
+        # Immediate recompute before entering the GUI loop
+        try:
+            _recompute_status_once()
+            time.sleep(0.3)
+            _recompute_status_once()
+        except Exception:
+            pass
         threading.Thread(target=_status_loop, args=(icon,), daemon=True).start()
         if options.get('auto_restart'):
             threading.Thread(target=_restart_loop, daemon=True).start()
         self.stdout.write('Tray icon active. Right-click for menu.')
+        self.stdout.write(f'Using management command at: {__file__}')
+        self.stdout.flush()
         
         # Wrap icon.run() with exception handling and cleanup
         try:

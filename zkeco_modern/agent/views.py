@@ -1,5 +1,6 @@
 import os
 from django.http import JsonResponse, HttpRequest, HttpResponse
+from django.views.decorators.csrf import csrf_exempt
 from django.shortcuts import render
 from django.utils import timezone
 from django.db.models import Max
@@ -141,6 +142,92 @@ def metrics(request: HttpRequest):
         "event_total": DeviceEventLog.objects.count(),
         "heartbeat": hb,
     })
+
+
+# ===================== Card Readers Config/Status API =====================
+def _readers_cfg_path():
+    import pathlib
+    base_dir = pathlib.Path(__file__).resolve().parent.parent  # zkeco_modern
+    return (base_dir.parent / 'scripts' / 'card_readers.json')
+
+
+def _tray_status_path():
+    import pathlib
+    base_dir = pathlib.Path(__file__).resolve().parent.parent
+    return base_dir.parent / 'tray_status.json'
+
+
+def _read_json_safe(p):
+    try:
+        import json, pathlib
+        pp = pathlib.Path(p)
+        if pp.exists():
+            return json.loads(pp.read_text(encoding='utf-8')) or {}
+    except Exception:
+        pass
+    return {}
+
+
+def _write_json_safe(p, data):
+    try:
+        import json, pathlib, os
+        pp = pathlib.Path(p)
+        pp.parent.mkdir(parents=True, exist_ok=True)
+        tmp = pp.with_suffix('.tmp')
+        tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
+        try:
+            if pp.exists():
+                pp.unlink()
+        except Exception:
+            pass
+        tmp.replace(pp)
+        return True
+    except Exception:
+        return False
+
+
+@csrf_exempt
+def readers_config(request: HttpRequest):
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': 'unauth'}, status=403)
+    cfg_path = _readers_cfg_path()
+    if request.method == 'GET':
+        cfg = _read_json_safe(cfg_path) or {"acp": {"enabled": True, "port": 9001, "name": "ACP TCP"},
+                                           "elatec": {"enabled": True, "port": "COM3", "name": "Elatec Serial"}}
+        st = _read_json_safe(_tray_status_path())
+        return JsonResponse({'ok': True, 'config': cfg, 'status': {
+            'acp': st.get('acp'), 'elatec': st.get('elatec'),
+            'acp_enabled': st.get('acp_enabled', True), 'elatec_enabled': st.get('elatec_enabled', True)
+        }})
+    # POST -> update config and enabled flags
+    try:
+        import json
+        body = json.loads(request.body.decode('utf-8') or '{}')
+    except Exception:
+        body = {}
+    cfg = _read_json_safe(cfg_path)
+    for key in ('acp','elatec'):
+        if key in body and isinstance(body[key], dict):
+            cur = cfg.get(key, {})
+            cur.update({k: body[key].get(k, cur.get(k)) for k in ('enabled','port','name')})
+            cfg[key] = cur
+    ok = _write_json_safe(cfg_path, cfg)
+    # Update tray_status enabled flags for immediate UI feedback
+    st = _read_json_safe(_tray_status_path())
+    if 'acp' in body and isinstance(body['acp'], dict) and 'enabled' in body['acp']:
+        st['acp_enabled'] = bool(body['acp']['enabled'])
+    if 'elatec' in body and isinstance(body['elatec'], dict) and 'enabled' in body['elatec']:
+        st['elatec_enabled'] = bool(body['elatec']['enabled'])
+    _write_json_safe(_tray_status_path(), st)
+    return JsonResponse({'ok': ok, 'config': cfg})
+
+
+def readers_status(request: HttpRequest):
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': 'unauth'}, status=403)
+    st = _read_json_safe(_tray_status_path())
+    cfg = _read_json_safe(_readers_cfg_path())
+    return JsonResponse({'ok': True, 'status': st, 'config': cfg})
 
 
 def monitor(request: HttpRequest):
@@ -1163,6 +1250,369 @@ def issuecard_reissue(request: HttpRequest, pk: int):
         return JsonResponse({'ok': True,'valid_until': obj.valid_until,'status': obj.cardstatus})
     except Exception as e:
         return JsonResponse({'ok': False,'error': str(e)}, status=400)
+
+# --- Modern JSON endpoints for IssueCards used by Personnel UI ---
+def issuecards_json_list(request: HttpRequest):
+    if not request.user.is_authenticated:
+        return JsonResponse({'items': []})
+    # Combine: primary/secondary from Employee model + additional from EmployeeCard
+    items = []
+    from .models import Employee as AgentEmployee
+    emps = AgentEmployee.objects.all().only('id','legacy_userid','first_name','last_name','card_number','secondary_card_number')
+    for e in emps:
+        full_name = f"{getattr(e,'last_name','')} {getattr(e,'first_name','')}".strip()
+        if getattr(e,'card_number', None):
+            items.append({
+                'id': f"emp:{e.id}:primary",
+                'card_number': e.card_number,
+                'employee_name': full_name,
+                'userid': getattr(e,'legacy_userid', None),
+                'slot': 'primary',
+                'status': 'Active',
+                'issue_date': None,
+                'valid_until': None,
+            })
+        if getattr(e,'secondary_card_number', None):
+            items.append({
+                'id': f"emp:{e.id}:secondary",
+                'card_number': e.secondary_card_number,
+                'employee_name': full_name,
+                'userid': getattr(e,'legacy_userid', None),
+                'slot': 'secondary',
+                'status': 'Active',
+                'issue_date': None,
+                'valid_until': None,
+            })
+    # Additional cards
+    qs = EmployeeCard.objects.select_related('employee').order_by('id')
+    for x in qs[:1000]:
+        name = f"{getattr(x.employee,'last_name','')} {getattr(x.employee,'first_name','')}".strip() if getattr(x,'employee',None) else ''
+        items.append({
+            'id': x.id,
+            'card_number': x.card_number,
+            'employee_name': name,
+            'userid': getattr(x.employee,'legacy_userid', None) if getattr(x,'employee',None) else None,
+            'slot': 'additional',
+            'status': 'Active',
+            'issue_date': getattr(x,'created_at', None).isoformat() if hasattr(x,'created_at') and x.created_at else None,
+            'valid_until': getattr(x,'valid_until', None),
+        })
+    return JsonResponse({'items': items})
+
+def issuecards_json_search(request: HttpRequest):
+    q = request.GET.get('q','').strip()
+    if not q:
+        return JsonResponse([], safe=False)
+    qs = EmployeeCard.objects.filter(card_number__icontains=q).order_by('id')[:50]
+    return JsonResponse([{'id':c.id,'card_number':c.card_number} for c in qs], safe=False)
+
+def issuecard_json_detail(request: HttpRequest, pk: str):
+    # Support synthetic IDs for employee primary/secondary slots: emp:<id>:primary|secondary
+    sid = str(pk)
+    if sid.startswith("emp:"):
+        try:
+            _, emp_id, slot = sid.split(":")
+            from .models import Employee as AgentEmployee
+            e = AgentEmployee.objects.get(pk=int(emp_id))
+            full_name = f"{getattr(e,'last_name','')} {getattr(e,'first_name','')}".strip()
+            num = getattr(e, 'card_number' if slot=='primary' else 'secondary_card_number')
+            return JsonResponse({
+                'id': sid,
+                'card_number': num,
+                'site_code': '',
+                'employee': e.id,
+                'employee_name': full_name,
+                'valid_until': None,
+                'slot': slot,
+            })
+        except Exception:
+            return JsonResponse({'ok': False, 'error': 'not-found'}, status=404)
+    else:
+        try:
+            c = EmployeeCard.objects.select_related('employee').get(pk=pk)
+            name = f"{getattr(c.employee,'last_name','')} {getattr(c.employee,'first_name','')}".strip() if getattr(c,'employee',None) else ''
+            return JsonResponse({
+                'id': c.id,
+                'card_number': c.card_number,
+                'site_code': getattr(c,'site_code',''),
+                'employee': getattr(c.employee,'id', None) if getattr(c,'employee',None) else None,
+                'employee_name': name,
+                'valid_until': getattr(c,'valid_until', None),
+                'slot': 'additional',
+            })
+        except EmployeeCard.DoesNotExist:
+            return JsonResponse({'ok': False, 'error': 'not-found'}, status=404)
+
+def issuecard_json_create(request: HttpRequest):
+    if request.method != 'POST' or not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False,'error':'unauth'}, status=403)
+    import json
+    try:
+        payload = json.loads(request.body.decode('utf-8'))
+        emp_id = int(payload.get('employee_id'))
+        from .models import Employee as AgentEmployee
+        emp = AgentEmployee.objects.get(pk=emp_id)
+        num = payload.get('card_number','').strip()
+        if not num:
+            return JsonResponse({'ok': False,'error':'card_number required'}, status=400)
+        # Slot handling: primary/secondary update on Employee; additional creates EmployeeCard
+        slot = (payload.get('slot') or 'additional').lower()
+        if slot in ('primary','secondary'):
+            # check duplicate across all cards
+            if EmployeeCard.objects.filter(card_number__iexact=num).exists():
+                return JsonResponse({'ok': False,'error':'duplicate card_number'}, status=400)
+            from django.db.models import Q
+            if AgentEmployee.objects.filter(Q(card_number__iexact=num)|Q(secondary_card_number__iexact=num)).exclude(pk=emp_id).exists():
+                return JsonResponse({'ok': False,'error':'duplicate card_number'}, status=400)
+            if slot == 'primary':
+                emp.card_number = num
+            else:
+                emp.secondary_card_number = num
+            emp.save()
+            entity_id = f"emp:{emp.id}:{slot}"
+        else:
+            if EmployeeCard.objects.filter(card_number__iexact=num).exists():
+                return JsonResponse({'ok': False,'error':'duplicate card_number'}, status=400)
+            c = EmployeeCard.objects.create(employee=emp, card_number=num, site_code=payload.get('site_code',''))
+            entity_id = c.id
+        try:
+            AuditLog.objects.create(module='issuecard', action='create', entity_id=entity_id, entity_name=num, user=getattr(request.user,'username',None), details=f"slot={slot}")
+        except Exception:
+            pass
+        return JsonResponse({'ok': True, 'id': entity_id})
+    except Exception as e:
+        return JsonResponse({'ok': False,'error': str(e)}, status=400)
+
+def issuecard_json_update(request: HttpRequest, pk: str):
+    if request.method != 'POST' or not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False,'error':'unauth'}, status=403)
+    import json
+    try:
+        sid = str(pk)
+        payload = json.loads(request.body.decode('utf-8'))
+        num = payload.get('card_number','').strip()
+        if not num:
+            return JsonResponse({'ok': False,'error':'card_number required'}, status=400)
+        # If synthetic id (employee slot)
+        if sid.startswith('emp:'):
+            _, emp_id, slot = sid.split(':')
+            from .models import Employee as AgentEmployee
+            from django.db.models import Q
+            if EmployeeCard.objects.filter(card_number__iexact=num).exists():
+                return JsonResponse({'ok': False,'error':'duplicate card_number'}, status=400)
+            if AgentEmployee.objects.filter(Q(card_number__iexact=num)|Q(secondary_card_number__iexact=num)).exclude(pk=int(emp_id)).exists():
+                return JsonResponse({'ok': False,'error':'duplicate card_number'}, status=400)
+            e = AgentEmployee.objects.get(pk=int(emp_id))
+            if slot == 'primary':
+                e.card_number = num
+            else:
+                e.secondary_card_number = num
+            e.save()
+            entity_id = sid
+        else:
+            c = EmployeeCard.objects.get(pk=pk)
+            if EmployeeCard.objects.filter(card_number__iexact=num).exclude(pk=pk).exists():
+                return JsonResponse({'ok': False,'error':'duplicate card_number'}, status=400)
+            c.card_number = num
+            emp_id = payload.get('employee_id')
+            if emp_id:
+                try:
+                    from .models import Employee as AgentEmployee
+                    emp = AgentEmployee.objects.get(pk=int(emp_id))
+                    c.employee = emp
+                except Exception:
+                    return JsonResponse({'ok': False,'error':'employee not found'}, status=400)
+            c.site_code = payload.get('site_code','')
+            c.save()
+            entity_id = c.id
+        try:
+            AuditLog.objects.create(module='issuecard', action='update', entity_id=entity_id, entity_name=num, user=getattr(request.user,'username',None), details='')
+        except Exception:
+            pass
+        return JsonResponse({'ok': True})
+    except EmployeeCard.DoesNotExist:
+        return JsonResponse({'ok': False,'error':'not-found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'ok': False,'error': str(e)}, status=400)
+
+from django.core.cache import cache
+
+def card_read_push(request: HttpRequest):
+    # Hardware or external services POST here the latest read card
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'method'}, status=405)
+    import json
+    try:
+        payload = json.loads(request.body.decode('utf-8'))
+        card_number = (payload.get('card_number') or '').strip()
+        source = (payload.get('source') or 'unknown').strip()
+        if not card_number:
+            return JsonResponse({'ok': False, 'error': 'card_number required'}, status=400)
+        cache.set('agent:last_card_read', {'card_number': card_number, 'source': source}, timeout=60)
+        return JsonResponse({'ok': True})
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=400)
+
+def card_read_wait(request: HttpRequest):
+    # UI polls this for up to a short timeout to get the last card read
+    from time import sleep
+    tries = 10
+    while tries > 0:
+        data = cache.get('agent:last_card_read')
+        if data:
+            # Clear after read
+            cache.delete('agent:last_card_read')
+            return JsonResponse({'ok': True, 'card_number': data.get('card_number'), 'source': data.get('source')})
+        sleep(1)
+        tries -= 1
+    return JsonResponse({'ok': False, 'error': 'timeout'}, status=408)
+
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def listener_error(request: HttpRequest):
+    """Record listener error in cache for tray tooltip visibility.
+    Cache key: agent:listener_error:<name>
+    """
+    import json
+    try:
+        data = json.loads(request.body.decode('utf-8')) if request.body else {}
+        name = str(data.get('name') or '').strip().lower()
+        msg = str(data.get('message') or '').strip()
+        if name:
+            cache.set(f'agent:listener_error:{name}', msg, timeout=3600)
+        return JsonResponse({'ok': True})
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=400)
+
+def access_evaluate_and_open(request: HttpRequest):
+    # Evaluate a pushed card and open a door if allowed
+    if request.method != 'POST' or not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': 'unauth'}, status=403)
+    import json
+    try:
+        payload = json.loads(request.body.decode('utf-8'))
+        card_number = (payload.get('card_number') or '').strip()
+        source = (payload.get('source') or 'unknown').strip()
+        device_id = payload.get('device_id')
+        door_id = payload.get('door_id')
+        door_pk = payload.get('door_pk')
+        if not card_number:
+            return JsonResponse({'ok': False, 'error': 'card_number required'}, status=400)
+        # Resolve employee by card (primary/secondary or additional EmployeeCard)
+        from django.db.models import Q
+        from django.utils import timezone
+        from .models import Employee as AgentEmployee, EmployeeCard, Door, AccessLevel, TimeSegment, Holiday, EmployeeAccessCache
+        emp = AgentEmployee.objects.filter(Q(card_number__iexact=card_number)|Q(secondary_card_number__iexact=card_number)).first()
+        if not emp:
+            emp_card = EmployeeCard.objects.select_related('employee').filter(card_number__iexact=card_number).first()
+            emp = getattr(emp_card, 'employee', None)
+        # Determine door
+        door = None
+        if door_pk:
+            try:
+                door = Door.objects.filter(pk=int(door_pk)).first()
+            except Exception:
+                door = None
+        elif device_id and door_id:
+            try:
+                door = Door.objects.filter(device_id=int(device_id), name__iexact=str(door_id)).first()
+            except Exception:
+                door = None
+        now = timezone.localtime()
+        today = now.date()
+        weekday_index = (now.weekday())  # 0=Mon .. 6=Sun
+        reasons = []
+        allowed = False
+        if not emp:
+            reasons.append('no_employee_for_card')
+        elif not emp.active:
+            reasons.append('employee_inactive')
+        elif door is None:
+            reasons.append('door_not_resolved')
+        else:
+            # Date validity window
+            if (emp.acc_startdate and today < emp.acc_startdate) or (emp.acc_enddate and today > emp.acc_enddate):
+                reasons.append('outside_employee_validity')
+            # Holiday block
+            if Holiday.objects.filter(date=today).exists():
+                reasons.append('holiday_block')
+            # Access levels: door must be included and current time within any assigned segment
+            levels = emp.access_levels.all()
+            if not levels.exists():
+                reasons.append('no_access_levels')
+            else:
+                # Door included?
+                door_included = AccessLevel.objects.filter(pk__in=levels.values('pk'), doors=door).exists()
+                if not door_included:
+                    reasons.append('door_not_in_access_levels')
+                else:
+                    # Time permitted?
+                    segments = TimeSegment.objects.filter(pk__in=AccessLevel.objects.filter(pk__in=levels.values('pk')).values('time_segments')).distinct()
+                    current_ok = False
+                    for seg in segments:
+                        try:
+                            if (seg.days_mask & (1 << weekday_index)) and (seg.start_time <= now.time() <= seg.end_time):
+                                current_ok = True
+                                break
+                        except Exception:
+                            pass
+                    if not current_ok:
+                        reasons.append('outside_time_segments')
+                    else:
+                        allowed = True
+        # Cache result for quick tray status
+        try:
+            cache.set('agent:last_access_eval', {
+                'ok': allowed,
+                'card_number': card_number,
+                'employee_id': getattr(emp, 'id', None),
+                'door_id': getattr(door, 'id', None),
+                'source': source,
+                'reasons': reasons,
+                'ts': now.isoformat(),
+            }, timeout=60)
+        except Exception:
+            pass
+        # Persist cache per employee+door for debugging and display
+        try:
+            if emp and door:
+                EmployeeAccessCache.objects.update_or_create(employee=emp, door=door, defaults={'allowed': allowed, 'reason': (reasons[0] if reasons else 'ok')})
+        except Exception:
+            pass
+        # Attempt door open if allowed
+        if allowed:
+            try:
+                if door_pk:
+                    return door_pk_open(request, int(door_pk))
+                if device_id and door_id:
+                    return door_open(request, int(device_id), str(door_id))
+            except Exception:
+                reasons.append('door_open_failed')
+        return JsonResponse({'ok': allowed, 'employee': getattr(emp,'id', None), 'door': getattr(door,'id', None), 'source': source, 'reasons': reasons})
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=400)
+
+def employees_json_list(request: HttpRequest):
+    if not request.user.is_authenticated:
+        return JsonResponse({'items': []})
+    try:
+        qs = Employee.objects.order_by('last_name','first_name').only('id','legacy_userid','first_name','last_name','card_number','secondary_card_number')
+        items = []
+        for e in qs:
+            items.append({
+                'id': e.id,
+                'legacy_userid': getattr(e,'legacy_userid', None),
+                'first_name': getattr(e,'first_name','') or '',
+                'last_name': getattr(e,'last_name','') or '',
+                'card_number': getattr(e,'card_number', None),
+                'secondary_card_number': getattr(e,'secondary_card_number', None),
+            })
+        return JsonResponse({'items': items})
+    except Exception as ex:
+        return JsonResponse({'items': [], 'error': str(ex)}, status=500)
 
 def access_logs_list(request: HttpRequest):
     if not request.user.is_authenticated:

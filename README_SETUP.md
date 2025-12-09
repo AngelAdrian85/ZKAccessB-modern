@@ -200,6 +200,49 @@ $python = ".\.venv\Scripts\python.exe"
 
 ---
 
+## 🧲 Card Readers Integration
+
+### UI Scan Flow
+- In Personnel → Carduri, the "🔎 Citește Card" button polls `GET /agent/api/cards/read/wait/` for ~10s.
+- Any external reader should push the latest read to `POST /agent/api/cards/read/push/` with JSON:
+  `{ "card_number": "<value>", "source": "acp|elatec|serial" }`.
+
+### ACP-100/200/400 TCP Listener
+- Script: `scripts/card_reader_acp.py`
+- Usage:
+  ```powershell
+  .\.venv\Scripts\Activate.ps1
+  python scripts/card_reader_acp.py 9001
+  ```
+- Protocol: one line per read: `CARD:<number>` or JSON `{"card":"..."}`.
+
+### Elatec LF/HF Serial Listener
+- Script: `scripts/card_reader_elatec.py`
+- Requires `pyserial`:
+  ```powershell
+  .\.venv\Scripts\Activate.ps1
+  pip install pyserial
+  ```
+- Usage:
+  ```powershell
+  python scripts/card_reader_elatec.py COM3
+  ```
+- Expected line format from reader: either `CARD:<number>` or raw `<number>`.
+
+### CommCenter / Tray Controls
+- Configure listeners via `scripts/card_readers.json` or helper script:
+  ```powershell
+  # Enable ACP and set port 9010
+  powershell -ExecutionPolicy Bypass -File scripts\toggle_listeners.ps1 -Target acp -Action enable
+  powershell -ExecutionPolicy Bypass -File scripts\toggle_listeners.ps1 -Target acp -Action set -Value 9010
+
+  # Disable Elatec
+  powershell -ExecutionPolicy Bypass -File scripts\toggle_listeners.ps1 -Target elatec -Action disable
+  ```
+- Restart tray to apply: `powershell -ExecutionPolicy Bypass -File tray_launch.ps1`
+
+---
+
 ## ⚡ Performance Tips
 
 1. **First run takes longer** (5-10 min) - Normal, lots to install

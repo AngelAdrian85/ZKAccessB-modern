@@ -14,6 +14,7 @@ zkeco_new/venv/
 zkeco_modern/venv/
 zkeco_new/venv/Lib/
 zkeco_new/venv/Scripts/
+.venv_new/
 
 # Distribution / packaging
 dist/
@@ -28,6 +29,7 @@ local_settings.py
 db.sqlite3
 media/
 staticfiles/
+tray_status.json
 
 # OS files
 .DS_Store

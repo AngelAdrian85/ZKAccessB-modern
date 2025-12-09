@@ -1,7 +1,7 @@
 Param(
   [int]$Port = 8000,
   [string]$Settings = 'zkeco_config.settings',
-  [string]$Venv = '.venv_new',
+  [string]$Venv = '.venv',
   [switch]$SelfTest,
   [switch]$NoCommCenter,
   [switch]$WSGI
@@ -29,13 +29,79 @@ try {
     }
   }
 } catch {}
-# Prefer existing .venv if present and target venv python missing
-if( (Test-Path '.venv') -and -not (Test-Path "$Venv\Scripts\python.exe") ) { $Venv = '.venv' }
+
+# Extra cleanup: kill any leftover card reader scripts started outside this session
+try {
+  Write-Host "[TRAY] Cleaning up leftover card reader listeners"
+  $targets = @('card_reader_acp.py','card_reader_elatec.py')
+  foreach($name in $targets){
+    try {
+      Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*$name*" } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} }
+    } catch {}
+  }
+} catch {}
+# Prefer the standard .venv if present; else fallback to .venv_new
+if( -not (Test-Path $Venv) ){
+  if(Test-Path '.venv') { $Venv = '.venv' }
+  elseif(Test-Path '.venv_new') { $Venv = '.venv_new' }
+}
 Write-Host "[TRAY] Preparing environment (quiet pip)"
 if(!(Test-Path "$Venv\Scripts\python.exe")){
   py -3 -m venv $Venv; if($LASTEXITCODE -ne 0){ Write-Error 'venv failed'; exit 1 }
 }
 $py = Join-Path $Venv 'Scripts/python.exe'
+
+# Ensure virtual environment is activated for the current session
+try {
+  $activate = Join-Path $Venv 'Scripts/Activate.ps1'
+  if (Test-Path $activate) {
+    Write-Host "[TRAY] Activating virtual environment: $Venv"
+    . $activate
+    # Robust activation: set PATH and VIRTUAL_ENV explicitly
+    try {
+      $env:VIRTUAL_ENV = (Resolve-Path $Venv).Path
+      $scriptsPath = (Join-Path (Resolve-Path $Venv).Path 'Scripts')
+      if($env:Path -notlike "*$scriptsPath*"){
+        $env:Path = "$scriptsPath;" + $env:Path
+      }
+    } catch {}
+    # Guard: kill any non-venv tray_agent/daphne/runserver processes
+    try {
+      Write-Host "[TRAY] Guarding against non-venv processes"
+      $venvPy = Join-Path $scriptsPath 'python.exe'
+      $procList = Get-CimInstance Win32_Process
+      $toKill = @()
+      $workspaceRoot = (Resolve-Path $PWD).Path
+      foreach($p in $procList){
+        $cmd = $p.CommandLine
+        if([string]::IsNullOrEmpty($cmd)){ continue }
+        $isAgent = ($cmd -like "*manage.py* tray_agent*")
+        $isDaphne = ($cmd -like "*-m daphne*")
+        $isRunserver = ($cmd -like "*manage.py* runserver*")
+        $isLegacyAgent = ($cmd -like "*zkeco_modern*tray_agent.py*") -or ($cmd -like "* tray_agent.py*")
+        if($isAgent -or $isDaphne -or $isRunserver){
+          $usesVenv = ($cmd -like "*$venvPy*")
+          if(-not $usesVenv){ $toKill += $p.ProcessId }
+        }
+        # Always kill legacy standalone tray_agent.py started anywhere under this workspace
+        if($isLegacyAgent){
+          try {
+            if($cmd -like "*$workspaceRoot*"){
+              $toKill += $p.ProcessId
+            }
+          } catch {}
+        }
+      }
+      foreach($pid in ($toKill | Sort-Object -Unique)){
+        try { Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue; Write-Host "[TRAY] Killed non-venv PID $pid" } catch {}
+      }
+    } catch {}
+  } else {
+    Write-Warning "[TRAY] Activate.ps1 not found in $Venv; continuing with direct python path"
+  }
+} catch {
+  Write-Warning "[TRAY] Failed to activate venv: $_"
+}
 
 # Upgrade pip quietly (suppress normal output, keep errors)
 Write-Host "[TRAY] Upgrading pip (quiet)"
@@ -60,6 +126,8 @@ function Write-TrayStatusJson {
     acp      = if($AcpOn){'ON'}else{'OPRIT'}
     elatec   = if($ElatecOn){'ON'}else{'OPRIT'}
     server   = $ServerState  # PORNESTE | OPRIT | PORNIT
+    acp_enabled    = $true
+    elatec_enabled = $true
   }
   $color = 'red'
   if($status.acp -eq 'ON' -and $status.elatec -eq 'ON' -and $status.server -eq 'PORNIT'){
@@ -90,7 +158,7 @@ try {
     }
     if ($acpEnabled) {
       Write-Host "[TRAY] Starting ACP listener on port $acpPort"
-      $p = Start-Process -FilePath $py -ArgumentList $acpScript, $acpPort -PassThru -WindowStyle Minimized
+      $p = Start-Process -FilePath $py -ArgumentList $acpScript, $acpPort -PassThru -WindowStyle Hidden
       if ($p) { $global:TrayChildPids += $p.Id }
     } else {
       Write-Host "[TRAY] ACP listener disabled via config"
@@ -118,7 +186,7 @@ try {
     if ($elatecEnabled) {
       Write-Host "[TRAY] Starting Elatec serial listener on $elatecPort"
       try {
-        $p2 = Start-Process -FilePath $py -ArgumentList $elatecScript, $elatecPort -PassThru -WindowStyle Minimized
+        $p2 = Start-Process -FilePath $py -ArgumentList $elatecScript, $elatecPort -PassThru -WindowStyle Hidden
         if ($p2) { $global:TrayChildPids += $p2.Id }
       } catch {
         Write-Warning "[ELATEC] Failed to start on '$elatecPort': $_"; $elatecEnabled = $false
@@ -132,7 +200,22 @@ try {
 }
 
 # Initial status: readers based on enable flags, server getting ready
-try { Write-TrayStatusJson -AcpOn:$acpEnabled -ElatecOn:$elatecEnabled -ServerState 'PORNESTE' } catch {}
+try {
+  # Persist enabled flags into status for tray_agent to respect
+  $statusInit = [ordered]@{
+    acp            = if($acpEnabled){'ON'}else{'OPRIT'}
+    elatec         = if($elatecEnabled){'ON'}else{'OPRIT'}
+    server         = 'PORNESTE'
+    acp_enabled    = $acpEnabled
+    elatec_enabled = $elatecEnabled
+    commcenter     = 'PORNESTE'
+  }
+  # Color: treat disabled readers as satisfied
+  $allReadersOk = (($statusInit.acp_enabled -eq $false) -or ($statusInit.acp -eq 'ON')) -and (($statusInit.elatec_enabled -eq $false) -or ($statusInit.elatec -eq 'ON'))
+  $colorInit = if(($statusInit.server -eq 'PORNIT') -and $allReadersOk){ 'green' } elseif(($statusInit.server -eq 'PORNIT') -or $allReadersOk){ 'yellow' } else { 'red' }
+  $statusInit.color = $colorInit
+  Set-Content -Path (Join-Path $PWD 'tray_status.json') -Value ($statusInit | ConvertTo-Json -Depth 3) -Encoding UTF8
+} catch {}
 
 # Automatic Django migration check & apply
 Write-Host "[TRAY] Checking migrations"
@@ -171,68 +254,25 @@ Write-Host "[TRAY] Launching tray agent"
 $trayArgs = @()
 if($SelfTest){ $trayArgs += '--self-test' }
 if($NoCommCenter){ $trayArgs += '--no-commcenter' }
-# ASGI only if not explicitly requesting WSGI
 if(-not $WSGI){ $trayArgs += '--asgi' }
 $trayArgs += @('--driver','auto','--port',"$Port")
 Write-Host "[TRAY] Collecting static files"
 & $py $manage collectstatic --noinput > $null 2> collectstatic_errors.log
 if($LASTEXITCODE -ne 0){ Write-Warning "[TRAY] collectstatic reported errors; see collectstatic_errors.log" }
 Write-Host "[TRAY] Starting tray agent"
+# Run tray_agent in the foreground so actions are visible in terminal
 try {
-  $trayProc = Start-Process -FilePath $py -ArgumentList (@('zkeco_modern/manage.py','tray_agent') + $trayArgs) -PassThru -WindowStyle Minimized -WorkingDirectory $PWD
-  if ($trayProc -and $trayProc.HasExited -eq $false) {
-    try { Write-TrayStatusJson -AcpOn:$acpEnabled -ElatecOn:$elatecEnabled -ServerState 'PORNIT' } catch {}
+  # Write initial running status before handing off
+  $statusRun = [ordered]@{
+    acp            = if($acpEnabled){'ON'}else{'OPRIT'}
+    elatec         = if($elatecEnabled){'ON'}else{'OPRIT'}
+    server         = 'PORNIT'
+    acp_enabled    = $acpEnabled
+    elatec_enabled = $elatecEnabled
+    commcenter     = 'PORNESTE'
   }
-  # Wait until tray agent exits (blocking monitor)
-  if ($trayProc) { $trayProc.WaitForExit() }
-  $exitCode = if($trayProc){ $trayProc.ExitCode } else { $LASTEXITCODE }
-} catch {
-  Write-Error "[TRAY] Failed to start tray_agent: $_"
-  $exitCode = 1
-}
-
-# Cleanup after tray agent exits (regardless of exit code)
-Write-Host "[TRAY] Tray agent exited with code $exitCode, cleaning up..."
-Write-Host "[TRAY] Killing remaining processes on configured ports"
-try {
-  $configFile = Join-Path 'zkeco_modern' 'agent_controller.ini'
-  $cfgPort = $Port
-  if(Test-Path $configFile){
-    try {
-      $raw = Get-Content $configFile -ErrorAction SilentlyContinue | Select-String -Pattern '^server_port\s*=\s*(\d+)' | ForEach-Object { $_.Matches[0].Groups[1].Value } | Select-Object -First 1
-      if($raw){ $cfgPort = [int]$raw }
-    } catch {}
-  }
-  Write-Host "[TRAY] Scanning and killing processes on port $cfgPort"
-  $pids = netstat -ano 2>$null | Select-String ":$cfgPort" | ForEach-Object { ($_ -split " +")[-1] } | Sort-Object -Unique
-  # Stop card reader services
-  if ($global:TrayChildPids) {
-    Write-Host "[TRAY] Stopping card reader services"
-    foreach($pid in $global:TrayChildPids){
-      try { Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue } catch {}
-    }
-  }
-  foreach($pid in $pids){
-    if($pid -match '^[0-9]+$'){
-      try { 
-        taskkill /PID $pid /F /T 2>$null
-        Write-Host "[TRAY] Killed PID $pid on port $cfgPort" 
-      } catch {}
-    }
-  }
+  $allReadersOk = (($statusRun.acp_enabled -eq $false) -or ($statusRun.acp -eq 'ON')) -and (($statusRun.elatec_enabled -eq $false) -or ($statusRun.elatec -eq 'ON'))
+  $statusRun.color = if(($statusRun.server -eq 'PORNIT') -and $allReadersOk){ 'green' } elseif(($statusRun.server -eq 'PORNIT') -or $allReadersOk){ 'yellow' } else { 'red' }
+  Set-Content -Path (Join-Path $PWD 'tray_status.json') -Value ($statusRun | ConvertTo-Json -Depth 3) -Encoding UTF8
 } catch {}
-
-Write-Host "[TRAY] Cleanup complete"
-# Final status: readers off, server off after cleanup
-try { Write-TrayStatusJson -AcpOn:$false -ElatecOn:$false -ServerState 'OPRIT' } catch {}
-# Exit code 15 is normal (user quit); exit codes 1-11 are errors, others are unexpected
-if($exitCode -eq 15){
-  Write-Host "[TRAY] tray_agent exited normally (exit code 15)"
-  exit 0
-} elseif($exitCode -gt 0 -and $exitCode -lt 12){
-  Write-Error "[TRAY] tray_agent exited with error code $exitCode"
-  exit $exitCode
-} elseif($exitCode -ne 0){
-  Write-Warning "[TRAY] tray_agent exited with unexpected code $exitCode"
-  exit 0
-}
+& $py @('zkeco_modern/manage.py','tray_agent') @trayArgs
