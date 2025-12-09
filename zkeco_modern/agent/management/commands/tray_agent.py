@@ -232,6 +232,40 @@ def _read_tray_status() -> dict:
         pass
     return {}
 
+def _write_tray_status(acp_on: bool, elatec_on: bool, server_state: str, center_on: bool):
+    """Write tray_status.json for full synchronization with tray_launch.ps1.
+    server_state in { 'PORNIT', 'PORNESTE', 'OPRIT' }
+    Color rules: green=all ON, red=all OFF, yellow otherwise.
+    """
+    try:
+        acp_on = bool(acp_on)
+        elatec_on = bool(elatec_on)
+        center_on = bool(center_on)
+        srv = (server_state or '').upper()
+        if srv not in ('PORNIT','PORNESTE','OPRIT'):
+            srv = 'OPRIT'
+        all_on = acp_on and elatec_on and center_on and (srv == 'PORNIT')
+        all_off = (not acp_on) and (not elatec_on) and (not center_on) and (srv == 'OPRIT')
+        color = 'green' if all_on else ('red' if all_off else 'yellow')
+        data = {
+            'acp': 'ON' if acp_on else 'OPRIT',
+            'elatec': 'ON' if elatec_on else 'OPRIT',
+            'commcenter': 'ON' if center_on else 'OPRIT',
+            'server': srv,
+            'color': color,
+        }
+        p = _tray_status_path()
+        tmp = p.with_suffix('.tmp')
+        tmp.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
+        try:
+            if p.exists():
+                p.unlink()
+        except Exception:
+            pass
+        tmp.replace(p)
+    except Exception:
+        pass
+
 def _read_first_error_from_log(max_bytes: int = 32768) -> str:
     """Return a concise last-error summary from server.log.
     Prefers the final line of the last Traceback block if present,
@@ -1027,6 +1061,13 @@ class Command(BaseCommand):
                         if new_img is not None:
                             icon_ref.icon = new_img
                         _LAST_ICON_STATE = state
+                    # Always write consolidated status for 100% sync
+                    try:
+                        # If JSON provided explicit server state, use it; else derive from boolean
+                        srv_out = ('PORNIT' if server_running else ('PORNESTE' if (use_json and srv_state=='PORNESTE') else 'OPRIT'))
+                        _write_tray_status(acp_live, el_live, srv_out, center_running)
+                    except Exception:
+                        pass
                 except Exception:
                     pass
                 _STOP_EVENT.wait(options['status_interval'])
