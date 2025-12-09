@@ -100,4 +100,6 @@ urlpatterns = [
     # Readers config/status API
     path("api/readers/config", views.readers_config, name="agent-readers-config"),
     path("api/readers/status", views.readers_status, name="agent-readers-status"),
+    path("api/readers/start", views.readers_start, name="agent-readers-start"),
+    path("api/readers/stop", views.readers_stop, name="agent-readers-stop"),
 ]

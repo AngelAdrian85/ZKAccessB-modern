@@ -230,6 +230,35 @@ def readers_status(request: HttpRequest):
     return JsonResponse({'ok': True, 'status': st, 'config': cfg})
 
 
+@csrf_exempt
+def readers_start(request: HttpRequest):
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': 'unauth'}, status=403)
+    name = (request.POST.get('name') or request.GET.get('name') or '').strip().lower()
+    if name not in ('acp','elatec'):
+        return JsonResponse({'ok': False, 'error': 'invalid-name'}, status=400)
+    st = _read_json_safe(_tray_status_path())
+    st[f'cmd_start_{name}'] = True
+    # yellow transition
+    st[name] = 'PORNESTE'
+    _write_json_safe(_tray_status_path(), st)
+    return JsonResponse({'ok': True})
+
+
+@csrf_exempt
+def readers_stop(request: HttpRequest):
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': 'unauth'}, status=403)
+    name = (request.POST.get('name') or request.GET.get('name') or '').strip().lower()
+    if name not in ('acp','elatec'):
+        return JsonResponse({'ok': False, 'error': 'invalid-name'}, status=400)
+    st = _read_json_safe(_tray_status_path())
+    st[f'cmd_stop_{name}'] = True
+    st[name] = 'OPRIT'
+    _write_json_safe(_tray_status_path(), st)
+    return JsonResponse({'ok': True})
+
+
 def monitor(request: HttpRequest):
     if not request.user.is_authenticated:
         from django.contrib.auth.views import redirect_to_login

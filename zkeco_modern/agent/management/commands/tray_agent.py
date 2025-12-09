@@ -1152,6 +1152,34 @@ class Command(BaseCommand):
                         except Exception:
                             # If COM detection fails, keep previous el_en value
                             pass
+                        # Handle explicit start/stop commands from UI
+                        try:
+                            if st.get('cmd_start_acp'):
+                                logging.info('UI requested: start ACP listener')
+                                _start_listener('acp')
+                                time.sleep(0.2)
+                                acp_live = _listener_running('acp')
+                            if st.get('cmd_stop_acp'):
+                                logging.info('UI requested: stop ACP listener')
+                                _stop_listener('acp')
+                                time.sleep(0.2)
+                                acp_live = _listener_running('acp')
+                            if st.get('cmd_start_elatec'):
+                                logging.info('UI requested: start Elatec listener')
+                                if com_present:
+                                    _start_listener('elatec')
+                                    time.sleep(0.2)
+                                else:
+                                    logging.info('Elatec COM missing; ignoring start')
+                                el_live = _listener_running('elatec')
+                            if st.get('cmd_stop_elatec'):
+                                logging.info('UI requested: stop Elatec listener')
+                                _stop_listener('elatec')
+                                time.sleep(0.2)
+                                el_live = _listener_running('elatec')
+                        except Exception:
+                            pass
+
                         # Auto-restart listeners if enabled but not live
                         try:
                             if acp_en and not acp_live:
