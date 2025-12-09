@@ -971,10 +971,7 @@ class Command(BaseCommand):
                 try:
                     # Prefer state provided by tray_launch.ps1 if present
                     status_json = _read_tray_status()
-                    acp_on_json = (status_json.get('acp') or '').upper() == 'ON'
-                    el_on_json = (status_json.get('elatec') or '').upper() == 'ON'
                     srv_state = (status_json.get('server') or '').upper()  # PORNESTE | PORNIT | OPRIT
-                    server_running_json = srv_state in ('PORNIT','PORNESTE')
                     color_json = (status_json.get('color') or '').lower()
                     use_json = bool(status_json)
 
@@ -983,37 +980,24 @@ class Command(BaseCommand):
                         port_probe = int(_CONFIG.get('tray','port', fallback=str(port)))
                     except Exception:
                         port_probe = port
-                    server_running_probe = _is_server_running(host='127.0.0.1', port=port_probe)
-                    if not server_running_probe:
-                        server_running_probe = _SERVER_PROC is not None and _SERVER_PROC.poll() is None
+                    server_running = _is_server_running(host='127.0.0.1', port=port_probe)
+                    if not server_running:
+                        server_running = _SERVER_PROC is not None and _SERVER_PROC.poll() is None
                     center_running = _CENTER is not None
-                    # Choose final booleans
-                    server_running = server_running_json if use_json else server_running_probe
-                    acp_live = acp_on_json
-                    el_live = el_on_json
+                    # Live reader state from processes (ground truth)
+                    acp_live = _listener_running('acp')
+                    el_live = _listener_running('elatec')
                     any_running = (server_running or center_running or acp_live or el_live)
                     tip = []
                     # Reader status summaries from JSON if present; fall back to config hints
                     try:
-                        if use_json:
-                            tip.append('ACP:' + ('ON' if acp_live else 'OPRIT'))
-                            tip.append('Elatec:' + ('ON' if el_live else 'OPRIT'))
-                        else:
-                            cfg = _read_listeners_config()
-                            acp_cfg = (cfg or {}).get('acp') or {}
-                            el_cfg = (cfg or {}).get('elatec') or {}
-                            acp_en = bool(acp_cfg.get('enabled', True))
-                            el_en = bool(el_cfg.get('enabled', True))
-                            acp_live = _listener_running('acp')
-                            el_live = _listener_running('elatec')
-                            if acp_live:
-                                tip.append('ACP:ON')
-                            else:
-                                tip.append('ACP:OFF' + (f" (:{acp_cfg.get('port') or 9001}?)" if acp_en else ''))
-                            if el_live:
-                                tip.append('Elatec:ON')
-                            else:
-                                tip.append('Elatec:OFF' + (f" ({el_cfg.get('port') or 'COM?'}?)" if el_en else ''))
+                        cfg = _read_listeners_config()
+                        acp_cfg = (cfg or {}).get('acp') or {}
+                        el_cfg = (cfg or {}).get('elatec') or {}
+                        acp_en = bool(acp_cfg.get('enabled', True))
+                        el_en = bool(el_cfg.get('enabled', True))
+                        tip.append('ACP:' + ('ON' if acp_live else ('OFF' + (f" (:{acp_cfg.get('port') or 9001}?)" if acp_en else ''))))
+                        tip.append('Elatec:' + ('ON' if el_live else ('OFF' + (f" ({el_cfg.get('port') or 'COM?'}?)" if el_en else ''))))
                     except Exception:
                         pass
                     # Append last card read and access evaluation status
@@ -1039,24 +1023,24 @@ class Command(BaseCommand):
                         tip.append(f"Dispozitive {online}/{total}")
                         tip.append(f"Cicluri {_CENTER.cycles}")
                         tip.append(f"RT {_CENTER.total_rtlog_lines}")
-                    if use_json:
-                        tip.append('Server:' + ( 'PORNIT' if srv_state=='PORNIT' else ('PORNEȘTE' if srv_state=='PORNESTE' else 'OPRIT') ))
-                    else:
-                        tip.append('Server:' + ('PORNEȘTE' if server_running else 'OPRIT'))
+                    tip.append('Server:' + ( 'PORNIT' if server_running else ('PORNEȘTE' if srv_state=='PORNESTE' else 'OPRIT') ))
                     tip.append('CommCenter:' + ('PORNEȘTE' if center_running else 'OPRIT'))
                     tip.append(f'Licență:{_license_status()}')
                     tip.append('Click dreapta: meniu')
                     icon_ref.title = ' | '.join(tip)
-                    state = (server_running, center_running, any_running, color_json if use_json else None)
+                    state = (server_running, center_running, any_running, color_json if use_json else None, acp_live, el_live)
                     if state != _LAST_ICON_STATE:
-                        # Derive color: prefer JSON, else compute
-                        if use_json and color_json in ('green','yellow','red'):
-                            color = {'green': (46,204,113), 'yellow': (241,196,15), 'red': (231,76,60)}[color_json]
+                        # Derive color: green when required services running
+                        cfg = _read_listeners_config()
+                        acp_en = bool(((cfg or {}).get('acp') or {}).get('enabled', True))
+                        el_en = bool(((cfg or {}).get('elatec') or {}).get('enabled', True))
+                        all_on = server_running and center_running and ((not acp_en) or acp_live) and ((not el_en) or el_live)
+                        if all_on:
+                            color = (46,204,113)
+                        elif any_running:
+                            color = (241,196,15)
                         else:
-                            if any_running:
-                                color = (46, 204, 113) if (server_running and center_running) else (241, 196, 15)
-                            else:
-                                color = (231, 76, 60)
+                            color = (231,76,60)
                         new_img = _build_icon(color=color)
                         if new_img is not None:
                             icon_ref.icon = new_img
@@ -1064,7 +1048,7 @@ class Command(BaseCommand):
                     # Always write consolidated status for 100% sync
                     try:
                         # If JSON provided explicit server state, use it; else derive from boolean
-                        srv_out = ('PORNIT' if server_running else ('PORNESTE' if (use_json and srv_state=='PORNESTE') else 'OPRIT'))
+                        srv_out = ('PORNIT' if server_running else ('PORNESTE' if srv_state=='PORNESTE' else 'OPRIT'))
                         _write_tray_status(acp_live, el_live, srv_out, center_running)
                     except Exception:
                         pass
