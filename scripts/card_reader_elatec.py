@@ -46,6 +46,7 @@ ERROR_URL = BASE + '/agent/api/listeners/error/'
 
 # Elatec readers often output hex or decimal card numbers followed by newline
 # Optionally they can be configured to prefix with 'CARD:'
+# Virtual mode: when CFG.elatec.mode == "virtual", simulate heartbeat and optional card without opening serial.
 
 def push_card(card_number: str, source: str='elatec'):
     try:
@@ -63,6 +64,21 @@ def push_card(card_number: str, source: str='elatec'):
         pass
 
 def run_serial():
+    if (CFG or {}).get('elatec', {}).get('mode') == 'virtual':
+        print('[ELATEC] Virtual mode active: no serial port, heartbeat only')
+        n = 0
+        while True:
+            try:
+                hb = { 'ts': time.time(), 'source': 'elatec', 'port': SERIAL_PORT, 'virtual': True }
+                with open(HEARTBEAT_PATH,'w',encoding='utf-8') as f:
+                    json.dump(hb, f)
+            except Exception:
+                pass
+            n += 1
+            if n % 20 == 0:
+                push_card('00098765', 'elatec')
+            time.sleep(0.5)
+        return
     if serial is None:
         print('[ELATEC] pyserial not installed. Install with: pip install pyserial')
         return

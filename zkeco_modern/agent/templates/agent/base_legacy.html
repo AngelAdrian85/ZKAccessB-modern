@@ -209,7 +209,7 @@ async function startReader(name){
     if(name==='elatec'){ document.getElementById('dot-el').style.background='#f1c40f'; }
     await fetch('/agent/api/readers/start?name='+encodeURIComponent(name), {method:'POST'});
   }catch(e){}
-  setTimeout(refreshReaders, 800);
+  setTimeout(refreshReaders, 1500);
 }
 async function stopReader(name){
   try{
@@ -217,7 +217,7 @@ async function stopReader(name){
     if(name==='elatec'){ document.getElementById('dot-el').style.background='#f1c40f'; }
     await fetch('/agent/api/readers/stop?name='+encodeURIComponent(name), {method:'POST'});
   }catch(e){}
-  setTimeout(refreshReaders, 800);
+  setTimeout(refreshReaders, 1500);
 }
 document.getElementById('btnStartAcp').addEventListener('click', (e)=>{ e.preventDefault(); startReader('acp'); });
 document.getElementById('btnStopAcp').addEventListener('click', (e)=>{ e.preventDefault(); stopReader('acp'); });

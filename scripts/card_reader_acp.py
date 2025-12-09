@@ -40,6 +40,8 @@ PUSH_URL = BASE + '/agent/api/cards/read/push/'
 EVAL_URL = BASE + '/agent/api/access/evaluate-open/'
 
 # Expected simple line protocol: CARD:<number>\n or JSON {"card":"..."}
+# Virtual mode: when CFG.acp.mode == "virtual", do not open TCP socket;
+# instead, write heartbeat continuously and optionally generate test cards.
 
 def push_card(card_number: str, source: str='acp'):
     try:
@@ -103,6 +105,22 @@ def handle_client(conn, addr):
 
 
 def serve():
+    if (CFG or {}).get('acp', {}).get('mode') == 'virtual':
+        print('[ACP] Virtual mode active: no TCP socket, heartbeat only')
+        n = 0
+        while True:
+            try:
+                hb = { 'ts': time.time(), 'source': 'acp', 'port': LISTEN_PORT, 'virtual': True }
+                with open(HEARTBEAT_PATH,'w',encoding='utf-8') as f:
+                    json.dump(hb, f)
+            except Exception:
+                pass
+            # Optional demo card push every ~8s
+            n += 1
+            if n % 16 == 0:
+                push_card('00012345', 'acp')
+            time.sleep(0.5)
+        return
     backoff = 0.5
     while True:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
