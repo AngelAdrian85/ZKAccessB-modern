@@ -56,7 +56,7 @@
     <a href="#" onclick="bulkClose(); return false;">▶Close all current doors</a>
     <a href="#" onclick="cancelAllAlarms(); return false;">▶Cancel all alarms</a>
   </div>
-  <div style="font-size:11px;color:#555;">UI v2025-12-10.2</div>
+  <div style="font-size:11px;color:#555;">UI v2025-12-10.3 🪪 Physical Reader</div>
   <div id="diagnosticsStrip" style="margin-top:6px;font-size:11px;color:#333;background:#e9eef3;border:1px solid #d0d7de;border-radius:4px;padding:6px;display:flex;gap:12px;flex-wrap:wrap;">
     <span>Doors: <code id="diagDoorsCount">0</code></span>
     <span>Map: <code id="diagMapStatus">✗</code></span>
@@ -90,7 +90,195 @@
   </div>
 </div>
 <script>
-console.log('Monitor UI template loaded: v2025-12-10.1');
+console.log('Monitor UI template loaded: v2025-12-10.3 + Physical Card Reader');
+
+// Physical card reader input detection
+(function initCardReader(){
+  let cardBuffer = '';
+  let lastKeyTime = 0;
+  const READER_TIMEOUT = 100; // ms between keypresses from card reader
+  const CARD_MIN_LENGTH = 4;  // minimum card number length
+  
+  document.addEventListener('keypress', function(e){
+    const now = Date.now();
+    const focused = document.activeElement;
+    
+    // Skip if user is typing in an input/textarea (except testCardInput, which we can auto-fill)
+    if(focused && (focused.tagName === 'INPUT' || focused.tagName === 'TEXTAREA')){
+      if(focused.id === 'testCardInput'){
+        // Allow card reader to fill this field
+      } else {
+        return; // User is typing in another field
+      }
+    }
+    
+    // Reset buffer if too much time passed (human typing vs card reader)
+    if(now - lastKeyTime > READER_TIMEOUT){
+      cardBuffer = '';
+    }
+    lastKeyTime = now;
+    
+    // Enter key = card read complete
+    if(e.key === 'Enter' && cardBuffer.length >= CARD_MIN_LENGTH){
+      e.preventDefault();
+      processPhysicalCard(cardBuffer.trim());
+      cardBuffer = '';
+      return;
+    }
+    
+    // Accumulate alphanumeric characters (some cards have letters)
+    if(/[\dA-Za-z]/.test(e.key)){
+      cardBuffer += e.key;
+    }
+  });
+  
+  async function processPhysicalCard(cardNumber){
+    console.log('🪪 Physical card detected:', cardNumber);
+    
+    // Visual feedback
+    const indicator = document.createElement('div');
+    indicator.style.position = 'fixed';
+    indicator.style.top = '20px';
+    indicator.style.right = '20px';
+    indicator.style.background = '#2da44e';
+    indicator.style.color = '#fff';
+    indicator.style.padding = '12px 20px';
+    indicator.style.borderRadius = '6px';
+    indicator.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
+    indicator.style.zIndex = '9999';
+    indicator.style.fontSize = '14px';
+    indicator.style.fontWeight = '600';
+    indicator.textContent = `🪪 Card citit: ${cardNumber}`;
+    document.body.appendChild(indicator);
+    
+    setTimeout(() => {
+      indicator.style.transition = 'opacity 0.3s';
+      indicator.style.opacity = '0';
+      setTimeout(() => indicator.remove(), 300);
+    }, 2000);
+    
+    // Fill testCardInput if empty
+    const cardInput = document.getElementById('testCardInput');
+    if(cardInput && !cardInput.value){
+      cardInput.value = cardNumber;
+    }
+    
+    // Automatically trigger card read test
+    try {
+      const sel = document.getElementById('doorFilter');
+      const selectedDoorPk = sel && sel.value ? String(sel.value) : '';
+      
+      const qs = new URLSearchParams();
+      qs.set('card_number', cardNumber);
+      
+      const url = `/agent/api/test-read-card${qs.toString()?('?'+qs.toString()):''}`;
+      const resp = await fetch(url);
+      const data = await resp.json();
+      
+      const body = document.getElementById('events');
+      const tr = document.createElement('tr');
+      const reasonsRaw = Array.isArray(data.reasons) ? data.reasons.join(', ') : (data.reasons || data.error || '');
+      const roReason = translateReasons(reasonsRaw);
+      const isOk = !!data.ok;
+      
+      tr.style.background = isOk ? '#1a3d2a' : '#3b1e1e';
+      const eventDesc = isOk ? '🪪 CARD FIZIC ACCEPTAT → deschidere ușă' : ('🪪 CARD FIZIC RESPINS: ' + roReason);
+      
+      const map = window.__doorMap || {};
+      let eventPoint = '';
+      let doorName = '-';
+      
+      if(selectedDoorPk){
+        eventPoint = selectedDoorPk;
+        if(map[selectedDoorPk] && map[selectedDoorPk].name){
+          doorName = map[selectedDoorPk].name;
+        } else if(sel){
+          const opt = Array.from(sel.options||[]).find(o => String(o.value) === selectedDoorPk);
+          if(opt){
+            doorName = String(opt.textContent||'').replace(/^[^:]+:\s*/,'').replace(/\s*\(id=\d+\)$/,'') || '-';
+          }
+        }
+      }
+      
+      let cardHolder = data.employee_fullname || data.employee_full_name || data.employee_name || data.emp_fullname || data.emp_name || '-';
+      
+      if((!cardHolder || cardHolder === '-') && cardNumber){
+        try {
+          const sr = await fetch('{% url "crud-issuecards-search" %}?q=' + encodeURIComponent(cardNumber));
+          const sj = await sr.json();
+          const item = (sj.items||[])[0];
+          const name = item?.employee_fullname || item?.employee_name || item?.emp_name || item?.owner_name || '';
+          if(name){ cardHolder = name; }
+        } catch(err){}
+      }
+      
+      const statusCellHtml = statusBadge(isOk, data.status_text);
+      tr.innerHTML = [
+        new Date().toLocaleTimeString(),
+        eventPoint,
+        eventDesc,
+        cardNumber,
+        (doorName && String(doorName).trim()) ? doorName : '-',
+        (cardHolder && String(cardHolder).trim()) ? cardHolder : '-',
+        statusCellHtml,
+        'CITITOR FIZIC'
+      ].map(v => `<td>${v}</td>`).join('');
+      
+      body.insertBefore(tr, body.firstChild);
+      
+      // If access granted and door selected, auto-open the door
+      if(isOk && selectedDoorPk){
+        const doors = window.__doorsCache || [];
+        const doorObj = doors.find(d => String(d.id) === selectedDoorPk);
+        if(doorObj && doorObj.device_id){
+          console.log('🚪 Auto-opening door:', doorName);
+          doorAction(doorObj.device_id, doorObj.id, 'open');
+        }
+      }
+      
+      // Action buttons
+      let statusTd = tr.cells[7];
+      if(!statusTd && tr.cells.length > 8){ statusTd = tr.cells[8]; }
+      
+      if(!isOk && cardNumber){
+        const addBtn = document.createElement('button');
+        addBtn.textContent = 'Adaugă Card';
+        addBtn.style.marginLeft = '6px';
+        addBtn.style.padding = '2px 6px';
+        addBtn.style.fontSize = '10px';
+        addBtn.style.border = 'none';
+        addBtn.style.borderRadius = '3px';
+        addBtn.style.background = '#1e90ff';
+        addBtn.style.color = '#fff';
+        addBtn.style.cursor = 'pointer';
+        addBtn.onclick = () => openAddCardModal(cardNumber);
+        if(statusTd){ statusTd.appendChild(addBtn); }
+      } else if(isOk && data.employee){
+        const editBtn = document.createElement('button');
+        editBtn.textContent = 'Modifică';
+        editBtn.style.marginLeft = '6px';
+        editBtn.style.padding = '2px 6px';
+        editBtn.style.fontSize = '10px';
+        editBtn.style.border = 'none';
+        editBtn.style.borderRadius = '3px';
+        editBtn.style.background = '#2da44e';
+        editBtn.style.color = '#fff';
+        editBtn.style.cursor = 'pointer';
+        editBtn.onclick = () => location.href = `/agent/crud/employees/${data.employee}/edit/`;
+        if(statusTd){ statusTd.appendChild(editBtn); }
+      }
+      
+    } catch(e){
+      console.error('Error processing physical card:', e);
+      addEvent({
+        description: `🪪 EROARE citire card fizic: ${cardNumber}`,
+        status: 'ERR',
+        verify_mode: 'CITITOR FIZIC'
+      });
+    }
+  }
+})();
+
 // Update diagnostics helpers
 function updateDiagnostics(){
   try{
