@@ -3,12 +3,18 @@
 {% block content %}
 <style>
 .device-icon{width:80px;height:80px;background:#1e303d;border:2px solid #2d4961;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;margin:8px;position:relative;cursor:pointer;transition:all 0.3s;}
+.device-icon:hover{transform:translateY(-2px);}
 .device-icon.online{border-color:#2da44e;background:#1a3d2a;}
 .device-icon.offline{border-color:#cf222e;opacity:0.5;}
 .device-icon .icon{font-size:32px;margin-bottom:4px;}
-.device-icon .label{font-size:10px;color:#cfe9f8;text-align:center;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.device-icon.online .icon::before{content:'🏢';}
+.device-icon .label{font-size:11px;color:#cfe9f8;text-align:center;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.device-icon .label.name-anim{animation:pulse 1.6s infinite;}
+.device-icon.online .icon::before{content:'🚪';}
 .device-icon.offline .icon::before{content:'⚫';}
+.device-actions{display:none;position:absolute;top:-8px;right:-8px;background:#0d3a63;border:1px solid #1e303d;border-radius:6px;padding:4px;box-shadow:0 2px 8px rgba(0,0,0,0.4); z-index: 10;} 
+.device-actions button{display:block;margin:2px 0;padding:2px 6px;font-size:10px;border:none;border-radius:4px;color:#fff;background:#1e3e55;cursor:pointer;}
+.device-actions button:hover{background:#245678;}
+.device-icon:hover .device-actions{display:block;}
 .device-grid{display:flex;flex-wrap:wrap;justify-content:center;padding:20px;gap:12px;min-height:200px;}
 #event-grid{width:100%;border-collapse:collapse;font-size:11px;background:#152a38;margin-top:20px;}
 #event-grid thead tr{background:#0d3a63;}
@@ -35,9 +41,12 @@
   <select id="panelFilter"><option>----------------</option></select>
   <label style="color:#fff;font-weight:600;">Door:</label>
   <select id="doorFilter"><option>----------------</option></select>
+  <button onclick="testDoorOpen()" style="background:#2da44e;" data-tip="Test deschidere pe ușa selectată">🚪 Test Deschidere Ușă</button>
   <button class="action" onclick="bulkOpen()" data-tip="Deschide toate ușile">▶Open all current doors</button>
   <button class="danger" onclick="bulkClose()" data-tip="Închide toate ușile">▶Close all current doors</button>
   <button onclick="cancelAllAlarms()" style="background:#815f00;" data-tip="Anulează toate alarmele">▶Cancel all alarms</button>
+  <input id="testCardInput" placeholder="Card nr (opțional)" style="background:#152a38;border:1px solid #1e303d;color:#cfe9f8;padding:4px 8px;border-radius:4px;font-size:12px;width:160px;" />
+  <button onclick="testReadCard()" style="background:#2da44e;" data-tip="Generează o citire de test (8 cifre)">🪪 Test Citire Card</button>
 </div>
 
 <div style="background:#f0f4f8;padding:8px 12px;margin:-20px -20px 12px -20px;border-bottom:1px solid #d0d7de;">
@@ -47,25 +56,31 @@
     <a href="#" onclick="bulkClose(); return false;">▶Close all current doors</a>
     <a href="#" onclick="cancelAllAlarms(); return false;">▶Cancel all alarms</a>
   </div>
+  <div style="font-size:11px;color:#555;">UI v2025-12-10.2</div>
+  <div id="diagnosticsStrip" style="margin-top:6px;font-size:11px;color:#333;background:#e9eef3;border:1px solid #d0d7de;border-radius:4px;padding:6px;display:flex;gap:12px;flex-wrap:wrap;">
+    <span>Doors: <code id="diagDoorsCount">0</code></span>
+    <span>Map: <code id="diagMapStatus">✗</code></span>
+    <span>WS: <code id="diagWs">connecting…</code></span>
+  </div>
 </div>
 
 <div class="device-grid" id="devices"></div>
 
 <div style="margin-top:20px;">
   <h3 style="color:#5fc4ff;font-size:14px;font-weight:600;margin:0 0 8px 0;display:flex;justify-content:space-between;align-items:center;">
-    📋 Events Monitoring
-    <input id="eventFilter" placeholder="Filter events..." style="padding:4px 8px;background:#152a38;border:1px solid #1e303d;border-radius:4px;max-width:200px;color:#cfe9f8;font-size:12px;" oninput="filterEvents()" />
+     📋 Monitorizare Evenimente
+     <input id="eventFilter" placeholder="Filtrează evenimente..." style="padding:4px 8px;background:#152a38;border:1px solid #1e303d;border-radius:4px;max-width:200px;color:#cfe9f8;font-size:12px;" oninput="filterEvents()" />
   </h3>
   <div style="overflow:auto;max-height:400px;border:1px solid #1e303d;border-radius:6px;">
     <table id="event-grid">
       <thead>
         <tr>
           <th>Time</th>
-          <th>Device</th>
           <th>Event point</th>
           <th>Event Description</th>
           <th>Card Number</th>
-          <th>No.(Firstname Lastname)</th>
+          <th>Nume Ușă/Dispozitiv</th>
+          <th>Posesor card</th>
           <th>Status</th>
           <th>Verify Mode</th>
         </tr>
@@ -74,40 +89,109 @@
     </table>
   </div>
 </div>
-
 <script>
+console.log('Monitor UI template loaded: v2025-12-10.1');
+// Update diagnostics helpers
+function updateDiagnostics(){
+  try{
+    const doors = window.__doorsCache || [];
+    const map = window.__doorMap || {};
+    const wsEl = document.getElementById('diagWs');
+    document.getElementById('diagDoorsCount').textContent = doors.length||0;
+    document.getElementById('diagMapStatus').textContent = (map && Object.keys(map).length>0) ? '✓' : '✗';
+    if(wsEl && typeof window.__wsStatus==='string'){ wsEl.textContent = window.__wsStatus; }
+  }catch{}
+}
 const devs={};
 function renderDevices(){
   const wrap=document.getElementById('devices');
-  wrap.innerHTML=Object.values(devs)
+  const devHtml = Object.values(devs)
     .map(d=>{
       const deviceName = (d.sn || d.id || 'Device').toString();
       const isOnline = d.online !== false;
       const hasAlarm = d.door_state === 'ALARM';
-      return `<div class='device-icon ${isOnline?"online":"offline"} ${hasAlarm?"alarm":""}' onclick='alert("Device: ${deviceName}")' title='${deviceName} - ${isOnline?"ONLINE":"OFFLINE"}'>
+      return `<div class='device-icon ${isOnline?"online":"offline"} ${hasAlarm?"alarm":""}' title='${deviceName} - ${isOnline?"ONLINE":"OFFLINE"}'>
         <div class='icon'></div>
         <div class='label'>${deviceName}</div>
       </div>`;
-    })
-    .join('') || '<p style="color:#999;text-align:center;padding:40px;">No devices connected. Waiting for device status...</p>';
+    }).join('');
+  try {
+    const doors = window.__doorsCache || [];
+    const doorsHtml = (doors||[]).map(d=>{
+      const dn = d.name; // show only door name
+      // Door state icon badges (Closed/Open/Locked/Forced)
+      const state = (d.state || 'CLOSED').toUpperCase();
+      const badge = state==='OPEN' ? '🟢' : state==='LOCKED' ? '🟡' : state==='FORCED' ? '🔴' : '🔵';
+      const title = `${dn} | State: ${state}`;
+      const deviceId = d.device_id || '';
+      return `<div class='device-icon online' title='${title}' data-door-id='${d.id}' data-device-id='${deviceId}' onclick='onDoorIconClick(${deviceId||"null"},${d.id})'>
+        <div class='icon'></div>
+        <div class='label name-anim' style='font-weight:600; color:#e6f6ff;'>${badge} ${dn}</div>
+        <div class='device-actions'>
+          <button onclick='event.stopPropagation(); onDoorAction("open", ${deviceId||"null"}, ${d.id})'>Open</button>
+          <button onclick='event.stopPropagation(); onDoorAction("close", ${deviceId||"null"}, ${d.id})'>Close</button>
+          <button onclick='event.stopPropagation(); onDoorAction("cancel-alarm", ${deviceId||"null"}, ${d.id})'>Cancel Alarm</button>
+          <button onclick='event.stopPropagation(); onDoorAction("lock", ${deviceId||"null"}, ${d.id})'>Lock</button>
+          <button onclick='event.stopPropagation(); onDoorAction("unlock", ${deviceId||"null"}, ${d.id})'>Unlock</button>
+        </div>
+      </div>`;
+    }).join('');
+    // Prefer showing doors first; fall back to devices
+    wrap.innerHTML = doorsHtml || devHtml || '<p style="color:#999;text-align:center;padding:40px;">No devices/doors yet. Waiting for status...</p>';
+  } catch {
+    wrap.innerHTML = devHtml || '<p style="color:#999;text-align:center;padding:40px;">No devices connected. Waiting for device status...</p>';
+  }
+}
+function normalizeEvent(e){
+  const ne = { ...e };
+  ne.time = ne.time || new Date().toLocaleTimeString();
+  ne.point = ne.point || ne.event_point_id || ne.point_id || ne.door_id || '';
+  // prefer explicit description over generic event/code
+  ne.description = ne.description || ne.event_description || ne.event || (Array.isArray(ne.descriptions)? ne.descriptions.join(', ') : '') || '';
+  ne.card_no = ne.card_no || ne.card || ne.card_number || '';
+  ne.name = ne.name || ne.employee_name || ne.emp_name || '-';
+  ne.cardholder = ne.cardholder || ne.employee_fullname || ne.employee_name || ne.emp_name || '';
+  ne.status = ne.status || ne.status_text || '';
+  ne.verify_mode = ne.verify_mode || ne.verify || '';
+  return ne;
 }
 function addEvent(obj){
+  const e = normalizeEvent(obj);
   const body=document.getElementById('events');
   const tr=document.createElement('tr');
-  const alarm = (obj.status||'').toUpperCase()==='ALARM' || /(alarm)/i.test(obj.description||'');
+  const alarm = (e.status||'').toUpperCase()==='ALARM' || /(alarm)/i.test(e.description||'');
   tr.style.background = alarm ? '#3b1e1e' : '';
+  // If name missing, fill with door name by event point id
+  let displayName = (e.name||'').trim();
+  try{
+    const map = window.__doorMap || {};
+    if((!displayName || displayName==='-') && e.point && map[e.point]){
+      displayName = map[e.point].name || '-';
+    }
+    // Fallback: use doorFilter option text that matches the point id
+    if((!displayName || displayName==='-') && e.point){
+      const sel = document.getElementById('doorFilter');
+      if(sel){
+        const opt = Array.from(sel.options||[]).find(o=>String(o.value)===String(e.point));
+        if(opt){
+          // Strip device prefix and id suffix
+          const txt = String(opt.textContent||'').replace(/^[^:]+:\s*/,'').replace(/\s*\(id=\d+\)$/, '');
+          if(txt){ displayName = txt; }
+        }
+      }
+    }
+  }catch{}
   tr.innerHTML = [
-    new Date().toLocaleTimeString(),
-    obj.device_id||'',
-    obj.point||'',
-    obj.description||obj.event||JSON.stringify(obj).slice(0,40),
-    obj.card_no||'',
-    obj.name||'',
-    obj.status||'',
-    obj.verify_mode||''
+    e.time,
+    e.point||'',
+    e.description||'',
+    e.card_no||'',
+    displayName || '-',
+    (e.cardholder||'') || '-',
+    e.status||'',
+    e.verify_mode||''
   ].map(val=>`<td>${val}</td>`).join('');
-  body.insertBefore(tr, body.firstChild); // Insert at top
-  // Trim rows if exceed 500
+  body.insertBefore(tr, body.firstChild);
   while(body.rows.length>500){ body.deleteRow(500); }
 }
 function filterEvents(){
@@ -118,35 +202,342 @@ function filterEvents(){
 }
 function wsConnect(){
   const ws=new WebSocket((location.protocol==='https:'?'wss':'ws')+'://'+location.host+'/ws/monitor/');
+  window.__wsStatus = 'connecting…'; updateDiagnostics();
   ws.onmessage=(e)=>{
     let data; try{data=JSON.parse(e.data);}catch(err){return;}
     if(data.type==='device.status'||data.type==='device.online'){
       devs[data.device_id]=Object.assign(devs[data.device_id]||{id:data.device_id},{online:data.online!==false,sn:data.serial||data.sn,door_state:data.door_state||'CLOSED'});
       renderDevices();
+      window.__wsStatus = 'online'; updateDiagnostics();
     } else if(data.type==='rtlog.batch'){
-      addEvent({rtlog_count:data.lines.length,device_id:data.device_id});
+      addEvent({ point:data.point_id||'', description:`RTLOG x${data.lines?.length||0}` });
     } else if(data.type==='event.batch'){
       if(data.descriptions && data.codes){
-        data.descriptions.forEach((desc,i)=>{ addEvent({event:desc,code:data.codes[i],device_id:data.device_id}); });
-      } else { addEvent({events:data.count,device_id:data.device_id}); }
+        data.descriptions.forEach((desc,i)=>{ addEvent({ point:data.point_id||'', description:desc, code:data.codes[i]}); });
+      } else { addEvent({ point:data.point_id||'', description:`Events x${data.count||0}`}); }
     } else if(data.type==='legacy.event'){
-      addEvent(data);
+      addEvent({
+        point: data.point_id||data.point||'',
+        description: data.description||data.event||'',
+        card_no: data.card_no||data.card||'',
+        name: data.name||data.employee_name||'-'
+      });
     } else if(/^door\./.test(data.type)){
       const ds = devs[data.device_id] || {id:data.device_id};
       if(data.type==='door.open'){ ds.door_state='OPEN'; }
       else if(data.type==='door.close'){ ds.door_state='CLOSED'; }
       else if(data.type==='door.normal_open'){ ds.door_state='NORMAL_OPEN'; }
       else if(data.type==='door.cancel_alarm'){ ds.door_state='ALARM_CLEARED'; }
-      devs[data.device_id]=ds; renderDevices(); addEvent({event:data.type,device_id:data.device_id});
+      devs[data.device_id]=ds; renderDevices();
+      try {
+        const pid = (data.point_id||data.door_id||'');
+        const map = window.__doorMap || {};
+        const nm = (pid && map[pid] && map[pid].name) ? map[pid].name : '-';
+          addEvent({ description:data.type, point: pid, name: nm });
+      } catch { addEvent({ description:data.type, point: (data.point_id||data.door_id||'') }); }
     } else { addEvent(data); }
   };
 }
-function doorAction(id,door,action){ fetch(`/agent/api/devices/${id}/doors/${door}/${action}/`).then(r=>r.json()).then(j=>addEvent({door_action:action,device_id:id,ok:j.ok})); }
-function bulkOpen(){Object.values(devs).forEach(d=>doorAction(d.id,0,'open'));}
-function bulkClose(){Object.values(devs).forEach(d=>doorAction(d.id,0,'close'));}
-function cancelAllAlarms(){Object.values(devs).forEach(d=>doorAction(d.id,0,'cancel-alarm'));}
+function doorAction(id,door,action){
+  // Map UI actions to backend endpoints
+  const endpointAction = (action==='unlock') ? 'normal-open' : (action==='lock' ? 'close' : action);
+  // Enforce local lock semantics: when locked, block 'open' and 'normal-open'
+  window.__doorLockMap = window.__doorLockMap || {};
+  if(action!=='unlock' && (action==='open' || action==='normal-open') && window.__doorLockMap[door]){
+    const map = window.__doorMap || {}; const nm = (door && map[door] && map[door].name) || '-';
+    addEvent({ description:`door.${action} BLOCKED (LOCK active) (id=${door}${nm?' name='+nm:''})`, status:'ERR', verify_mode:'CLIENT', point: door, name: nm });
+    return;
+  }
+  fetch(`/agent/api/devices/${id}/doors/${door}/${endpointAction}/`).then(r=>r.json()).then(j=>{
+    const map = window.__doorMap || {}; const nm = (door && map[door] && map[door].name) || '-';
+    const desc = `door.${action} ${j.ok?'OK':'ERR'} (id=${door}${nm?' name='+nm:''})`;
+    addEvent({ description: desc, status: j.ok?'OK':'ERR', verify_mode:'API', point: door, name: nm });
+    // Update local lock state based on action
+    if(j.ok){
+      if(action==='lock'){ window.__doorLockMap[door] = true; }
+      if(action==='unlock'){ window.__doorLockMap[door] = false; }
+    }
+  }).catch(()=>{
+    const map = window.__doorMap || {}; const nm = (door && map[door] && map[door].name) || '-';
+    const desc = `door.${action} ERR (id=${door}${nm?' name='+nm:''})`;
+    addEvent({ description: desc, status:'ERR', verify_mode:'API', point: door, name: nm });
+  });
+}
+function onDoorIconClick(deviceId, doorId){
+  // Toggle open/close based on last known state; log only once via API response
+  try {
+    window.__doorLockMap = window.__doorLockMap || {};
+    if(window.__doorLockMap[doorId]){
+      const map = window.__doorMap || {}; const nm = (doorId && map[doorId] && map[doorId].name) || '-';
+      addEvent({ description:`door.open BLOCKED (LOCK active) (id=${doorId}${nm?' name='+nm:''})`, status:'ERR', verify_mode:'CLIENT', point: doorId, name: nm });
+      return;
+    }
+    const ds = devs[deviceId];
+    const isOpen = ds && ds.door_state === 'OPEN';
+    const act = isOpen ? 'close' : 'open';
+    if(deviceId && doorId){ doorAction(deviceId, doorId, act); }
+  } catch(e){
+    addEvent({ description:`door.open ERR`, status:'ERR', verify_mode:'API', point: doorId });
+  }
+}
+function onDoorAction(action, deviceId, doorId){
+  // Fire device action; rely on API response to add a single log row
+  try {
+    window.__doorLockMap = window.__doorLockMap || {};
+    if(action!=='unlock' && (action==='open' || action==='normal-open') && window.__doorLockMap[doorId]){
+      const map = window.__doorMap || {}; const nm = (doorId && map[doorId] && map[doorId].name) || '-';
+      addEvent({ description:`door.${action} BLOCKED (LOCK active) (id=${doorId}${nm?' name='+nm:''})`, status:'ERR', verify_mode:'CLIENT', point: doorId, name: nm });
+      return;
+    }
+    if(deviceId && doorId){ doorAction(deviceId, doorId, action); }
+  } catch(e){
+    addEvent({ description:`door.${action} ERR`, status:'ERR', verify_mode:'API', point: doorId });
+  }
+}
+function bulkOpen(){
+  addEvent({ description:'▶ Open all current doors command sent', verify_mode:'BULK' });
+  const doors = window.__doorsCache || [];
+  doors.forEach(d=>{ if(d.device_id && d.id){ doorAction(d.device_id, d.id, 'open'); } });
+}
+function bulkClose(){
+  addEvent({ description:'▶ Close all current doors command sent', verify_mode:'BULK' });
+  const doors = window.__doorsCache || [];
+  doors.forEach(d=>{ if(d.device_id && d.id){ doorAction(d.device_id, d.id, 'close'); } });
+}
+function cancelAllAlarms(){
+  addEvent({ description:'▶ Cancel all alarms command sent', verify_mode:'BULK' });
+  const doors = window.__doorsCache || [];
+  doors.forEach(d=>{ if(d.device_id && d.id){ doorAction(d.device_id, d.id, 'cancel-alarm'); } });
+}
 function refreshDevices(){renderDevices();}
+async function testReadCard(){
+  try{
+    // Do NOT use selected door for Test Citire Card
+    const cardInput = document.getElementById('testCardInput');
+    const cardNumber = cardInput && cardInput.value ? cardInput.value.trim() : '';
+    const qs = new URLSearchParams();
+    if(cardNumber){ qs.set('card_number', cardNumber); }
+    const url = `/agent/api/test-read-card${qs.toString()?('?'+qs.toString()):''}`;
+    const resp = await fetch(url);
+    const data = await resp.json();
+    const body=document.getElementById('events');
+    const tr=document.createElement('tr');
+    const reasonsRaw = Array.isArray(data.reasons)? data.reasons.join(', ') : (data.reasons||data.error||'');
+    const roReason = translateReasons(reasonsRaw);
+    const cardNum = data.card_number || cardNumber || '';
+    const isOk = !!data.ok;
+    tr.style.background = isOk ? '' : '#3b1e1e';
+    const eventDesc = isOk ? 'CARD ACCEPTAT → deschidere ușă' : ('CARD RESPINS: '+roReason);
+    // Fill name with door name when available
+    const map = window.__doorMap || {};
+    // For Test Citire Card, bind ONLY to the currently selected door.
+    // If no door selected, show '-'; otherwise show selected door name.
+    const sel = document.getElementById('doorFilter');
+    const selectedDoorPk = sel && sel.value ? String(sel.value) : '';
+    let eventPoint = '';
+    let doorName = '-';
+    if(selectedDoorPk){
+      eventPoint = selectedDoorPk;
+      // Prefer map name; fallback to option text cleaned
+      if(map[selectedDoorPk] && map[selectedDoorPk].name){
+        doorName = map[selectedDoorPk].name;
+      } else if(sel){
+        const opt = Array.from(sel.options||[]).find(o=>String(o.value)===selectedDoorPk);
+        if(opt){ doorName = String(opt.textContent||'').replace(/^[^:]+:\s*/,'').replace(/\s*\(id=\d+\)$/,'') || '-'; }
+      }
+    }
+    // Robust card holder resolution
+    let cardHolder = data.employee_fullname || data.employee_full_name || data.employee_name || data.emp_fullname || data.emp_name || '-';
+    // Fallback: resolve card holder via IssueCards search when missing
+    if((!cardHolder || cardHolder==='-') && cardNum){
+      try{
+        const sr = await fetch('{% url "crud-issuecards-search" %}?q='+encodeURIComponent(cardNum));
+        const sj = await sr.json();
+        const item = (sj.items||[])[0];
+        const name = item?.employee_fullname || item?.employee_name || item?.emp_name || item?.owner_name || '';
+        if(name){ cardHolder = name; }
+      }catch(err){ /* ignore */ }
+    }
+    const statusCellHtml = statusBadge(isOk, data.status_text);
+    tr.innerHTML = [
+      new Date().toLocaleTimeString(),     // Time
+      eventPoint,                          // Event point (door id for test)
+      eventDesc,                           // Event Description
+      cardNum,                             // Card Number
+      (doorName && String(doorName).trim()) ? doorName : '-', // Name shows door name for test
+      (cardHolder && String(cardHolder).trim()) ? cardHolder : '-', // Card holder
+      statusCellHtml,                      // Status
+      'TEST'                               // Verify Mode
+    ].map(v=>`<td>${v}</td>`).join('');
+    body.insertBefore(tr, body.firstChild);
+    // Defensive: enforce Event Description and Card Number positions
+    try { tr.cells[2].textContent = eventDesc; } catch(e){}
+    try { tr.cells[3].textContent = cardNum; } catch(e){}
+    // Action buttons depending on recognition
+    let statusTd = tr.cells[7];
+    if(!statusTd && tr.cells.length>8){ statusTd = tr.cells[8]; }
+    if(!isOk && cardNum){
+      const addBtn = document.createElement('button');
+      addBtn.textContent = 'Adaugă Card';
+      addBtn.style.marginLeft='6px'; addBtn.style.padding='2px 6px'; addBtn.style.fontSize='10px'; addBtn.style.border='none'; addBtn.style.borderRadius='3px'; addBtn.style.background='#1e90ff'; addBtn.style.color='#fff'; addBtn.style.cursor='pointer';
+      addBtn.onclick = ()=>openAddCardModal(cardNum);
+      if(statusTd){ statusTd.appendChild(addBtn); }
+    } else if (isOk && data.employee){
+      const editBtn = document.createElement('button');
+      editBtn.textContent = 'Modifică';
+      editBtn.style.marginLeft='6px'; editBtn.style.padding='2px 6px'; editBtn.style.fontSize='10px'; editBtn.style.border='none'; editBtn.style.borderRadius='3px'; editBtn.style.background='#2da44e'; editBtn.style.color='#fff'; editBtn.style.cursor='pointer';
+      editBtn.onclick = ()=>location.href = `/agent/crud/employees/${data.employee}/edit/`;
+      if(statusTd){ statusTd.appendChild(editBtn); }
+    }
+  }catch(e){ console.error(e); }
+}
+function openAddCardModal(card){
+  // Create a lightweight modal host
+  let host = document.getElementById('monitorAddCardModal');
+  if(!host){
+    host = document.createElement('div'); host.id='monitorAddCardModal';
+    host.style.position='fixed'; host.style.inset='0'; host.style.background='rgba(0,0,0,0.6)'; host.style.zIndex='1000'; host.style.display='none';
+    const panel = document.createElement('div'); panel.style.margin='60px auto'; panel.style.maxWidth='900px'; panel.style.background='#2d5a7b'; panel.style.border='1px solid #3d6a8b'; panel.style.borderRadius='6px'; panel.style.padding='10px';
+    panel.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;color:#fff;margin-bottom:8px;"><strong>Adaugă Angajat / Card</strong><button onclick="document.getElementById('monitorAddCardModal').style.display='none'" style="background:#d97e4a;color:#fff;border:none;border-radius:12px;width:24px;height:24px;cursor:pointer;">×</button></div><div id="monitorAddCardBody" style="background:#fff;border-radius:4px;overflow:auto;max-height:70vh;"><div style="padding:20px;text-align:center;color:#999;">Loading...</div></div>`;
+    host.appendChild(panel); document.body.appendChild(host);
+  }
+  host.style.display='block';
+  fetch('{% url "crud-employee-create" %}?card_number='+encodeURIComponent(card)+'&suggested_id=next', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+    .then(r=>r.text()).then(html=>{ document.getElementById('monitorAddCardBody').innerHTML = html; })
+    .catch(e=>{ document.getElementById('monitorAddCardBody').innerHTML = 'Error: '+e.message; });
+}
 wsConnect();
-document.getElementById('filter').addEventListener('input',()=>renderDevices());
+// Guarded binding in case element doesn't exist
+try {
+  const ef = document.getElementById('eventFilter');
+  if(ef){ ef.addEventListener('input',()=>filterEvents()); }
+} catch{}
+async function populateDoors(){
+  try{
+    const resp = await fetch('{% url "doors-json-list" %}');
+    const data = await resp.json();
+    const sel = document.getElementById('doorFilter');
+    sel.innerHTML = '<option value="">----------------</option>';
+    (data.items||[]).forEach(d=>{
+      const opt = document.createElement('option');
+      opt.value = d.id; opt.textContent = (d.device_name? (d.device_name+': ') : '') + d.name + ` (id=${d.id})`;
+      sel.appendChild(opt);
+    });
+    // Cache doors so renderDevices can show them until WS status arrives
+    window.__doorsCache = (data.items||[]);
+    // Build a quick id->door map for event name resolution
+    const map = {};
+    (data.items||[]).forEach(d=>{ map[d.id] = { name: d.name, device_id: d.device_id }; });
+    window.__doorMap = map;
+    renderDevices();
+  }catch(e){ console.warn('door list error', e); }
+  finally{ updateDiagnostics(); }
+}
+async function testDoorOpen(){
+  const sel = document.getElementById('doorFilter');
+  const doorPk = sel && sel.value ? sel.value : '';
+  try{
+    if(!doorPk){
+      addEvent({ description:'door.open ERR: selectează o ușă', status:'ERR', verify_mode:'API' });
+      return;
+    }
+    // Rotate through cards from DB to avoid repeating the same card
+    let randomCard = '';
+    try{
+      window.__cardsCache = window.__cardsCache || [];
+      // If cache empty, fetch all issue cards
+      if(window.__cardsCache.length === 0){
+        try{
+          const sr = await fetch('{% url "crud-issuecards-list" %}');
+          const sj = await sr.json();
+          const items = Array.isArray(sj.items) ? sj.items : [];
+          const seen = new Set();
+          window.__cardsCache = items
+            .map(it => ({
+              card_number: it?.card_number || it?.card || '',
+              employee_fullname: it?.employee_fullname || it?.employee_name || it?.emp_name || it?.owner_name || ''
+            }))
+            .filter(it => {
+              const cn = it.card_number; if(!cn || seen.has(cn)) return false; seen.add(cn); return true;
+            });
+        }catch(e){ console.warn('cards fetch error', e); }
+      }
+      // If still empty, log warning and skip random selection
+      if(!Array.isArray(window.__cardsCache) || window.__cardsCache.length === 0){
+        console.warn('No cards found in cache');
+      } else {
+        // Always pick a random card from the cache
+        const lastCard = window.__lastTestCard || '';
+        let pool = window.__cardsCache;
+        // Filter out last card if there are alternatives
+        if(window.__cardsCache.length > 1){
+          const filtered = window.__cardsCache.filter(c => c.card_number !== lastCard);
+          if(filtered.length > 0){ pool = filtered; }
+        }
+        const pickObj = pool[Math.floor(Math.random() * pool.length)];
+        if(pickObj){
+          randomCard = pickObj.card_number;
+          window.__lastTestCard = randomCard;
+          console.log('Frontend selected card:', randomCard);
+        }
+      }
+    }catch(e){ console.error('Card selection error:', e); }
+    // Always send card_number to backend (never use use_existing on API call)
+    const url = `/agent/api/test-read-card?door_pk=${encodeURIComponent(doorPk)}&card_number=${encodeURIComponent(randomCard)}`;
+    console.log('Sending to backend:', url);
+    const resp = await fetch(url);
+    const data = await resp.json();
+    const map = window.__doorMap || {};
+    let nm = (data.event_point_id && map[data.event_point_id] && map[data.event_point_id].name) ? map[data.event_point_id].name : '-';
+    if(nm==='-'){
+      const opt = Array.from(sel.options||[]).find(o=>String(o.value)===String(doorPk));
+      if(opt){ nm = String(opt.textContent||'').replace(/^[^:]+:\s*/,'').replace(/\s*\(id=\d+\)$/,'') || '-'; }
+    }
+    // Resolve card holder using response or fallback IssueCards search
+    // Prefer the randomly chosen card; if backend ignores it, still show our pick
+    // Always prefer server-selected card_number for truth; fallback to our pick
+    const cardNum = data.card_number || randomCard || '';
+    // Optional tiny debug to verify backend variety
+    if(typeof data.card_list_count !== 'undefined'){
+      console.debug('Cards available (server):', data.card_list_count, data.card_list_sample);
+    }
+    let holder = data.employee_fullname || data.employee_full_name || data.employee_name || data.emp_fullname || data.emp_name || '-';
+    if((!holder || holder==='-') && cardNum){
+      try{
+        const sr = await fetch('{% url "crud-issuecards-search" %}?q='+encodeURIComponent(cardNum));
+        const sj = await sr.json();
+        const item = (sj.items||[])[0];
+        const name = item?.employee_fullname || item?.employee_name || item?.emp_name || item?.owner_name || '';
+        if(name){ holder = name; }
+      }catch(err){ /* ignore */ }
+    }
+    addEvent({
+      time: new Date().toLocaleTimeString(),
+      point: (data.event_point_id || doorPk),
+      description: data.ok ? 'DESCHIDERE UȘĂ ACCEPTATĂ' : ('DESCHIDERE UȘĂ RESPINSĂ: '+ translateReasons(Array.isArray(data.reasons)? data.reasons.join(', '):(data.reasons||data.error||''))),
+      card_no: cardNum,
+      name: nm,
+      cardholder: holder,
+      status: data.ok ? 'OK' : 'RESPINS',
+      verify_mode: 'TEST'
+    });
+  }catch(e){ console.error(e); addEvent({ description:'door.open ERR', status:'ERR', verify_mode:'API', point: doorPk }); }
+}
+populateDoors();
+function translateReasons(r){
+  if(!r) return '';
+  const s = (Array.isArray(r)? r.join(', ') : String(r)).toLowerCase();
+  return s
+    .replaceAll('no_employee_for_card','nu există angajat pentru acest card')
+    .replaceAll('outside_time_segments','în afara intervalelor de timp')
+    .replaceAll('door_open_failed','deschiderea ușii a eșuat')
+    .replaceAll('unauth','neautorizat')
+    .replaceAll('not_allowed','acces nepermis');
+}
+function statusBadge(ok, statusText){
+  const label = ok ? 'ACCEPTAT' : 'RESPINS';
+  const color = ok ? '#2da44e' : '#cf222e';
+  return `<span style="display:inline-block;padding:2px 8px;border-radius:12px;background:${color};color:#fff;font-weight:600;">${statusText||label}</span>`;
+}
 </script>
 {% endblock %}

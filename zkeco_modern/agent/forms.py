@@ -434,7 +434,7 @@ class DeviceExtendedForm(forms.ModelForm):
             'name', 'serial_number', 'device_type', 'comm_mode', 'ip_address', 'port',
             'comm_password', 'rs485_port', 'rs485_baudrate', 'rs485_address',
             'area_name', 'time_zone', 'firmware_version', 'hardware_version',
-            'enabled', 'auto_sync_time', 'clear_on_add'
+            'enabled', 'auto_sync_time', 'clear_on_add', 'scanner_linked', 'scanner_type',
         ]
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'e.g., FINANCIAR, Medical'}),
@@ -463,6 +463,8 @@ class DeviceExtendedForm(forms.ModelForm):
         self.fields['enabled'].initial = True
         self.fields['port'].initial = 4370
         self.fields['rs485_baudrate'].initial = 9600
+        self.fields['scanner_linked'] = forms.BooleanField(required=False, label='Scanner Linked', widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}))
+        self.fields['scanner_type'] = forms.ChoiceField(required=False, label='Scanner Type', choices=[('', 'Select'), ('acp', 'ACP TCP'), ('elatec', 'Elatec Serial')], widget=forms.Select(attrs={'class': 'form-control'}))
     
     def clean(self):
         cleaned = super().clean()

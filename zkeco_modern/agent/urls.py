@@ -37,6 +37,7 @@ urlpatterns = [
     path("crud/access-levels/<int:pk>/delete/", views.access_level_delete, name="crud-access-level-delete"),
     path("crud/employees/", views.employees_list, name="crud-employees-list"),
     path("crud/employees/json/", views.employees_json_list, name="crud-employees-json"),
+    path("api/doors/list", views.doors_json_list, name="doors-json-list"),
     path("crud/employees/new/", views.employee_create, name="crud-employee-create"),
     path("crud/employees/check-personnel-no/", views.check_personnel_no, name="crud-employee-check-personnel"),
     path("crud/employees/check-cards/", views.check_card_numbers, name="crud-employee-check-cards"),
@@ -89,6 +90,7 @@ urlpatterns = [
     path("api/doors/<int:pk>/close/", views.door_pk_close, name="door-pk-close"),
     path("api/access/check/", views.access_check, name="access-check"),
     path("api/access/evaluate-open/", views.access_evaluate_and_open, name="access-evaluate-open"),
+    path("api/test-read-card", views.test_read_card, name="api-test-read-card"),
     path("api/commands/recent/", views.command_recent, name="command-recent"),
     path("shutdown/", views.server_shutdown, name="agent-shutdown"),
     # Control Center (grouped operations & CommCenter management)

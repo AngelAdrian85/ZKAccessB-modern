@@ -21,6 +21,7 @@ tr:nth-child(even){background:#fafbfc;}
   <div class="search-bar">
     <input id="filter" placeholder="Search by ID or SN" oninput="filterRows()" />
     <button class="btn" onclick="location.href='/agent/monitor/'">Go Monitor</button>
+    <button class="btn" style="background:#2da44e;border-color:#1f7d35;" onclick="openDeviceModal()">➕ Dispozitiv Scanner</button>
   </div>
   <table id="dev-table">
     <thead>
@@ -54,6 +55,27 @@ function filterRows(){
     const q=r.getAttribute('data-q');
     r.style.display = (!term || q.toLowerCase().includes(term)) ? '' : 'none';
   });
+}
+
+// Lightweight modal host that includes the compact device form fragment
+function openDeviceModal(){
+  let host = document.getElementById('deviceQuickModalHost');
+  if(!host){
+    host = document.createElement('div'); host.id='deviceQuickModalHost';
+    host.style.position='fixed'; host.style.inset='0'; host.style.background='rgba(0,0,0,0.6)'; host.style.zIndex='1000'; host.style.display='none';
+    const panel = document.createElement('div'); panel.style.margin='40px auto'; panel.style.maxWidth='960px'; panel.style.background='#2d5a7b'; panel.style.border='1px solid #3d6a8b'; panel.style.borderRadius='6px'; panel.style.padding='10px';
+    panel.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;color:#fff;margin-bottom:8px;"><strong>Adaugă Dispozitiv Scanner</strong><button onclick="closeDeviceModal()" style="background:#d97e4a;color:#fff;border:none;border-radius:12px;width:24px;height:24px;cursor:pointer;">×</button></div><div id="deviceQuickModalBody" style="background:#fff;border-radius:4px;overflow:auto;max-height:70vh;"></div>`;
+    host.appendChild(panel); document.body.appendChild(host);
+  }
+  host.style.display='block';
+  // Inject the compact device form fragment directly
+  document.getElementById('deviceQuickModalBody').innerHTML = `
+    {% include 'agent/device_form_fragment.html' %}
+  `;
+}
+function closeDeviceModal(){
+  const host = document.getElementById('deviceQuickModalHost');
+  if(host){ host.style.display='none'; }
 }
 </script>
 </body></html>

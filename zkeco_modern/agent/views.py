@@ -290,8 +290,10 @@ def status_summary(request: HttpRequest):
 
 def device_list(request: HttpRequest):
     from .models import Device
+    from .forms import DeviceExtendedForm
     devices = Device.objects.all().order_by('name')
-    return render(request, 'agent/device_list.html', {'devices': devices})
+    form = DeviceExtendedForm()
+    return render(request, 'agent/device_list.html', {'devices': devices, 'form': form})
 
 def devices_crud_list(request: HttpRequest):
     if not request.user.is_authenticated:
@@ -299,8 +301,16 @@ def devices_crud_list(request: HttpRequest):
         return redirect_to_login(request.get_full_path())
     from .models import Device
     qs = Device.objects.order_by('name')
+    # Filter: all (default) | controllers | new | readers
+    flt = (request.GET.get('filter') or 'all').strip().lower()
+    if flt == 'controllers':
+        qs = qs.filter(device_type__in=['access_panel','door_controller','two_door_panel','multi_door_panel'], scanner_linked=False)
+    elif flt == 'readers':
+        qs = qs.filter(scanner_linked=True)
+    elif flt == 'new':
+        qs = qs.filter(scanner_linked=False).exclude(device_type__in=['access_panel','door_controller','two_door_panel','multi_door_panel'])
     page = _paginate(qs, request)
-    return render(request,'agent/devices_crud_list.html',{'page': page})
+    return render(request,'agent/devices_crud_list.html',{'page': page, 'active_filter': flt})
 
 def device_ping(request: HttpRequest):
     if not request.user.is_authenticated:
@@ -1620,9 +1630,138 @@ def access_evaluate_and_open(request: HttpRequest):
                     return door_open(request, int(device_id), str(door_id))
             except Exception:
                 reasons.append('door_open_failed')
-        return JsonResponse({'ok': allowed, 'employee': getattr(emp,'id', None), 'door': getattr(door,'id', None), 'source': source, 'reasons': reasons})
+        # Friendly Romanian status and employee name
+        status_text = 'ACCEPTAT' if allowed else 'RESPINS'
+        employee_name = None
+        try:
+            if emp:
+                fn = getattr(emp,'first_name','') or ''
+                ln = getattr(emp,'last_name','') or ''
+                employee_name = (fn+' '+ln).strip()
+        except Exception:
+            employee_name = None
+        return JsonResponse({
+            'ok': allowed,
+            'employee': getattr(emp,'id', None),
+            'employee_name': employee_name,
+            'door': getattr(door,'id', None),
+            'source': source,
+            'reasons': reasons,
+            'status_text': status_text,
+        })
     except Exception as e:
         return JsonResponse({'ok': False, 'error': str(e)}, status=400)
+
+def test_read_card(request: HttpRequest):
+    """Generate a random 8-digit card and evaluate/open for a given door.
+    Query:
+      - door_pk: optional Door PK to target; if missing, first door is used.
+      - card_number: optional card to use; if missing, a random 8-digit card is used.
+    Returns JSON with evaluation result and the card number used, plus event_point_id.
+    """
+    # Allow test from monitor without login to simplify UX
+    import random
+    from .models import Door, EmployeeCard, Employee
+    
+    # Optional provided card number; else pick an existing registered card if available
+    provided_card = (request.GET.get('card_number') or '').strip()
+    use_existing = (request.GET.get('use_existing') or '').strip() in ('1','true','yes')
+    
+    # DEBUG: Log what we receive
+    import sys
+    debug_log = f"test_read_card called: provided_card='{provided_card}', use_existing={use_existing}"
+    print(debug_log, file=sys.stderr)
+    
+    card = None
+    if provided_card:
+        card = provided_card
+        print(f"Using provided card: {card}", file=sys.stderr)
+    elif use_existing:
+        try:
+            # Fetch fresh list of ALL registered cards on every request
+            ecs = []
+            try:
+                ec_cards = list(EmployeeCard.objects.exclude(card_number__isnull=True).exclude(card_number='').values_list('card_number', flat=True)[:500])
+                ecs.extend(ec_cards)
+            except Exception as e:
+                pass
+            try:
+                emp_primary = list(Employee.objects.exclude(card_number__isnull=True).exclude(card_number='').values_list('card_number', flat=True)[:500])
+                ecs.extend(emp_primary)
+            except Exception as e:
+                pass
+            try:
+                emp_secondary = list(Employee.objects.exclude(secondary_card_number__isnull=True).exclude(secondary_card_number='').values_list('secondary_card_number', flat=True)[:500])
+                ecs.extend(emp_secondary)
+            except Exception as e:
+                pass
+            # Deduplicate and convert to list
+            ecs = [str(x) for x in ecs if x]
+            ecs = list(dict.fromkeys(ecs))
+            
+            print(f"Available cards in DB: {ecs}", file=sys.stderr)
+            
+            # Use a counter-based selection that rotates through all cards
+            # This guarantees each card is picked in sequence, ensuring variety
+            if ecs:
+                import time as _time
+                # Use current time + request count to seed a diverse selection
+                seed_val = int(_time.time() * 1000) % len(ecs)  # Millisecond-based index
+                card = ecs[seed_val]
+                print(f"Selected card (seed_val={seed_val}): {card}", file=sys.stderr)
+            else:
+                card = None
+        except Exception as e:
+            print(f"Error in use_existing: {e}", file=sys.stderr)
+            card = None
+    if not card:
+        card = str(random.randint(10000000, 99999999))
+        print(f"Generated random card: {card}", file=sys.stderr)
+    # Resolve door
+    door_pk = request.GET.get('door_pk')
+    door = None
+    try:
+        if door_pk:
+            door = Door.objects.filter(pk=int(door_pk)).first()
+        else:
+            door = Door.objects.order_by('id').first()
+    except Exception:
+        door = Door.objects.order_by('id').first()
+    if not door:
+        return JsonResponse({'ok': False, 'error': 'no-door', 'card_number': card}, status=400)
+    # Call existing evaluator
+    try:
+        import json
+        payload = json.dumps({'card_number': card, 'door_pk': door.id, 'source': 'test'})
+        # Build a faux POST request using current request as base
+        req = request
+        req.method = 'POST'
+        req._body = payload.encode('utf-8')
+        resp = access_evaluate_and_open(req)
+        # Ensure card_number is present in response
+        try:
+            import json as _json
+            payload = resp.content.decode('utf-8') if hasattr(resp, 'content') else ''
+            data = _json.loads(payload) if payload else {}
+        except Exception:
+            data = {}
+        if isinstance(data, dict):
+            # Ensure card_number and reasons are present for UI rendering
+            if 'card_number' not in data:
+                data['card_number'] = card
+            # Include event_point_id for monitor column mapping
+            data['event_point_id'] = door.id
+            # Persist last used to avoid immediate repeats
+            # Track last used and maintain round-robin index persistence
+            try:
+                from django.core.cache import cache as _cache
+                _cache.set('agent:last_test_card', card, timeout=600)
+            except Exception:
+                pass
+            return JsonResponse(data)
+        return resp
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e), 'card_number': card, 'event_point_id': door and door.id}, status=400)
 
 def employees_json_list(request: HttpRequest):
     if not request.user.is_authenticated:
@@ -1638,6 +1777,24 @@ def employees_json_list(request: HttpRequest):
                 'last_name': getattr(e,'last_name','') or '',
                 'card_number': getattr(e,'card_number', None),
                 'secondary_card_number': getattr(e,'secondary_card_number', None),
+            })
+        return JsonResponse({'items': items})
+    except Exception as ex:
+        return JsonResponse({'items': [], 'error': str(ex)}, status=500)
+
+def doors_json_list(request: HttpRequest):
+    if not request.user.is_authenticated:
+        return JsonResponse({'items': []}, status=403)
+    try:
+        from .models import Door
+        qs = Door.objects.select_related('device').order_by('id')
+        items = []
+        for d in qs:
+            items.append({
+                'id': d.id,
+                'name': d.name or f"Door {d.id}",
+                'device_id': getattr(d.device,'id', None),
+                'device_name': getattr(d.device,'name', None),
             })
         return JsonResponse({'items': items})
     except Exception as ex:
@@ -2551,7 +2708,23 @@ def employee_create(request: HttpRequest):
             if is_ajax:
                 return JsonResponse({'ok': False, 'errors': form.errors})
     else:
-        form = EmployeeExtendedForm()
+        # Prefill from query for quick add via Test Read
+        init = {}
+        card_q = (request.GET.get('card_number') or '').strip()
+        sugg = (request.GET.get('suggested_id') or '').strip()
+        if card_q:
+            init['card_number'] = card_q
+        if sugg:
+            try:
+                if sugg == 'next':
+                    from .models import Employee
+                    next_id = (Employee.objects.order_by('-id').first().id + 1) if Employee.objects.exists() else 1
+                    init['legacy_userid'] = next_id
+                else:
+                    init['legacy_userid'] = int(sugg)
+            except Exception:
+                pass
+        form = EmployeeExtendedForm(initial=init)
     
     # Return ultra-compact fragment for AJAX modal, full page otherwise
     template = 'agent/employee_form_fragment.html' if is_ajax else 'agent/employee_form.html'

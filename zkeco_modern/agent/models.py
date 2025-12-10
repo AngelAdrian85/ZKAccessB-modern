@@ -79,6 +79,10 @@ class Device(models.Model):
     firmware_version = models.CharField(max_length=64, blank=True, default='', help_text="Firmware version")
     hardware_version = models.CharField(max_length=64, blank=True, default='', help_text="Hardware version")
     
+    # Scanner linkage (ACP/Elatec readers use these devices)
+    scanner_linked = models.BooleanField(default=False, help_text="Device is used by card scanners")
+    scanner_type = models.CharField(max_length=16, blank=True, default='', help_text="Scanner type: acp/elatec")
+    
     # Metadata
     created_at = models.DateTimeField(auto_now_add=True)
     last_contact = models.DateTimeField(null=True, blank=True, help_text="Last successful communication")
@@ -88,12 +92,31 @@ class Device(models.Model):
             models.Index(fields=["serial_number"]),
             models.Index(fields=["ip_address"]),
             models.Index(fields=["enabled"]),
+            models.Index(fields=["scanner_linked"]),
         ]
         verbose_name = "Access Control Device"
         verbose_name_plural = "Access Control Devices"
 
     def __str__(self):
         return f"{self.name} (SN:{self.serial_number})"[:80]
+
+    # Classification helpers for UI/filters
+    def is_controller(self):
+        return (self.device_type in ('access_panel', 'door_controller', 'two_door_panel', 'multi_door_panel')) and (not self.scanner_linked)
+
+    def is_reader(self):
+        return bool(self.scanner_linked)
+
+    def type_badge(self):
+        if self.is_reader():
+            if self.scanner_type == 'acp':
+                return 'Reader: ACP'
+            if self.scanner_type == 'elatec':
+                return 'Reader: Elatec'
+            return 'Reader'
+        if self.is_controller():
+            return 'Centrală'
+        return 'Dispozitiv'
 
 
 class DeviceStatus(models.Model):

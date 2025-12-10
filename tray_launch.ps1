@@ -171,20 +171,30 @@ try {
     if ($LASTEXITCODE -ne 0) { & $py -m pip install pyserial -q > $null 2> $null }
     $elatecEnabled = $true
     $elatecPort = 'COM3'
+    $elatecMode = 'serial'
     if ($ReaderCfg -and $ReaderCfg.elatec) {
       if ($ReaderCfg.elatec.enabled -eq $false) { $elatecEnabled = $false }
       if ($ReaderCfg.elatec.port) { $elatecPort = [string]$ReaderCfg.elatec.port }
+      if ($ReaderCfg.elatec.mode) { $elatecMode = [string]$ReaderCfg.elatec.mode }
     }
-    # Auto-disable if COM port not present
-    try {
-      $ports = (Get-CimInstance Win32_SerialPort | Select-Object -ExpandProperty DeviceID) 2> $null
-    } catch { $ports = @() }
-    if ($elatecEnabled -and (-not $ports -or ($ports -notcontains $elatecPort))) {
-      Write-Warning "[TRAY] Elatec port '$elatecPort' not found; disabling Elatec"
-      $elatecEnabled = $false
+    # Auto-disable if COM port not present (only for non-virtual mode)
+    if ($elatecMode -ne 'virtual') {
+      try {
+        $ports = (Get-CimInstance Win32_SerialPort | Select-Object -ExpandProperty DeviceID) 2> $null
+      } catch { $ports = @() }
+      if ($elatecEnabled -and (-not $ports -or ($ports -notcontains $elatecPort))) {
+        Write-Warning "[TRAY] Elatec port '$elatecPort' not found; disabling Elatec"
+        $elatecEnabled = $false
+      }
+    } else {
+      Write-Host "[TRAY] Elatec in virtual mode; skipping COM port check"
     }
     if ($elatecEnabled) {
-      Write-Host "[TRAY] Starting Elatec serial listener on $elatecPort"
+      if ($elatecMode -eq 'virtual') {
+        Write-Host "[TRAY] Starting Elatec virtual listener"
+      } else {
+        Write-Host "[TRAY] Starting Elatec serial listener on $elatecPort"
+      }
       try {
         $p2 = Start-Process -FilePath $py -ArgumentList $elatecScript, $elatecPort -PassThru -WindowStyle Hidden
         if ($p2) { $global:TrayChildPids += $p2.Id }

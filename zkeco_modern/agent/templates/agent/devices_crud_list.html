@@ -7,15 +7,27 @@
 .device-page-header h2 { margin: 0; font-size: 28px; color: #e8f0f8; text-shadow: 0 2px 4px rgba(0,0,0,0.3); }
 .btn-new { background: #3da5d9; color: #fff; border: none; padding: 12px 24px; border-radius: 6px; font-weight: 700; font-size: 14px; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.3); transition: all 0.3s ease; text-decoration: none; display: inline-block; }
 .btn-new:hover { transform: translateY(-2px); box-shadow: 0 6px 12px rgba(0,0,0,0.4); background: #2d95c9; }
+.filter-bar { max-width: 1200px; margin: -10px auto 10px; display: flex; gap: 8px; align-items: center; }
+.filter-chip { position: relative; overflow: hidden; background: linear-gradient(90deg, #102638 0%, #16344a 100%); color: #cfe9ff; border: 1px solid #3d6a8b; padding: 8px 14px; border-radius: 18px; font-size: 12px; text-decoration: none; box-shadow: 0 2px 6px rgba(0,0,0,0.3); transition: transform 0.2s ease, box-shadow 0.25s ease, background 0.4s ease; }
+.filter-chip:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,0.4); background: linear-gradient(90deg, #143248 0%, #1c4762 100%); }
+.filter-chip::after { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at var(--x) var(--y), rgba(61,165,217,0.25), transparent 45%); opacity: 0; transition: opacity 0.3s ease; }
+.filter-chip:hover::after { opacity: 1; }
+.filter-chip.active { background: linear-gradient(90deg, #1a3a52 0%, #3da5d9 100%); color: #fff; border-color: #3da5d9; animation: chipPulse 1.6s ease-in-out infinite; }
+@keyframes chipPulse { 0% { box-shadow: 0 0 0 0 rgba(61,165,217,0.5);} 70% { box-shadow: 0 0 0 8px rgba(61,165,217,0);} 100% { box-shadow: 0 0 0 0 rgba(61,165,217,0);} }
 .table-wrapper { max-width: 1200px; margin: 0 auto; overflow-x: auto; }
 .devices-table { width: 100%; border-collapse: collapse; background: #2d5a7b; border-radius: 8px; overflow: hidden; box-shadow: 0 8px 16px rgba(0,0,0,0.4); }
 .devices-table thead { background: linear-gradient(90deg, #1a3a52 0%, #3da5d9 100%); color: #fff; }
 .devices-table th { padding: 14px 12px; text-align: left; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
 .devices-table td { padding: 12px; border-bottom: 1px solid #3d6a8b; font-size: 13px; color: #e8f0f8; }
 .devices-table tbody tr:hover { background: #3d6a8b; }
+.devices-table tbody tr.controller { border-left: 4px solid #32ff7e; box-shadow: inset 0 0 0 1px rgba(50,255,126,0.25); }
+.devices-table tbody tr.reader { border-left: 4px solid #a020f0; box-shadow: inset 0 0 0 1px rgba(160,32,240,0.25); }
 .status-badge { display: inline-block; padding: 4px 10px; border-radius: 12px; font-weight: 600; font-size: 11px; }
 .status-active { background: #2da44e; color: #fff; }
 .status-inactive { background: #d97e4a; color: #fff; }
+.type-badge { margin-left: 8px; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+.type-controller { background: rgba(50,255,126,0.15); color: #8ef3b7; border: 1px solid rgba(50,255,126,0.45); }
+.type-reader { background: rgba(160,32,240,0.15); color: #d0a2ff; border: 1px solid rgba(160,32,240,0.45); }
 .action-buttons { display: flex; gap: 6px; }
 .btn-edit { color: #3da5d9; text-decoration: none; font-weight: 600; font-size: 12px; padding: 4px 8px; }
 .btn-edit:hover { text-decoration: underline; }
@@ -31,7 +43,21 @@
 <div class="device-page-wrapper">
 <div class="device-page-header">
   <h2>🖥️ Dispozitive</h2>
-  <button onclick="openDeviceModal()" class="btn-new" title="Adaugă dispozitiv nou">+ Dispozitiv Nou</button>
+  <div style="display:flex; gap:8px;">
+    <button onclick="openDeviceModal()" class="btn-new" title="Adaugă dispozitiv nou">+ Dispozitiv Nou</button>
+    <button onclick="openScannerDeviceModal()" class="btn-new" title="Adaugă dispozitiv pentru scanere">+ Dispozitiv Scanner</button>
+  </div>
+</div>
+
+<div class="filter-bar">
+  {% with af=active_filter|default:'all' %}
+  <a class="filter-chip {% if af == 'all' %}active{% endif %}" href="?filter=all">Toate</a>
+  <a class="filter-chip {% if af == 'controllers' %}active{% endif %}" href="?filter=controllers">Centrale</a>
+  <a class="filter-chip {% if af == 'new' %}active{% endif %}" href="?filter=new">Dispozitive Noi</a>
+  <a class="filter-chip {% if af == 'readers' %}active{% endif %}" href="?filter=readers">Cititoare (ACP/Elatec)</a>
+  {% endwith %}
+  <span style="margin-left:auto; font-size:11px; color:#7db3d9;">Legendă: verde=centrală, violet=cititor</span>
+  
 </div>
 
 {% if page.object_list %}
@@ -44,9 +70,15 @@
 </thead>
 <tbody>
 {% for device in page.object_list %}
-<tr>
+<tr class="{% if device.is_reader %}reader{% elif device.is_controller %}controller{% endif %}">
   <td><strong>#{{ device.id }}</strong></td>
-  <td><strong>{{ device.name }}</strong></td>
+  <td><strong>{{ device.name }}</strong>
+    {% if device.is_reader %}
+      <span class="type-badge type-reader">{{ device.type_badge }}</span>
+    {% elif device.is_controller %}
+      <span class="type-badge type-controller">{{ device.type_badge }}</span>
+    {% endif %}
+  </td>
   <td><code>{{ device.serial_number|default:"—" }}</code></td>
   <td>{{ device.ip_address|default:"—" }}</td>
   <td>{{ device.port|default:"4370" }}</td>
@@ -270,11 +302,128 @@ function getCookie(name) {
   </div>
 </div>
 
+<!-- Scanner-Linked Device Modal Form -->
+<style>
+.scanner-modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.7); z-index: 651; align-items: center; justify-content: center; padding: 12px; }
+.scanner-modal-panel { background: #2d5a7b; border: 1px solid #3d6a8b; border-radius: 8px; box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6); width: min(760px, 98vw); max-height: 90vh; display: flex; flex-direction: column; }
+.scanner-modal-header { background: linear-gradient(90deg, #1a3a52 0%, #3da5d9 100%); border-radius: 8px 8px 0 0; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; color: #fff; font-size: 15px; font-weight: 600; }
+.scanner-modal-body { padding: 16px; color: #e8f0f8; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; flex: 1; }
+.scanner-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.scanner-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
+.scanner-field label { font-size: 12px; color: #3da5d9; font-weight: 600; }
+.scanner-field input, .scanner-field select { background: #1a3a52; border: 1px solid #3d6a8b; color: #e8f0f8; padding: 8px; border-radius: 4px; font-size: 12px; }
+.scanner-modal-footer { display: flex; justify-content: space-between; gap: 10px; padding: 12px 16px; border-top: 1px solid #3d6a8b; }
+.scanner-actions { display: flex; gap: 8px; align-items: center; }
+.scanner-btn { background: #2da44e; color: #fff; border: none; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.3); transition: transform 0.15s ease, box-shadow 0.25s ease; }
+.scanner-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(0,0,0,0.4); }
+.scanner-btn.secondary { background: #1e90ff; }
+.scanner-btn.warn { background: #d97e4a; }
+</style>
+
+<div id="scannerDeviceModal" class="scanner-modal-overlay">
+  <div class="scanner-modal-panel">
+    <div class="scanner-modal-header">
+      <span>✚ Dispozitiv pentru Scanere</span>
+      <button onclick="closeScannerDeviceModal()" style="background: transparent; border: none; color: #fff; font-size: 20px; cursor: pointer;">✕</button>
+    </div>
+    <div class="scanner-modal-body">
+      <form id="scannerDeviceForm" onsubmit="submitScannerDeviceForm(event)">
+        <div class="scanner-grid">
+          <div class="scanner-field">
+            <label><span style="color:#88c3ff;">*</span> Nume Dispozitiv</label>
+            <input name="name" required>
+          </div>
+          <div class="scanner-field">
+            <label>Număr Serie (SN)</label>
+            <input name="serial_number">
+          </div>
+          <div class="scanner-field">
+            <label><span style="color:#88c3ff;">*</span> Tip Scanner</label>
+            <select name="scanner_type" required onchange="toggleScannerComm()">
+              <option value="acp">ACP TCP</option>
+              <option value="elatec">Elatec Serial</option>
+            </select>
+          </div>
+          <div class="scanner-field">
+            <label>Activ</label>
+            <input type="checkbox" name="enabled" checked>
+          </div>
+        </div>
+        <div id="scanner-acp" class="scanner-grid" style="margin-top:10px;">
+          <div class="scanner-field">
+            <label>Adresă IP</label>
+            <input name="ip_address" placeholder="192.168.1.150">
+          </div>
+          <div class="scanner-field">
+            <label>Port</label>
+            <input name="port" type="number" value="4370">
+          </div>
+        </div>
+        <div id="scanner-elatec" class="scanner-grid" style="display:none; margin-top:10px;">
+          <div class="scanner-field">
+            <label>Port Serial</label>
+            <input name="rs485_port" placeholder="COM3">
+          </div>
+          <div class="scanner-field">
+            <label>Baud Rate</label>
+            <input name="rs485_baudrate" type="number" value="9600">
+          </div>
+        </div>
+        <div class="scanner-grid" style="margin-top:10px;">
+          <div class="scanner-field">
+            <label>Prefix Rețea (ex: 100.51.101)</label>
+            <input type="text" id="scanner_discovery_prefix" placeholder="100.51.101">
+          </div>
+          <div class="scanner-field">
+            <label>Test IP (Ping)</label>
+            <input type="text" id="scanner_ping_ip" placeholder="100.51.101.95">
+          </div>
+          <div class="scanner-field">
+            <label>Test Port TCP</label>
+            <div style="display:flex; gap:8px;">
+              <input type="text" id="scanner_port_ip" placeholder="100.51.101.95" style="flex:1;">
+              <input type="number" id="scanner_port_num" value="4370" style="width:90px;">
+            </div>
+          </div>
+        </div>
+        <div id="scannerDiscoveryResults" style="margin-top:8px; font-size:12px; color:#dfe8ff;"></div>
+        <input type="hidden" name="device_type" value="biometric_reader">
+        <input type="hidden" name="comm_mode" value="tcp" id="scanner-comm-mode">
+        <input type="hidden" name="scanner_linked" value="on">
+        <div class="scanner-modal-footer">
+          <div class="scanner-actions">
+            <button type="button" class="scanner-btn" onclick="scannerDiscover()">Scanează Rețeaua</button>
+            <button type="button" class="scanner-btn secondary" onclick="scannerPing()">Ping</button>
+            <button type="button" class="scanner-btn warn" onclick="scannerPortTest()">Test Port</button>
+          </div>
+          <div>
+            <button type="button" class="secondary" onclick="closeScannerDeviceModal()">Anulează</button>
+            <button type="submit" class="primary">Salvează</button>
+          </div>
+        </div>
+        <div id="scannerDeviceStatus" class="device-modal-status"></div>
+      </form>
+    </div>
+  </div>
+  
+</div>
+
 <script>
 function toggleDeviceCommMode() {
   const mode = document.querySelector('input[name="comm_mode"]:checked').value;
   document.getElementById('device-tcp-group').style.display = (mode === 'tcp') ? 'block' : 'none';
   document.getElementById('device-rs485-group').style.display = (mode === 'rs485') ? 'block' : 'none';
+}
+
+function openScannerDeviceModal(){ document.getElementById('scannerDeviceModal').style.display='flex'; }
+function closeScannerDeviceModal(){ document.getElementById('scannerDeviceModal').style.display='none'; document.getElementById('scannerDeviceForm').reset(); document.getElementById('scannerDeviceStatus').textContent=''; }
+function toggleScannerComm(){
+  const t = document.querySelector('#scannerDeviceForm select[name="scanner_type"]').value;
+  const acp = document.getElementById('scanner-acp');
+  const el = document.getElementById('scanner-elatec');
+  const cm = document.getElementById('scanner-comm-mode');
+  if(t === 'acp'){ acp.style.display='grid'; el.style.display='none'; cm.value='tcp'; }
+  else { acp.style.display='none'; el.style.display='grid'; cm.value='rs485'; }
 }
 
 async function submitDeviceForm(e) {
@@ -320,6 +469,85 @@ function discoverDevices() {
     .catch(e => {
       resultsDiv.innerHTML = '✗ Eroare la scanare: ' + e.message;
     });
+}
+
+async function submitScannerDeviceForm(e){
+  e.preventDefault();
+  const form = document.getElementById('scannerDeviceForm');
+  const status = document.getElementById('scannerDeviceStatus');
+  const fd = new FormData(form);
+  // Ensure scanner_linked boolean is set correctly
+  fd.set('scanner_linked', 'on');
+  status.textContent = '⏳ Se salvează...';
+  try {
+    const resp = await fetch('/agent/crud/devices/new/', {
+      method: 'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') }, body: fd
+    });
+    const data = await resp.json();
+    if(data.ok){ status.textContent = '✓ Dispozitiv scanner salvat!'; setTimeout(()=>{ closeScannerDeviceModal(); location.reload(); }, 1000); }
+    else { status.textContent = '✗ Eroare: ' + (data.error || 'Necunoscut'); }
+  } catch(err){ status.textContent = '✗ Eroare: ' + err.message; }
+}
+
+// Scanner discovery helpers
+function scannerDiscover(){
+  const pref = (document.getElementById('scanner_discovery_prefix').value || '').trim();
+  if(!pref){ document.getElementById('scannerDiscoveryResults').textContent = '⚠ Introdu prefix (ex: 192.168.1)'; return; }
+  // Build /24 CIDR
+  const range = `${pref}.0/24`;
+  const div = document.getElementById('scannerDiscoveryResults');
+  div.textContent = `⏳ Scanare: ${range} ...`;
+  fetch(`/agent/devices/discover/?range=${encodeURIComponent(range)}`)
+    .then(r=>r.json()).then(d=>{
+      if(d.ok && d.devices && d.devices.length){
+        div.innerHTML = `<strong>✓ Găsite ${d.devices.length} dispozitive (clic pentru auto-completare):</strong><ul style="margin:6px 0; padding-left: 18px;">` +
+          d.devices.map(x=>`<li><a href="#" onclick="applyDiscovery('${x.ip}'); return false;">${x.ip}</a> ${x.model?('- '+x.model):''}</li>`).join('') + '</ul>';
+      } else {
+        div.textContent = '⚠ Nimic găsit. Verifică firewall/ICMP sau încearcă test port.';
+      }
+    }).catch(e=>{ div.textContent = '✗ Eroare: ' + e.message; });
+}
+
+function scannerPing(){
+  const ip = (document.getElementById('scanner_ping_ip').value || '').trim();
+  if(!ip){ document.getElementById('scannerDiscoveryResults').textContent = '⚠ Introdu IP pentru ping'; return; }
+  const div = document.getElementById('scannerDiscoveryResults');
+  div.textContent = `⏳ Ping ${ip} ...`;
+  fetch(`/agent/devices/ping/?ip=${encodeURIComponent(ip)}`)
+    .then(r=>r.json()).then(d=>{
+      if(d.ok && d.alive){ div.textContent = `✓ ${ip} răspunde la ping`; }
+      else { div.textContent = `✗ ${ip} nu răspunde (${d.error||'no-reply'})`; }
+    }).catch(e=>{ div.textContent = '✗ Eroare: ' + e.message; });
+}
+
+function scannerPortTest(){
+  const ip = (document.getElementById('scanner_port_ip').value || '').trim();
+  const port = parseInt((document.getElementById('scanner_port_num').value || '4370'), 10);
+  if(!ip){ document.getElementById('scannerDiscoveryResults').textContent = '⚠ Introdu IP pentru test port'; return; }
+  const div = document.getElementById('scannerDiscoveryResults');
+  div.textContent = `⏳ Test port ${port} pe ${ip} ...`;
+  fetch(`/agent/devices/port-test/?ip=${encodeURIComponent(ip)}&port=${encodeURIComponent(port)}`)
+    .then(r=>r.json()).then(d=>{
+      if(d.ok && d.open){ div.textContent = `✓ Port ${port} este deschis pe ${ip}`; }
+      else { div.textContent = `✗ Port ${port} este închis sau filtrat pe ${ip}`; }
+    }).catch(e=>{ div.textContent = '✗ Eroare: ' + e.message; });
+}
+
+function applyDiscovery(ip){
+  // Fill fields based on current scanner type
+  const t = document.querySelector('#scannerDeviceForm select[name="scanner_type"]').value;
+  if(t === 'acp'){
+    const ipInput = document.querySelector('#scannerDeviceForm input[name="ip_address"]');
+    const portInput = document.querySelector('#scannerDeviceForm input[name="port"]');
+    if(ipInput){ ipInput.value = ip; }
+    if(portInput && (!portInput.value || portInput.value === '')){ portInput.value = '4370'; }
+    document.getElementById('scanner_ping_ip').value = ip;
+    document.getElementById('scanner_port_ip').value = ip;
+  } else {
+    // For Elatec (serial), we still set helper test fields
+    document.getElementById('scanner_ping_ip').value = ip;
+    document.getElementById('scanner_port_ip').value = ip;
+  }
 }
 </script>
 

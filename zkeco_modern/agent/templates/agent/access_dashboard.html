@@ -152,7 +152,7 @@ table th, table td { padding: 4px 6px; }
       {% endfor %}
       </tbody>
     </table>
-    <h3>Doors</h3>
+    <h3 style="display:flex;justify-content:space-between;align-items:center;">Doors <button onclick="testReadCard()" title="Test Citire Card" style="padding:4px 8px;font-size:10px;background:#2da44e;border:none;border-radius:4px;color:#fff;cursor:pointer;">🪪 Test Citire Card</button></h3>
     <table style="width: 100%;">
       <thead>
         <tr><th>Door</th><th>Status</th><th>Action</th></tr>
@@ -368,6 +368,35 @@ function submitDeviceForm(form) {
   });
 }
 function doorAction(doorId, action) { console.log('Door ' + doorId + ' - ' + action); }
+async function testReadCard(){
+  try {
+    const resp = await fetch('{% url "api-test-read-card" %}');
+    const data = await resp.json();
+    const cont = document.getElementById('eventsContainer');
+    const el = document.createElement('div');
+    el.style.borderLeft = '3px solid ' + (data.ok ? '#2da44e' : '#d97e4a');
+    el.style.padding = '6px 8px'; el.style.margin = '4px 0';
+    const card = data.card_number || 'random';
+    if(data.ok){
+      el.innerHTML = `✓ Card ${card} acceptat → deschis ușa #${data.door || ''}`;
+    } else {
+      const reasons = (data.reasons || data.error || 'necunoscut');
+      el.innerHTML = `✗ Card ${card} respins (${Array.isArray(reasons)?reasons.join(', '):reasons}) ` +
+        `<button onclick="openAddCardModal('${card}')" style="margin-left:6px;padding:2px 6px;font-size:10px;border:none;border-radius:3px;background:#1e90ff;color:#fff;cursor:pointer;">Adaugă Card</button>`;
+    }
+    cont.prepend(el);
+  } catch(e){ console.error(e); }
+}
+function openAddCardModal(card){
+  // Open quick employee modal and prefill card + suggested id
+  const modal = document.getElementById('employeeModal');
+  const body = document.getElementById('employeeModalBody');
+  modal.classList.add('show');
+  body.innerHTML = '<div style="padding:20px;text-align:center;color:#999;">Loading...</div>';
+  fetch('{% url "crud-employee-create" %}?card_number='+encodeURIComponent(card)+'&suggested_id=next', {
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  }).then(r=>r.text()).then(html=>{ body.innerHTML = html; }).catch(e=>{ body.innerHTML = 'Error: '+e.message; });
+}
 window.onclick = function(event) {
   let getModal = document.getElementById('getStartedModal');
   let quickModal = document.getElementById('quickStartModal');
