@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Event Log Improvements - Test Suite</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0d1117;
+            color: #cfe9f8;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #2da44e;
+            border-bottom: 2px solid #2da44e;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #4db3ff;
+            margin-top: 30px;
+        }
+        .test-section {
+            background: #152a38;
+            border: 1px solid #1e303d;
+            border-radius: 6px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .test-case {
+            background: #0d3a63;
+            border-left: 3px solid #2da44e;
+            padding: 12px;
+            margin: 10px 0;
+            border-radius: 3px;
+        }
+        .test-case.alarm {
+            border-left-color: #cf222e;
+            background: #2d1e1e;
+        }
+        .test-case.unknown {
+            border-left-color: #9e6a03;
+            background: #3d2a1a;
+        }
+        button {
+            background: #2da44e;
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            margin: 5px 5px 5px 0;
+        }
+        button:hover {
+            background: #1f763d;
+        }
+        button.danger {
+            background: #cf222e;
+        }
+        button.danger:hover {
+            background: #a21a1e;
+        }
+        input {
+            background: #152a38;
+            border: 1px solid #1e303d;
+            color: #cfe9f8;
+            padding: 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            margin-right: 5px;
+        }
+        .result {
+            background: #1a3d2a;
+            border: 1px solid #2da44e;
+            padding: 10px;
+            border-radius: 3px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 11px;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+        }
+        .result.active {
+            display: block;
+        }
+        .result.error {
+            background: #2d1e1e;
+            border-color: #cf222e;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+        .status.pass {
+            background: #2da44e;
+            color: #fff;
+        }
+        .status.fail {
+            background: #cf222e;
+            color: #fff;
+        }
+        .status.pending {
+            background: #9e6a03;
+            color: #fff;
+        }
+        .door-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+            margin: 15px 0;
+        }
+        .door-icon {
+            border: 2px solid;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+        }
+        .door-icon:hover {
+            transform: translateY(-2px);
+        }
+        .door-icon-emoji {
+            font-size: 36px;
+            margin-bottom: 8px;
+        }
+        .door-icon-label {
+            font-size: 11px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .door-icon-state {
+            font-size: 9px;
+            opacity: 0.8;
+        }
+        .table-wrapper {
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #152a38;
+            font-size: 11px;
+        }
+        thead {
+            background: #0d3a63;
+        }
+        th {
+            border: 1px solid #1e303d;
+            padding: 8px;
+            text-align: left;
+            font-weight: 600;
+            color: #fff;
+        }
+        td {
+            border: 1px solid #1e303d;
+            padding: 6px;
+            color: #cfe9f8;
+        }
+        tr.green-bg {
+            background: #1a3d2a !important;
+        }
+        tr.amber-bg {
+            background: #2d3d1e !important;
+        }
+        tr.red-bg {
+            background: #3b1e1e !important;
+        }
+        .action-btn {
+            padding: 2px 6px !important;
+            font-size: 10px !important;
+            margin: 0 !important;
+        }
+        .action-btn.edit {
+            background: #0960a8;
+        }
+        .action-btn.edit:hover {
+            background: #0a3d7a;
+        }
+        .action-btn.add {
+            background: #15803d;
+        }
+        .action-btn.add:hover {
+            background: #0d5a2a;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Event Log Improvements - Test Suite</h1>
+        
+        <!-- Test 1: Card Owner Detection API -->
+        <div class="test-section">
+            <h2>1️⃣ Card Owner Detection API</h2>
+            <p>Test the <code>/agent/api/check-card-owner/</code> endpoint</p>
+            
+            <div class="test-case">
+                <strong>Known Card (Employee)</strong>
+                <p>Test with a card that exists in database</p>
+                <input type="text" id="cardKnown" placeholder="Card number" value="TEST0013" />
+                <button onclick="testCardOwnership('known')">🔍 Check Card Ownership</button>
+                <div id="resultKnown" class="result"></div>
+                <span id="statusKnown" class="status pending">Pending</span>
+            </div>
+            
+            <div class="test-case unknown">
+                <strong>Unknown Card (Not in DB)</strong>
+                <p>Test with a random card number not in database</p>
+                <input type="text" id="cardUnknown" placeholder="Card number" value="99999999" />
+                <button onclick="testCardOwnership('unknown')">🔍 Check Card Ownership</button>
+                <div id="resultUnknown" class="result"></div>
+                <span id="statusUnknown" class="status pending">Pending</span>
+            </div>
+            
+            <div class="test-case alarm">
+                <strong>Error Case (Missing Param)</strong>
+                <p>Test API error handling</p>
+                <button onclick="testCardOwnershipError()">⚠️ Test Error Case</button>
+                <div id="resultError" class="result"></div>
+                <span id="statusError" class="status pending">Pending</span>
+            </div>
+        </div>
+        
+        <!-- Test 2: Event Row Styling -->
+        <div class="test-section">
+            <h2>2️⃣ Event Log Row Styling</h2>
+            <p>Preview how event rows are styled based on card ownership</p>
+            
+            <div class="table-wrapper">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>Card Number</th>
+                            <th>Cardholder</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="green-bg">
+                            <td>09:15:30</td>
+                            <td>TEST0013</td>
+                            <td>Ion Popescu</td>
+                            <td>OK</td>
+                            <td><button class="action-btn edit" onclick="alert('Edits employee #1')">✏️ Modificare</button></td>
+                        </tr>
+                        <tr class="amber-bg">
+                            <td>09:16:45</td>
+                            <td>99999999</td>
+                            <td>-</td>
+                            <td>OK</td>
+                            <td><button class="action-btn add" onclick="alert('Add new card')">+Adaugă Card</button></td>
+                        </tr>
+                        <tr class="red-bg">
+                            <td>09:17:12</td>
+                            <td>88888888</td>
+                            <td>-</td>
+                            <td>ALARM</td>
+                            <td><button class="action-btn add" onclick="alert('Add new card')">+Adaugă Card</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="test-case">
+                <strong>Color Legend</strong>
+                <ul>
+                    <li>🟢 <strong>Green</strong> (#1a3d2a): Card belongs to employee → Button "✏️ Modificare"</li>
+                    <li>🟡 <strong>Amber</strong> (#2d3d1e): Unknown card → Button "+Adaugă Card"</li>
+                    <li>🔴 <strong>Red</strong> (#3b1e1e): ALARM event → Button "+Adaugă Card"</li>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- Test 3: Door State Icons -->
+        <div class="test-section">
+            <h2>3️⃣ Door State Icons</h2>
+            <p>Preview how door icons change based on state</p>
+            
+            <div class="door-grid">
+                <div class="door-icon" style="border-color: #2da44e; background: #1a3d2a; color: #2da44e; box-shadow: 0 0 15px rgba(45, 164, 78, 0.6);">
+                    <div class="door-icon-emoji">🚪</div>
+                    <div class="door-icon-label">FINANCIAL</div>
+                    <div class="door-icon-state">OPEN</div>
+                </div>
+                
+                <div class="door-icon" style="border-color: #cf222e; background: #2d1e1e; color: #cf222e; box-shadow: 0 0 15px rgba(207, 34, 46, 0.6);">
+                    <div class="door-icon-emoji">🚪</div>
+                    <div class="door-icon-label">MEDICAL</div>
+                    <div class="door-icon-state">CLOSED</div>
+                </div>
+                
+                <div class="door-icon" style="border-color: #9e6a03; background: #3d2a1a; color: #9e6a03; box-shadow: 0 0 15px rgba(158, 106, 3, 0.6);">
+                    <div class="door-icon-emoji">🔒</div>
+                    <div class="door-icon-label">ARCHIVE</div>
+                    <div class="door-icon-state">LOCKED</div>
+                </div>
+                
+                <div class="door-icon" style="border-color: #79c0ff; background: #1a3d4a; color: #79c0ff; box-shadow: 0 0 15px rgba(121, 192, 255, 0.6);">
+                    <div class="door-icon-emoji">🔓</div>
+                    <div class="door-icon-label">STORAGE</div>
+                    <div class="door-icon-state">UNLOCKED</div>
+                </div>
+                
+                <div class="door-icon" style="border-color: #ff6b6b; background: #2d1e1e; color: #ff6b6b; box-shadow: 0 0 15px rgba(255, 107, 107, 0.6);">
+                    <div class="door-icon-emoji">⚠️</div>
+                    <div class="door-icon-label">EMERGENCY</div>
+                    <div class="door-icon-state">ALARM</div>
+                </div>
+            </div>
+            
+            <div class="test-case">
+                <strong>State Mapping</strong>
+                <ul>
+                    <li>🟢 <strong>OPEN</strong>: 🚪 emoji, Green border (#2da44e), Green glow</li>
+                    <li>🔴 <strong>CLOSED</strong>: 🚪 emoji, Red border (#cf222e), Red glow</li>
+                    <li>🟠 <strong>LOCKED</strong>: 🔒 emoji, Orange border (#9e6a03), Orange glow</li>
+                    <li>🔵 <strong>UNLOCKED</strong>: 🔓 emoji, Blue border (#79c0ff), Blue glow</li>
+                    <li>⚠️ <strong>ALARM</strong>: ⚠️ emoji, Bright red border (#ff6b6b), Red glow</li>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- Test 4: Integration Test -->
+        <div class="test-section">
+            <h2>4️⃣ Integration Test</h2>
+            <p>Full test simulating event log behavior</p>
+            
+            <button onclick="runIntegrationTest()">🚀 Run Full Integration Test</button>
+            <button class="danger" onclick="clearIntegrationTest()">🗑️ Clear Results</button>
+            
+            <div id="integrationResults" style="margin-top: 15px;">
+                <!-- Results will be populated here -->
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const BASE_URL = 'http://127.0.0.1:14525';
+        
+        async function testCardOwnership(type) {
+            const cardInput = document.getElementById(`card${type.charAt(0).toUpperCase() + type.slice(1)}`);
+            const resultDiv = document.getElementById(`result${type.charAt(0).toUpperCase() + type.slice(1)}`);
+            const statusSpan = document.getElementById(`status${type.charAt(0).toUpperCase() + type.slice(1)}`);
+            const cardNumber = cardInput.value.trim();
+            
+            if (!cardNumber) {
+                resultDiv.textContent = 'Error: Please enter a card number';
+                resultDiv.classList.add('active', 'error');
+                statusSpan.textContent = 'FAIL';
+                statusSpan.className = 'status fail';
+                return;
+            }
+            
+            statusSpan.textContent = 'Testing...';
+            statusSpan.className = 'status pending';
+            resultDiv.textContent = 'Fetching...';
+            resultDiv.classList.add('active');
+            
+            try {
+                const response = await fetch(`${BASE_URL}/agent/api/check-card-owner/?card_number=${encodeURIComponent(cardNumber)}`);
+                const data = await response.json();
+                
+                resultDiv.innerHTML = `<strong>Response:</strong>\n${JSON.stringify(data, null, 2)}`;
+                
+                if (data.exists) {
+                    statusSpan.textContent = `PASS - Found: ${data.employee_name}`;
+                    statusSpan.className = 'status pass';
+                    resultDiv.classList.remove('error');
+                } else {
+                    statusSpan.textContent = 'PASS - Not found (expected)';
+                    statusSpan.className = 'status pass';
+                    resultDiv.classList.remove('error');
+                }
+            } catch (err) {
+                resultDiv.textContent = `Error: ${err.message}`;
+                resultDiv.classList.add('error');
+                statusSpan.textContent = 'FAIL';
+                statusSpan.className = 'status fail';
+            }
+        }
+        
+        async function testCardOwnershipError() {
+            const resultDiv = document.getElementById('resultError');
+            const statusSpan = document.getElementById('statusError');
+            
+            statusSpan.textContent = 'Testing...';
+            statusSpan.className = 'status pending';
+            resultDiv.textContent = 'Fetching...';
+            resultDiv.classList.add('active');
+            
+            try {
+                const response = await fetch(`${BASE_URL}/agent/api/check-card-owner/`);
+                const data = await response.json();
+                
+                if (response.status === 400) {
+                    resultDiv.innerHTML = `<strong>Expected Error (400):</strong>\n${JSON.stringify(data, null, 2)}`;
+                    statusSpan.textContent = 'PASS - Error handling works';
+                    statusSpan.className = 'status pass';
+                } else {
+                    resultDiv.innerHTML = `Unexpected status: ${response.status}`;
+                    statusSpan.textContent = 'FAIL';
+                    statusSpan.className = 'status fail';
+                }
+            } catch (err) {
+                resultDiv.textContent = `Network Error: ${err.message}`;
+                resultDiv.classList.add('error');
+                statusSpan.textContent = 'FAIL';
+                statusSpan.className = 'status fail';
+            }
+        }
+        
+        async function runIntegrationTest() {
+            const resultsDiv = document.getElementById('integrationResults');
+            resultsDiv.innerHTML = '<p>Running integration test...</p>';
+            
+            const tests = [
+                { name: 'API Available', test: () => fetch(`${BASE_URL}/agent/api/check-card-owner/?card_number=TEST0013`).then(r => r.ok) },
+                { name: 'Known Card Detection', test: () => fetch(`${BASE_URL}/agent/api/check-card-owner/?card_number=TEST0013`).then(r => r.json()).then(d => d.exists === true) },
+                { name: 'Unknown Card Detection', test: () => fetch(`${BASE_URL}/agent/api/check-card-owner/?card_number=99999999`).then(r => r.json()).then(d => d.exists === false) },
+                { name: 'Error Handling', test: () => fetch(`${BASE_URL}/agent/api/check-card-owner/`).then(r => r.status === 400) }
+            ];
+            
+            const results = [];
+            for (const test of tests) {
+                try {
+                    const passed = await test.test();
+                    results.push({ name: test.name, passed, error: null });
+                } catch (err) {
+                    results.push({ name: test.name, passed: false, error: err.message });
+                }
+            }
+            
+            let html = '<table><thead><tr><th>Test</th><th>Result</th></tr></thead><tbody>';
+            let allPassed = true;
+            for (const result of results) {
+                html += `<tr class="${result.passed ? 'green-bg' : 'red-bg'}">
+                    <td>${result.name}</td>
+                    <td>${result.passed ? '✅ PASS' : `❌ FAIL${result.error ? ': ' + result.error : ''}`}</td>
+                </tr>`;
+                allPassed = allPassed && result.passed;
+            }
+            html += '</tbody></table>';
+            
+            if (allPassed) {
+                html += '<p style="color: #2da44e; margin-top: 10px;">✅ All tests passed!</p>';
+            } else {
+                html += '<p style="color: #cf222e; margin-top: 10px;">❌ Some tests failed. Check API endpoint.</p>';
+            }
+            
+            resultsDiv.innerHTML = html;
+        }
+        
+        function clearIntegrationTest() {
+            document.getElementById('integrationResults').innerHTML = '';
+        }
+        
+        // Auto-run integration test on page load
+        window.addEventListener('load', () => {
+            console.log('Test page loaded. You can run tests now.');
+        });
+    </script>
+</body>
+</html>
