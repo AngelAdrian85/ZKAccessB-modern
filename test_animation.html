@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Card Reader Animation Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: #f0f0f0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .test-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin: 0 0 20px 0;
+        }
+        .button {
+            background: #2da44e;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+        .button:hover {
+            background: #2a9145;
+        }
+        .info {
+            background: #e7f5ec;
+            border-left: 4px solid #2da44e;
+            padding: 12px;
+            margin: 20px 0;
+            border-radius: 4px;
+            color: #0d3a63;
+        }
+        code {
+            background: #f5f5f5;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🪪 Card Reader Animation Test</h1>
+        
+        <div class="info">
+            <strong>Instructions:</strong>
+            <ol>
+                <li>Click the button below to trigger animation</li>
+                <li>Watch for tech-style notification in center of screen</li>
+                <li>Animation should display for 1.5 seconds</li>
+                <li>Check browser console (F12) for debug messages</li>
+            </ol>
+        </div>
+
+        <button class="button" onclick="testAnimation()">🪪 Test Animation</button>
+        <button class="button" style="background: #666; margin-left: 10px;" onclick="testMultiple()">Test 3x Rapid</button>
+
+        <div class="info" style="margin-top: 30px;">
+            <strong>Expected Behavior:</strong>
+            <ul>
+                <li>✅ Overlay with dark background (50% opacity)</li>
+                <li>✅ Card box centered on screen</li>
+                <li>✅ Blue gradient background</li>
+                <li>✅ Green glowing border</li>
+                <li>✅ Title: "🪪 CARD DETECTAT"</li>
+                <li>✅ Card number in large monospace font</li>
+                <li>✅ Pulsing green bar animation</li>
+                <li>✅ Entry animation: scale up from small + rotate</li>
+                <li>✅ Fade out after 1.5 seconds</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        function testAnimation(cardNumber = '12345678') {
+            console.log('🪪 Testing card animation:', cardNumber);
+            
+            // Visual feedback - Tech animation centered on screen
+            const overlay = document.createElement('div');
+            overlay.style.position = 'fixed';
+            overlay.style.inset = '0';
+            overlay.style.background = 'rgba(0, 0, 0, 0.5)';
+            overlay.style.zIndex = '9998';
+            overlay.style.display = 'flex';
+            overlay.style.alignItems = 'center';
+            overlay.style.justifyContent = 'center';
+            overlay.style.animation = 'fadeInOverlay 0.3s ease-in-out';
+            
+            const indicator = document.createElement('div');
+            indicator.style.position = 'relative';
+            indicator.style.background = 'linear-gradient(135deg, #0d3a63 0%, #1e5a8e 100%)';
+            indicator.style.border = '2px solid #2da44e';
+            indicator.style.boxShadow = '0 0 30px rgba(45, 164, 78, 0.6), inset 0 0 20px rgba(45, 164, 78, 0.2)';
+            indicator.style.borderRadius = '12px';
+            indicator.style.padding = '30px 50px';
+            indicator.style.textAlign = 'center';
+            indicator.style.zIndex = '9999';
+            indicator.style.animation = 'scaleInCard 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)';
+            
+            const title = document.createElement('div');
+            title.style.fontSize = '24px';
+            title.style.fontWeight = 'bold';
+            title.style.color = '#2da44e';
+            title.style.marginBottom = '12px';
+            title.style.textShadow = '0 0 10px rgba(45, 164, 78, 0.5)';
+            title.textContent = '🪪 CARD DETECTAT';
+            
+            const cardNum = document.createElement('div');
+            cardNum.style.fontSize = '32px';
+            cardNum.style.fontWeight = 'bold';
+            cardNum.style.color = '#fff';
+            cardNum.style.fontFamily = 'monospace';
+            cardNum.style.letterSpacing = '2px';
+            cardNum.style.marginBottom = '12px';
+            cardNum.style.textShadow = '0 0 15px rgba(45, 164, 78, 0.7)';
+            cardNum.textContent = cardNumber;
+            
+            const pulse = document.createElement('div');
+            pulse.style.display = 'inline-block';
+            pulse.style.width = '60px';
+            pulse.style.height = '6px';
+            pulse.style.background = '#2da44e';
+            pulse.style.borderRadius = '3px';
+            pulse.style.marginTop = '12px';
+            pulse.style.animation = 'pulse 1.5s infinite';
+            
+            indicator.appendChild(title);
+            indicator.appendChild(cardNum);
+            indicator.appendChild(pulse);
+            overlay.appendChild(indicator);
+            document.body.appendChild(overlay);
+            
+            // Add styles for animations if not already present
+            if (!document.getElementById('cardReaderAnimations')) {
+                const style = document.createElement('style');
+                style.id = 'cardReaderAnimations';
+                style.textContent = `
+                    @keyframes fadeInOverlay {
+                        from { opacity: 0; }
+                        to { opacity: 1; }
+                    }
+                    @keyframes scaleInCard {
+                        0% {
+                            transform: scale(0.2) rotate(-15deg);
+                            opacity: 0;
+                        }
+                        50% {
+                            transform: scale(1.05) rotate(0deg);
+                        }
+                        100% {
+                            transform: scale(1) rotate(0deg);
+                            opacity: 1;
+                        }
+                    }
+                    @keyframes pulse {
+                        0%, 100% { width: 60px; opacity: 1; }
+                        50% { width: 120px; opacity: 0.6; }
+                    }
+                `;
+                document.head.appendChild(style);
+                console.log('✅ CSS animations injected');
+            }
+            
+            // Display for at least 1.5 seconds, then fade out
+            setTimeout(() => {
+                console.log('📊 Starting fade-out after 1.5 seconds');
+                overlay.style.animation = 'fadeInOverlay 0.4s ease-in-out reverse';
+                overlay.style.transition = 'opacity 0.4s ease-in-out';
+                overlay.style.opacity = '0';
+                setTimeout(() => {
+                    overlay.remove();
+                    console.log('✅ Animation complete, element removed from DOM');
+                }, 400);
+            }, 1500);
+        }
+
+        function testMultiple() {
+            const cards = ['12345678', '87654321', 'TEST001'];
+            let index = 0;
+            
+            function showNext() {
+                if (index < cards.length) {
+                    console.log(`🪪 Card ${index + 1}/3: ${cards[index]}`);
+                    testAnimation(cards[index]);
+                    index++;
+                    setTimeout(showNext, 2500); // 2.5 sec delay (1.5 sec display + 0.4 fade + 0.6 buffer)
+                }
+            }
+            
+            showNext();
+        }
+
+        console.log('✅ Card Reader Animation Test Page Loaded');
+        console.log('📍 Click "Test Animation" to see the effect');
+    </script>
+</body>
+</html>

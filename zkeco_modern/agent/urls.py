@@ -91,6 +91,7 @@ urlpatterns = [
     path("api/access/check/", views.access_check, name="access-check"),
     path("api/access/evaluate-open/", views.access_evaluate_and_open, name="access-evaluate-open"),
     path("api/test-read-card", views.test_read_card, name="api-test-read-card"),
+    path("api/check-card-owner/", views.check_card_owner, name="api-check-card-owner"),
     path("api/commands/recent/", views.command_recent, name="command-recent"),
     path("shutdown/", views.server_shutdown, name="agent-shutdown"),
     # Control Center (grouped operations & CommCenter management)

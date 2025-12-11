@@ -2992,6 +2992,45 @@ def comm_center_stop(request: HttpRequest):
     except Exception as e:
         return JsonResponse({'ok': False,'error': str(e)}, status=500)
 
+@csrf_exempt
+def check_card_owner(request: HttpRequest):
+    """Check if a card belongs to an employee in the database.
+    Query params:
+      - card_number: The card to check
+    Returns JSON with:
+      - exists: True if card is in DB
+      - employee_id: Employee ID (if exists)
+      - employee_name: Full name (if exists)
+      - card_type: 'primary' or 'secondary'
+    """
+    from .models import Employee
+    
+    card_number = (request.GET.get('card_number') or '').strip()
+    if not card_number:
+        return JsonResponse({'exists': False, 'error': 'no-card-number'}, status=400)
+    
+    # Check primary card
+    emp = Employee.objects.filter(card_number=card_number).first()
+    if emp:
+        return JsonResponse({
+            'exists': True,
+            'employee_id': emp.id,
+            'employee_name': f"{emp.first_name} {emp.last_name}".strip(),
+            'card_type': 'primary'
+        })
+    
+    # Check secondary card
+    emp = Employee.objects.filter(secondary_card_number=card_number).first()
+    if emp:
+        return JsonResponse({
+            'exists': True,
+            'employee_id': emp.id,
+            'employee_name': f"{emp.first_name} {emp.last_name}".strip(),
+            'card_type': 'secondary'
+        })
+    
+    return JsonResponse({'exists': False})
+
 def control_center(request: HttpRequest):
     if not request.user.is_authenticated or not request.user.is_staff:
         from django.contrib.auth.views import redirect_to_login

@@ -83,6 +83,7 @@
           <th>Posesor card</th>
           <th>Status</th>
           <th>Verify Mode</th>
+          <th>Acțiune</th>
         </tr>
       </thead>
       <tbody id="events"></tbody>
@@ -135,27 +136,98 @@ console.log('Monitor UI template loaded: v2025-12-10.3 + Physical Card Reader');
   async function processPhysicalCard(cardNumber){
     console.log('🪪 Physical card detected:', cardNumber);
     
-    // Visual feedback
-    const indicator = document.createElement('div');
-    indicator.style.position = 'fixed';
-    indicator.style.top = '20px';
-    indicator.style.right = '20px';
-    indicator.style.background = '#2da44e';
-    indicator.style.color = '#fff';
-    indicator.style.padding = '12px 20px';
-    indicator.style.borderRadius = '6px';
-    indicator.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
-    indicator.style.zIndex = '9999';
-    indicator.style.fontSize = '14px';
-    indicator.style.fontWeight = '600';
-    indicator.textContent = `🪪 Card citit: ${cardNumber}`;
-    document.body.appendChild(indicator);
+    // Visual feedback - Tech animation centered on screen
+    const overlay = document.createElement('div');
+    overlay.style.position = 'fixed';
+    overlay.style.inset = '0';
+    overlay.style.background = 'rgba(0, 0, 0, 0.5)';
+    overlay.style.zIndex = '9998';
+    overlay.style.display = 'flex';
+    overlay.style.alignItems = 'center';
+    overlay.style.justifyContent = 'center';
+    overlay.style.animation = 'fadeInOverlay 0.3s ease-in-out';
     
+    const indicator = document.createElement('div');
+    indicator.style.position = 'relative';
+    indicator.style.background = 'linear-gradient(135deg, #0d3a63 0%, #1e5a8e 100%)';
+    indicator.style.border = '2px solid #2da44e';
+    indicator.style.boxShadow = '0 0 30px rgba(45, 164, 78, 0.6), inset 0 0 20px rgba(45, 164, 78, 0.2)';
+    indicator.style.borderRadius = '12px';
+    indicator.style.padding = '30px 50px';
+    indicator.style.textAlign = 'center';
+    indicator.style.zIndex = '9999';
+    indicator.style.animation = 'scaleInCard 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)';
+    
+    const title = document.createElement('div');
+    title.style.fontSize = '24px';
+    title.style.fontWeight = 'bold';
+    title.style.color = '#2da44e';
+    title.style.marginBottom = '12px';
+    title.style.textShadow = '0 0 10px rgba(45, 164, 78, 0.5)';
+    title.textContent = '🪪 CARD DETECTAT';
+    
+    const cardNum = document.createElement('div');
+    cardNum.style.fontSize = '32px';
+    cardNum.style.fontWeight = 'bold';
+    cardNum.style.color = '#fff';
+    cardNum.style.fontFamily = 'monospace';
+    cardNum.style.letterSpacing = '2px';
+    cardNum.style.marginBottom = '12px';
+    cardNum.style.textShadow = '0 0 15px rgba(45, 164, 78, 0.7)';
+    cardNum.textContent = cardNumber;
+    
+    const pulse = document.createElement('div');
+    pulse.style.display = 'inline-block';
+    pulse.style.width = '60px';
+    pulse.style.height = '6px';
+    pulse.style.background = '#2da44e';
+    pulse.style.borderRadius = '3px';
+    pulse.style.marginTop = '12px';
+    pulse.style.animation = 'pulse 1.5s infinite';
+    
+    indicator.appendChild(title);
+    indicator.appendChild(cardNum);
+    indicator.appendChild(pulse);
+    overlay.appendChild(indicator);
+    document.body.appendChild(overlay);
+    
+    // Add styles for animations if not already present
+    if (!document.getElementById('cardReaderAnimations')) {
+      const style = document.createElement('style');
+      style.id = 'cardReaderAnimations';
+      style.textContent = `
+        @keyframes fadeInOverlay {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes scaleInCard {
+          0% {
+            transform: scale(0.2) rotate(-15deg);
+            opacity: 0;
+          }
+          50% {
+            transform: scale(1.05) rotate(0deg);
+          }
+          100% {
+            transform: scale(1) rotate(0deg);
+            opacity: 1;
+          }
+        }
+        @keyframes pulse {
+          0%, 100% { width: 60px; opacity: 1; }
+          50% { width: 120px; opacity: 0.6; }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+    
+    // Display for at least 1 second, then fade out
     setTimeout(() => {
-      indicator.style.transition = 'opacity 0.3s';
-      indicator.style.opacity = '0';
-      setTimeout(() => indicator.remove(), 300);
-    }, 2000);
+      overlay.style.animation = 'fadeInOverlay 0.4s ease-in-out reverse';
+      overlay.style.transition = 'opacity 0.4s ease-in-out';
+      overlay.style.opacity = '0';
+      setTimeout(() => overlay.remove(), 400);
+    }, 1500);
     
     // Fill testCardInput if empty
     const cardInput = document.getElementById('testCardInput');
@@ -307,14 +379,48 @@ function renderDevices(){
     const doors = window.__doorsCache || [];
     const doorsHtml = (doors||[]).map(d=>{
       const dn = d.name; // show only door name
-      // Door state icon badges (Closed/Open/Locked/Forced)
+      // Door state icon badges - dynamic based on actual state
       const state = (d.state || 'CLOSED').toUpperCase();
-      const badge = state==='OPEN' ? '🟢' : state==='LOCKED' ? '🟡' : state==='FORCED' ? '🔴' : '🔵';
+      
+      // Map state to emoji and colors
+      let icon = '🚪';
+      let color = '#cf222e';
+      let bgColor = '#2d1e1e';
+      let glowColor = 'rgba(207, 34, 46, 0.6)';
+      
+      if(state === 'OPEN'){
+        icon = '🚪'; // Door open emoji
+        color = '#2da44e'; // Green
+        bgColor = '#1a3d2a'; // Dark green
+        glowColor = 'rgba(45, 164, 78, 0.6)';
+      } else if(state === 'CLOSED'){
+        icon = '🚪'; // Door closed emoji
+        color = '#cf222e'; // Red
+        bgColor = '#2d1e1e'; // Dark red
+        glowColor = 'rgba(207, 34, 46, 0.6)';
+      } else if(state === 'LOCKED'){
+        icon = '🔒'; // Locked emoji
+        color = '#9e6a03'; // Orange
+        bgColor = '#3d2a1a'; // Dark orange
+        glowColor = 'rgba(158, 106, 3, 0.6)';
+      } else if(state === 'UNLOCKED'){
+        icon = '🔓'; // Unlocked emoji
+        color = '#79c0ff'; // Light blue
+        bgColor = '#1a3d4a'; // Dark blue
+        glowColor = 'rgba(121, 192, 255, 0.6)';
+      } else if(state === 'ALARM'){
+        icon = '⚠️'; // Warning emoji
+        color = '#ff6b6b'; // Bright red
+        bgColor = '#2d1e1e'; // Dark red
+        glowColor = 'rgba(255, 107, 107, 0.6)';
+      }
+      
       const title = `${dn} | State: ${state}`;
       const deviceId = d.device_id || '';
-      return `<div class='device-icon online' title='${title}' data-door-id='${d.id}' data-device-id='${deviceId}' onclick='onDoorIconClick(${deviceId||"null"},${d.id})'>
-        <div class='icon'></div>
-        <div class='label name-anim' style='font-weight:600; color:#e6f6ff;'>${badge} ${dn}</div>
+      
+      return `<div class='device-icon online' title='${title}' data-door-id='${d.id}' data-device-id='${deviceId}' data-state='${state}' style='border-color: ${color}; background: ${bgColor}; box-shadow: 0 0 15px ${glowColor};' onclick='onDoorIconClick(${deviceId||"null"},${d.id})'>
+        <div class='icon' style='font-size: 36px;'>${icon}</div>
+        <div class='label name-anim' style='font-weight:600; color:${color};'>${dn}</div>
         <div class='device-actions'>
           <button onclick='event.stopPropagation(); onDoorAction("open", ${deviceId||"null"}, ${d.id})'>Open</button>
           <button onclick='event.stopPropagation(); onDoorAction("close", ${deviceId||"null"}, ${d.id})'>Close</button>
@@ -348,7 +454,7 @@ function addEvent(obj){
   const body=document.getElementById('events');
   const tr=document.createElement('tr');
   const alarm = (e.status||'').toUpperCase()==='ALARM' || /(alarm)/i.test(e.description||'');
-  tr.style.background = alarm ? '#3b1e1e' : '';
+  
   // If name missing, fill with door name by event point id
   let displayName = (e.name||'').trim();
   try{
@@ -369,7 +475,19 @@ function addEvent(obj){
       }
     }
   }catch{}
-  tr.innerHTML = [
+  
+  // Default background: red for alarms, amber for unknown cards
+  let rowBackground = '';
+  if(alarm){
+    rowBackground = '#3b1e1e'; // Red for alarms
+  } else if(e.card_no){
+    rowBackground = '#2d3d1e'; // Amber/yellowish for unknown cards initially
+  }
+  tr.style.background = rowBackground;
+  tr.dataset.cardNo = e.card_no || '';
+  
+  // Create cells with action button
+  const cells = [
     e.time,
     e.point||'',
     e.description||'',
@@ -379,8 +497,60 @@ function addEvent(obj){
     e.status||'',
     e.verify_mode||''
   ].map(val=>`<td>${val}</td>`).join('');
+  
+  // Add action button cell
+  const actionHtml = e.card_no ? 
+    `<td><button data-action-btn style="padding:2px 6px;background:#15803d;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:11px;font-weight:500;">+Adaugă Card</button></td>` :
+    `<td></td>`;
+  
+  tr.innerHTML = cells + actionHtml;
+  
+  // Add default click handler
+  if(e.card_no && e.card_no.trim()){
+    const btn = tr.querySelector('[data-action-btn]');
+    if(btn){
+      btn.onclick = () => openAddCardModal(e.card_no);
+    }
+    // Check if card belongs to employee (async, non-blocking)
+    checkAndUpdateCardRow(tr, e.card_no);
+  }
+  
   body.insertBefore(tr, body.firstChild);
   while(body.rows.length>500){ body.deleteRow(500); }
+}
+
+// Async function to check card ownership and update row styling
+function checkAndUpdateCardRow(tr, cardNumber){
+  fetch(`/agent/api/check-card-owner/?card_number=${encodeURIComponent(cardNumber)}`)
+    .then(r=>r.json())
+    .then(data=>{
+      if(data.exists){
+        // Card belongs to employee - update row
+        tr.style.background = '#1a3d2a'; // Green for employee cards
+        tr.dataset.employeeId = data.employee_id;
+        tr.dataset.employeeName = data.employee_name;
+        // Update button
+        const btn = tr.querySelector('[data-action-btn]');
+        if(btn){
+          btn.textContent = '✏️ Modificare';
+          btn.style.background = '#0960a8';
+          btn.onclick = (e) => {
+            e.preventDefault();
+            openEditCardModal(data.employee_id, cardNumber);
+          };
+        }
+      }
+    })
+    .catch(err=>{
+      console.log('Card check failed:', err);
+      // Keep default styling on error
+    });
+}
+
+// Helper function to open edit modal
+function openEditCardModal(employeeId, cardNumber){
+  const url = `/agent/crud/employees/${employeeId}/edit/?card=${encodeURIComponent(cardNumber)}`;
+  window.location.href = url;
 }
 function filterEvents(){
   const term=document.getElementById('eventFilter').value.toLowerCase();
