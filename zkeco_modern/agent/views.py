@@ -227,7 +227,13 @@ def readers_status(request: HttpRequest):
         return JsonResponse({'ok': False, 'error': 'unauth'}, status=403)
     st = _read_json_safe(_tray_status_path())
     cfg = _read_json_safe(_readers_cfg_path())
-    return JsonResponse({'ok': True, 'status': st, 'config': cfg})
+    # surface commcenter/color if present in tray_status.json
+    status_extra = {
+        'commcenter': st.get('commcenter'),
+        'color': st.get('color'),
+        'server': st.get('server'),
+    }
+    return JsonResponse({'ok': True, 'status': st, 'config': cfg, 'extra': status_extra})
 
 
 @csrf_exempt
@@ -615,10 +621,52 @@ def access_dashboard(request: HttpRequest):
     recent_events = list(DeviceEventLog.objects.order_by('-created_at')[:5].values('created_at','code'))
     recent_commands = list(CommandLog.objects.order_by('-created_at')[:5].values('created_at','command','status'))
     # Live device/door status panel context
-    device_statuses = list(DeviceStatus.objects.select_related('device').all().values(
-        'device__id','device__name','device__serial_number','online','door_state','updated_at'))
-    doors = list(Door.objects.select_related('device').all().values(
-        'id','name','device_id','device__name','is_open','enabled','location'))
+    # Build live device status payload with categories (centrale / dispozitive / cititoare)
+    device_statuses = []
+    for ds in DeviceStatus.objects.select_related('device').all():
+        dev = getattr(ds, 'device', None)
+        category = 'other'
+        type_badge = ''
+        device_type = ''
+        if dev:
+            device_type = dev.device_type
+            try:
+                if dev.is_controller():
+                    category = 'central'
+                elif dev.is_reader():
+                    category = 'reader'
+            except Exception:
+                category = 'other'
+            try:
+                type_badge = dev.type_badge()
+            except Exception:
+                type_badge = device_type
+        device_statuses.append({
+            'device__id': getattr(dev, 'id', None),
+            'device__name': getattr(dev, 'name', None),
+            'device__serial_number': getattr(dev, 'serial_number', ''),
+            'online': ds.online,
+            'door_state': ds.door_state,
+            'updated_at': ds.updated_at,
+            'category': category,
+            'device_type': device_type,
+            'type_badge': type_badge,
+        })
+
+    # Build door payload with cached lock state fallback
+    doors = []
+    for d in Door.objects.select_related('device').all():
+        state = _door_state_from_cache_or_model(d)
+        doors.append({
+            'id': d.id,
+            'name': d.name,
+            'device_id': getattr(d.device, 'id', None),
+            'device__name': getattr(d.device, 'name', None),
+            'is_open': d.is_open,
+            'enabled': d.enabled,
+            'location': d.location,
+            'state': state,
+        })
     access_level_options = list(AccessLevel.objects.order_by('name').values('id','name'))
     ctx = {
         'counts': {
@@ -1526,6 +1574,83 @@ def listener_error(request: HttpRequest):
     except Exception as e:
         return JsonResponse({'ok': False, 'error': str(e)}, status=400)
 
+@csrf_exempt
+def backup_run(request: HttpRequest):
+    """Lightweight backup trigger placeholder; does not run if paths missing."""
+    if not request.user.is_authenticated or not request.user.is_staff or request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    try:
+        import configparser, pathlib, subprocess, time, shlex
+        base_dir = pathlib.Path(__file__).resolve().parent.parent
+        ini = base_dir / 'agent_controller.ini'
+        if not ini.exists():
+            return JsonResponse({'ok': False, 'error': 'missing-config'})
+        cfg = configparser.ConfigParser(); cfg.read(ini)
+        backup_dir = pathlib.Path(cfg.get('controller','backup_path', fallback=str(base_dir/'backups')))
+        mysql_bin = pathlib.Path(cfg.get('controller','mysql_bin', fallback=str(base_dir/'mysql'/'bin')))
+        mysql_host = cfg.get('controller','mysql_host', fallback='127.0.0.1')
+        mysql_user = cfg.get('controller','mysql_user', fallback='root')
+        mysql_password = cfg.get('controller','mysql_password', fallback='')
+        dump_flags_raw = cfg.get('controller','dump_flags', fallback='')
+        mysqldump = mysql_bin / 'mysqldump.exe'
+        if not mysqldump.exists():
+            return JsonResponse({'ok': False, 'error': 'missing-mysqldump'})
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        ts = time.strftime('%Y%m%d_%H%M%S')
+        outfile = backup_dir / f'db_backup_manual_{ts}.sql'
+        # Build mysqldump command with credentials and optional flags
+        cmd = [str(mysqldump)]
+        if mysql_host:
+            cmd.extend(['-h', mysql_host])
+        if mysql_user:
+            cmd.extend(['-u', mysql_user])
+        if mysql_password:
+            cmd.append(f'--password={mysql_password}')
+        extra_flags = [f for f in shlex.split(dump_flags_raw) if f]
+        if extra_flags:
+            cmd.extend(extra_flags)
+        cmd.append('--all-databases')
+        try:
+            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=60)
+            output_text = proc.stdout.decode(errors='ignore') if proc.stdout else ''
+            if proc.returncode == 0:
+                outfile.write_bytes(proc.stdout)
+                return JsonResponse({'ok': True, 'file': outfile.name, 'bytes': len(proc.stdout)})
+            return JsonResponse({'ok': False, 'error': 'dump-failed', 'output': output_text[:800]})
+        except subprocess.TimeoutExpired:
+            return JsonResponse({'ok': False, 'error': 'timeout'})
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=500)
+
+# ----- Door lock state helpers (cached per-door) -----
+LOCK_CACHE_KEY = 'agent:door_lock_state'
+
+def _get_lock_map():
+    try:
+        return cache.get(LOCK_CACHE_KEY, {}) or {}
+    except Exception:
+        return {}
+
+def _set_lock_state(door_id, state: str):
+    try:
+        m = _get_lock_map()
+        key = str(door_id)
+        if state and state.upper() == 'LOCKED':
+            m[key] = 'LOCKED'
+        else:
+            if key in m:
+                del m[key]
+        cache.set(LOCK_CACHE_KEY, m, timeout=86400)
+    except Exception:
+        pass
+
+def _door_state_from_cache_or_model(door):
+    lock_map = _get_lock_map()
+    lock_state = lock_map.get(str(getattr(door, 'id', '')))
+    if lock_state == 'LOCKED':
+        return 'LOCKED'
+    return 'OPEN' if getattr(door, 'is_open', False) else 'CLOSED'
+
 def access_evaluate_and_open(request: HttpRequest):
     # Evaluate a pushed card and open a door if allowed
     if request.method != 'POST' or not request.user.is_authenticated:
@@ -1538,16 +1663,40 @@ def access_evaluate_and_open(request: HttpRequest):
         device_id = payload.get('device_id')
         door_id = payload.get('door_id')
         door_pk = payload.get('door_pk')
+        open_all = str(payload.get('open_all') or request.GET.get('open_all') or '').lower() in ('1','true','yes','all')
         if not card_number:
             return JsonResponse({'ok': False, 'error': 'card_number required'}, status=400)
-        # Resolve employee by card (primary/secondary or additional EmployeeCard)
+
+        # Resolve employee by card (primary/secondary/extra) using tolerant variants
         from django.db.models import Q
         from django.utils import timezone
         from .models import Employee as AgentEmployee, EmployeeCard, Door, AccessLevel, TimeSegment, Holiday, EmployeeAccessCache
-        emp = AgentEmployee.objects.filter(Q(card_number__iexact=card_number)|Q(secondary_card_number__iexact=card_number)).first()
-        if not emp:
-            emp_card = EmployeeCard.objects.select_related('employee').filter(card_number__iexact=card_number).first()
-            emp = getattr(emp_card, 'employee', None)
+
+        base_card = str(card_number or '').strip()
+        variants = []
+        compact = base_card.replace(' ', '')
+        variants.extend([base_card, base_card.upper(), base_card.lower(), compact, compact.upper(), compact.lower()])
+        if base_card.isdigit():
+            trimmed = base_card.lstrip('0') or '0'
+            variants.extend([trimmed, trimmed.upper(), trimmed.lower()])
+        seen = set(); card_candidates = []
+        for v in variants:
+            if v and v not in seen:
+                seen.add(v); card_candidates.append(v)
+
+        emp = None
+        matched_card = base_card
+        for cand in card_candidates:
+            emp = AgentEmployee.objects.filter(Q(card_number__iexact=cand) | Q(secondary_card_number__iexact=cand)).first()
+            if emp:
+                matched_card = cand
+                break
+            emp_card = EmployeeCard.objects.select_related('employee').filter(card_number__iexact=cand).first()
+            if emp_card and emp_card.employee:
+                emp = emp_card.employee
+                matched_card = cand
+                break
+
         # Determine door
         door = None
         if door_pk:
@@ -1560,17 +1709,18 @@ def access_evaluate_and_open(request: HttpRequest):
                 door = Door.objects.filter(device_id=int(device_id), name__iexact=str(door_id)).first()
             except Exception:
                 door = None
+
         now = timezone.localtime()
         today = now.date()
         weekday_index = (now.weekday())  # 0=Mon .. 6=Sun
         reasons = []
         allowed = False
+        allowed_doors = []
+
         if not emp:
             reasons.append('no_employee_for_card')
         elif not emp.active:
             reasons.append('employee_inactive')
-        elif door is None:
-            reasons.append('door_not_resolved')
         else:
             # Date validity window
             if (emp.acc_startdate and today < emp.acc_startdate) or (emp.acc_enddate and today > emp.acc_enddate):
@@ -1578,35 +1728,61 @@ def access_evaluate_and_open(request: HttpRequest):
             # Holiday block
             if Holiday.objects.filter(date=today).exists():
                 reasons.append('holiday_block')
-            # Access levels: door must be included and current time within any assigned segment
-            levels = emp.access_levels.all()
-            if not levels.exists():
+
+            levels = list(emp.access_levels.all())
+            if not levels:
                 reasons.append('no_access_levels')
             else:
-                # Door included?
-                door_included = AccessLevel.objects.filter(pk__in=levels.values('pk'), doors=door).exists()
-                if not door_included:
-                    reasons.append('door_not_in_access_levels')
-                else:
-                    # Time permitted?
-                    segments = TimeSegment.objects.filter(pk__in=AccessLevel.objects.filter(pk__in=levels.values('pk')).values('time_segments')).distinct()
-                    current_ok = False
-                    for seg in segments:
-                        try:
+                def _seg_allows(al_obj):
+                    try:
+                        for seg in al_obj.time_segments.all():
                             if (seg.days_mask & (1 << weekday_index)) and (seg.start_time <= now.time() <= seg.end_time):
-                                current_ok = True
-                                break
-                        except Exception:
-                            pass
-                    if not current_ok:
-                        reasons.append('outside_time_segments')
+                                return True
+                    except Exception:
+                        pass
+                    return False
+
+                time_ok_any = False
+                door_ids_allowed = set()
+                door_map = {}
+                for al in levels:
+                    seg_ok = _seg_allows(al)
+                    if seg_ok:
+                        time_ok_any = True
+                    for d in al.doors.all():
+                        door_map[d.id] = d
+                        if seg_ok:
+                            door_ids_allowed.add(d.id)
+
+                allowed_doors = [
+                    {'id': d_id, 'name': getattr(door_map[d_id], 'name', ''), 'device_id': getattr(door_map[d_id], 'device_id', None)}
+                    for d_id in door_ids_allowed
+                ]
+
+                if not time_ok_any:
+                    reasons.append('outside_time_segments')
+
+                # If door not resolved but employee has allowed doors, pick first
+                if door is None and allowed_doors:
+                    try:
+                        door = door_map.get(allowed_doors[0]['id'])
+                    except Exception:
+                        door = door
+
+                if door:
+                    if door.id not in door_ids_allowed:
+                        reasons.append('door_not_in_access_levels')
+                    elif not time_ok_any:
+                        pass
                     else:
                         allowed = True
+                else:
+                    reasons.append('door_not_resolved')
         # Cache result for quick tray status
         try:
             cache.set('agent:last_access_eval', {
                 'ok': allowed,
-                'card_number': card_number,
+                'card_number': matched_card,
                 'employee_id': getattr(emp, 'id', None),
                 'door_id': getattr(door, 'id', None),
                 'source': source,
@@ -1622,7 +1798,7 @@ def access_evaluate_and_open(request: HttpRequest):
         except Exception:
             pass
         # Attempt door open if allowed
-        if allowed:
+        if allowed and not open_all:
             try:
                 if door_pk:
                     return door_pk_open(request, int(door_pk))
@@ -1644,10 +1820,14 @@ def access_evaluate_and_open(request: HttpRequest):
             'ok': allowed,
             'employee': getattr(emp,'id', None),
             'employee_name': employee_name,
+            'card_number': matched_card,
             'door': getattr(door,'id', None),
+            'allowed_doors': allowed_doors,
+            'door_access_count': len(allowed_doors),
             'source': source,
             'reasons': reasons,
             'status_text': status_text,
+            'open_all': open_all,
         })
     except Exception as e:
         return JsonResponse({'ok': False, 'error': str(e)}, status=400)
@@ -1666,6 +1846,7 @@ def test_read_card(request: HttpRequest):
     # Optional provided card number; else pick an existing registered card if available
     provided_card = (request.GET.get('card_number') or '').strip()
     use_existing = (request.GET.get('use_existing') or '').strip() in ('1','true','yes')
+    open_all = str(request.GET.get('open_all') or '').lower() in ('1','true','yes','all')
     
     # DEBUG: Log what we receive
     import sys
@@ -1732,7 +1913,7 @@ def test_read_card(request: HttpRequest):
     # Call existing evaluator
     try:
         import json
-        payload = json.dumps({'card_number': card, 'door_pk': door.id, 'source': 'test'})
+        payload = json.dumps({'card_number': card, 'door_pk': door.id, 'source': 'test', 'open_all': open_all})
         # Build a faux POST request using current request as base
         req = request
         req.method = 'POST'
@@ -1749,6 +1930,8 @@ def test_read_card(request: HttpRequest):
             # Ensure card_number and reasons are present for UI rendering
             if 'card_number' not in data:
                 data['card_number'] = card
+            if 'allowed_doors' not in data:
+                data['allowed_doors'] = []
             # Include event_point_id for monitor column mapping
             data['event_point_id'] = door.id
             # Persist last used to avoid immediate repeats
@@ -1791,7 +1974,7 @@ def doors_json_list(request: HttpRequest):
         items = []
         for d in qs:
             # Map is_open boolean to state string for UI
-            state = 'OPEN' if d.is_open else 'CLOSED'
+            state = _door_state_from_cache_or_model(d)
             items.append({
                 'id': d.id,
                 'name': d.name or f"Door {d.id}",
@@ -2359,6 +2542,7 @@ def door_open(request: HttpRequest, device_id: int, door_id: str):
             door = Door.objects.get(id=door_id)
             door.is_open = True
             door.save(update_fields=['is_open', 'last_state_change'])
+            _set_lock_state(door.id, None)
         except Door.DoesNotExist:
             pass
         _persist_and_broadcast_status(device_id, "OPEN")
@@ -2374,6 +2558,7 @@ def door_close(request: HttpRequest, device_id: int, door_id: str):
             door = Door.objects.get(id=door_id)
             door.is_open = False
             door.save(update_fields=['is_open', 'last_state_change'])
+            _set_lock_state(door.id, None)
         except Door.DoesNotExist:
             pass
         _persist_and_broadcast_status(device_id, "CLOSED")
@@ -2384,7 +2569,37 @@ def door_normal_open(request: HttpRequest, device_id: int, door_id: str):
         return JsonResponse({"ok": False, "error": "unauthorized"}, status=403)
     ok = _enqueue(device_id, f"DOOR_NORMAL_OPEN:{door_id}")
     if ok:
+        _set_lock_state(door_id, None)
         _persist_and_broadcast_status(device_id, "NORMAL_OPEN")
+    return JsonResponse({"ok": ok})
+
+def door_lock(request: HttpRequest, device_id: int, door_id: str):
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({"ok": False, "error": "unauthorized"}, status=403)
+    ok = _enqueue(device_id, f"DOOR_LOCK:{door_id}")
+    if ok:
+        try:
+            door = Door.objects.get(id=door_id)
+            door.is_open = False
+            door.save(update_fields=['is_open', 'last_state_change'])
+            _set_lock_state(door.id, 'LOCKED')
+        except Door.DoesNotExist:
+            _set_lock_state(door_id, 'LOCKED')
+        _persist_and_broadcast_status(device_id, "LOCKED")
+    return JsonResponse({"ok": ok})
+
+def door_unlock(request: HttpRequest, device_id: int, door_id: str):
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({"ok": False, "error": "unauthorized"}, status=403)
+    ok = _enqueue(device_id, f"DOOR_UNLOCK:{door_id}")
+    if ok:
+        try:
+            door = Door.objects.get(id=door_id)
+            door.save(update_fields=['last_state_change'])
+            _set_lock_state(door.id, None)
+        except Door.DoesNotExist:
+            _set_lock_state(door_id, None)
+        _persist_and_broadcast_status(device_id, "UNLOCKED")
     return JsonResponse({"ok": ok})
 
 def door_cancel_alarm(request: HttpRequest, device_id: int, door_id: str):
@@ -2699,11 +2914,25 @@ def access_check(request: HttpRequest):
 def command_recent(request: HttpRequest):
     if not request.user.is_authenticated:
         return JsonResponse({'ok': False,'error':'unauthorized'}, status=403)
-    logs = CommandLog.objects.order_by('-created_at')[:50]
-    data = []
+    try:
+        limit = int(request.GET.get('limit', '20'))
+    except Exception:
+        limit = 20
+    limit = max(1, min(limit, 100))
+    logs = CommandLog.objects.order_by('-created_at')[:limit]
+    items = []
     for l in logs:
-        data.append({'id': l.id,'command': l.command,'status': l.status,'result': l.result,'device_id': l.device_id,'door_id': l.door_id,'created_at': l.created_at.isoformat(),'executed_at': l.executed_at and l.executed_at.isoformat()})
-    return JsonResponse({'ok': True,'commands': data})
+        items.append({
+            'id': l.id,
+            'command': (l.command or '')[:240],
+            'status': l.status,
+            'result': l.result,
+            'device_id': l.device_id,
+            'door_id': l.door_id,
+            'created_at': l.created_at.isoformat(),
+            'executed_at': l.executed_at and l.executed_at.isoformat(),
+        })
+    return JsonResponse({'ok': True,'items': items,'commands': items})
 
 def employee_create(request: HttpRequest):
     if not request.user.is_authenticated or not request.user.is_staff:
@@ -3027,38 +3256,46 @@ def check_card_owner(request: HttpRequest):
         return JsonResponse({'exists': False, 'error': 'no-card-number'}, status=400)
 
     # Normalize comparisons to be case-insensitive and spacing-tolerant
-    num = card_number.strip()
+    base = card_number.strip()
+    variants = []
+    compact = base.replace(' ', '')
+    variants.extend([base, base.upper(), base.lower(), compact, compact.upper(), compact.lower()])
+    # Strip leading zeros for numeric cards
+    if base.isdigit():
+        trimmed = base.lstrip('0') or '0'
+        variants.extend([trimmed, trimmed.upper(), trimmed.lower()])
+    # Remove duplicate variants while preserving order
+    seen = set(); normalized = []
+    for v in variants:
+        if v and v not in seen:
+            seen.add(v); normalized.append(v)
 
-    # Check primary card (case-insensitive)
-    emp = Employee.objects.filter(card_number__iexact=num).first()
-    if emp:
-        return JsonResponse({
-            'exists': True,
-            'employee_id': emp.id,
-            'employee_name': f"{emp.first_name} {emp.last_name}".strip(),
-            'card_type': 'primary'
-        })
-
-    # Check secondary card (case-insensitive)
-    emp = Employee.objects.filter(secondary_card_number__iexact=num).first()
-    if emp:
-        return JsonResponse({
-            'exists': True,
-            'employee_id': emp.id,
-            'employee_name': f"{emp.first_name} {emp.last_name}".strip(),
-            'card_type': 'secondary'
-        })
-
-    # Check any extra cards stored in EmployeeCard (mirrors primary behaviour)
-    card = EmployeeCard.objects.select_related('employee').filter(card_number__iexact=num).first()
-    if card and card.employee:
-        emp = card.employee
-        return JsonResponse({
-            'exists': True,
-            'employee_id': emp.id,
-            'employee_name': f"{emp.first_name} {emp.last_name}".strip(),
-            'card_type': 'extra'
-        })
+    for num in normalized:
+        emp = Employee.objects.filter(card_number__iexact=num).first()
+        if emp:
+            return JsonResponse({
+                'exists': True,
+                'employee_id': emp.id,
+                'employee_name': f"{emp.first_name} {emp.last_name}".strip(),
+                'card_type': 'primary'
+            })
+        emp = Employee.objects.filter(secondary_card_number__iexact=num).first()
+        if emp:
+            return JsonResponse({
+                'exists': True,
+                'employee_id': emp.id,
+                'employee_name': f"{emp.first_name} {emp.last_name}".strip(),
+                'card_type': 'secondary'
+            })
+        card = EmployeeCard.objects.select_related('employee').filter(card_number__iexact=num).first()
+        if card and card.employee:
+            emp = card.employee
+            return JsonResponse({
+                'exists': True,
+                'employee_id': emp.id,
+                'employee_name': f"{emp.first_name} {emp.last_name}".strip(),
+                'card_type': 'extra'
+            })
 
     return JsonResponse({'exists': False})
 

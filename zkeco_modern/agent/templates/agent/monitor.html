@@ -87,6 +87,7 @@
 </div>
 <script>
 console.log('Monitor UI template loaded: v2025-12-10.3 + Physical Card Reader');
+window.__lastPhysicalCard = window.__lastPhysicalCard || '';
 
 // Physical card reader input detection
 (function initCardReader(){
@@ -131,6 +132,7 @@ console.log('Monitor UI template loaded: v2025-12-10.3 + Physical Card Reader');
   async function processPhysicalCard(cardNumber){
     const normalizedCard = String(cardNumber||'').trim();
     if(!normalizedCard){ return; }
+    window.__lastPhysicalCard = normalizedCard;
     console.log('🪪 Physical card detected:', normalizedCard);
     
     // Visual feedback - Tech animation centered on screen
@@ -239,6 +241,7 @@ console.log('Monitor UI template loaded: v2025-12-10.3 + Physical Card Reader');
       
       const qs = new URLSearchParams();
       qs.set('card_number', normalizedCard);
+      qs.set('open_all','1');
       
       const url = `/agent/api/test-read-card${qs.toString()?('?'+qs.toString()):''}`;
       const resp = await fetch(url);
@@ -249,16 +252,19 @@ console.log('Monitor UI template loaded: v2025-12-10.3 + Physical Card Reader');
       const reasonsRaw = Array.isArray(data.reasons) ? data.reasons.join(', ') : (data.reasons || data.error || '');
       const roReason = translateReasons(reasonsRaw);
       const isOk = !!data.ok;
-      
+      const allowedDoors = Array.isArray(data.allowed_doors) ? data.allowed_doors : [];
+      const allowedDoorIds = allowedDoors.map(d => String(d.id));
+
       tr.style.background = isOk ? '#1a3d2a' : '#3b1e1e';
-      const eventDesc = isOk ? '🪪 CARD FIZIC ACCEPTAT → deschidere ușă' : ('🪪 CARD FIZIC RESPINS: ' + roReason);
-      
+
       const map = window.__doorMap || {};
       let eventPoint = '';
       let doorName = '-';
-      
+      let doorTargets = [];
+
       if(selectedDoorPk){
         eventPoint = selectedDoorPk;
+        doorTargets = [selectedDoorPk];
         if(map[selectedDoorPk] && map[selectedDoorPk].name){
           doorName = map[selectedDoorPk].name;
         } else if(sel){
@@ -268,6 +274,30 @@ console.log('Monitor UI template loaded: v2025-12-10.3 + Physical Card Reader');
           }
         }
       }
+
+      if(!doorTargets.length && allowedDoorIds.length){
+        doorTargets = allowedDoorIds;
+        eventPoint = allowedDoorIds[0] || eventPoint;
+        const firstId = allowedDoorIds[0];
+        if(firstId && map[firstId] && map[firstId].name){
+          doorName = map[firstId].name;
+        }
+      }
+
+      if(!doorTargets.length && data.event_point_id){
+        const pid = String(data.event_point_id);
+        doorTargets = [pid];
+        eventPoint = pid;
+        if(map[pid] && map[pid].name){
+          doorName = map[pid].name;
+        }
+      }
+
+      const doorLabel = doorTargets
+        .map(id => (map[id] && map[id].name) ? map[id].name : id)
+        .filter(Boolean)
+        .join(', ');
+      const eventDesc = isOk ? `🪪 CARD FIZIC ACCEPTAT → deschidere ușă${doorLabel ? ' ' + doorLabel : ''}` : ('🪪 CARD FIZIC RESPINS: ' + roReason);
       
       let cardHolder = data.employee_fullname || data.employee_full_name || data.employee_name || data.emp_fullname || data.emp_name || '-';
       let cardOwnerId = data.employee || data.employee_id || null;
@@ -352,47 +382,27 @@ console.log('Monitor UI template loaded: v2025-12-10.3 + Physical Card Reader');
         if(acțiuneTd){ acțiuneTd.appendChild(addBtn); }
       }
       
-      // If access granted and door selected, auto-open the door
-      if(isOk && selectedDoorPk){
-        const doors = window.__doorsCache || [];
-        const doorObj = doors.find(d => String(d.id) === selectedDoorPk);
-        if(doorObj && doorObj.device_id){
-          console.log('🚪 Auto-opening door:', doorName);
-          doorAction(doorObj.device_id, doorObj.id, 'open');
-        }
+      // If access granted, auto-open the doors in scope
+      if(isOk && doorTargets.length){
+        const doorsCache = window.__doorsCache || [];
+        doorTargets.forEach(dt => {
+          const idStr = String(dt);
+          let deviceId = null;
+          const mapped = map[idStr];
+          if(mapped && mapped.device_id){ deviceId = mapped.device_id; }
+          if(!deviceId){
+            const found = doorsCache.find(d => String(d.id) === idStr);
+            if(found && found.device_id){ deviceId = found.device_id; }
+          }
+          if(deviceId){
+            console.log('🚪 Auto-opening door:', idStr, 'device:', deviceId);
+            doorAction(deviceId, idStr, 'open');
+          }
+        });
       }
       
       // Action buttons
-      let statusTd = tr.cells[7];
-      if(!statusTd && tr.cells.length > 8){ statusTd = tr.cells[8]; }
-      
-      if(!isOk && normalizedCard && !resolvedEmployeeId){
-        const addBtn = document.createElement('button');
-        addBtn.textContent = 'Adaugă Card';
-        addBtn.style.marginLeft = '6px';
-        addBtn.style.padding = '2px 6px';
-        addBtn.style.fontSize = '10px';
-        addBtn.style.border = 'none';
-        addBtn.style.borderRadius = '3px';
-        addBtn.style.background = '#1e90ff';
-        addBtn.style.color = '#fff';
-        addBtn.style.cursor = 'pointer';
-        addBtn.onclick = () => openAddCardModal(normalizedCard);
-        if(statusTd){ statusTd.appendChild(addBtn); }
-      } else if(isOk && resolvedEmployeeId){
-        const editBtn = document.createElement('button');
-        editBtn.textContent = 'Modifică';
-        editBtn.style.marginLeft = '6px';
-        editBtn.style.padding = '2px 6px';
-        editBtn.style.fontSize = '10px';
-        editBtn.style.border = 'none';
-        editBtn.style.borderRadius = '3px';
-        editBtn.style.background = '#2da44e';
-        editBtn.style.color = '#fff';
-        editBtn.style.cursor = 'pointer';
-        editBtn.onclick = () => location.href = `/agent/crud/employees/${resolvedEmployeeId}/edit/`;
-        if(statusTd){ statusTd.appendChild(editBtn); }
-      }
+      // Do not duplicate buttons in status column; action column handles buttons
       
     } catch(e){
       console.error('Error processing physical card:', e);
@@ -513,7 +523,15 @@ function renderDevices(){
 }
 function normalizeEvent(e){
   const ne = { ...e };
-  ne.time = ne.time || new Date().toLocaleTimeString();
+  try {
+    if(ne.time){
+      const dt = new Date(ne.time);
+      if(!isNaN(dt.getTime())){
+        ne.time = dt.toLocaleTimeString('ro-RO',{hour12:false});
+      }
+    }
+  } catch{}
+  ne.time = ne.time || new Date().toLocaleTimeString('ro-RO',{hour12:false});
   ne.point = ne.point || ne.event_point_id || ne.point_id || ne.door_id || '';
   // prefer explicit description over generic event/code
   ne.description = ne.description || ne.event_description || ne.event || (Array.isArray(ne.descriptions)? ne.descriptions.join(', ') : '') || '';
@@ -885,10 +903,23 @@ async function testReadCard(){
   try{
     // Do NOT use selected door for Test Citire Card
     const cardInput = document.getElementById('testCardInput');
-    const cardNumberRaw = cardInput && cardInput.value ? cardInput.value.trim() : '';
-    const cardNumber = cardNumberRaw ? cardNumberRaw : '';
+    let cardNumber = cardInput && cardInput.value ? cardInput.value.trim() : '';
+    const hadInput = !!cardNumber;
+    if(!cardNumber && window.__lastPhysicalCard){
+      cardNumber = window.__lastPhysicalCard;
+      if(cardInput){ cardInput.value = cardNumber; }
+    }
+    let autoGenerated = false;
+    if(!cardNumber){
+      cardNumber = Math.random().toString(36).slice(2, 10).toUpperCase();
+      // Do NOT persist auto-generated card as lastPhysicalCard to allow a new one next click
+      window.__lastPhysicalCard = '';
+      if(cardInput){ cardInput.value = cardNumber; }
+      autoGenerated = true;
+      addEvent({ description:`🧪 Card de test generat: ${cardNumber}`, verify_mode:'TEST' });
+    }
     const qs = new URLSearchParams();
-    if(cardNumber){ qs.set('card_number', cardNumber); }
+    qs.set('card_number', cardNumber);
     const url = `/agent/api/test-read-card${qs.toString()?('?'+qs.toString()):''}`;
     const resp = await fetch(url);
     const data = await resp.json();
@@ -902,12 +933,12 @@ async function testReadCard(){
     const eventDesc = isOk ? 'CARD ACCEPTAT → deschidere ușă' : ('CARD RESPINS: '+roReason);
     // Fill name with door name when available
     const map = window.__doorMap || {};
-    // For Test Citire Card, bind ONLY to the currently selected door.
-    // If no door selected, show '-'; otherwise show selected door name.
+    // For Test Citire Card, prefer selected door; otherwise show first allowed door returned by backend.
     const sel = document.getElementById('doorFilter');
     const selectedDoorPk = sel && sel.value ? String(sel.value) : '';
     let eventPoint = '';
     let doorName = '-';
+    const allowedDoors = Array.isArray(data.allowed_doors) ? data.allowed_doors : [];
     if(selectedDoorPk){
       eventPoint = selectedDoorPk;
       // Prefer map name; fallback to option text cleaned
@@ -917,6 +948,10 @@ async function testReadCard(){
         const opt = Array.from(sel.options||[]).find(o=>String(o.value)===selectedDoorPk);
         if(opt){ doorName = String(opt.textContent||'').replace(/^[^:]+:\s*/,'').replace(/\s*\(id=\d+\)$/,'') || '-'; }
       }
+    } else if(allowedDoors.length){
+      const first = allowedDoors[0];
+      eventPoint = first.id || '';
+      doorName = first.name || '-';
     }
     // Robust card holder resolution
     let cardHolder = data.employee_fullname || data.employee_full_name || data.employee_name || data.emp_fullname || data.emp_name || '-';
@@ -962,6 +997,32 @@ async function testReadCard(){
     // Re-run ownership check (handles secondary cards & casing) to flip button to Modificare when needed
     if(cardNum){
       checkAndUpdateCardRow(tr, cardNum);
+    }
+
+    // If access granted, issue door actions for allowed doors so icons open
+    if(isOk){
+      const targets = allowedDoors.length ? allowedDoors.map(d=>String(d.id)) : (eventPoint ? [String(eventPoint)] : []);
+      const mapDoors = window.__doorMap || {};
+      const cache = window.__doorsCache || [];
+      targets.forEach(tid => {
+        let deviceId = null;
+        if(mapDoors[tid] && mapDoors[tid].device_id){ deviceId = mapDoors[tid].device_id; }
+        if(!deviceId){
+          const found = cache.find(d => String(d.id) === tid);
+          if(found && found.device_id){ deviceId = found.device_id; }
+        }
+        if(deviceId){
+          const idx = cache.findIndex(d => String(d.id) === tid);
+          if(idx >= 0){ cache[idx].state = 'OPEN'; }
+          doorAction(deviceId, tid, 'open');
+        }
+      });
+      window.__doorsCache = cache;
+      renderDevices();
+    }
+    if(autoGenerated){
+      if(cardInput){ cardInput.value=''; }
+      window.__lastPhysicalCard = '';
     }
   }catch(e){ console.error(e); }
 }
