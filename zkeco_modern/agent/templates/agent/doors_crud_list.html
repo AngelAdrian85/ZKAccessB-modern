@@ -1,64 +1,63 @@
 {% extends 'agent/base_legacy.html' %}
-{% block title %}Doors List{% endblock %}
+{% block title %}Doors (CRUD){% endblock %}
 {% block content %}
 <h2 style="background: linear-gradient(135deg, #0a4a8c 0%, #1e7bc9 50%, #87ceeb 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; padding-bottom: 10px;">🚪 Doors (CRUD)</h2>
 <p style="margin-top: 10px;"><a class='op' href='{% url "crud-door-create" %}' style="background: linear-gradient(135deg, #0a4a8c 0%, #1e7bc9 50%, #87ceeb 100%); color: #fff; padding: 6px 12px; border-radius: 4px; text-decoration: none;">Add Door</a></p>
-<table class='status-box' style='width:100%;border-collapse:collapse;background:#fff;border:1px solid #c5d3e3;'>
-<tr style="background: linear-gradient(135deg, #0a4a8c 0%, #1e7bc9 50%, #87ceeb 100%); color: #fff; font-weight: 600;"><th style="padding:10px;border:1px solid #87ceeb;">Name</th><th style="padding:10px;border:1px solid #87ceeb;">Device</th><th style="padding:10px;border:1px solid #87ceeb;">Location</th><th style="padding:10px;border:1px solid #87ceeb;">Enabled</th><th style="padding:10px;border:1px solid #87ceeb;">State</th><th style="padding:10px;border:1px solid #87ceeb;">Actions</th></tr>
-{% for d in page.object_list %}
-<tr data-door-id='{{ d.id }}' style="border-bottom: 1px solid #e0e6f2; background: #fff;">
-  <td class='inline-edit' data-field='name' style="padding: 8px; border-right: 1px solid #e0e6f2;">{{ d.name }}</td>
-  <td style="padding: 8px; border-right: 1px solid #e0e6f2;">{{ d.device }}</td>
-  <td class='inline-edit' data-field='location' style="padding: 8px; border-right: 1px solid #e0e6f2;">{{ d.location }}</td>
-  <td class='inline-edit' data-field='enabled' style="padding: 8px; border-right: 1px solid #e0e6f2;">{{ d.enabled }}</td>
-  <td class='door-state' style="padding: 8px; border-right: 1px solid #e0e6f2;"><span style="color: {% if d.is_open %}#da3633{% else %}#2da44e{% endif %}; font-weight: 600;">{{ d.is_open|yesno:"OPEN,CLOSED" }}</span></td>
-  <td style="padding: 8px;">
-    <a class='op' href='{% url "crud-door-edit" d.id %}' style="background: #2da44e; color: #fff; padding: 4px 8px; border-radius: 3px; text-decoration: none; font-size: 12px;">Edit</a>
-    {% if d.device %}
-      <button class='op door-open-btn' style="background: #1e7bc9; color: #fff; padding: 4px 8px; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;">Open</button>
-      <button class='op door-close-btn' style='background:#999; color: #fff; padding: 4px 8px; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;'>Close</button>
-    {% endif %}
-    <form method='post' action='{% url "crud-door-delete" d.id %}' style='display:inline' onsubmit='return confirm("Delete door?")'>
-      {% csrf_token %}<button class='op' style='background:#da3633; color: #fff; padding: 4px 8px; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;'>Del</button>
-    </form>
-  </td>
-</tr>
-{% empty %}<tr><td colspan='6' style="padding: 10px; text-align: center; color: #999;">No doors</td></tr>{% endfor %}
-</table>
-<div>Page {{ page.number }} of {{ page.paginator.num_pages }}</div>
-{% if page.has_previous %}<a href='?page={{ page.previous_page_number }}'>Prev</a>{% endif %}
-{% if page.has_next %}<a href='?page={{ page.next_page_number }}'>Next</a>{% endif %}
-{% endblock %}
-{% block extra_js %}
-<script>
-function getCSRF(){
-  const m = document.cookie.match(/csrftoken=([^;]+)/); return m?m[1]:'';
-}
-document.querySelectorAll('td.inline-edit').forEach(td=>{
-  td.contentEditable = true;
-  td.addEventListener('blur', ()=>{
-    const tr = td.closest('tr');
-    const id = tr.getAttribute('data-door-id');
-    const field = td.getAttribute('data-field');
-    let value = td.innerText.trim();
-    if(field==='enabled'){ value = (value.toLowerCase().startsWith('t')||value==='1'||value.toLowerCase()==='true'); }
-    fetch(`/agent/crud/doors/${id}/inline/`, {
-      method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken':getCSRF()},
-      body: JSON.stringify({field, value})
-    }).then(r=>r.json()).then(data=>{ if(!data.ok){ console.warn(data); } });
-  });
-});
-document.querySelectorAll('.door-open-btn').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    const id = btn.closest('tr').getAttribute('data-door-id');
-    fetch(`/agent/api/doors/${id}/open/`).then(r=>r.json()).then(data=>{ if(data.ok){ btn.closest('tr').querySelector('.door-state').innerText='OPEN'; } });
-  });
-});
-document.querySelectorAll('.door-close-btn').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    const id = btn.closest('tr').getAttribute('data-door-id');
-    fetch(`/agent/api/doors/${id}/close/`).then(r=>r.json()).then(data=>{ if(data.ok){ btn.closest('tr').querySelector('.door-state').innerText='CLOSED'; } });
-  });
-});
-</script>
+<style>
+.access-shell{margin:8px auto;max-width:1400px;background:#1e4a6b;border:2px solid #3da5d9;border-radius:4px;box-shadow:0 6px 16px rgba(0,0,0,0.35);padding:6px;}
+.access-tabs{display:flex;gap:2px;margin-bottom:6px;border-bottom:1px solid #3d6a8b;}
+.access-tab{padding:6px 12px;background:#163247;border:1px solid #3d6a8b;border-bottom:none;color:#9fd2f1;font-weight:700;font-size:11px;text-transform:uppercase;cursor:pointer;text-decoration:none;border-radius:3px 3px 0 0;}
+.access-tab.active{background:#3da5d9;color:#fff;border-color:#3da5d9;}
+.card-panel{background:#0f2433;border:1px solid #3d6a8b;border-radius:4px;padding:10px;}
+.card-panel h3{margin:0 0 6px 0;color:#9fd2f1;font-size:13px;letter-spacing:0.2px;}
+.compact-table{width:100%;border-collapse:collapse;font-size:11px;background:#102637;}
+.compact-table thead{background:linear-gradient(90deg,#1a3a52 0%,#3da5d9 100%);color:#fff;}
+.compact-table th,.compact-table td{padding:6px 8px;border:1px solid #2d6a8b;text-align:left;}
+.btn-small{padding:6px 12px;border:none;border-radius:3px;font-size:11px;font-weight:700;cursor:pointer;color:#fff;text-decoration:none;display:inline-block;}
+.btn-primary{background:#3da5d9;}
+.btn-success{background:#2da44e;}
+.btn-danger{background:#d94a3d;}
+.pagination{margin-top:8px;display:flex;gap:8px;align-items:center;color:#9fd2f1;font-size:11px;}
+</style>
+
+<div class="access-shell">
+  <div class="access-tabs">
+    <a class="access-tab active" href="/agent/crud/doors/">Doors</a>
+    <a class="access-tab" href="/agent/crud/time-segments/">Time Segments</a>
+    <a class="access-tab" href="/agent/crud/holidays/">Holidays</a>
+    <a class="access-tab" href="/agent/crud/access-levels/">Access Levels</a>
+    <a class="access-tab" href="/agent/crud/access-logs/">Access Logs</a>
+  </div>
+  <div class="card-panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <h3>🔓 Doors</h3>
+      <a class="btn-small btn-primary" href="{% url 'crud-door-create' %}">+ Add Door</a>
+    </div>
+    <table class="compact-table">
+      <thead><tr><th>Name</th><th>Device</th><th>Location</th><th>Enabled</th><th>State</th><th style="width:160px;">Actions</th></tr></thead>
+      <tbody>
+        {% for d in page.object_list %}
+        <tr>
+          <td>{{ d.name }}</td>
+          <td>{% if d.device %}{{ d.device.device_name }} (SN:{{ d.device.serial_number }}){% endif %}</td>
+          <td>{{ d.location }}</td>
+          <td>{{ d.enabled }}</td>
+          <td>{{ d.state }}</td>
+          <td>
+            <a class="btn-small btn-success" href="{% url 'crud-door-edit' d.id %}">Edit</a>
+            <form method='post' action='{% url "crud-door-delete" d.id %}' style='display:inline' onsubmit='return confirm("Delete door?")'>
+              {% csrf_token %}<button class="btn-small btn-danger" type="submit">Del</button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}<tr><td colspan="6" style="text-align:center;color:#9fd2f1;">No doors</td></tr>{% endfor %}
+      </tbody>
+    </table>
+    <div class="pagination">
+      <span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+      {% if page.has_previous %}<a class="btn-small btn-primary" href='?page={{ page.previous_page_number }}'>Prev</a>{% endif %}
+      {% if page.has_next %}<a class="btn-small btn-primary" href='?page={{ page.next_page_number }}'>Next</a>{% endif %}
+    </div>
+  </div>
+</div>
 {% endblock %}

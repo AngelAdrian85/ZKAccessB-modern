@@ -1790,11 +1790,14 @@ def doors_json_list(request: HttpRequest):
         qs = Door.objects.select_related('device').order_by('id')
         items = []
         for d in qs:
+            # Map is_open boolean to state string for UI
+            state = 'OPEN' if d.is_open else 'CLOSED'
             items.append({
                 'id': d.id,
                 'name': d.name or f"Door {d.id}",
                 'device_id': getattr(d.device,'id', None),
                 'device_name': getattr(d.device,'name', None),
+                'state': state,  # ADD THIS: state for door icon colors
             })
         return JsonResponse({'items': items})
     except Exception as ex:
@@ -2351,6 +2354,13 @@ def door_open(request: HttpRequest, device_id: int, door_id: str):
         return JsonResponse({"ok": False, "error": "unauthorized"}, status=403)
     ok = _enqueue(device_id, f"DOOR_OPEN:{door_id}")
     if ok:
+        # Update door.is_open state in database
+        try:
+            door = Door.objects.get(id=door_id)
+            door.is_open = True
+            door.save(update_fields=['is_open', 'last_state_change'])
+        except Door.DoesNotExist:
+            pass
         _persist_and_broadcast_status(device_id, "OPEN")
     return JsonResponse({"ok": ok})
 
@@ -2359,6 +2369,13 @@ def door_close(request: HttpRequest, device_id: int, door_id: str):
         return JsonResponse({"ok": False, "error": "unauthorized"}, status=403)
     ok = _enqueue(device_id, f"DOOR_CLOSE:{door_id}")
     if ok:
+        # Update door.is_open state in database
+        try:
+            door = Door.objects.get(id=door_id)
+            door.is_open = False
+            door.save(update_fields=['is_open', 'last_state_change'])
+        except Door.DoesNotExist:
+            pass
         _persist_and_broadcast_status(device_id, "CLOSED")
     return JsonResponse({"ok": ok})
 
@@ -2994,23 +3011,26 @@ def comm_center_stop(request: HttpRequest):
 
 @csrf_exempt
 def check_card_owner(request: HttpRequest):
-    """Check if a card belongs to an employee in the database.
+    """Check if a card belongs to an employee (primary, secondary, or extra cards).
     Query params:
       - card_number: The card to check
     Returns JSON with:
       - exists: True if card is in DB
       - employee_id: Employee ID (if exists)
       - employee_name: Full name (if exists)
-      - card_type: 'primary' or 'secondary'
+      - card_type: 'primary' | 'secondary' | 'extra'
     """
-    from .models import Employee
-    
+    from .models import Employee, EmployeeCard
+
     card_number = (request.GET.get('card_number') or '').strip()
     if not card_number:
         return JsonResponse({'exists': False, 'error': 'no-card-number'}, status=400)
-    
-    # Check primary card
-    emp = Employee.objects.filter(card_number=card_number).first()
+
+    # Normalize comparisons to be case-insensitive and spacing-tolerant
+    num = card_number.strip()
+
+    # Check primary card (case-insensitive)
+    emp = Employee.objects.filter(card_number__iexact=num).first()
     if emp:
         return JsonResponse({
             'exists': True,
@@ -3018,9 +3038,9 @@ def check_card_owner(request: HttpRequest):
             'employee_name': f"{emp.first_name} {emp.last_name}".strip(),
             'card_type': 'primary'
         })
-    
-    # Check secondary card
-    emp = Employee.objects.filter(secondary_card_number=card_number).first()
+
+    # Check secondary card (case-insensitive)
+    emp = Employee.objects.filter(secondary_card_number__iexact=num).first()
     if emp:
         return JsonResponse({
             'exists': True,
@@ -3028,7 +3048,18 @@ def check_card_owner(request: HttpRequest):
             'employee_name': f"{emp.first_name} {emp.last_name}".strip(),
             'card_type': 'secondary'
         })
-    
+
+    # Check any extra cards stored in EmployeeCard (mirrors primary behaviour)
+    card = EmployeeCard.objects.select_related('employee').filter(card_number__iexact=num).first()
+    if card and card.employee:
+        emp = card.employee
+        return JsonResponse({
+            'exists': True,
+            'employee_id': emp.id,
+            'employee_name': f"{emp.first_name} {emp.last_name}".strip(),
+            'card_type': 'extra'
+        })
+
     return JsonResponse({'exists': False})
 
 def control_center(request: HttpRequest):

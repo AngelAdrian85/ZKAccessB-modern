@@ -1,22 +1,57 @@
 {% extends 'agent/base_legacy.html' %}
 {% block title %}Time Segments{% endblock %}
 {% block content %}
-<h2>Time Segments (CRUD)</h2>
-<p><a class='op' href='{% url "crud-segment-create" %}'>Add Segment</a></p>
-<table class='status-box' style='width:100%;border-collapse:collapse'>
-<tr><th>Name</th><th>Start</th><th>End</th><th>Days</th><th>Actions</th></tr>
-{% for s in page.object_list %}
-<tr>
-  <td>{{ s.name }}</td><td>{{ s.start_time }}</td><td>{{ s.end_time }}</td><td>{{ s.days_display }}</td>
-  <td><a class='op' href='{% url "crud-segment-edit" s.id %}'>Edit</a>
-    <form method='post' action='{% url "crud-segment-delete" s.id %}' style='display:inline' onsubmit='return confirm("Delete segment?")'>
-      {% csrf_token %}<button class='op' style='background:#632626'>Del</button>
-    </form>
-  </td>
-</tr>
-{% empty %}<tr><td colspan='4'>No segments</td></tr>{% endfor %}
-</table>
-<div>Page {{ page.number }} of {{ page.paginator.num_pages }}</div>
-{% if page.has_previous %}<a href='?page={{ page.previous_page_number }}'>Prev</a>{% endif %}
-{% if page.has_next %}<a href='?page={{ page.next_page_number }}'>Next</a>{% endif %}
+<style>
+.access-shell{margin:8px auto;max-width:1400px;background:#1e4a6b;border:2px solid #3da5d9;border-radius:4px;box-shadow:0 6px 16px rgba(0,0,0,0.35);padding:6px;}
+.access-tabs{display:flex;gap:2px;margin-bottom:6px;border-bottom:1px solid #3d6a8b;}
+.access-tab{padding:6px 12px;background:#163247;border:1px solid #3d6a8b;border-bottom:none;color:#9fd2f1;font-weight:700;font-size:11px;text-transform:uppercase;cursor:pointer;text-decoration:none;border-radius:3px 3px 0 0;}
+.access-tab.active{background:#3da5d9;color:#fff;border-color:#3da5d9;}
+.card-panel{background:#0f2433;border:1px solid #3d6a8b;border-radius:4px;padding:10px;}
+.card-panel h3{margin:0 0 8px 0;color:#9fd2f1;font-size:13px;letter-spacing:0.2px;}
+.compact-table{width:100%;border-collapse:collapse;font-size:11px;background:#102637;}
+.compact-table thead{background:linear-gradient(90deg,#1a3a52 0%,#3da5d9 100%);color:#fff;}
+.compact-table th,.compact-table td{padding:6px 8px;border:1px solid #2d6a8b;text-align:left;color:#e8f0f8;}
+.btn-small{padding:6px 12px;border:none;border-radius:3px;font-size:11px;font-weight:700;cursor:pointer;color:#fff;text-decoration:none;display:inline-block;}
+.btn-primary{background:#3da5d9;}
+.btn-success{background:#2da44e;}
+.btn-danger{background:#d94a3d;}
+.pagination{margin-top:8px;display:flex;gap:8px;align-items:center;color:#9fd2f1;font-size:11px;}
+</style>
+
+<div class="access-shell">
+  <div class="access-tabs">
+    <a class="access-tab" href="/agent/crud/doors/">Doors</a>
+    <a class="access-tab active" href="/agent/crud/time-segments/">Time Segments</a>
+    <a class="access-tab" href="/agent/crud/holidays/">Holidays</a>
+    <a class="access-tab" href="/agent/crud/access-levels/">Access Levels</a>
+    <a class="access-tab" href="/agent/crud/access-logs/">Access Logs</a>
+  </div>
+  <div class="card-panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+      <h3>⏱️ Time Segments</h3>
+      <a class="btn-small btn-primary" href="{% url 'crud-segment-create' %}">+ Add Segment</a>
+    </div>
+    <table class="compact-table">
+      <thead><tr><th>Name</th><th>Start</th><th>End</th><th>Days</th><th style="width:150px;">Actions</th></tr></thead>
+      <tbody>
+        {% for s in page.object_list %}
+        <tr>
+          <td>{{ s.name }}</td><td>{{ s.start_time }}</td><td>{{ s.end_time }}</td><td>{{ s.days_display }}</td>
+          <td>
+            <a class="btn-small btn-success" href="{% url 'crud-segment-edit' s.id %}">Edit</a>
+            <form method='post' action='{% url "crud-segment-delete" s.id %}' style='display:inline' onsubmit='return confirm("Delete segment?")'>
+              {% csrf_token %}<button class="btn-small btn-danger" type="submit">Del</button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}<tr><td colspan="5" style="text-align:center;color:#9fd2f1;">No segments</td></tr>{% endfor %}
+      </tbody>
+    </table>
+    <div class="pagination">
+      <span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+      {% if page.has_previous %}<a class="btn-small btn-primary" href='?page={{ page.previous_page_number }}'>Prev</a>{% endif %}
+      {% if page.has_next %}<a class="btn-small btn-primary" href='?page={{ page.next_page_number }}'>Next</a>{% endif %}
+    </div>
+  </div>
+</div>
 {% endblock %}

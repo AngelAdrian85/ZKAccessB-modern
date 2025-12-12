@@ -1,11 +1,37 @@
 {% extends 'agent/base_legacy.html' %}
 {% block title %}Access Level{% endblock %}
 {% block content %}
-<h2>{% if obj %}Edit Access Level{% else %}Create Access Level{% endif %}</h2>
-<form method='post'>
-  {% csrf_token %}
-  {{ form.as_p }}
-  <button type='submit' class='op'>Save</button>
-  <a href='{% url "crud-access-levels-list" %}'>Back</a>
-</form>
+<style>
+.access-shell{margin:8px auto;max-width:900px;background:#1e4a6b;border:2px solid #3da5d9;border-radius:4px;box-shadow:0 6px 16px rgba(0,0,0,0.35);padding:6px;}
+.access-tabs{display:flex;gap:2px;margin-bottom:6px;border-bottom:1px solid #3d6a8b;}
+.access-tab{padding:6px 12px;background:#163247;border:1px solid #3d6a8b;border-bottom:none;color:#9fd2f1;font-weight:700;font-size:11px;text-transform:uppercase;cursor:pointer;text-decoration:none;border-radius:3px 3px 0 0;}
+.access-tab.active{background:#3da5d9;color:#fff;border-color:#3da5d9;}
+.form-card{background:#0f2433;border:1px solid #3d6a8b;border-radius:4px;padding:12px;}
+.form-card h3{margin:0 0 10px 0;color:#9fd2f1;font-size:13px;}
+.form-card label{color:#e8f0f8;font-weight:600;font-size:11px;display:block;margin-top:10px;}
+.form-card input,.form-card select,.form-card textarea{width:100%;background:#102637;border:1px solid #2d6a8b;color:#e8f0f8;border-radius:3px;padding:6px;font-size:11px;}
+.btn-small{padding:6px 12px;border:none;border-radius:3px;font-size:11px;font-weight:700;cursor:pointer;color:#fff;text-decoration:none;display:inline-block;}
+.btn-primary{background:#3da5d9;}
+.btn-secondary{background:#2d6a8b;}
+</style>
+
+<div class="access-shell">
+  <div class="access-tabs">
+    <a class="access-tab" href="/agent/crud/doors/">Doors</a>
+    <a class="access-tab" href="/agent/crud/time-segments/">Time Segments</a>
+    <a class="access-tab active" href="/agent/crud/access-levels/">Access Levels</a>
+    <a class="access-tab" href="/agent/crud/access-logs/">Access Logs</a>
+  </div>
+  <div class="form-card">
+    <h3>{% if obj %}Edit Access Level{% else %}Create Access Level{% endif %}</h3>
+    <form method='post'>
+      {% csrf_token %}
+      {{ form.as_p }}
+      <div style="display:flex;gap:8px;margin-top:12px;">
+        <button type='submit' class='btn-small btn-primary'>Save</button>
+        <a class="btn-small btn-secondary" href='{% url "crud-access-levels-list" %}'>Back</a>
+      </div>
+    </form>
+  </div>
+</div>
 {% endblock %}

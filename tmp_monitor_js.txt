@@ -1,91 +1,4 @@
-{% extends 'agent/base_legacy.html' %}
-{% block title %}Real-Time Monitoring{% endblock %}
-{% block content %}
-<style>
-.device-icon{width:80px;height:80px;background:#1e303d;border:2px solid #2d4961;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;margin:6px;position:relative;cursor:pointer;transition:all 0.3s;}
-.device-icon:hover{transform:translateY(-2px);}
-.device-icon.online{border-color:#2da44e;background:#1a3d2a;}
-.device-icon.offline{border-color:#cf222e;opacity:0.5;}
-.device-icon .icon{font-size:32px;margin-bottom:4px;}
-.device-icon .label{font-size:11px;color:#cfe9f8;text-align:center;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.device-icon .label.name-anim{animation:pulse 1.6s infinite;}
-.device-actions{display:none;position:absolute;top:-8px;right:-8px;background:#0d3a63;border:1px solid #1e303d;border-radius:6px;padding:4px;box-shadow:0 2px 8px rgba(0,0,0,0.4); z-index: 10;} 
-.device-actions button{display:block;margin:2px 0;padding:2px 6px;font-size:10px;border:none;border-radius:4px;color:#fff;background:#1e3e55;cursor:pointer;}
-.device-actions button:hover{background:#245678;}
-.device-icon:hover .device-actions{display:block;}
-.device-grid{display:flex;flex-wrap:wrap;justify-content:center;padding:10px;gap:10px;min-height:180px;}
-.door-panel{font-size:10px;color:#b8d7ef;margin-top:2px;opacity:0.9;}
-#event-grid{width:100%;border-collapse:collapse;font-size:11px;background:#152a38;margin-top:12px;}
-#event-grid thead tr{background:#0d3a63;}
-#event-grid th{border:1px solid #1e303d;padding:5px;color:#fff;font-weight:600;}
-#event-grid td{border:1px solid #1e303d;padding:3px;color:#cfe9f8;}
-.toolbar{background:#0d3a63;padding:6px 10px;margin:-16px -20px 8px -20px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;border-bottom:2px solid #1e303d;}
-.toolbar button{padding:6px 12px;border-radius:4px;border:none;background:#1e3e55;color:#fff;cursor:pointer;font-size:12px;font-weight:500;}
-.toolbar button:hover{background:#245678;}
-.toolbar button.action{background:#2da44e;}
-.toolbar button.danger{background:#cf222e;}
-.toolbar input,.toolbar select{background:#152a38;border:1px solid #1e303d;color:#cfe9f8;padding:4px 8px;border-radius:4px;font-size:12px;}
-.filter-links{display:flex;gap:12px;margin:8px 0;font-size:12px;flex-wrap:wrap;}
-.filter-links a{color:#4db3ff;text-decoration:none;padding:4px 0;}
-.filter-links a:hover{text-decoration:underline;}
-@keyframes pulse{0%,100%{transform:scale(1);}50%{transform:scale(1.08);}}
-@keyframes flash{0%,100%{border-color:#cf222e;}50%{border-color:#ff6b6b;}}
-.device-icon.alarm{animation:flash 0.8s infinite;}
-#debug-status{position:fixed;bottom:0;right:0;background:rgba(0,0,0,0.9);color:#0f0;font-size:10px;padding:8px;max-width:300px;font-family:monospace;max-height:120px;overflow-y:auto;z-index:9999;border-top:1px solid #0f0;}
-</style>
 
-<div class="toolbar">
-  <label style="color:#fff;font-weight:600;">Area:</label>
-  <select id="areaFilter"><option>All</option></select>
-  <label style="color:#fff;font-weight:600;">Access Control Panel:</label>
-  <select id="panelFilter"><option value="all">Show all</option><option value="">----------------</option></select>
-  <label style="color:#fff;font-weight:600;">Door:</label>
-  <select id="doorFilter"><option>----------------</option></select>
-  <button onclick="testDoorOpen()" style="background:#2da44e;" data-tip="Test deschidere pe ușa selectată">🚪 Test Deschidere Ușă</button>
-  <button class="action" onclick="bulkOpen()" data-tip="Deschide toate ușile">▶Open all current doors</button>
-  <button class="danger" onclick="bulkClose()" data-tip="Închide toate ușile">▶Close all current doors</button>
-  <button onclick="cancelAllAlarms()" style="background:#815f00;" data-tip="Anulează toate alarmele">▶Cancel all alarms</button>
-  <input id="testCardInput" placeholder="Card nr (opțional)" style="background:#152a38;border:1px solid #1e303d;color:#cfe9f8;padding:4px 8px;border-radius:4px;font-size:12px;width:160px;" />
-  <button onclick="testReadCard()" style="background:#2da44e;" data-tip="Generează o citire de test (8 cifre)">🪪 Test Citire Card</button>
-</div>
-
-<div class="device-grid" id="devices"></div>
-
-<div style="margin-top:4px;">
-  <h3 style="color:#5fc4ff;font-size:13px;font-weight:600;margin:0 0 6px 0;display:flex;justify-content:space-between;align-items:center;gap:8px;">
-     📋 Monitorizare Evenimente
-     <input id="eventFilter" placeholder="Filtrează evenimente..." style="padding:4px 8px;background:#152a38;border:1px solid #1e303d;border-radius:4px;max-width:220px;color:#cfe9f8;font-size:12px;" oninput="filterEvents()" />
-  </h3>
-  <div style="overflow:auto;max-height:520px;border:1px solid #1e303d;border-radius:6px;margin-top:4px;">
-    <table id="event-grid">
-      <thead>
-        <tr>
-          <th>Time</th>
-          <th>Event point</th>
-          <th>Event Description</th>
-          <th>Card Number</th>
-          <th>Nume Ușă/Dispozitiv</th>
-          <th>Posesor card</th>
-          <th>Status</th>
-          <th>Verify Mode</th>
-          <th>Acțiune</th>
-        </tr>
-      </thead>
-      <tbody id="events"></tbody>
-    </table>
-  </div>
-</div>
-
-<div id="monitor-footer" style="margin-top:8px;margin-bottom:-10px;padding:6px 10px;background:#0d3a63;border-top:1px solid #1e303d;color:#e8f0f8;font-size:11px;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;">
-  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-    <span style="font-weight:600;">🚪 Door Status Monitoring</span>
-    <a href="#" onclick="bulkOpen(); return false;" style="color:#8bd8ff;">▶Open all</a>
-    <a href="#" onclick="bulkClose(); return false;" style="color:#8bd8ff;">▶Close all</a>
-    <a href="#" onclick="cancelAllAlarms(); return false;" style="color:#f0c674;">▶Cancel alarms</a>
-  </div>
-  <span style="opacity:0.85;">UI v2025-12-10.4 · Physical Reader</span>
-</div>
-<script>
 console.log('Monitor UI template loaded: v2025-12-10.3 + Physical Card Reader');
 
 // Physical card reader input detection
@@ -129,9 +42,7 @@ console.log('Monitor UI template loaded: v2025-12-10.3 + Physical Card Reader');
   });
   
   async function processPhysicalCard(cardNumber){
-    const normalizedCard = String(cardNumber||'').trim();
-    if(!normalizedCard){ return; }
-    console.log('🪪 Physical card detected:', normalizedCard);
+    console.log('🪪 Physical card detected:', cardNumber);
     
     // Visual feedback - Tech animation centered on screen
     const overlay = document.createElement('div');
@@ -171,7 +82,7 @@ console.log('Monitor UI template loaded: v2025-12-10.3 + Physical Card Reader');
     cardNum.style.letterSpacing = '2px';
     cardNum.style.marginBottom = '12px';
     cardNum.style.textShadow = '0 0 15px rgba(45, 164, 78, 0.7)';
-    cardNum.textContent = normalizedCard;
+    cardNum.textContent = cardNumber;
     
     const pulse = document.createElement('div');
     pulse.style.display = 'inline-block';
@@ -229,7 +140,7 @@ console.log('Monitor UI template loaded: v2025-12-10.3 + Physical Card Reader');
     // Fill testCardInput if empty
     const cardInput = document.getElementById('testCardInput');
     if(cardInput && !cardInput.value){
-      cardInput.value = normalizedCard;
+      cardInput.value = cardNumber;
     }
     
     // Automatically trigger card read test
@@ -238,7 +149,7 @@ console.log('Monitor UI template loaded: v2025-12-10.3 + Physical Card Reader');
       const selectedDoorPk = sel && sel.value ? String(sel.value) : '';
       
       const qs = new URLSearchParams();
-      qs.set('card_number', normalizedCard);
+      qs.set('card_number', cardNumber);
       
       const url = `/agent/api/test-read-card${qs.toString()?('?'+qs.toString()):''}`;
       const resp = await fetch(url);
@@ -273,10 +184,10 @@ console.log('Monitor UI template loaded: v2025-12-10.3 + Physical Card Reader');
       let cardOwnerId = data.employee || data.employee_id || null;
       
       // IMPORTANT: Always check card ownership via check-card-owner API (detects primary & secondary cards)
-      if(!cardOwnerId && normalizedCard){
+      if(!cardOwnerId && cardNumber){
         try {
-          console.log('[Physical Card] Checking card ownership for:', normalizedCard);
-          const checkResp = await fetch(`/agent/api/check-card-owner/?card_number=${encodeURIComponent(normalizedCard)}`);
+          console.log('[Physical Card] Checking card ownership for:', cardNumber);
+          const checkResp = await fetch(`/agent/api/check-card-owner/?card_number=${encodeURIComponent(cardNumber)}`);
           const checkData = await checkResp.json();
           console.log('[Physical Card] Check result:', checkData);
           if(checkData.exists){
@@ -291,12 +202,12 @@ console.log('Monitor UI template loaded: v2025-12-10.3 + Physical Card Reader');
         }
       }
       
-      if((!cardHolder || cardHolder === '-') && normalizedCard){
+      if((!cardHolder || cardHolder === '-') && cardNumber){
         try {
-          const sr = await fetch('{% url "crud-issuecards-search" %}?q=' + encodeURIComponent(normalizedCard));
+          const sr = await fetch('{% url "crud-issuecards-search" %}?q=' + encodeURIComponent(cardNumber));
           const sj = await sr.json();
           const item = (sj.items||[])[0];
-          const name = (item && (item.employee_fullname || item.employee_name || item.emp_name || item.owner_name)) || '';
+          const name = item?.employee_fullname || item?.employee_name || item?.emp_name || item?.owner_name || '';
           if(name){ cardHolder = name; }
         } catch(err){}
       }
@@ -307,7 +218,7 @@ console.log('Monitor UI template loaded: v2025-12-10.3 + Physical Card Reader');
         new Date().toLocaleTimeString(),
         eventPoint,
         eventDesc,
-        normalizedCard,
+        cardNumber,
         (doorName && String(doorName).trim()) ? doorName : '-',
         (cardHolder && String(cardHolder).trim()) ? cardHolder : '-',
         statusCellHtml,
@@ -322,9 +233,8 @@ console.log('Monitor UI template loaded: v2025-12-10.3 + Physical Card Reader');
       
       // Add action button to Acțiune column if needed
       const acțiuneTd = tr.querySelector('[data-acțiune]');
-      const resolvedEmployeeId = cardOwnerId || data.employee || data.employee_id || null;
-      console.log('[Physical Card] cardOwnerId:', resolvedEmployeeId, 'isOk:', isOk, 'decision:', resolvedEmployeeId ? 'MODIFY' : 'ADD');
-      if(resolvedEmployeeId){
+      console.log('[Physical Card] cardOwnerId:', cardOwnerId, 'isOk:', isOk, 'decision:', cardOwnerId ? 'MODIFY' : 'ADD');
+      if(cardOwnerId){
         // CARD IS KNOWN - Show Modify button
         const editBtn = document.createElement('button');
         editBtn.textContent = '✏️ Modificare';
@@ -335,9 +245,9 @@ console.log('Monitor UI template loaded: v2025-12-10.3 + Physical Card Reader');
         editBtn.style.background = '#0960a8';
         editBtn.style.color = '#fff';
         editBtn.style.cursor = 'pointer';
-        editBtn.onclick = () => location.href = `/agent/crud/employees/${resolvedEmployeeId}/edit/?card=${encodeURIComponent(normalizedCard)}`;
+        editBtn.onclick = () => location.href = `/agent/crud/employees/${cardOwnerId}/edit/?card=${encodeURIComponent(cardNumber)}`;
         if(acțiuneTd){ acțiuneTd.appendChild(editBtn); }
-      } else if(normalizedCard){
+      } else if(cardNumber){
         // CARD NOT KNOWN - Show Add button
         const addBtn = document.createElement('button');
         addBtn.textContent = '➕Adaugă Card';
@@ -348,7 +258,7 @@ console.log('Monitor UI template loaded: v2025-12-10.3 + Physical Card Reader');
         addBtn.style.background = '#15803d';
         addBtn.style.color = '#fff';
         addBtn.style.cursor = 'pointer';
-        addBtn.onclick = () => openAddCardModal(normalizedCard);
+        addBtn.onclick = () => openAddCardModal(cardNumber);
         if(acțiuneTd){ acțiuneTd.appendChild(addBtn); }
       }
       
@@ -366,7 +276,7 @@ console.log('Monitor UI template loaded: v2025-12-10.3 + Physical Card Reader');
       let statusTd = tr.cells[7];
       if(!statusTd && tr.cells.length > 8){ statusTd = tr.cells[8]; }
       
-      if(!isOk && normalizedCard && !resolvedEmployeeId){
+      if(!isOk && cardNumber && !cardOwnerId){
         const addBtn = document.createElement('button');
         addBtn.textContent = 'Adaugă Card';
         addBtn.style.marginLeft = '6px';
@@ -377,9 +287,9 @@ console.log('Monitor UI template loaded: v2025-12-10.3 + Physical Card Reader');
         addBtn.style.background = '#1e90ff';
         addBtn.style.color = '#fff';
         addBtn.style.cursor = 'pointer';
-        addBtn.onclick = () => openAddCardModal(normalizedCard);
+        addBtn.onclick = () => openAddCardModal(cardNumber);
         if(statusTd){ statusTd.appendChild(addBtn); }
-      } else if(isOk && resolvedEmployeeId){
+      } else if(isOk && data.employee){
         const editBtn = document.createElement('button');
         editBtn.textContent = 'Modifică';
         editBtn.style.marginLeft = '6px';
@@ -390,14 +300,14 @@ console.log('Monitor UI template loaded: v2025-12-10.3 + Physical Card Reader');
         editBtn.style.background = '#2da44e';
         editBtn.style.color = '#fff';
         editBtn.style.cursor = 'pointer';
-        editBtn.onclick = () => location.href = `/agent/crud/employees/${resolvedEmployeeId}/edit/`;
+        editBtn.onclick = () => location.href = `/agent/crud/employees/${data.employee}/edit/`;
         if(statusTd){ statusTd.appendChild(editBtn); }
       }
       
     } catch(e){
       console.error('Error processing physical card:', e);
       addEvent({
-        description: `🪪 EROARE citire card fizic: ${normalizedCard}`,
+        description: `🪪 EROARE citire card fizic: ${cardNumber}`,
         status: 'ERR',
         verify_mode: 'CITITOR FIZIC'
       });
@@ -411,17 +321,14 @@ function updateDiagnostics(){
     const doors = window.__doorsCache || [];
     const map = window.__doorMap || {};
     const wsEl = document.getElementById('diagWs');
-    const doorsCountEl = document.getElementById('diagDoorsCount');
-    const mapStatusEl = document.getElementById('diagMapStatus');
-    if(doorsCountEl){ doorsCountEl.textContent = doors.length||0; }
-    if(mapStatusEl){ mapStatusEl.textContent = (map && Object.keys(map).length>0) ? '✓' : '✗'; }
+    document.getElementById('diagDoorsCount').textContent = doors.length||0;
+    document.getElementById('diagMapStatus').textContent = (map && Object.keys(map).length>0) ? '✓' : '✗';
     if(wsEl && typeof window.__wsStatus==='string'){ wsEl.textContent = window.__wsStatus; }
   }catch{}
 }
 const devs={};
 function renderDevices(){
-  const _doorsCache = window.__doorsCache || [];
-  console.log('[Render] Starting renderDevices. __doorsCache:', _doorsCache.length, 'items:', _doorsCache.slice(0,3).map(d => ({id: d.id, name: d.name, state: d.state})));
+  console.log('[Render] Starting renderDevices. __doorsCache:', window.__doorsCache?.length, 'items:', window.__doorsCache?.slice(0,3).map(d => ({id: d.id, name: d.name, state: d.state})));
   const wrap=document.getElementById('devices');
   const devHtml = Object.values(devs)
     .map(d=>{
@@ -434,22 +341,7 @@ function renderDevices(){
       </div>`;
     }).join('');
   try {
-    const panelSel = document.getElementById('panelFilter');
-    const selectedPanel = panelSel ? panelSel.value : '';
-    const doorsAll = window.__allDoors || window.__doorsCache || [];
-    let doors = doorsAll;
-    if(selectedPanel === 'all'){ doors = doorsAll; }
-    else if(selectedPanel){ doors = doorsAll.filter(d=>String(d.device_id)===String(selectedPanel)); }
-    // When selectedPanel is empty ("------"), show none
-    if(selectedPanel === ''){ doors = []; }
-    window.__doorsCache = doors; // keep cache aligned with filter
-    // Sync lock map with current door states so lock is enforced for cards & UI
-    window.__doorLockMap = window.__doorLockMap || {};
-    (doors||[]).forEach(d=>{
-      const st = (d.state||'').toUpperCase();
-      if(st === 'LOCKED') window.__doorLockMap[d.id] = true;
-      else if(st) window.__doorLockMap[d.id] = false;
-    });
+    const doors = window.__doorsCache || [];
     let doorsHtml = (doors||[]).map(d=>{
       const dn = d.name; // show only door name
       // Door state icon badges - dynamic based on actual state
@@ -491,11 +383,9 @@ function renderDevices(){
       const title = `${dn} | State: ${state}`;
       const deviceId = d.device_id || '';
       
-      const panel = (d.device_name || '').trim();
-      return `<div class='device-icon online' title='${title}${panel?` | Panel: ${panel}`:''}' data-door-id='${d.id}' data-device-id='${deviceId}' data-state='${state}' style='border-color: ${color}; background: ${bgColor}; box-shadow: 0 0 15px ${glowColor};' onclick='onDoorIconClick(${deviceId||"null"},${d.id})'>
+      return `<div class='device-icon online' title='${title}' data-door-id='${d.id}' data-device-id='${deviceId}' data-state='${state}' style='border-color: ${color}; background: ${bgColor}; box-shadow: 0 0 15px ${glowColor};' onclick='onDoorIconClick(${deviceId||"null"},${d.id})'>
         <div class='icon' style='font-size: 36px;'>${icon}</div>
         <div class='label name-anim' style='font-weight:600; color:${color};'>${dn}</div>
-        ${panel?`<div class="door-panel">${panel}</div>`:''}
         <div class='device-actions'>
           <button onclick='event.stopPropagation(); onDoorAction("open", ${deviceId||"null"}, ${d.id})'>Open</button>
           <button onclick='event.stopPropagation(); onDoorAction("close", ${deviceId||"null"}, ${d.id})'>Close</button>
@@ -517,7 +407,7 @@ function normalizeEvent(e){
   ne.point = ne.point || ne.event_point_id || ne.point_id || ne.door_id || '';
   // prefer explicit description over generic event/code
   ne.description = ne.description || ne.event_description || ne.event || (Array.isArray(ne.descriptions)? ne.descriptions.join(', ') : '') || '';
-  ne.card_no = (ne.card_no || ne.card || ne.card_number || '').toString().trim();
+  ne.card_no = ne.card_no || ne.card || ne.card_number || '';
   ne.name = ne.name || ne.employee_name || ne.emp_name || '-';
   ne.cardholder = ne.cardholder || ne.employee_fullname || ne.employee_name || ne.emp_name || '';
   ne.status = ne.status || ne.status_text || '';
@@ -529,23 +419,6 @@ function addEvent(obj){
   const body=document.getElementById('events');
   const tr=document.createElement('tr');
   const alarm = (e.status||'').toUpperCase()==='ALARM' || /(alarm)/i.test(e.description||'');
-
-  // Try to keep door icons in sync based on events (fallback when ws misses)
-  try {
-    const pt = e.point || e.event_point_id || '';
-    const descLower = (e.description||'').toLowerCase();
-    const statusUpper = (e.status||'').toUpperCase();
-    if(pt && window.__doorsCache){
-      const idx = window.__doorsCache.findIndex(d=>String(d.id)===String(pt));
-      if(idx>=0){
-        if(statusUpper==='OK' && /acceptat/.test(descLower)){ window.__doorsCache[idx].state = 'OPEN'; }
-        else if(/blocked\s*\(lock active\)/.test(descLower)){ window.__doorsCache[idx].state = 'LOCKED'; window.__doorLockMap = window.__doorLockMap || {}; window.__doorLockMap[pt]=true; }
-        else if(/unlock/.test(descLower) && statusUpper!=='ERR'){ window.__doorsCache[idx].state = 'UNLOCKED'; window.__doorLockMap = window.__doorLockMap || {}; window.__doorLockMap[pt]=false; }
-        else if(/lock/.test(descLower) && statusUpper!=='ERR'){ window.__doorsCache[idx].state = 'LOCKED'; window.__doorLockMap = window.__doorLockMap || {}; window.__doorLockMap[pt]=true; }
-        renderDevices();
-      }
-    }
-  } catch(err){ console.warn('sync door state from event failed', err); }
   
   // If name missing, fill with door name by event point id
   let displayName = (e.name||'').trim();
@@ -614,102 +487,45 @@ function addEvent(obj){
 }
 
 // Async function to check card ownership and update row styling
-async function checkAndUpdateCardRow(tr, cardNumber){
-  const normalized = String(cardNumber||'').trim();
-  if(!normalized){ return; }
-  const variants = [];
-  const base = normalized;
-  const upper = base.toUpperCase();
-  const compact = base.replace(/\s+/g,'');
-  const compactUpper = compact.toUpperCase();
-  variants.push(base);
-  if(upper !== base) variants.push(upper);
-  if(compact && compact !== base) variants.push(compact);
-  if(compactUpper && compactUpper !== upper) variants.push(compactUpper);
-  // Strip leading 'CARD' prefix (common on test cards)
-  const stripped = base.replace(/^card/i,'').trim();
-  if(stripped && stripped !== base) variants.push(stripped, stripped.toUpperCase());
-  // Try mixed-case lowering
-  variants.push(base.toLowerCase());
-  variants.push(compact.toLowerCase());
-  // If numeric, also try without leading zeros
-  if(/^\d+$/.test(base)){
-    const num = String(parseInt(base,10));
-    if(num && !variants.includes(num)) variants.push(num);
-  }
-  console.log('[Card Check] Checking card variants:', variants);
-  let data = null;
-  for(const candidate of variants){
-    const url = `/agent/api/check-card-owner/?card_number=${encodeURIComponent(candidate)}`;
-    console.log('[Card Check] Fetching:', url);
-    try{
-      const r = await fetch(url);
-      console.log('[Card Check] Response status:', r.status, 'for', candidate);
-      const j = await r.json();
-      console.log('[Card Check] Response data:', j);
-      if(j && j.exists){ data = j; break; }
-    }catch(err){ console.error('[Card Check] ❌ Error on', candidate, err); }
-  }
-  if(data && data.exists){
-    console.log('[Card Check] ✅ Card found! Employee:', data.employee_name, 'ID:', data.employee_id);
-    tr.style.background = '#1a3d2a';
-    tr.dataset.employeeId = data.employee_id;
-    tr.dataset.employeeName = data.employee_name;
-    // Update cardholder cell (column 6) if empty
-    try {
-      const holderCell = tr.cells[5];
-      if(holderCell && (!holderCell.textContent || holderCell.textContent.trim()==='-' )){
-        holderCell.textContent = data.employee_name || '-';
-      }
-    } catch(err){ console.warn('Cardholder cell update failed', err); }
-    const btn = tr.querySelector('[data-action-btn]');
-    if(btn){
-      btn.textContent = '✏️ Modificare';
-      btn.style.background = '#0960a8';
-      btn.onclick = (e) => {
-        e.preventDefault();
-        openEditCardModal(data.employee_id, normalized);
-      };
-    }
-  } else {
-    console.log('[Card Check] ❌ Card NOT found in database after variants');
-    // Fallback: try issuecards search for owner mapping
-    try{
-      const sr = await fetch('{% url "crud-issuecards-search" %}?q='+encodeURIComponent(normalized));
-      const sj = await sr.json();
-      const item = (sj.items||[])[0];
-      const ownerId = item && (item.employee_id || item.employee || item.owner_id);
-      const ownerName = item && (item.employee_fullname || item.employee_name || item.emp_name || item.owner_name);
-      if(ownerId){
-        tr.style.background = '#1a3d2a';
-        tr.dataset.employeeId = ownerId;
-        tr.dataset.employeeName = ownerName||'';
-        try{
-          const holderCell = tr.cells[5];
-          if(holderCell && (!holderCell.textContent || holderCell.textContent.trim()==='-' )){
-            holderCell.textContent = ownerName || '-';
-          }
-        }catch(err){ console.warn('Cardholder fallback update failed', err); }
+function checkAndUpdateCardRow(tr, cardNumber){
+  console.log('[Card Check] Checking card:', cardNumber);
+  const url = `/agent/api/check-card-owner/?card_number=${encodeURIComponent(cardNumber)}`;
+  console.log('[Card Check] Fetching:', url);
+  
+  fetch(url)
+    .then(r=>{
+      console.log('[Card Check] Response status:', r.status);
+      return r.json();
+    })
+    .then(data=>{
+      console.log('[Card Check] Response data:', data);
+      if(data.exists){
+        console.log('[Card Check] ✅ Card found! Employee:', data.employee_name, 'ID:', data.employee_id);
+        // Card belongs to employee - update row
+        tr.style.background = '#1a3d2a'; // Green for employee cards
+        tr.dataset.employeeId = data.employee_id;
+        tr.dataset.employeeName = data.employee_name;
+        // Update button
         const btn = tr.querySelector('[data-action-btn]');
         if(btn){
+          console.log('[Card Check] Updating button text and handler...');
           btn.textContent = '✏️ Modificare';
           btn.style.background = '#0960a8';
-          btn.onclick = (e)=>{ e.preventDefault(); openEditCardModal(ownerId, normalized); };
+          btn.onclick = (e) => {
+            e.preventDefault();
+            console.log('[Card Check] Opening edit modal for employee', data.employee_id);
+            openEditCardModal(data.employee_id, cardNumber);
+          };
+        } else {
+          console.warn('[Card Check] ⚠️ Button not found in row!');
         }
+      } else {
+        console.log('[Card Check] ❌ Card NOT found in database');
       }
-    }catch(err){ console.error('[Card Check] Issuecards fallback error:', err); }
-  }
-  // If still unknown, ensure button stays Add
-  try {
-    if(!tr.dataset.employeeId){
-      const btn = tr.querySelector('[data-action-btn]');
-      if(btn){
-        btn.textContent = '+Adaugă Card';
-        btn.style.background = '#15803d';
-        btn.onclick = ()=> openAddCardModal(normalized);
-      }
-    }
-  } catch(err){ console.warn('Finalize button state failed', err); }
+    })
+    .catch(err=>{
+      console.error('[Card Check] ❌ Error:', err);
+    });
 }
 
 // Helper function to open edit modal
@@ -733,8 +549,7 @@ function wsConnect(){
       renderDevices();
       window.__wsStatus = 'online'; updateDiagnostics();
     } else if(data.type==='rtlog.batch'){
-      const lineCount = (data && data.lines && data.lines.length) ? data.lines.length : 0;
-      addEvent({ point:data.point_id||'', description:`RTLOG x${lineCount}` });
+      addEvent({ point:data.point_id||'', description:`RTLOG x${data.lines?.length||0}` });
     } else if(data.type==='event.batch'){
       if(data.descriptions && data.codes){
         data.descriptions.forEach((desc,i)=>{ addEvent({ point:data.point_id||'', description:desc, code:data.codes[i]}); });
@@ -753,8 +568,6 @@ function wsConnect(){
       else if(data.type==='door.close'){ ds.door_state='CLOSED'; newState='CLOSED'; }
       else if(data.type==='door.normal_open'){ ds.door_state='NORMAL_OPEN'; newState='UNLOCKED'; }
       else if(data.type==='door.cancel_alarm'){ ds.door_state='ALARM_CLEARED'; newState='CLOSED'; }
-      else if(data.type==='door.lock'){ ds.door_state='LOCKED'; newState='LOCKED'; window.__doorLockMap = window.__doorLockMap || {}; window.__doorLockMap[data.door_id] = true; }
-      else if(data.type==='door.unlock'){ ds.door_state='UNLOCKED'; newState='UNLOCKED'; window.__doorLockMap = window.__doorLockMap || {}; window.__doorLockMap[data.door_id] = false; }
       // Update door state in __doorsCache so icons change color
       if(newState && data.door_id && window.__doorsCache){
         const doorIdx = window.__doorsCache.findIndex(d => d.id === data.door_id);
@@ -777,8 +590,8 @@ function doorAction(id,door,action){
   // Convert door to number for matching in __doorsCache
   const doorId = parseInt(door) || door;
   console.log('[Door Action] Processing:', action, 'door:', doorId, 'device:', id);
-  // Map UI actions to backend endpoints 1:1
-  const endpointAction = action;
+  // Map UI actions to backend endpoints
+  const endpointAction = (action==='unlock') ? 'normal-open' : (action==='lock' ? 'close' : action);
   // Enforce local lock semantics: when locked, block 'open' and 'normal-open'
   window.__doorLockMap = window.__doorLockMap || {};
   if(action!=='unlock' && (action==='open' || action==='normal-open') && window.__doorLockMap[doorId]){
@@ -795,8 +608,8 @@ function doorAction(id,door,action){
       let newState = null;
       if(action==='open'){ newState = 'OPEN'; }
       else if(action==='close'){ newState = 'CLOSED'; }
-      else if(action==='lock'){ newState = 'LOCKED'; window.__doorLockMap[doorId] = true; }
-      else if(action==='unlock'){ newState = 'UNLOCKED'; window.__doorLockMap[doorId] = false; }
+      else if(action==='lock'){ newState = 'LOCKED'; }
+      else if(action==='unlock'){ newState = 'UNLOCKED'; }
       else if(action==='normal-open'){ newState = 'OPEN'; }
       if(newState){
         console.log('[Door Action] ✅ IMMEDIATELY setting door state to:', newState);
@@ -885,8 +698,7 @@ async function testReadCard(){
   try{
     // Do NOT use selected door for Test Citire Card
     const cardInput = document.getElementById('testCardInput');
-    const cardNumberRaw = cardInput && cardInput.value ? cardInput.value.trim() : '';
-    const cardNumber = cardNumberRaw ? cardNumberRaw : '';
+    const cardNumber = cardInput && cardInput.value ? cardInput.value.trim() : '';
     const qs = new URLSearchParams();
     if(cardNumber){ qs.set('card_number', cardNumber); }
     const url = `/agent/api/test-read-card${qs.toString()?('?'+qs.toString()):''}`;
@@ -896,7 +708,7 @@ async function testReadCard(){
     const tr=document.createElement('tr');
     const reasonsRaw = Array.isArray(data.reasons)? data.reasons.join(', ') : (data.reasons||data.error||'');
     const roReason = translateReasons(reasonsRaw);
-    const cardNum = (data.card_number || cardNumber || '').toString().trim();
+    const cardNum = data.card_number || cardNumber || '';
     const isOk = !!data.ok;
     tr.style.background = isOk ? '' : '#3b1e1e';
     const eventDesc = isOk ? 'CARD ACCEPTAT → deschidere ușă' : ('CARD RESPINS: '+roReason);
@@ -926,12 +738,12 @@ async function testReadCard(){
         const sr = await fetch('{% url "crud-issuecards-search" %}?q='+encodeURIComponent(cardNum));
         const sj = await sr.json();
         const item = (sj.items||[])[0];
-        const name = (item && (item.employee_fullname || item.employee_name || item.emp_name || item.owner_name)) || '';
+        const name = item?.employee_fullname || item?.employee_name || item?.emp_name || item?.owner_name || '';
         if(name){ cardHolder = name; }
       }catch(err){ /* ignore */ }
     }
     const statusCellHtml = statusBadge(isOk, data.status_text);
-    // Build row with 9 cells; last cell starts with Add button having data-action-btn for later upgrade
+    // Build row with 9 cells (including empty ACȚIUNE column that will be filled with button)
     tr.innerHTML = [
       new Date().toLocaleTimeString(),     // Time (col 0)
       eventPoint,                          // Event point (col 1)
@@ -941,8 +753,11 @@ async function testReadCard(){
       (cardHolder && String(cardHolder).trim()) ? cardHolder : '-', // Card holder (col 5)
       statusCellHtml,                      // Status (col 6)
       'TEST',                              // Verify Mode (col 7)
-      `<button data-action-btn style="padding:2px 6px;background:#15803d;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:11px;font-weight:500;">+Adaugă Card</button>` // Default; will switch to Modificare if card exists
-    ].map((v) => `<td>${v}</td>`).join('');
+      ''                                   // Acțiune (col 8) - will fill with button below
+    ].map((v, idx) => {
+      if(idx === 8) return `<td data-acțiune></td>`;  // Mark for action column
+      return `<td>${v}</td>`;
+    }).join('');
     body.insertBefore(tr, body.firstChild);
     // Add button to the ACȚIUNE column (last column, index 8)
     const acțiuneTd = tr.querySelector('[data-acțiune]');
@@ -958,10 +773,6 @@ async function testReadCard(){
       editBtn.style.padding='2px 6px'; editBtn.style.fontSize='10px'; editBtn.style.border='none'; editBtn.style.borderRadius='3px'; editBtn.style.background='#0960a8'; editBtn.style.color='#fff'; editBtn.style.cursor='pointer';
       editBtn.onclick = ()=>location.href = `/agent/crud/employees/${data.employee}/edit/`;
       if(acțiuneTd){ acțiuneTd.appendChild(editBtn); }
-    }
-    // Re-run ownership check (handles secondary cards & casing) to flip button to Modificare when needed
-    if(cardNum){
-      checkAndUpdateCardRow(tr, cardNum);
     }
   }catch(e){ console.error(e); }
 }
@@ -992,51 +803,26 @@ async function populateDoors(){
     const resp = await fetch('{% url "doors-json-list" %}');
     const data = await resp.json();
     console.log('[Populate Doors] API Response:', data);
-    const allDoors = (data.items||[]).map(d => ({ ...d, state: d.state || 'CLOSED' }));
-    window.__allDoors = allDoors;
-    const panelSel = document.getElementById('panelFilter');
-    const doorSel = document.getElementById('doorFilter');
-    const uniquePanels = [];
-    if(panelSel){
-      panelSel.innerHTML = '<option value="all">Show all</option><option value="">----------------</option>';
-      const seen = new Set();
-      allDoors.forEach(d=>{
-        const key = `${d.device_id||''}`;
-        if(!key || seen.has(key)) return;
-        seen.add(key);
-        const opt = document.createElement('option');
-        opt.value = d.device_id;
-        opt.textContent = d.device_name || (`Controller ${d.device_id}`);
-        panelSel.appendChild(opt);
-        uniquePanels.push({id:d.device_id,name:opt.textContent});
-      });
-    }
-    function applyDoorList(panelId){
-      if(!doorSel) return;
-      doorSel.innerHTML = '<option value="">----------------</option>';
-      let filtered = allDoors;
-      if(panelId === ''){
-        filtered = [];
-      } else if(panelId && panelId !== 'all'){
-        filtered = allDoors.filter(d=>String(d.device_id)===String(panelId));
-      }
-      filtered.forEach(d=>{
-        const opt = document.createElement('option');
-        opt.value = d.id;
-        opt.textContent = (d.device_name? (d.device_name+': ') : '') + d.name + ` (id=${d.id})`;
-        doorSel.appendChild(opt);
-      });
-      // Update caches for renderDevices to show only relevant doors
-      window.__doorsCache = filtered.map(d=>({...d}));
-      renderDevices();
-    }
-    window.__applyDoorList = applyDoorList;
-    applyDoorList(panelSel ? panelSel.value : 'all');
+    const sel = document.getElementById('doorFilter');
+    sel.innerHTML = '<option value="">----------------</option>';
+    (data.items||[]).forEach(d=>{
+      const opt = document.createElement('option');
+      opt.value = d.id; opt.textContent = (d.device_name? (d.device_name+': ') : '') + d.name + ` (id=${d.id})`;
+      sel.appendChild(opt);
+    });
+    // Cache doors so renderDevices can show them until WS status arrives
+    // IMPORTANT: Add initial state=CLOSED if not present, so icons show proper colors
+    window.__doorsCache = (data.items||[]).map(d => ({
+      ...d,
+      state: d.state || 'CLOSED'
+    }));
+    console.log('[Populate Doors] Cached doors:', window.__doorsCache);
     // Build a quick id->door map for event name resolution
     const map = {};
-    allDoors.forEach(d=>{ map[d.id] = { name: d.name, device_id: d.device_id, device_name: d.device_name || '' }; });
+    (data.items||[]).forEach(d=>{ map[d.id] = { name: d.name, device_id: d.device_id }; });
     window.__doorMap = map;
     console.log('[Populate Doors] Door map:', map);
+    renderDevices();
   }catch(e){ console.warn('door list error', e); }
   finally{ updateDiagnostics(); }
 }
@@ -1046,14 +832,6 @@ async function testDoorOpen(){
   try{
     if(!doorPk){
       addEvent({ description:'door.open ERR: selectează o ușă', status:'ERR', verify_mode:'API' });
-      return;
-    }
-    // Block immediately if door is locked
-    window.__doorLockMap = window.__doorLockMap || {};
-    if(window.__doorLockMap[doorPk]){
-      const map = window.__doorMap || {};
-      const nmLocked = (map[doorPk] && map[doorPk].name) ? map[doorPk].name : '-';
-      addEvent({ description:`door.open BLOCKED (LOCK active) (id=${doorPk} name=${nmLocked})`, status:'ERR', verify_mode:'CLIENT', point: doorPk, name: nmLocked });
       return;
     }
     // Rotate through cards from DB to avoid repeating the same card
@@ -1069,8 +847,8 @@ async function testDoorOpen(){
           const seen = new Set();
           window.__cardsCache = items
             .map(it => ({
-              card_number: (it && (it.card_number || it.card)) || '',
-              employee_fullname: (it && (it.employee_fullname || it.employee_name || it.emp_name || it.owner_name)) || ''
+              card_number: it?.card_number || it?.card || '',
+              employee_fullname: it?.employee_fullname || it?.employee_name || it?.emp_name || it?.owner_name || ''
             }))
             .filter(it => {
               const cn = it.card_number; if(!cn || seen.has(cn)) return false; seen.add(cn); return true;
@@ -1084,6 +862,7 @@ async function testDoorOpen(){
         // Always pick a random card from the cache
         const lastCard = window.__lastTestCard || '';
         let pool = window.__cardsCache;
+        let doorsHtml = (doors||[]).map(d=>{
         if(window.__cardsCache.length > 1){
           const filtered = window.__cardsCache.filter(c => c.card_number !== lastCard);
           if(filtered.length > 0){ pool = filtered; }
@@ -1121,38 +900,23 @@ async function testDoorOpen(){
         const sr = await fetch('{% url "crud-issuecards-search" %}?q='+encodeURIComponent(cardNum));
         const sj = await sr.json();
         const item = (sj.items||[])[0];
-        const name = (item && (item.employee_fullname || item.employee_name || item.emp_name || item.owner_name)) || '';
+        const name = item?.employee_fullname || item?.employee_name || item?.emp_name || item?.owner_name || '';
         if(name){ holder = name; }
       }catch(err){ /* ignore */ }
     }
-    const lockedNow = window.__doorLockMap && window.__doorLockMap[doorPk];
-    const ok = data.ok && !lockedNow;
-    const desc = lockedNow
-      ? `door.open BLOCKED (LOCK active) (id=${doorPk} name=${nm||'-'})`
-      : (data.ok ? 'DESCHIDERE UȘĂ ACCEPTATĂ' : ('DESCHIDERE UȘĂ RESPINSĂ: '+ translateReasons(Array.isArray(data.reasons)? data.reasons.join(', '):(data.reasons||data.error||''))));
     addEvent({
       time: new Date().toLocaleTimeString(),
       point: (data.event_point_id || doorPk),
-      description: desc,
+      description: data.ok ? 'DESCHIDERE UȘĂ ACCEPTATĂ' : ('DESCHIDERE UȘĂ RESPINSĂ: '+ translateReasons(Array.isArray(data.reasons)? data.reasons.join(', '):(data.reasons||data.error||''))),
       card_no: cardNum,
       name: nm,
       cardholder: holder,
-      status: ok ? 'OK' : 'RESPINS',
+      status: data.ok ? 'OK' : 'RESPINS',
       verify_mode: 'TEST'
     });
   }catch(e){ console.error(e); addEvent({ description:'door.open ERR', status:'ERR', verify_mode:'API', point: doorPk }); }
 }
 populateDoors();
-// Wire up panel filter to limit doors per controller
-try {
-  const panelSel = document.getElementById('panelFilter');
-  if(panelSel){
-    panelSel.addEventListener('change', ()=>{
-      const val = panelSel.value || '';
-      if(window.__applyDoorList){ window.__applyDoorList(val); }
-    });
-  }
-} catch(err){ console.warn('Panel filter bind failed', err); }
 function translateReasons(r){
   if(!r) return '';
   const s = (Array.isArray(r)? r.join(', ') : String(r)).toLowerCase();
@@ -1168,5 +932,4 @@ function statusBadge(ok, statusText){
   const color = ok ? '#2da44e' : '#cf222e';
   return `<span style="display:inline-block;padding:2px 8px;border-radius:12px;background:${color};color:#fff;font-weight:600;">${statusText||label}</span>`;
 }
-</script>
-{% endblock %}
+

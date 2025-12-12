@@ -1,29 +1,64 @@
 {% extends 'agent/base_legacy.html' %}
 {% block content %}
-<h2 data-tip="Evenimente acces" title="Jurnal Acces">Jurnal Acces</h2>
-<form method="get" class="filter" data-tip="Filtru jurnal" title="Filtru">
-{{ form.as_p }}
-<button class="btn" data-tip="Aplică filtrul" title="Filtrează">Filtrează</button>
-<a href="?" class="btn" data-tip="Resetează filtrul" title="Reset">Reset</a>
-</form>
-{% if missing %}<p class="warn">Model AccessLog indisponibil.</p>{% endif %}
-{% if page %}
-<table class="crud" data-tip="Tabel evenimente" title="Evenimente">
-<thead><tr><th>Data</th><th>UserID</th><th>Card</th><th>Ușă</th><th>Device</th><th>Tip</th><th>Rezultat</th><th>Info</th></tr></thead>
-<tbody>
-{% for e in page.object_list %}
-<tr>
-<td>{{ e.timestamp }}</td>
-<td>{% if e.userid %}{{ e.userid.userid }}{% endif %}</td>
-<td>{{ e.cardno }}</td>
-<td>{% if e.door %}{{ e.door.name }}{% endif %}</td>
-<td>{% if e.device %}{{ e.device.device_name }}{% endif %}</td>
-<td>{{ e.event_type }}</td>
-<td>{{ e.result }}</td>
-<td>{{ e.info|truncatechars:60 }}</td>
-</tr>
-{% endfor %}
-</tbody></table>
-<div class="pagination">{% if page.has_previous %}<a href="?page={{ page.previous_page_number }}" data-tip="Pagina anterioară">«</a>{% endif %} <span>{{ page.number }}/{{ page.paginator.num_pages }}</span> {% if page.has_next %}<a href="?page={{ page.next_page_number }}" data-tip="Pagina următoare">»</a>{% endif %}</div>
-{% endif %}
+<style>
+.access-shell{margin:8px auto;max-width:1400px;background:#1e4a6b;border:2px solid #3da5d9;border-radius:4px;box-shadow:0 6px 16px rgba(0,0,0,0.35);padding:6px;}
+.access-tabs{display:flex;gap:2px;margin-bottom:6px;border-bottom:1px solid #3d6a8b;}
+.access-tab{padding:6px 12px;background:#163247;border:1px solid #3d6a8b;border-bottom:none;color:#9fd2f1;font-weight:700;font-size:11px;text-transform:uppercase;cursor:pointer;text-decoration:none;border-radius:3px 3px 0 0;}
+.access-tab.active{background:#3da5d9;color:#fff;border-color:#3da5d9;}
+.card-panel{background:#0f2433;border:1px solid #3d6a8b;border-radius:4px;padding:10px;}
+.card-panel h3{margin:0 0 6px 0;color:#9fd2f1;font-size:13px;letter-spacing:0.2px;}
+.filter-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin:10px 0;}
+.filter-grid label{color:#e8f0f8;font-weight:600;font-size:11px;display:block;margin-bottom:2px;}
+.filter-grid input,.filter-grid select{width:100%;background:#102637;border:1px solid #2d6a8b;color:#e8f0f8;border-radius:3px;padding:6px;font-size:11px;}
+.btn-small{padding:6px 12px;border:none;border-radius:3px;font-size:11px;font-weight:700;cursor:pointer;color:#fff;text-decoration:none;display:inline-block;}
+.btn-primary{background:#3da5d9;}
+.btn-secondary{background:#2d6a8b;}
+.compact-table{width:100%;border-collapse:collapse;font-size:11px;background:#102637;}
+.compact-table thead{background:linear-gradient(90deg,#1a3a52 0%,#3da5d9 100%);color:#fff;}
+.compact-table th,.compact-table td{padding:6px 8px;border:1px solid #2d6a8b;text-align:left;}
+.pagination{margin-top:8px;display:flex;gap:8px;align-items:center;color:#9fd2f1;font-size:11px;}
+</style>
+
+<div class="access-shell">
+	<div class="access-tabs">
+		<a class="access-tab" href="/agent/crud/doors/">Doors</a>
+		<a class="access-tab" href="/agent/crud/time-segments/">Time Segments</a>
+		<a class="access-tab" href="/agent/crud/holidays/">Holidays</a>
+		<a class="access-tab" href="/agent/crud/access-levels/">Access Levels</a>
+		<a class="access-tab active" href="/agent/crud/access-logs/">Access Logs</a>
+	</div>
+	<div class="card-panel">
+		<h3>📋 Jurnal Acces</h3>
+		<form method="get">
+			<div class="filter-grid">
+				{{ form.as_p }}
+			</div>
+			<div style="display:flex;gap:8px;flex-wrap:wrap;">
+				<button class="btn-small btn-primary" type="submit">Filtrează</button>
+				<a class="btn-small btn-secondary" href="?">Reset</a>
+			</div>
+		</form>
+		{% if missing %}<p class="warn" style="color:#ffb3b3;">Model AccessLog indisponibil.</p>{% endif %}
+		{% if page %}
+		<table class="compact-table" data-tip="Tabel evenimente" title="Evenimente">
+			<thead><tr><th>Data</th><th>UserID</th><th>Card</th><th>Ușă</th><th>Device</th><th>Tip</th><th>Rezultat</th><th>Info</th></tr></thead>
+			<tbody>
+				{% for e in page.object_list %}
+				<tr>
+					<td>{{ e.timestamp }}</td>
+					<td>{% if e.userid %}{{ e.userid.userid }}{% endif %}</td>
+					<td>{{ e.cardno }}</td>
+					<td>{% if e.door %}{{ e.door.name }}{% endif %}</td>
+					<td>{% if e.device %}{{ e.device.device_name }}{% endif %}</td>
+					<td>{{ e.event_type }}</td>
+					<td>{{ e.result }}</td>
+					<td>{{ e.info|truncatechars:60 }}</td>
+				</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+		<div class="pagination">{% if page.has_previous %}<a class="btn-small btn-primary" href="?page={{ page.previous_page_number }}" data-tip="Pagina anterioară">«</a>{% endif %} <span>{{ page.number }}/{{ page.paginator.num_pages }}</span> {% if page.has_next %}<a class="btn-small btn-primary" href="?page={{ page.next_page_number }}" data-tip="Pagina următoare">»</a>{% endif %}</div>
+		{% endif %}
+	</div>
+</div>
 {% endblock %}

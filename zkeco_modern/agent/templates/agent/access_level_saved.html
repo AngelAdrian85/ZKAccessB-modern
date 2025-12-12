@@ -1,6 +1,14 @@
 {% extends 'agent/base_legacy.html' %}
 {% block title %}Access Level Saved{% endblock %}
 {% block content %}
-<h2>Access Level {{ obj.name }} {% if created %}created{% else %}updated{% endif %}</h2>
-<p><a class='op' href='{% url "crud-access-levels-list" %}'>Return to list</a></p>
+<style>
+.access-shell{margin:20px auto;max-width:800px;background:#1e4a6b;border:2px solid #3da5d9;border-radius:4px;box-shadow:0 6px 16px rgba(0,0,0,0.35);padding:12px;color:#e8f0f8;}
+.access-title{font-size:16px;font-weight:700;color:#9fd2f1;margin-bottom:8px;}
+.btn-small{padding:6px 12px;border:none;border-radius:3px;font-size:11px;font-weight:700;cursor:pointer;color:#fff;text-decoration:none;display:inline-block;}
+.btn-primary{background:#3da5d9;}
+</style>
+<div class="access-shell">
+	<div class="access-title">Access Level {{ obj.name }} {% if created %}created{% else %}updated{% endif %}</div>
+	<a class="btn-small btn-primary" href='{% url "crud-access-levels-list" %}'>Return to list</a>
+</div>
 {% endblock %}

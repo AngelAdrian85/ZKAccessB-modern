@@ -1,11 +1,40 @@
 {% extends 'agent/base_legacy.html' %}
 {% block title %}Door{% endblock %}
 {% block content %}
-<h2>{% if obj %}Edit Door{% else %}Create Door{% endif %}</h2>
-<form method='post' title='Formular ușă – configurație bază'>
-  {% csrf_token %}
-  {{ form.as_p }}
-  <button type='submit' class='op' data-tip='Salvează datele ușii'>Save</button>
-  <a class='op' data-tip='Înapoi la lista ușilor' href='{% url "crud-doors-list" %}'>Back</a>
-</form>
+<style>
+.access-shell{margin:10px auto;max-width:960px;background:#122536;border:2px solid #3da5d9;border-radius:6px;box-shadow:0 8px 18px rgba(0,0,0,0.35);padding:8px;}
+.access-tabs{display:flex;gap:3px;margin-bottom:10px;border-bottom:1px solid #2f5876;}
+.access-tab{padding:7px 13px;background:#0d1b29;border:1px solid #2f5876;border-bottom:none;color:#9fd2f1;font-weight:700;font-size:11px;text-transform:uppercase;cursor:pointer;text-decoration:none;border-radius:4px 4px 0 0;}
+.access-tab.active{background:#3da5d9;color:#fff;border-color:#3da5d9;}
+.form-card{background:#0a1a27;border:1px solid #2f5876;border-radius:5px;padding:14px;}
+.form-card h3{margin:0 0 12px 0;color:#9fd2f1;font-size:14px;}
+.form-card label{color:#e8f0f8;font-weight:600;font-size:11px;display:block;margin-top:10px;}
+.form-card input,.form-card select,.form-card textarea{width:100%;background:#0f2433;border:1px solid #2f5876;color:#e8f0f8;border-radius:4px;padding:7px;font-size:11px;}
+.form-card p{margin:8px 0;}
+.btn-row{display:flex;gap:10px;margin-top:14px;}
+.btn-small{padding:7px 13px;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;color:#fff;text-decoration:none;display:inline-block;}
+.btn-primary{background:#3da5d9;}
+.btn-secondary{background:#2f5876;}
+</style>
+
+<div class="access-shell">
+  <div class="access-tabs">
+    <a class="access-tab active" href="/agent/crud/doors/">Doors</a>
+    <a class="access-tab" href="/agent/crud/time-segments/">Time Segments</a>
+    <a class="access-tab" href="/agent/crud/holidays/">Holidays</a>
+    <a class="access-tab" href="/agent/crud/access-levels/">Access Levels</a>
+    <a class="access-tab" href="/agent/crud/access-logs/">Access Logs</a>
+  </div>
+  <div class="form-card" title='Formular ușă – configurație bază'>
+    <h3>{% if obj %}Edit Door{% else %}Create Door{% endif %}</h3>
+    <form method='post'>
+      {% csrf_token %}
+      {{ form.as_p }}
+      <div class="btn-row">
+        <button type='submit' class='btn-small btn-primary' data-tip='Salvează datele ușii'>Save</button>
+        <a class='btn-small btn-secondary' data-tip='Înapoi la lista ușilor' href='{% url "crud-doors-list" %}'>Back</a>
+      </div>
+    </form>
+  </div>
+</div>
 {% endblock %}

@@ -1,12 +1,43 @@
 {% extends 'agent/base_legacy.html' %}
 {% block title %}Holidays{% endblock %}
 {% block content %}
-<h2>Holidays</h2>
-<p>Placeholder for AccHolidays_edit.</p>
-<table class='status-box' style='width:100%;border-collapse:collapse'>
-  <tr><th style='text-align:left'>Date</th><th>Name</th><th>Actions</th></tr>
-  <tr><td>2025-12-25</td><td>Christmas</td><td><a href='#' class='op'>Edit</a></td></tr>
-  <tr><td>2026-01-01</td><td>New Year</td><td><a href='#' class='op'>Edit</a></td></tr>
-  <tr><td colspan='3'><a href='#' class='op'>Add Holiday</a></td></tr>
-</table>
+<style>
+.access-shell{margin:10px auto;max-width:1100px;background:#122536;border:2px solid #3da5d9;border-radius:6px;box-shadow:0 8px 18px rgba(0,0,0,0.35);padding:8px;}
+.access-tabs{display:flex;gap:3px;margin-bottom:10px;border-bottom:1px solid #2f5876;}
+.access-tab{padding:7px 13px;background:#0d1b29;border:1px solid #2f5876;border-bottom:none;color:#9fd2f1;font-weight:700;font-size:11px;text-transform:uppercase;cursor:pointer;text-decoration:none;border-radius:4px 4px 0 0;}
+.access-tab.active{background:#3da5d9;color:#fff;border-color:#3da5d9;}
+.card-panel{background:#0a1a27;border:1px solid #2f5876;border-radius:5px;padding:14px;}
+.card-panel h3{margin:0 0 12px 0;color:#9fd2f1;font-size:14px;letter-spacing:0.2px;}
+.compact-table{width:100%;border-collapse:collapse;font-size:11px;background:#0f2433;}
+.compact-table thead{background:linear-gradient(90deg,#1a3a52 0%,#3da5d9 100%);color:#fff;}
+.compact-table th,.compact-table td{padding:7px 8px;border:1px solid #2f5876;text-align:left;color:#e8f0f8;}
+.btn-small{padding:7px 13px;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer;color:#fff;text-decoration:none;display:inline-block;}
+.btn-primary{background:#3da5d9;}
+.muted{color:#7fa0b6;font-size:11px;}
+</style>
+
+<div class="access-shell">
+  <div class="access-tabs">
+    <a class="access-tab" href="/agent/crud/doors/">Doors</a>
+    <a class="access-tab" href="/agent/crud/time-segments/">Time Segments</a>
+    <a class="access-tab active" href="/agent/crud/holidays/">Holidays</a>
+    <a class="access-tab" href="/agent/crud/access-levels/">Access Levels</a>
+    <a class="access-tab" href="/agent/crud/access-logs/">Access Logs</a>
+  </div>
+  <div class="card-panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <h3>📅 Holidays</h3>
+      <a class="btn-small btn-primary" href="#">+ Add Holiday</a>
+    </div>
+    <p class="muted">Manage days when access is restricted. This placeholder matches the modern Access theme.</p>
+    <table class="compact-table">
+      <thead><tr><th>Date</th><th>Name</th><th style="width:120px;">Actions</th></tr></thead>
+      <tbody>
+        <tr><td>2025-12-25</td><td>Christmas</td><td><a class="btn-small btn-primary" href="#">Edit</a></td></tr>
+        <tr><td>2026-01-01</td><td>New Year</td><td><a class="btn-small btn-primary" href="#">Edit</a></td></tr>
+        <tr><td colspan="3" style="text-align:center;color:#9fd2f1;">Sample data placeholder</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
 {% endblock %}
