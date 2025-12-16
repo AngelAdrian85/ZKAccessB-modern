@@ -385,6 +385,7 @@ def _start_listener(name: str):
                     com = str(el.get('port', 'COM3'))
                     cf = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
                     p = subprocess.Popen([py, script, com], cwd=str(base.parent), creationflags=cf)
+                    logging.info('Starting listener process: %s %s', script, port if name=='acp' else com)
                     _LISTENER_PROCS.append(p)
     except Exception:
         pass
@@ -393,6 +394,7 @@ def _stop_listener(name: str):
     """Stop processes matching a listener script."""
     target = 'card_reader_acp.py' if name == 'acp' else 'card_reader_elatec.py'
     try:
+        logging.info('Stopping listener: %s', name)
         # Stop tracked ones
         global _LISTENER_PROCS
         keep = []
@@ -410,6 +412,19 @@ def _stop_listener(name: str):
         _LISTENER_PROCS = keep
         # Kill any OS processes by script name
         subprocess.run(['powershell','-ExecutionPolicy','Bypass','-Command', f"Get-CimInstance Win32_Process | Where-Object {{ $_.CommandLine -like '*{target}*' }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force }}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # Verify no matching processes remain; if so, log their PIDs
+        try:
+            out = subprocess.run(['powershell','-ExecutionPolicy','Bypass','-Command', f"Get-CimInstance Win32_Process | Where-Object {{ $_.CommandLine -like '*{target}*' }} | Select-Object -ExpandProperty ProcessId"], capture_output=True, text=True)
+            pids = [l.strip() for l in (out.stdout or '').splitlines() if l.strip()]
+            if pids:
+                logging.warning('Processes still present for %s after stop: %s. Attempting forced kill.', target, pids)
+                for pid in pids:
+                    try:
+                        subprocess.run(['taskkill','/F','/PID', pid], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
     except Exception:
         pass
 
@@ -1128,6 +1143,9 @@ class Command(BaseCommand):
                     # Live reader state from processes (ground truth)
                     acp_live = _listener_running('acp')
                     el_live = _listener_running('elatec')
+                    # record initial source reasons
+                    acp_reason = 'process' if acp_live else 'none'
+                    el_reason = 'process' if el_live else 'none'
                     any_running = (server_running or center_running or acp_live or el_live)
                     tip = []
                     # Reader status summaries from JSON if present; fall back to config hints
@@ -1209,6 +1227,44 @@ class Command(BaseCommand):
                         except Exception:
                             pass
 
+                        # For virtual-mode readers, prefer DB DeviceStatus or heartbeat as liveness signals
+                        try:
+                            if (not el_live):
+                                try:
+                                    cfg = _read_listeners_config()
+                                    el_cfg = (cfg or {}).get('elatec') or {}
+                                    el_mode = str(el_cfg.get('mode','')).lower()
+                                    if el_mode == 'virtual':
+                                        try:
+                                            from zkeco_modern.agent.models import Device, DeviceStatus
+                                            has_online = DeviceStatus.objects.filter(device__in=Device.objects.filter(scanner_type='elatec', scanner_linked=True, enabled=True), online=True).exists()
+                                            if has_online:
+                                                el_live = True
+                                                el_reason = 'db'
+                                                logging.info('Elatec virtual: treated as live due to DeviceStatus.online')
+                                            else:
+                                                hb = Path.home() / 'zkeco_reader_heartbeat_elatec.json'
+                                                if hb.exists():
+                                                    try:
+                                                        data = json.loads(hb.read_text(encoding='utf-8'))
+                                                        ts = float(data.get('ts') or 0)
+                                                        if (time.time() - ts) <= max(15.0, 5.0):
+                                                            el_live = True
+                                                            el_reason = 'heartbeat'
+                                                            logging.info('Elatec virtual: treated as live due to recent heartbeat')
+                                                    except Exception:
+                                                        pass
+                                        except Exception:
+                                            pass
+                                except Exception:
+                                    pass
+                        except Exception:
+                            pass
+                        # Log decision path for readers each loop (concise)
+                        try:
+                            logging.info('Reader decision: ACP live=%s reason=%s ; Elatec live=%s reason=%s', acp_live, acp_reason, el_live, el_reason)
+                        except Exception:
+                            pass
                         # Auto-restart listeners if enabled but not live (skip if user requested stop)
                         try:
                             if acp_en and not acp_live and not bool(st.get('cmd_stop_acp')):
@@ -1217,7 +1273,7 @@ class Command(BaseCommand):
                                 time.sleep(0.2)
                                 acp_live = _listener_running('acp')
                             # Elatec only if enabled AND COM present (skip if user requested stop)
-                            if el_en and com_present and not el_live and not bool(st.get('cmd_stop_elatec')):
+                            if el_en and com_present and not el_live and not bool(st.get('cmd_stop_elatec')) and not bool(st.get('elatec_blocked', False)):
                                 logging.info('Elatec listener down; attempting auto-restart')
                                 _start_listener('elatec')
                                 time.sleep(0.2)
