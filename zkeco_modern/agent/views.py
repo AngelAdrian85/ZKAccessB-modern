@@ -244,9 +244,13 @@ def readers_start(request: HttpRequest):
     if name not in ('acp','elatec'):
         return JsonResponse({'ok': False, 'error': 'invalid-name'}, status=400)
     st = _read_json_safe(_tray_status_path())
+    # mark start command and clear any pending stop/block
     st[f'cmd_start_{name}'] = True
+    st[f'cmd_stop_{name}'] = False
     # yellow transition
     st[name] = 'PORNESTE'
+    # clear blocked flag so tray_agent may auto-start
+    st[f'{name}_blocked'] = False
     _write_json_safe(_tray_status_path(), st)
     return JsonResponse({'ok': True})
 
@@ -259,9 +263,19 @@ def readers_stop(request: HttpRequest):
     if name not in ('acp','elatec'):
         return JsonResponse({'ok': False, 'error': 'invalid-name'}, status=400)
     st = _read_json_safe(_tray_status_path())
+    # set stop command and mark as stopped for UI
     st[f'cmd_stop_{name}'] = True
+    st[f'cmd_start_{name}'] = False
     st[name] = 'OPRIT'
+    # prevent auto-restart until user clears
+    st[f'{name}_blocked'] = True
     _write_json_safe(_tray_status_path(), st)
+    # Also mark any linked devices as offline in DB so dashboard/device-list stay consistent
+    try:
+        from .models import Device, DeviceStatus
+        DeviceStatus.objects.filter(device__in=Device.objects.filter(scanner_type=name, scanner_linked=True)).update(online=False)
+    except Exception:
+        pass
     return JsonResponse({'ok': True})
 
 
