@@ -286,6 +286,14 @@ def _write_tray_status(acp_on: bool, elatec_on: bool, server_state: str, center_
             'elatec_enabled': elatec_enabled,
             'color': color,
         }
+        # Preserve blocked flags and other important UI-controlled keys from previous file
+        try:
+            for k, v in st_prev.items():
+                if k.endswith('_blocked') or k.startswith('cmd_'):
+                    # keep blocked flags and transient cmd_* flags if present
+                    data[k] = v
+        except Exception:
+            pass
         p = _tray_status_path()
         tmp = p.with_suffix('.tmp')
         tmp.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
@@ -297,6 +305,62 @@ def _write_tray_status(acp_on: bool, elatec_on: bool, server_state: str, center_
         tmp.replace(p)
     except Exception:
         pass
+
+def _update_tray_status_fields(updates: dict):
+    """Merge arbitrary fields into existing tray_status.json and write atomically."""
+    try:
+        st = _read_tray_status() or {}
+        for k, v in (updates or {}).items():
+            st[k] = v
+        p = _tray_status_path()
+        tmp = p.with_suffix('.tmp')
+        tmp.write_text(json.dumps(st, ensure_ascii=False), encoding='utf-8')
+        try:
+            if p.exists():
+                p.unlink()
+        except Exception:
+            pass
+        tmp.replace(p)
+    except Exception:
+        logging.exception('Failed to update tray_status fields')
+
+def _set_blocked(name: str, value: bool):
+    try:
+        st = _read_tray_status()
+        prev = bool(st.get(f'{name}_blocked', False))
+        val = bool(value)
+        if prev == val:
+            return
+        st[f'{name}_blocked'] = val
+        # when blocking, set a cmd_stop marker for other agents
+        if val:
+            st[f'cmd_stop_{name}'] = True
+        else:
+            # remove transient stop command when unblocking
+            if f'cmd_stop_{name}' in st:
+                st.pop(f'cmd_stop_{name}', None)
+        # If operator blocks a reader, ensure the enabled flag remains True
+        # unless the reader is explicitly disabled in scripts/card_readers.json
+        try:
+            if val:
+                cfg = _read_listeners_config()
+                cfg_entry = (cfg or {}).get(name) or {}
+                cfg_disabled = (cfg_entry.get('enabled') is False)
+                if not cfg_disabled:
+                    st[f'{name}_enabled' if name+'_'+'enabled' in st else f'{name}_enabled'] = True
+                else:
+                    # keep config-driven disabled state
+                    pass
+        except Exception:
+            pass
+        _update_tray_status_fields(st)
+        logging.info('%s_blocked set to %s', name, val)
+        try:
+            _recompute_status_once()
+        except Exception:
+            pass
+    except Exception:
+        logging.exception('Error setting blocked flag')
 
 def _read_first_error_from_log(max_bytes: int = 32768) -> str:
     """Return a concise last-error summary from server.log.
@@ -365,6 +429,14 @@ def _start_listener(name: str):
     """Start a single listener based on config: 'acp' or 'elatec'."""
     global _LISTENER_PROCS
     try:
+        # Respect explicit UI block flags to avoid unwanted auto-start
+        try:
+            st = _read_tray_status()
+            if st.get(f'{name}_blocked', False):
+                logging.info('Start suppressed for %s due to %s_blocked flag', name, name)
+                return
+        except Exception:
+            pass
         cfg = _read_listeners_config()
         base = Path(getattr(settings, 'BASE_DIR', Path.cwd()))
         py = sys.executable
@@ -410,19 +482,28 @@ def _stop_listener(name: str):
             except Exception:
                 pass
         _LISTENER_PROCS = keep
-        # Kill any OS processes by script name
-        subprocess.run(['powershell','-ExecutionPolicy','Bypass','-Command', f"Get-CimInstance Win32_Process | Where-Object {{ $_.CommandLine -like '*{target}*' }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force }}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        # Verify no matching processes remain; if so, log their PIDs
+        # Kill any OS processes by script name, retrying if they reappear
         try:
-            out = subprocess.run(['powershell','-ExecutionPolicy','Bypass','-Command', f"Get-CimInstance Win32_Process | Where-Object {{ $_.CommandLine -like '*{target}*' }} | Select-Object -ExpandProperty ProcessId"], capture_output=True, text=True)
-            pids = [l.strip() for l in (out.stdout or '').splitlines() if l.strip()]
-            if pids:
-                logging.warning('Processes still present for %s after stop: %s. Attempting forced kill.', target, pids)
+            attempts = 3
+            remaining = None
+            for attempt in range(attempts):
+                out = subprocess.run(['powershell','-ExecutionPolicy','Bypass','-Command', f"Get-CimInstance Win32_Process | Where-Object {{ $_.CommandLine -like '*{target}*' }} | Select-Object -ExpandProperty ProcessId"], capture_output=True, text=True)
+                pids = [l.strip() for l in (out.stdout or '').splitlines() if l.strip()]
+                if not pids:
+                    remaining = []
+                    break
+                logging.warning('Processes still present for %s after stop (attempt %d): %s. Attempting forced kill.', target, attempt + 1, pids)
                 for pid in pids:
                     try:
-                        subprocess.run(['taskkill','/F','/PID', pid], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        subprocess.run(['taskkill','/F','/PID', pid, '/T'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     except Exception:
                         pass
+                time.sleep(0.5 + attempt * 0.2)
+            # final check
+            out = subprocess.run(['powershell','-ExecutionPolicy','Bypass','-Command', f"Get-CimInstance Win32_Process | Where-Object {{ $_.CommandLine -like '*{target}*' }} | Select-Object -ExpandProperty ProcessId"], capture_output=True, text=True)
+            remaining = [l.strip() for l in (out.stdout or '').splitlines() if l.strip()]
+            if remaining:
+                logging.warning('Processes still present for %s after final stop attempts: %s', target, remaining)
         except Exception:
             pass
     except Exception:
@@ -431,13 +512,15 @@ def _stop_listener(name: str):
 def _start_listeners():
     global _LISTENER_PROCS
     try:
+        # If UI or tray explicitly blocked a listener, do not start it here
+        st = _read_tray_status()
         cfg = _read_listeners_config()
         base = Path(getattr(settings, 'BASE_DIR', Path.cwd()))
         py = sys.executable
         # ACP
         try:
             acp = cfg.get('acp', {'enabled': True, 'port': 9001})
-            if acp.get('enabled', True):
+            if acp.get('enabled', True) and not bool(st.get('acp_blocked', False)):
                 script = str(base.parent / 'scripts' / 'card_reader_acp.py')
                 if Path(script).exists():
                     port = str(acp.get('port', 9001))
@@ -449,7 +532,7 @@ def _start_listeners():
         # Elatec
         try:
             el = cfg.get('elatec', {'enabled': True, 'port': 'COM3'})
-            if el.get('enabled', True):
+            if el.get('enabled', True) and not bool(st.get('elatec_blocked', False)):
                 script = str(base.parent / 'scripts' / 'card_reader_elatec.py')
                 if Path(script).exists():
                     com = str(el.get('port', 'COM3'))
@@ -940,15 +1023,18 @@ def _build_menu(icon, host, port):
             pystray.MenuItem('ACP: Disable', lambda: _run_toggle('acp','disable')),
             pystray.MenuItem('ACP: Set Port', lambda: (lambda v=_prompt_value('ACP Port','9001'): _run_toggle('acp','set', v))()),
             pystray.MenuItem('ACP: Start', lambda: threading.Thread(target=lambda: (_start_listener('acp'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
-            pystray.MenuItem('ACP: Stop', lambda: threading.Thread(target=lambda: (_stop_listener('acp'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
-            pystray.MenuItem('ACP: Restart', lambda: threading.Thread(target=lambda: (_stop_listener('acp'), time.sleep(1), _start_listener('acp'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
+            pystray.MenuItem('ACP: Stop', lambda: threading.Thread(target=lambda: (_set_blocked('acp', True), _stop_listener('acp'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
+            pystray.MenuItem('ACP: Restart', lambda: threading.Thread(target=lambda: (_set_blocked('acp', True), _stop_listener('acp'), time.sleep(1), _set_blocked('acp', False), _start_listener('acp'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
             pystray.MenuItem('---', pystray.Menu()),
             pystray.MenuItem('Elatec: Enable', lambda: _run_toggle('elatec','enable')),
             pystray.MenuItem('Elatec: Disable', lambda: _run_toggle('elatec','disable')),
             pystray.MenuItem('Elatec: Set COM', lambda: (lambda v=_prompt_value('Elatec COM','COM3'): _run_toggle('elatec','set', v))()),
             pystray.MenuItem('Elatec: Start', lambda: threading.Thread(target=lambda: (_start_listener('elatec'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
-            pystray.MenuItem('Elatec: Stop', lambda: threading.Thread(target=lambda: (_stop_listener('elatec'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
-            pystray.MenuItem('Elatec: Restart', lambda: threading.Thread(target=lambda: (_stop_listener('elatec'), time.sleep(1), _start_listener('elatec'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
+            pystray.MenuItem('Elatec: Stop', lambda: threading.Thread(target=lambda: (_set_blocked('elatec', True), _stop_listener('elatec'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
+            pystray.MenuItem('Elatec: Restart', lambda: threading.Thread(target=lambda: (_set_blocked('elatec', True), _stop_listener('elatec'), time.sleep(1), _set_blocked('elatec', False), _start_listener('elatec'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
+            pystray.MenuItem('---', pystray.Menu()),
+            pystray.MenuItem('ACP: Unblock', lambda: threading.Thread(target=lambda: (_set_blocked('acp', False), time.sleep(0.2), _recompute_status_once()), daemon=True).start()),
+            pystray.MenuItem('Elatec: Unblock', lambda: threading.Thread(target=lambda: (_set_blocked('elatec', False), time.sleep(0.2), _recompute_status_once()), daemon=True).start()),
         )
 
     def _recompute_status_once():
@@ -965,12 +1051,22 @@ def _build_menu(icon, host, port):
             st = _read_tray_status()
             acp_en = bool(st.get('acp_enabled', True))
             el_en = bool(st.get('elatec_enabled', True))
+            acp_blocked = bool(st.get('acp_blocked', False))
+            el_blocked = bool(st.get('elatec_blocked', False))
             _write_tray_status(acp_live, el_live, ('PORNIT' if srv else 'OPRIT'), cen)
-            # Nudge icon tooltip immediately
+            # Nudge icon tooltip immediately; blocked takes precedence over disabled
             if icon is not None:
                 tip = []
-                tip.append('ACP:' + ('ON' if acp_live else ('OPRIT' if acp_en else 'DISABLED')))
-                tip.append('Elatec:' + ('ON' if el_live else ('OPRIT' if el_en else 'DISABLED')))
+                def _reader_label(live, blocked, enabled):
+                    if live:
+                        return 'ON'
+                    if blocked:
+                        return 'OPRIT'
+                    if not enabled:
+                        return 'DISABLED'
+                    return 'OPRIT'
+                tip.append('ACP:' + _reader_label(acp_live, acp_blocked, acp_en))
+                tip.append('Elatec:' + _reader_label(el_live, el_blocked, el_en))
                 tip.append('Server:' + ('PORNIT' if srv else 'OPRIT'))
                 tip.append('CommCenter:' + ('PORNIT' if cen else 'OPRIT'))
                 tip.append(f'Licență:{_license_status()}')
@@ -985,8 +1081,8 @@ def _build_menu(icon, host, port):
         pystray.MenuItem('CommCenter', commcenter_menu),
         pystray.MenuItem('Card Readers', _card_readers_menu()),
         pystray.MenuItem('---', pystray.Menu()),  # Separator
-        pystray.MenuItem('Stop All Services', lambda: threading.Thread(target=lambda: (_stop_server(), _stop_comm_center(), _stop_listeners(), time.sleep(0.2), _recompute_status_once()), daemon=True).start()),
-        pystray.MenuItem('Start All Services', lambda: threading.Thread(target=lambda: (_start_server(host=host, port=port, asgi=True), _start_comm_center(), _start_listeners(), time.sleep(0.4), _recompute_status_once()), daemon=True).start()),
+        pystray.MenuItem('Stop All Services', lambda: threading.Thread(target=lambda: (_set_blocked('acp', True), _set_blocked('elatec', True), _stop_server(), _stop_comm_center(), _stop_listeners(), time.sleep(0.2), _recompute_status_once()), daemon=True).start()),
+        pystray.MenuItem('Start All Services', lambda: threading.Thread(target=lambda: (_update_tray_status_fields({'acp_enabled': True, 'elatec_enabled': True, 'cmd_start_acp': True, 'cmd_start_elatec': True}), _set_blocked('acp', False), _set_blocked('elatec', False), _start_server(host=host, port=port, asgi=True), _start_comm_center(), _start_listeners(), time.sleep(0.4), _recompute_status_once()), daemon=True).start()),
         pystray.MenuItem('---', pystray.Menu()),  # Separator
         pystray.MenuItem('Ajutor (RO)', lambda: threading.Thread(target=_show_help_ro, daemon=True).start()),
         pystray.MenuItem('Admin Menu', legacy_menu),
@@ -1143,6 +1239,16 @@ class Command(BaseCommand):
                     # Live reader state from processes (ground truth)
                     acp_live = _listener_running('acp')
                     el_live = _listener_running('elatec')
+                    # Respect explicit UI blocked flags immediately
+                    try:
+                        if st.get('acp_blocked', False):
+                            acp_live = False
+                            acp_reason = 'blocked'
+                        if st.get('elatec_blocked', False):
+                            el_live = False
+                            el_reason = 'blocked'
+                    except Exception:
+                        pass
                     # record initial source reasons
                     acp_reason = 'process' if acp_live else 'none'
                     el_reason = 'process' if el_live else 'none'
@@ -1267,7 +1373,7 @@ class Command(BaseCommand):
                             pass
                         # Auto-restart listeners if enabled but not live (skip if user requested stop)
                         try:
-                            if acp_en and not acp_live and not bool(st.get('cmd_stop_acp')):
+                            if acp_en and not acp_live and not bool(st.get('cmd_stop_acp')) and not bool(st.get('acp_blocked', False)):
                                 logging.info('ACP listener down; attempting auto-restart')
                                 _start_listener('acp')
                                 time.sleep(0.2)
@@ -1290,8 +1396,18 @@ class Command(BaseCommand):
                                 return None
                         acp_age = _hb_age(str(Path.home() / 'zkeco_reader_heartbeat_acp.json'))
                         el_age = _hb_age(str(Path.home() / 'zkeco_reader_heartbeat_elatec.json'))
-                        tip.append('ACP:' + ('ON' if acp_live else ('OPRIT' if acp_en else 'DISABLED')))
-                        tip.append('Elatec:' + ('ON' if el_live else ('OPRIT' if el_en else 'DISABLED')))
+                        acp_blocked = bool(st.get('acp_blocked', False))
+                        el_blocked = bool(st.get('elatec_blocked', False))
+                        def _reader_label2(live, blocked, enabled):
+                            if live:
+                                return 'ON'
+                            if blocked:
+                                return 'OPRIT'
+                            if not enabled:
+                                return 'DISABLED'
+                            return 'OPRIT'
+                        tip.append('ACP:' + _reader_label2(acp_live, acp_blocked, acp_en))
+                        tip.append('Elatec:' + _reader_label2(el_live, el_blocked, el_en))
                         if acp_age is not None:
                             tip.append(f"ACP HB:{acp_age}s")
                         if el_age is not None:

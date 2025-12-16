@@ -276,6 +276,15 @@ def readers_stop(request: HttpRequest):
         DeviceStatus.objects.filter(device__in=Device.objects.filter(scanner_type=name, scanner_linked=True)).update(online=False)
     except Exception:
         pass
+    # Attempt to stop any listener OS processes as well (in case tray agent is not running)
+    try:
+        import subprocess
+        target = 'card_reader_acp.py' if name == 'acp' else 'card_reader_elatec.py'
+        # Use PowerShell to find and stop matching processes
+        cmd = ['powershell','-ExecutionPolicy','Bypass','-Command', f"Get-CimInstance Win32_Process | Where-Object {{ $_.CommandLine -like '*{target}*' }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force }}"]
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
     return JsonResponse({'ok': True})
 
 
