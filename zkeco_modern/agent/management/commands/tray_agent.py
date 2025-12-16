@@ -429,6 +429,14 @@ def _start_listener(name: str):
     """Start a single listener based on config: 'acp' or 'elatec'."""
     global _LISTENER_PROCS
     try:
+        def _set_device_online_flag(scanner_name: str, value: bool):
+            try:
+                from zkeco_modern.agent.models import Device, DeviceStatus
+                qs = Device.objects.filter(scanner_type=scanner_name, scanner_linked=True)
+                if qs.exists():
+                    DeviceStatus.objects.filter(device__in=qs).update(online=bool(value))
+            except Exception:
+                logging.exception('Failed to set DeviceStatus.online for %s', scanner_name)
         # Respect explicit UI block flags to avoid unwanted auto-start
         try:
             st = _read_tray_status()
@@ -449,6 +457,11 @@ def _start_listener(name: str):
                     cf = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
                     p = subprocess.Popen([py, script, port], cwd=str(base.parent), creationflags=cf)
                     _LISTENER_PROCS.append(p)
+                    # mark linked devices as online
+                    try:
+                        _set_device_online_flag('acp', True)
+                    except Exception:
+                        pass
         elif name == 'elatec':
             el = cfg.get('elatec', {'enabled': True, 'port': 'COM3'})
             if el.get('enabled', True):
@@ -459,6 +472,10 @@ def _start_listener(name: str):
                     p = subprocess.Popen([py, script, com], cwd=str(base.parent), creationflags=cf)
                     logging.info('Starting listener process: %s %s', script, port if name=='acp' else com)
                     _LISTENER_PROCS.append(p)
+                    try:
+                        _set_device_online_flag('elatec', True)
+                    except Exception:
+                        pass
     except Exception:
         pass
 
@@ -504,6 +521,14 @@ def _stop_listener(name: str):
             remaining = [l.strip() for l in (out.stdout or '').splitlines() if l.strip()]
             if remaining:
                 logging.warning('Processes still present for %s after final stop attempts: %s', target, remaining)
+        try:
+            # mark linked devices as offline
+            from zkeco_modern.agent.models import Device, DeviceStatus
+            qs = Device.objects.filter(scanner_type=('acp' if name=='acp' else 'elatec'), scanner_linked=True)
+            if qs.exists():
+                DeviceStatus.objects.filter(device__in=qs).update(online=False)
+        except Exception:
+            logging.exception('Failed to set DeviceStatus.online False for %s', name)
         except Exception:
             pass
     except Exception:
