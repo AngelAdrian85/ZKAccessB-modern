@@ -21,12 +21,13 @@ from django.apps import apps
 
 Device = apps.get_model('agent', 'Device')
 DeviceStatus = apps.get_model('agent', 'DeviceStatus')
+from django.utils import timezone
 
 acp_q = Device.objects.filter(scanner_type='acp', scanner_linked=True)
 el_q = Device.objects.filter(scanner_type='elatec', scanner_linked=True)
 
-acp_count = DeviceStatus.objects.filter(device__in=acp_q).update(online=True)
-el_count = DeviceStatus.objects.filter(device__in=el_q).update(online=True)
+acp_count = DeviceStatus.objects.filter(device__in=acp_q).update(online=True, updated_at=timezone.now())
+el_count = DeviceStatus.objects.filter(device__in=el_q).update(online=True, updated_at=timezone.now())
 
 print('ACP DeviceStatus rows updated:', acp_count)
 print('Elatec DeviceStatus rows updated:', el_count)

@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 import threading
 import webbrowser
@@ -36,7 +36,6 @@ _LAST_ICON_STATE = None  # (server_running, center_running)
 _LISTENER_PROCS = []  # ACP/Elatec listener processes started by tray agent
 _PID_FILE = Path.home() / 'zkeco_tray_agent.pid'
 _START_TS = time.time()
-_DB_ERR_LAST = {}
 
 DEFAULT_HOST = '0.0.0.0'
 DEFAULT_PORT = 8000
@@ -209,29 +208,29 @@ def _choose_icon_color(server_running: bool, center_running: bool):
 def _show_help_ro():
     """Display a window with Romanian explanations for each tray action."""
     try:
-        win = tk.Tk(); win.title('Ajutor – Explicația butoanelor'); win.geometry('620x560')
+        win = tk.Tk(); win.title('Ajutor ΓÇô Explica╚¢ia butoanelor'); win.geometry('620x560')
         txt = tk.Text(win, wrap='word')
         txt.pack(fill='both', expand=True)
         info = [
-            ('Dashboard', 'Deschide pagina principală de monitorizare.'),
-            ('Web Server (ASGI)', 'Serverul prim ă cu suport WebSockets. Se pornește automat la deschiderea tray. Dacă lipsește Daphne, cade pe WSGI.'),
-            ('CommCenter', 'Serviciul de comunicație cu dispozitivele (polling, sincronizare, cicluri).'),
-            ('Admin Menu → Server WSGI', 'Fallback manual la WSGI dacă ASGI are probleme. Fără WebSockets.'),
-            ('Configure Server Port', 'Setează portul și modul (ASGI/WSGI) pentru server.'),
-            ('Configure Database', 'Afișează detalii despre motorul bazei de date.'),
-            ('Database Backup Location', 'Alege directorul pentru copiile de siguranță.'),
-            ('Video File Location', 'Definește directorul pentru fișiere video.'),
-            ('Picture File Location', 'Definește directorul pentru fișiere imagine (poze utilizatori).'),
-            ('Restore Database', 'Restaurează baza de date dintr-un fișier backup.'),
-            ('Backup Database', 'Creează o copie de siguranță a bazei de date curente.'),
-            ('License Activation', 'Activează licența cu cheia furnizată (validare HMAC).'),
-            ('View Server Log', 'Deschide fișierul server.log pentru depanare.'),
-            ('Quit', 'Închide agentul tray, oprește serviciile active și distruge procesul.'),
+            ('Dashboard', 'Deschide pagina principal─â de monitorizare.'),
+            ('Web Server (ASGI)', 'Serverul prim ─â cu suport WebSockets. Se porne╚Öte automat la deschiderea tray. Dac─â lipse╚Öte Daphne, cade pe WSGI.'),
+            ('CommCenter', 'Serviciul de comunica╚¢ie cu dispozitivele (polling, sincronizare, cicluri).'),
+            ('Admin Menu ΓåÆ Server WSGI', 'Fallback manual la WSGI dac─â ASGI are probleme. F─âr─â WebSockets.'),
+            ('Configure Server Port', 'Seteaz─â portul ╚Öi modul (ASGI/WSGI) pentru server.'),
+            ('Configure Database', 'Afi╚Öeaz─â detalii despre motorul bazei de date.'),
+            ('Database Backup Location', 'Alege directorul pentru copiile de siguran╚¢─â.'),
+            ('Video File Location', 'Define╚Öte directorul pentru fi╚Öiere video.'),
+            ('Picture File Location', 'Define╚Öte directorul pentru fi╚Öiere imagine (poze utilizatori).'),
+            ('Restore Database', 'Restaureaz─â baza de date dintr-un fi╚Öier backup.'),
+            ('Backup Database', 'Creeaz─â o copie de siguran╚¢─â a bazei de date curente.'),
+            ('License Activation', 'Activeaz─â licen╚¢a cu cheia furnizat─â (validare HMAC).'),
+            ('View Server Log', 'Deschide fi╚Öierul server.log pentru depanare.'),
+            ('Quit', '├Änchide agentul tray, opre╚Öte serviciile active ╚Öi distruge procesul.'),
         ]
         for title, desc in info:
-            txt.insert('end', f"• {title}: {desc}\n\n")
+            txt.insert('end', f"ΓÇó {title}: {desc}\n\n")
         txt.config(state='disabled')
-        tk.Button(win, text='Închide', command=win.destroy).pack(pady=6)
+        tk.Button(win, text='├Änchide', command=win.destroy).pack(pady=6)
         win.mainloop()
     except Exception:
         pass
@@ -324,100 +323,6 @@ def _update_tray_status_fields(updates: dict):
         tmp.replace(p)
     except Exception:
         logging.exception('Failed to update tray_status fields')
-
-def _set_device_online_flag(scanner: str, online: bool):
-    """Safely set DeviceStatus.online for devices matching scanner type.
-    Tries ORM update first; falls back to direct SQL. Works for sqlite/mysql/postgres.
-    """
-    try:
-        from django.db import connection
-        val = 1 if online else 0
-        # Build a safe-ish SQL string inlined with integers and escaped scanner value
-        esc = str(scanner).replace("'", "''")
-        vendor = getattr(connection, 'vendor', '')
-        cur = connection.cursor()
-        if vendor == 'sqlite':
-            sql = (f"UPDATE agent_devicestatus SET online={val}, updated_at=CURRENT_TIMESTAMP "
-                   f"WHERE device_id IN (SELECT id FROM agent_device WHERE scanner_type='{esc}' AND scanner_linked=1 AND enabled=1)")
-        else:
-            # For Postgres/MySQL, CURRENT_TIMESTAMP is supported; include updated_at update as well
-            sql = (f"UPDATE agent_devicestatus SET online = {val}, updated_at = CURRENT_TIMESTAMP FROM agent_device "
-                   f"WHERE agent_devicestatus.device_id = agent_device.id "
-                   f"AND agent_device.scanner_type = '{esc}' AND agent_device.scanner_linked = true AND agent_device.enabled = true")
-        try:
-            cur.execute(sql)
-            try:
-                connection.commit()
-            except Exception:
-                pass
-            logging.info('Set DeviceStatus.online=%s for scanner=%s (rows affected=%s)', val, scanner, getattr(cur, 'rowcount', 'unknown'))
-            # Broadcast status for affected devices via channels if available
-            try:
-                from channels.layers import get_channel_layer
-                from asgiref.sync import async_to_sync
-                # retrieve affected device ids and current door_state/serial
-                cur2 = connection.cursor()
-                if vendor == 'sqlite':
-                    sel = ("SELECT agent_device.id, agent_device.serial_number, agent_devicestatus.door_state, agent_devicestatus.online, agent_devicestatus.updated_at "
-                           "FROM agent_device JOIN agent_devicestatus ON agent_devicestatus.device_id = agent_device.id "
-                           f"WHERE agent_device.scanner_type = '{esc}' AND agent_device.scanner_linked=1 AND agent_device.enabled=1")
-                    cur2.execute(sel)
-                else:
-                    sel = ("SELECT agent_device.id, agent_device.serial_number, agent_devicestatus.door_state, agent_devicestatus.online, agent_devicestatus.updated_at "
-                           "FROM agent_device JOIN agent_devicestatus ON agent_devicestatus.device_id = agent_device.id "
-                           f"WHERE agent_device.scanner_type = '{esc}' AND agent_device.scanner_linked = true AND agent_device.enabled = true")
-                    cur2.execute(sel)
-                rows = cur2.fetchall() or []
-                try:
-                    from agent.ws import broadcast_device_status
-                    for did, serial, door_state, online_db, updated_at in rows:
-                            try:
-                                # Normalize updated_at to ISO string when possible
-                                ua = None
-                                try:
-                                    if updated_at is not None:
-                                        # sqlite may return string, others may return datetime
-                                        import datetime as _dt
-                                        if isinstance(updated_at, _dt.datetime):
-                                            ua = updated_at.isoformat()
-                                        else:
-                                            ua = str(updated_at)
-                                except Exception:
-                                    ua = None
-                                broadcast_device_status(did, bool(online_db), door_state=door_state, serial=serial, updated_at=ua)
-                            except Exception:
-                                pass
-                except Exception:
-                    pass
-            except Exception:
-                pass
-            return
-        except Exception as e:
-            # Throttle noisy DB errors to once per minute per scanner
-            try:
-                now = time.time()
-                last = _DB_ERR_LAST.get(scanner, 0)
-                if (now - last) > 60:
-                    logging.error('SQL update failed for DeviceStatus.online for %s: %s', scanner, e)
-                    _DB_ERR_LAST[scanner] = now
-            except Exception:
-                logging.error('SQL update failed for DeviceStatus.online for %s: %s', scanner, e)
-            return
-    except Exception as e:
-        logging.error('DB connection failed while setting DeviceStatus.online for %s: %s', scanner, e)
-        return
-
-def _remove_heartbeat(scanner: str):
-    try:
-        name = 'acp' if scanner == 'acp' else 'elatec'
-        hb = Path.home() / f'zkeco_reader_heartbeat_{name}.json'
-        if hb.exists():
-            try:
-                hb.unlink()
-            except Exception:
-                pass
-    except Exception:
-        pass
 
 def _set_blocked(name: str, value: bool):
     try:
@@ -524,6 +429,14 @@ def _start_listener(name: str):
     """Start a single listener based on config: 'acp' or 'elatec'."""
     global _LISTENER_PROCS
     try:
+        def _set_device_online_flag(scanner_name: str, value: bool):
+            try:
+                from zkeco_modern.agent.models import Device, DeviceStatus
+                qs = Device.objects.filter(scanner_type=scanner_name, scanner_linked=True)
+                if qs.exists():
+                    DeviceStatus.objects.filter(device__in=qs).update(online=bool(value))
+            except Exception:
+                logging.exception('Failed to set DeviceStatus.online for %s', scanner_name)
         # Respect explicit UI block flags to avoid unwanted auto-start
         try:
             st = _read_tray_status()
@@ -544,9 +457,9 @@ def _start_listener(name: str):
                     cf = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
                     p = subprocess.Popen([py, script, port], cwd=str(base.parent), creationflags=cf)
                     _LISTENER_PROCS.append(p)
+                    # mark linked devices as online
                     try:
-                        # mark devices online for this scanner when listener started
-                        _set_device_online_flag(name, True)
+                        _set_device_online_flag('acp', True)
                     except Exception:
                         pass
         elif name == 'elatec':
@@ -559,6 +472,10 @@ def _start_listener(name: str):
                     p = subprocess.Popen([py, script, com], cwd=str(base.parent), creationflags=cf)
                     logging.info('Starting listener process: %s %s', script, port if name=='acp' else com)
                     _LISTENER_PROCS.append(p)
+                    try:
+                        _set_device_online_flag('elatec', True)
+                    except Exception:
+                        pass
     except Exception:
         pass
 
@@ -604,17 +521,14 @@ def _stop_listener(name: str):
             remaining = [l.strip() for l in (out.stdout or '').splitlines() if l.strip()]
             if remaining:
                 logging.warning('Processes still present for %s after final stop attempts: %s', target, remaining)
-        except Exception:
-            pass
-        # Ensure heartbeat file removed and DB set to offline for this scanner
         try:
-            _remove_heartbeat(name)
+            # mark linked devices as offline
+            from zkeco_modern.agent.models import Device, DeviceStatus
+            qs = Device.objects.filter(scanner_type=('acp' if name=='acp' else 'elatec'), scanner_linked=True)
+            if qs.exists():
+                DeviceStatus.objects.filter(device__in=qs).update(online=False)
         except Exception:
-            pass
-        try:
-            _set_device_online_flag(name, False)
-        except Exception:
-            pass
+            logging.exception('Failed to set DeviceStatus.online False for %s', name)
     except Exception:
         pass
 
@@ -1178,7 +1092,7 @@ def _build_menu(icon, host, port):
                 tip.append('Elatec:' + _reader_label(el_live, el_blocked, el_en))
                 tip.append('Server:' + ('PORNIT' if srv else 'OPRIT'))
                 tip.append('CommCenter:' + ('PORNIT' if cen else 'OPRIT'))
-                tip.append(f'Licență:{_license_status()}')
+                tip.append(f'Licen╚¢─â:{_license_status()}')
                 tip.append('Click dreapta: meniu')
                 _set_icon_title(icon, ' | '.join(tip))
         except Exception:
@@ -1439,15 +1353,6 @@ class Command(BaseCommand):
                                         pass
                                 except Exception:
                                     pass
-                            # After command handling, ensure DB reflects current live flags
-                            try:
-                                _set_device_online_flag('acp', bool(acp_live))
-                            except Exception:
-                                pass
-                            try:
-                                _set_device_online_flag('elatec', bool(el_live))
-                            except Exception:
-                                pass
                         except Exception:
                             pass
 
@@ -1460,26 +1365,8 @@ class Command(BaseCommand):
                                     el_mode = str(el_cfg.get('mode','')).lower()
                                     if el_mode == 'virtual':
                                         try:
-                                            # Use raw SQL to check DeviceStatus.online to avoid Django app/model import
-                                            from django.db import connection
-                                            vendor = getattr(connection, 'vendor', '')
-                                            cur = connection.cursor()
-                                            if vendor == 'sqlite':
-                                                sql = ("SELECT 1 FROM agent_devicestatus JOIN agent_device ON agent_devicestatus.device_id=agent_device.id "
-                                                       "WHERE agent_device.scanner_type=? AND agent_device.scanner_linked=1 AND agent_device.enabled=1 AND agent_devicestatus.online=1 LIMIT 1")
-                                                params = ( 'elatec', )
-                                            else:
-                                                sql = ("SELECT 1 FROM agent_devicestatus JOIN agent_device ON agent_devicestatus.device_id=agent_device.id "
-                                                       "WHERE agent_device.scanner_type=%s AND agent_device.scanner_linked = true AND agent_device.enabled = true AND agent_devicestatus.online = 1 LIMIT 1")
-                                                params = ( 'elatec', )
-                                            try:
-                                                cur.execute(sql, params)
-                                                row = cur.fetchone()
-                                                has_online = bool(row)
-                                            except Exception as _e:
-                                                # Avoid continuous noisy logs; log the first error and then throttle
-                                                logging.debug('SQL check for DeviceStatus.online failed for elatec: %s', _e)
-                                                has_online = False
+                                            from zkeco_modern.agent.models import Device, DeviceStatus
+                                            has_online = DeviceStatus.objects.filter(device__in=Device.objects.filter(scanner_type='elatec', scanner_linked=True, enabled=True), online=True).exists()
                                             if has_online:
                                                 el_live = True
                                                 el_reason = 'db'
@@ -1575,7 +1462,7 @@ class Command(BaseCommand):
                         tip.append(f"RT {_CENTER.total_rtlog_lines}")
                     tip.append('Server:' + ( 'PORNIT' if server_running else ('PORNESTE' if srv_state=='PORNESTE' else 'OPRIT') ))
                     tip.append('CommCenter:' + ('PORNIT' if center_running else 'OPRIT'))
-                    tip.append(f'Licență:{_license_status()}')
+                    tip.append(f'Licen╚¢─â:{_license_status()}')
                     tip.append('Click dreapta: meniu')
                     _set_icon_title(icon_ref, ' | '.join(tip))
                     state = (server_running, center_running, any_running, color_json if use_json else None, acp_live, el_live)
@@ -1619,7 +1506,7 @@ class Command(BaseCommand):
                     _STOP_EVENT.wait(5.0)
 
         # Clear, unique tooltip to confirm the correct agent is running
-        icon = pystray.Icon('zkeco_access', _build_icon(color=_choose_icon_color(False, False)), 'Access Control — Django Tray Agent', menu=_build_menu(None, host, port))
+        icon = pystray.Icon('zkeco_access', _build_icon(color=_choose_icon_color(False, False)), 'Access Control ΓÇö Django Tray Agent', menu=_build_menu(None, host, port))
         icon.menu = _build_menu(icon, host, port)
         # Immediate recompute before entering the GUI loop
         try:
@@ -1649,3 +1536,4 @@ class Command(BaseCommand):
             self.stdout.write('Tray agent exited.')
         
         return 0
+

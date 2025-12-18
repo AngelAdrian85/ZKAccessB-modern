@@ -273,7 +273,25 @@ def readers_stop(request: HttpRequest):
     # Also mark any linked devices as offline in DB so dashboard/device-list stay consistent
     try:
         from .models import Device, DeviceStatus
-        DeviceStatus.objects.filter(device__in=Device.objects.filter(scanner_type=name, scanner_linked=True)).update(online=False)
+        qs = Device.objects.filter(scanner_type=name, scanner_linked=True)
+        affected = list(qs.values_list('id', flat=True))
+        DeviceStatus.objects.filter(device__in=qs).update(online=False, updated_at=timezone.now())
+        # Broadcast each affected device status via channels, include updated_at
+        try:
+            from agent.ws import broadcast_device_status
+            from agent.models import DeviceStatus as _DS
+            for did in affected:
+                try:
+                    try:
+                        ds = _DS.objects.get(device_id=did)
+                        ua = ds.updated_at.isoformat() if ds.updated_at else None
+                    except Exception:
+                        ua = None
+                    broadcast_device_status(did, False, updated_at=ua)
+                except Exception:
+                    pass
+        except Exception:
+            pass
     except Exception:
         pass
     # Attempt to stop any listener OS processes as well (in case tray agent is not running)
@@ -316,6 +334,35 @@ def status_summary(request: HttpRequest):
         'doors_open': sum(1 for r in rows if r['door_state'] == 'OPEN'),
     }
     return render(request, 'agent/status_summary.html', {'rows': rows, 'summary': summary})
+
+
+def status_summary_json(request: HttpRequest):
+    """Return JSON list of device statuses for AJAX polling.
+    Requires authenticated user (same as status_summary view).
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': 'unauth'}, status=403)
+    out = []
+    try:
+        for ds in DeviceStatus.objects.select_related('device').all():
+            # Serialize updated_at as ISO; client will render in local time
+            updated = ds.updated_at
+            iso = None
+            try:
+                iso = updated.isoformat() if updated is not None else None
+            except Exception:
+                iso = None
+            out.append({
+                'id': ds.device.id,
+                'name': ds.device.name,
+                'serial': ds.device.serial_number,
+                'online': bool(ds.online),
+                'door_state': ds.door_state,
+                'updated_at': iso,
+            })
+    except Exception:
+        return JsonResponse({'ok': False, 'error': 'db-error'}, status=500)
+    return JsonResponse({'ok': True, 'rows': out})
 
 def device_list(request: HttpRequest):
     from .models import Device

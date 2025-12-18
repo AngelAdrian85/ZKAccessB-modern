@@ -108,4 +108,5 @@ urlpatterns = [
     path("api/readers/status", views.readers_status, name="agent-readers-status"),
     path("api/readers/start", views.readers_start, name="agent-readers-start"),
     path("api/readers/stop", views.readers_stop, name="agent-readers-stop"),
+    path("api/status_summary/", views.status_summary_json, name="agent-status-summary-json"),
 ]
