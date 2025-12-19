@@ -17,8 +17,8 @@ application = get_asgi_application()
 django.setup()
 
 try:
-	# Import via fully-qualified app path to avoid root-level shim exclusion
-	from zkeco_modern.agent.routing import websocket_urlpatterns as agent_ws
+	# Import via normalized app path
+	from agent.routing import websocket_urlpatterns as agent_ws
 except Exception:
 	agent_ws = []
 

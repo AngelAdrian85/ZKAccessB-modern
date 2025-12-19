@@ -688,6 +688,50 @@ function escapeHtml(str){
   return (str || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
 }
 
+// WebSocket: update dashboard device statuses in real-time
+;(function(){
+  const scheme = (location.protocol === 'https:') ? 'wss' : 'ws';
+  const url = scheme + '://' + location.host + '/ws/monitor/';
+  let ws;
+  function applyPayload(payload){
+    if(!payload) return;
+    const p = payload.payload || payload;
+    if(!p) return;
+    if(p.type !== 'device.status' && typeof p.device_id === 'undefined') return;
+    const id = p.device_id || p.id || p.device__id;
+    if(!id) return;
+    // find by device__id or device__serial_number
+    const idx = dashDevices.findIndex(d => String(d.device__id) === String(id) || String(d.device__id) === String(p.device__id) || String(d.device__serial_number) === String(p.serial));
+    // Only use server-provided `updated_at`. If absent, keep existing value (don't insert client time).
+    const updated_at = (p.updated_at !== undefined && p.updated_at !== null && p.updated_at !== '') ? p.updated_at : (idx >= 0 ? dashDevices[idx].updated_at : null);
+    if(idx >= 0){
+      dashDevices[idx].online = !!p.online;
+      dashDevices[idx].updated_at = updated_at;
+      // also update door_state if present
+      if(typeof p.door_state !== 'undefined') dashDevices[idx].door_state = p.door_state;
+    } else {
+      // push a minimal entry so render shows it
+      dashDevices.push({ device__id: id, device__name: p.name || ('Device '+id), online: !!p.online, updated_at: updated_at, category: 'other', type_badge: p.type_badge||'' });
+    }
+    renderDeviceTable(currentDeviceMode);
+  }
+
+  function connect(){
+    try{ ws = new WebSocket(url); } catch(e){ setTimeout(connect,2000); return; }
+    ws.onopen = ()=>{ console.log('Dashboard WS connected'); setBadge('wsConnStatus','✓ Connected','ok'); };
+    ws.onclose = ()=>{ console.log('Dashboard WS closed, reconnecting'); setBadge('wsConnStatus','✗ Disconnected','err'); setTimeout(connect,2000); };
+    ws.onerror = (e)=>{ console.warn('Dashboard WS error', e); ws.close(); };
+    ws.onmessage = (e)=>{
+      let msg;
+      try{ msg = JSON.parse(e.data); } catch(err){ return; }
+      // monitor_event handler forwards payload directly; support both shapes
+      if(msg.payload) applyPayload(msg.payload);
+      else applyPayload(msg);
+    };
+  }
+  connect();
+})();
+
 function renderRecentCommands(items){
   const body = document.getElementById('recentCommandsBody');
   if(!body){ return; }
@@ -717,6 +761,30 @@ function startRecentCommandsPolling(){
   fetchRecent();
   setInterval(fetchRecent, 12000);
 }
+</script>
+
+<!-- DIAGNOSTIC: auto-report WS messages received by this page to server for debugging -->
+<script>
+(function(){
+  try{
+    const proto = (location.protocol === 'https:') ? 'wss' : 'ws';
+    const url = proto + '://' + location.host + '/ws/monitor/';
+    const postTo = '/agent/diag/ws-log/';
+    const ws = new WebSocket(url);
+    ws.addEventListener('open', ()=>{ console.log('WS diag connected ->', url); document.getElementById('wsConnStatus').className='badge ok'; document.getElementById('wsConnStatus').textContent='Connected'; });
+    ws.addEventListener('message', ev=>{
+      try{
+        const data = JSON.parse(ev.data);
+        fetch(postTo, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({page: 'dashboard', msg: data}) }).catch(()=>{});
+      }catch(e){
+        fetch(postTo, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({page: 'dashboard', raw: ev.data}) }).catch(()=>{});
+      }
+    });
+    ws.addEventListener('error', e=>{ console.log('WS diag error', e); document.getElementById('wsConnStatus').className='badge err'; document.getElementById('wsConnStatus').textContent='Error'; });
+    window.__WS_DIAG_PAGE = window.__WS_DIAG_PAGE || {};
+    window.__WS_DIAG_PAGE.dashboard = ws;
+  }catch(e){ console.log('WS diag init failed', e); }
+})();
 </script>
 
 {% endblock %}

@@ -8,7 +8,7 @@ sys.path.insert(0, r'c:\Users\AngelAdrian\Desktop\Acces\ZKAccessB')
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'zkeco_modern.settings')
 django.setup()
 
-from zkeco_modern.agent.models import Employee, EmployeeCard
+from agent.models import Employee, EmployeeCard
 
 # Check all cards in DB
 all_cards = []

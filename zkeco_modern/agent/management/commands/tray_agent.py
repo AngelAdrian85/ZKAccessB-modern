@@ -384,6 +384,18 @@ def _set_device_online_flag(scanner: str, online: bool):
                                             ua = str(updated_at)
                                 except Exception:
                                     ua = None
+                                try:
+                                    import logging
+                                    logging.getLogger(__name__).info(
+                                        'tray_agent (management cmd) -> broadcasting device=%s online=%s updated_at=%s serial=%s',
+                                        did, bool(online_db), ua, serial
+                                    )
+                                except Exception:
+                                    pass
+                                try:
+                                    print('tray_agent (management cmd) -> broadcasting device=%s online=%s updated_at=%s serial=%s' % (did, bool(online_db), ua, serial), flush=True)
+                                except Exception:
+                                    pass
                                 broadcast_device_status(did, bool(online_db), door_state=door_state, serial=serial, updated_at=ua)
                             except Exception:
                                 pass
@@ -496,7 +508,7 @@ def _start_comm_center(poll_interval=1.5, driver='stub'):
     global _CENTER
     if _CENTER is not None:
         return _CENTER
-    from zkeco_modern.agent.modern_comm_center import build_and_run_stub
+    from agent.modern_comm_center import build_and_run_stub
     _CENTER = build_and_run_stub(poll_interval=poll_interval, driver=driver)
     return _CENTER
 

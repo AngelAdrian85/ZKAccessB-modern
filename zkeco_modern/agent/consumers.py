@@ -29,6 +29,16 @@ class MonitorConsumer(AsyncWebsocketConsumer):
     async def monitor_event(self, event):
         # External broadcasts (door actions, status updates)
         payload = event.get("payload", {})
+        try:
+            # Server-side instrumentation for debugging: log payloads forwarded to WebSocket clients
+            import logging, json as _json
+            logging.getLogger(__name__).info('MonitorConsumer.forward -> payload=%s', payload)
+        except Exception:
+            pass
+        try:
+            print('MonitorConsumer.forward -> payload=', payload)
+        except Exception:
+            pass
         await self.send(text_data=json.dumps(payload))
 
     @database_sync_to_async
@@ -42,20 +52,28 @@ class MonitorConsumer(AsyncWebsocketConsumer):
         # Fetch persisted status if available
         persisted = await self._fetch_status_map()
         for d in devices:
-            st = persisted.get(d["id"], {"online": True, "door_state": "CLOSED"})
+            st = persisted.get(d["id"], {"online": True, "door_state": "CLOSED", "updated_at": None})
             await self.send(text_data=json.dumps({
                 "type": "device.status",
                 "device_id": d["id"],
                 "serial": d.get("serial_number") or str(d["id"]),
                 "online": st.get("online", True),
-                "door_state": st.get("door_state", "CLOSED")
+                "door_state": st.get("door_state", "CLOSED"),
+                "updated_at": st.get("updated_at")
             }))
 
     @database_sync_to_async
     def _fetch_status_map(self):
         try:
             from agent.models import DeviceStatus
-            return {s.device_id: {"online": s.online, "door_state": s.door_state} for s in DeviceStatus.objects.select_related("device").all()}
+            out = {}
+            for s in DeviceStatus.objects.select_related("device").all():
+                try:
+                    ua = s.updated_at.isoformat() if getattr(s, 'updated_at', None) is not None else None
+                except Exception:
+                    ua = None
+                out[s.device_id] = {"online": s.online, "door_state": s.door_state, "updated_at": ua}
+            return out
         except Exception:
             return {}
 

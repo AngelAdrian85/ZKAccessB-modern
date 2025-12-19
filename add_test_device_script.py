@@ -10,7 +10,7 @@ if os.path.exists(os.path.join(os.path.dirname(__file__), 'zkeco_modern')):
 django.setup()
 
 # Now we can import models
-from zkeco_modern.agent.models import Device
+from agent.models import Device
 from django.utils import timezone
 
 try:

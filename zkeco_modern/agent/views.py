@@ -252,6 +252,60 @@ def readers_start(request: HttpRequest):
     # clear blocked flag so tray_agent may auto-start
     st[f'{name}_blocked'] = False
     _write_json_safe(_tray_status_path(), st)
+    # Also mark any linked devices as online in DB so dashboard/device-list stay consistent
+    try:
+        from .models import Device, DeviceStatus
+        qs = Device.objects.filter(scanner_type=name, scanner_linked=True)
+        affected = list(qs.values_list('id', flat=True))
+        # Only update `updated_at` when the online state actually changes.
+        from agent.models import DeviceStatus as _DS
+        for dev in qs:
+            try:
+                # Do NOT create DeviceStatus rows here. Creating status rows at server/tray start
+                # records the server start time in `updated_at` which can be mistaken for a real
+                # device state-change. Only update existing status rows; skip creation.
+                ds = _DS.objects.filter(device=dev).first()
+                if not ds:
+                    # no prior status known for this device; skip updating to avoid writing server-time
+                    continue
+                # if device was previously offline, set updated_at; otherwise preserve historical timestamp
+                if not ds.online:
+                    ds.online = True
+                    ds.door_state = ''
+                    ds.updated_at = timezone.now()
+                    ds.save(update_fields=['online', 'door_state', 'updated_at'])
+                else:
+                    # keep existing updated_at, but ensure door_state is cleared
+                    if ds.door_state != '':
+                        ds.door_state = ''
+                        ds.save(update_fields=['door_state'])
+            except Exception:
+                # best-effort: skip problematic device
+                continue
+        # Broadcast each affected device status via channels, include updated_at
+        try:
+            from agent.ws import broadcast_device_status
+            from agent.models import DeviceStatus as _DS
+            for did in affected:
+                try:
+                    try:
+                        ds = _DS.objects.get(device_id=did)
+                        ua = ds.updated_at.isoformat() if ds.updated_at else None
+                    except Exception:
+                        ua = None
+                    try:
+                        import logging
+                        logging.getLogger(__name__).info('readers_start -> broadcasting device=%s online=%s updated_at=%s', did, True, ua)
+                    except Exception:
+                        pass
+                    # logging already emitted above; avoid noisy stdout prints in production
+                    broadcast_device_status(did, True, updated_at=ua)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+    except Exception:
+        pass
     return JsonResponse({'ok': True})
 
 
@@ -275,7 +329,22 @@ def readers_stop(request: HttpRequest):
         from .models import Device, DeviceStatus
         qs = Device.objects.filter(scanner_type=name, scanner_linked=True)
         affected = list(qs.values_list('id', flat=True))
-        DeviceStatus.objects.filter(device__in=qs).update(online=False, updated_at=timezone.now())
+        # Only update `updated_at` when the online state actually changes (i.e. going offline).
+        from agent.models import DeviceStatus as _DS
+        for dev in qs:
+            try:
+                # Avoid creating DeviceStatus rows on stop; only update existing records.
+                ds = _DS.objects.filter(device=dev).first()
+                if not ds:
+                    continue
+                if ds.online:
+                    # it was online -> now going offline, record timestamp
+                    ds.online = False
+                    ds.updated_at = timezone.now()
+                    ds.save(update_fields=['online', 'updated_at'])
+                # if already offline, leave updated_at unchanged
+            except Exception:
+                continue
         # Broadcast each affected device status via channels, include updated_at
         try:
             from agent.ws import broadcast_device_status
@@ -287,6 +356,14 @@ def readers_stop(request: HttpRequest):
                         ua = ds.updated_at.isoformat() if ds.updated_at else None
                     except Exception:
                         ua = None
+                    try:
+                        import logging
+                        logging.getLogger(__name__).info(
+                            'readers_stop -> broadcasting device=%s online=%s updated_at=%s', did, False, ua
+                        )
+                    except Exception:
+                        pass
+                    # logging already emitted above; avoid noisy stdout prints in production
                     broadcast_device_status(did, False, updated_at=ua)
                 except Exception:
                     pass
@@ -364,6 +441,37 @@ def status_summary_json(request: HttpRequest):
         return JsonResponse({'ok': False, 'error': 'db-error'}, status=500)
     return JsonResponse({'ok': True, 'rows': out})
 
+
+@csrf_exempt
+def ws_diag_log(request: HttpRequest):
+    """Temporary diagnostic endpoint: accept POSTs from browser JS containing
+    websocket messages received by the client and append them to a server-side log
+    for correlation during debugging.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'method-not-allowed'}, status=405)
+    try:
+        import json, pathlib
+        try:
+            body = json.loads(request.body.decode('utf-8') or '{}')
+        except Exception:
+            # store raw bytes if JSON parse fails
+            body = {'raw': request.body.decode('utf-8', errors='replace')}
+        base_dir = pathlib.Path(__file__).resolve().parent.parent
+        logdir = base_dir / 'runtime_logs'
+        logdir.mkdir(parents=True, exist_ok=True)
+        logfile = logdir / 'ws_diag.log'
+        from django.utils import timezone as djtz
+        entry = {'ts': djtz.now().isoformat(), 'remote': request.META.get('REMOTE_ADDR', ''), 'payload': body}
+        try:
+            with logfile.open('a', encoding='utf-8') as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        except Exception as e:
+            return JsonResponse({'ok': False, 'error': str(e)}, status=500)
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=500)
+    return JsonResponse({'ok': True})
+
 def device_list(request: HttpRequest):
     from .models import Device
     from .forms import DeviceExtendedForm
@@ -376,7 +484,9 @@ def devices_crud_list(request: HttpRequest):
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
     from .models import Device
-    qs = Device.objects.order_by('name')
+    # Prefetch DeviceStatus so template can show exact state update timestamps
+    # Related name defaults to 'devicestatus_set' (no explicit related_name in model)
+    qs = Device.objects.order_by('name').prefetch_related('devicestatus_set')
     # Filter: all (default) | controllers | new | readers
     flt = (request.GET.get('filter') or 'all').strip().lower()
     if flt == 'controllers':
@@ -711,13 +821,19 @@ def access_dashboard(request: HttpRequest):
                 type_badge = dev.type_badge()
             except Exception:
                 type_badge = device_type
+        # Serialize `updated_at` as ISO string for client-side JSON script
+        ua_iso = None
+        try:
+            ua_iso = ds.updated_at.isoformat() if ds.updated_at is not None else None
+        except Exception:
+            ua_iso = None
         device_statuses.append({
             'device__id': getattr(dev, 'id', None),
             'device__name': getattr(dev, 'name', None),
             'device__serial_number': getattr(dev, 'serial_number', ''),
             'online': ds.online,
             'door_state': ds.door_state,
-            'updated_at': ds.updated_at,
+            'updated_at': ua_iso,
             'category': category,
             'device_type': device_type,
             'type_badge': type_badge,
@@ -2547,8 +2663,8 @@ def _enqueue(device_id: int, cmd: str, door: Door | None = None) -> bool:
         log.save(update_fields=['status','result','executed_at'])
         _broadcast_command(log)
     try:
-        from zkeco_modern.agent.modern_comm_center import build_and_run_stub  # avoid circular import
-        import zkeco_modern.agent.modern_comm_center as mcc
+        from agent.modern_comm_center import build_and_run_stub  # avoid circular import
+        import agent.modern_comm_center as mcc
         center = getattr(mcc, 'ACTIVE_CENTER', None)
         if center is None:
             center = build_and_run_stub(poll_interval=1.0, driver='stub')
@@ -2598,7 +2714,12 @@ def _persist_and_broadcast_status(device_id: int, door_state: str, online: bool 
         except Exception:
             pass
         if layer:
-            asyncio.get_event_loop().create_task(layer.group_send("monitor", {"type": "monitor_event", "payload": {"type": "device.status", "device_id": device_id, "door_state": door_state, "online": online}}))
+            # Include the exact updated_at timestamp so clients can render the true state-change time
+            try:
+                ua = ds.updated_at.isoformat() if ds and getattr(ds, 'updated_at', None) is not None else None
+            except Exception:
+                ua = None
+            asyncio.get_event_loop().create_task(layer.group_send("monitor", {"type": "monitor_event", "payload": {"type": "device.status", "device_id": device_id, "door_state": door_state, "online": online, "updated_at": ua}}))
     except Exception:
         pass
 

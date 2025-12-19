@@ -65,12 +65,12 @@
 <table class="devices-table">
 <thead>
   <tr>
-    <th>ID</th><th>Nume</th><th>Serial (SN)</th><th>IP</th><th>Port</th><th>Mod</th><th>Firmware</th><th>Zonă</th><th>Status</th><th>Última Contactare</th><th>Acțiuni</th>
+    <th>ID</th><th>Nume</th><th>Serial (SN)</th><th>IP</th><th>Port</th><th>Mod</th><th>Firmware</th><th>Zonă</th><th>Status</th><th>Actualizat</th><th>Acțiuni</th>
   </tr>
 </thead>
 <tbody>
 {% for device in page.object_list %}
-<tr class="{% if device.is_reader %}reader{% elif device.is_controller %}controller{% endif %}">
+<tr class="{% if device.is_reader %}reader{% elif device.is_controller %}controller{% endif %}" data-device-id="{{ device.id }}">
   <td><strong>#{{ device.id }}</strong></td>
   <td><strong>{{ device.name }}</strong>
     {% if device.is_reader %}
@@ -86,13 +86,19 @@
   <td>{{ device.firmware_version|default:"—" }}</td>
   <td>{{ device.area_name|default:"—" }}</td>
   <td>
-    {% if device.enabled %}
-      <span class="status-badge status-active">✓ ACTIV</span>
-    {% else %}
-      <span class="status-badge status-inactive">✗ INACTIV</span>
-    {% endif %}
+    {% with status=device.devicestatus_set.first %}
+      {% if status and status.online %}
+        <span class="status-badge status-active">✓ ONLINE</span>
+      {% else %}
+        <span class="status-badge status-inactive">✗ OFFLINE</span>
+      {% endif %}
+    {% endwith %}
   </td>
-  <td><small>{% if device.last_contact %}{{ device.last_contact|date:"d.m H:i" }}{% else %}—{% endif %}</small></td>
+  <td>
+    {% with status=device.devicestatus_set.first %}
+      <small>{% if status and status.updated_at %}{{ status.updated_at|date:"d.m H:i:s" }}{% elif device.last_contact %}{{ device.last_contact|date:"d.m H:i:s" }}{% else %}—{% endif %}</small>
+    {% endwith %}
+  </td>
   <td><div class="action-buttons"><a href="{% url 'crud-device-edit' device.id %}" class="btn-edit">✏️ Edit</a><button class="btn-delete" onclick="if(confirm('Ești sigur?')) deleteDevice({{ device.id }});">🗑️ Șterge</button></div></td>
 </tr>
 {% endfor %}
@@ -117,6 +123,31 @@
 </div>
 
 <div class="footer-device">🔧 Modernized Device Management Interface</div>
+
+<!-- DIAGNOSTIC: auto-report WS messages received by this page to server for debugging -->
+<script>
+(function(){
+  try{
+    const proto = (location.protocol === 'https:') ? 'wss' : 'ws';
+    const url = proto + '://' + location.host + '/ws/monitor/';
+    const postTo = '/agent/diag/ws-log/';
+    const ws = new WebSocket(url);
+    ws.addEventListener('open', ()=>{ console.log('WS diag connected ->', url); });
+    ws.addEventListener('message', ev=>{
+      try{
+        const data = JSON.parse(ev.data);
+        // send to server for correlation
+        fetch(postTo, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({page: 'devices', msg: data}) }).catch(()=>{});
+      }catch(e){
+        fetch(postTo, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({page: 'devices', raw: ev.data}) }).catch(()=>{});
+      }
+    });
+    ws.addEventListener('error', e=>{ console.log('WS diag error', e); });
+    window.__WS_DIAG_PAGE = window.__WS_DIAG_PAGE || {};
+    window.__WS_DIAG_PAGE.devices = ws;
+  }catch(e){ console.log('WS diag init failed', e); }
+})();
+</script>
 
 <script>
 function openDeviceModal() { document.getElementById('deviceModal').style.display='flex'; }
@@ -552,3 +583,42 @@ function applyDiscovery(ip){
 </script>
 
 {% endblock %}
+
+<script>
+// WebSocket to update device status/updated time in real-time
+;(function(){
+  const scheme = (location.protocol === 'https:') ? 'wss' : 'ws';
+  const url = scheme + '://' + location.host + '/ws/monitor/';
+  let ws;
+  function connect(){
+    try{
+      ws = new WebSocket(url);
+    }catch(e){ setTimeout(connect, 3000); return; }
+    ws.onopen = () => console.log('Devices WS connected');
+    ws.onclose = () => { console.log('Devices WS closed, reconnecting in 2s'); setTimeout(connect,2000); };
+    ws.onerror = (e) => { console.warn('Devices WS error', e); ws.close(); };
+    ws.onmessage = (e) => {
+      let msg;
+      try { msg = JSON.parse(e.data); } catch(err){ return; }
+      const payload = msg.payload || msg;
+      if(!payload) return;
+      // payload expected to include: type='device.status', device_id, online, updated_at
+      if(payload.type !== 'device.status' && typeof payload.device_id === 'undefined') return;
+      const id = payload.device_id || payload.id;
+      if(!id) return;
+      const online = payload.online === true || payload.online === 'true';
+      const row = document.querySelector(`tr[data-device-id="${id}"]`);
+      if(!row) return;
+      const tds = row.querySelectorAll('td');
+      const statusCell = tds[8];
+      const updatedCell = tds[9];
+      if(statusCell) statusCell.innerHTML = online ? '<span class="status-badge status-active">✓ ONLINE</span>' : '<span class="status-badge status-inactive">✗ OFFLINE</span>';
+      // Only update the "Actualizat" cell when the server provides an authoritative timestamp.
+      if (updatedCell && Object.prototype.hasOwnProperty.call(payload, 'updated_at') && payload.updated_at) {
+        updatedCell.innerHTML = '<small>' + new Date(payload.updated_at).toLocaleString('ro-RO', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit'}) + '</small>';
+      }
+    };
+  }
+  connect();
+})();
+</script>
