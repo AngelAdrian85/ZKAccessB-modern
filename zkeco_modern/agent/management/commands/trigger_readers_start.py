@@ -54,7 +54,25 @@ class Command(BaseCommand):
             from agent.models import Device, DeviceStatus
             qs = Device.objects.filter(scanner_type=name, scanner_linked=True)
             affected = list(qs.values_list('id', flat=True))
-            DeviceStatus.objects.filter(device__in=qs).update(online=True, door_state='', updated_at=timezone.now())
+            # Only update `updated_at` for devices whose online state actually
+            # changes (offline -> online). Do not create new DeviceStatus rows
+            # here to avoid stamping server start time into the DB.
+            for dev in qs:
+                try:
+                    ds = DeviceStatus.objects.filter(device=dev).first()
+                    if not ds:
+                        continue
+                    if not ds.online:
+                        ds.online = True
+                        ds.door_state = ''
+                        ds.updated_at = timezone.now()
+                        ds.save(update_fields=['online', 'door_state', 'updated_at'])
+                    else:
+                        if ds.door_state != '':
+                            ds.door_state = ''
+                            ds.save(update_fields=['door_state'])
+                except Exception:
+                    continue
             try:
                 from agent.ws import broadcast_device_status
             except Exception:

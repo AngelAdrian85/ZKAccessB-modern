@@ -162,7 +162,7 @@ if($serverReady){ Write-Host 'Server ready.' -ForegroundColor Green; Log 'Server
 Write-Host 'Starting tray agent GUI (auto backup interval=60m)' -ForegroundColor Cyan
 Log 'Starting tray agent GUI'
 try {
-    $trayProc = Start-Process -FilePath $PythonExe -ArgumentList '.\zkeco_modern\tray_agent.py',"--backup-interval=60","--set=server_port=$Port" -PassThru
+    $trayProc = Start-Process -FilePath $PythonExe -ArgumentList '.\zkeco_modern\manage.py','tray_agent','--backup-interval=60','--set=server_port=$Port' -PassThru
     Start-Sleep -Seconds 4
     if ($trayProc.HasExited) { Fail 'Tray agent exited immediately' } else { Log "Tray agent PID=$($trayProc.Id)" }
 } catch { Fail 'Tray agent GUI start failed' }
@@ -186,7 +186,7 @@ if (-not $trayProc -or $trayProc.HasExited) {
     Write-Host 'Initiating one-off headless backup' -ForegroundColor Cyan
     Log 'Headless backup start'
     try {
-        $hbOutput = & $PythonExe .\zkeco_modern\tray_agent.py --headless --auto --set=server_port=$Port 2>&1
+        $hbOutput = & $PythonExe .\zkeco_modern\manage.py tray_agent --headless --auto --set=server_port=$Port 2>&1
         $exitCode = $LASTEXITCODE
         $hbOutput | Tee-Object -FilePath $logFile -Append | Out-Null
         if ($exitCode -ne 0) { Fail "Headless backup non-zero exit $exitCode" } else { Log 'Headless backup completed successfully' }

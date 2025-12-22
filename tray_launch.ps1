@@ -251,22 +251,35 @@ if (Test-Path $manage) {
   Write-Host "[TRAY] Dry-run migration check (makemigrations --dry-run --check)"
   & $py $manage makemigrations --dry-run --check > $null 2> migration_dryrun_errors.log
   if ($LASTEXITCODE -ne 0) {
-    Write-Host "[TRAY] Model changes without migrations detected; creating migrations"
+    Write-Host "[TRAY] Model changes without migrations detected; attempting to create migrations"
     & $py $manage makemigrations 2>> migration_dryrun_errors.log
-    if ($LASTEXITCODE -ne 0) { Write-Error "[TRAY] makemigrations (post dry-run) failed"; exit 11 }
+    if ($LASTEXITCODE -ne 0) {
+      Write-Warning "[TRAY] makemigrations (post dry-run) failed; continuing startup without applying migrations. See migration_dryrun_errors.log"
+      Add-Content -Path migration_auto.log -Value ((Get-Date).ToString() + " makemigrations post-dryrun failed; startup continued")
+    } else {
+      Write-Host "[TRAY] makemigrations generated new migration files"
+    }
   } else {
     Write-Host "[TRAY] Dry-run OK (no new migrations needed)"
   }
   Write-Host "[TRAY] Verifying schema (migrate --check)"
   & $py $manage migrate --check > $null 2> migration_check_errors.log
   if ($LASTEXITCODE -ne 0) {
-    Write-Host "[TRAY] Pending migrations detected; applying"
+    Write-Host "[TRAY] Pending migrations detected; attempting to apply"
     & $py $manage makemigrations 2> migration_make_errors.log
-    if ($LASTEXITCODE -ne 0) { Write-Error "[TRAY] makemigrations failed"; exit 2 }
-    & $py $manage migrate 2> migration_run_errors.log
-    if ($LASTEXITCODE -ne 0) { Write-Error "[TRAY] migrate failed"; exit 3 }
-    Write-Host "[TRAY] Migrations applied successfully"
-    Add-Content -Path migration_auto.log -Value ((Get-Date).ToString() + " Applied migrations successfully")
+    if ($LASTEXITCODE -ne 0) {
+      Write-Warning "[TRAY] makemigrations failed; skipping automatic migration apply. See migration_make_errors.log"
+      Add-Content -Path migration_auto.log -Value ((Get-Date).ToString() + " makemigrations failed; skipped automatic apply")
+    } else {
+      & $py $manage migrate 2> migration_run_errors.log
+      if ($LASTEXITCODE -ne 0) {
+        Write-Warning "[TRAY] migrate failed; continuing startup. See migration_run_errors.log"
+        Add-Content -Path migration_auto.log -Value ((Get-Date).ToString() + " migrate failed; startup continued")
+      } else {
+        Write-Host "[TRAY] Migrations applied successfully"
+        Add-Content -Path migration_auto.log -Value ((Get-Date).ToString() + " Applied migrations successfully")
+      }
+    }
   }
   else {
     Write-Host "[TRAY] No pending migrations"
@@ -310,3 +323,4 @@ try {
   Set-Content -Path (Join-Path $PWD 'tray_status.json') -Value ($statusRun | ConvertTo-Json -Depth 3) -Encoding UTF8
 } catch {}
 & $py @('zkeco_modern/manage.py','tray_agent') @trayArgs
+ 

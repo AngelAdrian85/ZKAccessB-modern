@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "device_id": 1,
+    "device_name": null,
+    "serial": null,
+    "online": true,
+    "updated_at": "2025-12-19T05:55:32.664397+00:00"
+  },
+  {
+    "id": 2,
+    "device_id": 3,
+    "device_name": null,
+    "serial": null,
+    "online": false,
+    "updated_at": "2025-12-19T05:57:53+00:00"
+  },
+  {
+    "id": 3,
+    "device_id": 2,
+    "device_name": null,
+    "serial": null,
+    "online": true,
+    "updated_at": "2025-12-19T05:57:53+00:00"
+  }
+]

@@ -303,6 +303,15 @@ class ModernCommCenter(object):
                         self.state_store.update_device(session.device_id, online=True)
                     # Persist authoritative DeviceStatus and broadcast its updated_at
                     ua = None
+                    # Probe for real device activity (rtlog) before deciding to persist
+                    # a change in the DB. This prevents marking devices 'online' at
+                    # CommCenter start purely because the driver returned a connect
+                    # success; instead we require evidence (rtlog) that the device
+                    # is responsive.
+                    try:
+                        probe_lines = session.poll_rtlog()
+                    except Exception:
+                        probe_lines = []
                     try:
                         # Use apps.get_model to avoid module import/app registry inconsistencies
                         DeviceStatus = apps.get_model('agent', 'DeviceStatus')
@@ -315,10 +324,37 @@ class ModernCommCenter(object):
                                 # status rows and skip creation.
                                 obj = DeviceStatus.objects.filter(device_id=session.device_id).first()
                                 if obj:
-                                    obj.online = True
-                                    obj.door_state = ''
-                                    # Save to ensure auto_now updated_at is written when state changes
-                                    obj.save()
+                                    # Only persist when there's an actual state change.
+                                    prev_online = bool(obj.online)
+                                    changed = False
+                                    # Mark online only if we observed real activity from the device
+                                    # (probe_lines non-empty). This avoids writing the server
+                                    # start time into `updated_at` for devices that are not
+                                    # actually responsive at startup.
+                                    if not prev_online and probe_lines:
+                                        obj.online = True
+                                        changed = True
+                                    if obj.door_state != '':
+                                        obj.door_state = ''
+                                        changed = True
+                                    if changed:
+                                        # If this is a genuine transition from offline->online
+                                        # (we observed activity) then persist `updated_at`
+                                        # even if this is the first startup cycle. Otherwise,
+                                        # avoid stamping `updated_at` on the very first
+                                        # CommCenter cycle to prevent recording the server
+                                        # start time for devices that didn't actually
+                                        # change state.
+                                        should_persist_updated = False
+                                        if (not prev_online) and probe_lines:
+                                            should_persist_updated = True
+                                        elif getattr(self, 'cycles', 0) > 0:
+                                            should_persist_updated = True
+
+                                        if should_persist_updated:
+                                            obj.save(update_fields=['online', 'door_state', 'updated_at'])
+                                        else:
+                                            obj.save(update_fields=['online', 'door_state'])
                                     try:
                                         ua = getattr(obj, 'updated_at', None)
                                         if ua is not None:
@@ -336,15 +372,46 @@ class ModernCommCenter(object):
                         # apps.get_model may fail in weird import states; fall back to local timestamp
                         ua = None
 
-                    if not ua:
+                    # For the initial startup broadcast we want clients to show a fresh 'last seen'
+                    # timestamp so the dashboard UI updates immediately. Use the current time for
+                    # the broadcast, but do NOT persist this value to the DB unless a real
+                    # device state change occurred (handled above by obj.save()).
+                    # Prefer the persisted DB timestamp when present; only fall back to
+                    # current time for devices without any persisted `DeviceStatus`.
+                    if ua:
+                        ua_broadcast = ua
+                    else:
                         try:
-                            ua = timezone.now().isoformat()
+                            ua_broadcast = timezone.now().isoformat()
                         except Exception:
-                            ua = None
+                            ua_broadcast = None
 
                     try:
                         from agent.ws import broadcast_device_status
-                        broadcast_device_status(session.device_id, True, serial=session.sn, updated_at=ua)
+                        broadcast_device_status(session.device_id, True, serial=session.sn, updated_at=ua_broadcast)
+                        # Persist last broadcast timestamp to runtime file so WebSocket consumers
+                        # can show the most-recent 'last seen' value even if DB wasn't written.
+                        try:
+                            import json, os
+                            base = getattr(settings, 'BASE_DIR', os.getcwd())
+                            rt_dir = os.path.join(base, 'zkeco_modern', 'runtime_logs')
+                            os.makedirs(rt_dir, exist_ok=True)
+                            rt_file = os.path.join(rt_dir, 'last_status_broadcasts.json')
+                            data = {}
+                            if os.path.exists(rt_file):
+                                try:
+                                    with open(rt_file, 'r', encoding='utf-8') as fh:
+                                        data = json.load(fh) or {}
+                                except Exception:
+                                    data = {}
+                            data[str(session.device_id)] = ua_broadcast
+                            try:
+                                with open(rt_file, 'w', encoding='utf-8') as fh:
+                                    json.dump(data, fh)
+                            except Exception:
+                                pass
+                        except Exception:
+                            pass
                     except Exception as e:
                         try:
                             LOG.warning('broadcast_device_status import/call failed: %s', e)

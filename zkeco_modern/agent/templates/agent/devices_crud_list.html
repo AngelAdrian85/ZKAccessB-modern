@@ -1,4 +1,5 @@
 {% extends 'agent/base_legacy.html' %}
+{% load tz %}
 {% block title %}Dispozitive{% endblock %}
 {% block content %}
 <style>
@@ -85,20 +86,23 @@
   <td><span style="background: #cce5ff; padding: 2px 6px; border-radius: 3px; font-size: 11px;">{{ device.get_comm_mode_display }}</span></td>
   <td>{{ device.firmware_version|default:"—" }}</td>
   <td>{{ device.area_name|default:"—" }}</td>
-  <td>
-    {% with status=device.devicestatus_set.first %}
-      {% if status and status.online %}
+    <td>
+      {% if device.latest_online %}
         <span class="status-badge status-active">✓ ONLINE</span>
       {% else %}
         <span class="status-badge status-inactive">✗ OFFLINE</span>
       {% endif %}
-    {% endwith %}
-  </td>
-  <td>
-    {% with status=device.devicestatus_set.first %}
-      <small>{% if status and status.updated_at %}{{ status.updated_at|date:"d.m H:i:s" }}{% elif device.last_contact %}{{ device.last_contact|date:"d.m H:i:s" }}{% else %}—{% endif %}</small>
-    {% endwith %}
-  </td>
+    </td>
+    <td>
+      {% comment %}Expose ISO timestamp to client and format in browser local time like the Dashboard{% endcomment %}
+      {% if device.latest_updated_at %}
+        <small class="ts" data-ts="{{ device.latest_updated_at|date:'c' }}">{{ device.latest_updated_at|date:"d.m H:i:s" }}</small>
+      {% elif device.last_contact %}
+        <small class="ts" data-ts="{{ device.last_contact|date:'c' }}">{{ device.last_contact|date:"d.m H:i:s" }}</small>
+      {% else %}
+        <small>—</small>
+      {% endif %}
+    </td>
   <td><div class="action-buttons"><a href="{% url 'crud-device-edit' device.id %}" class="btn-edit">✏️ Edit</a><button class="btn-delete" onclick="if(confirm('Ești sigur?')) deleteDevice({{ device.id }});">🗑️ Șterge</button></div></td>
 </tr>
 {% endfor %}
@@ -166,6 +170,29 @@ function getCookie(name) {
   }
   return v;
 }
+</script>
+
+<script>
+// Format all elements with class `ts` using the browser local timezone so it
+// matches Dashboard client-side rendering. This avoids server timezone
+// mismatches (e.g., UTC vs local) when templates render datetimes.
+document.addEventListener('DOMContentLoaded', function(){
+  try{
+    document.querySelectorAll('.ts[data-ts]').forEach(function(el){
+      const s = el.getAttribute('data-ts');
+      if(!s) return;
+      const d = new Date(s);
+      if(isNaN(d)) return;
+      // format as 'dd.mm HH:MM'
+      const opts = { hour: '2-digit', minute: '2-digit', second: '2-digit' };
+      const time = d.toLocaleTimeString(undefined, opts);
+      // day.month
+      const day = ('0'+d.getDate()).slice(-2);
+      const month = ('0'+(d.getMonth()+1)).slice(-2);
+      el.textContent = `${day}.${month} ${time}`;
+    });
+  }catch(e){ console.log('ts format error', e); }
+});
 </script>
 
 <!-- Device Modal Form -->

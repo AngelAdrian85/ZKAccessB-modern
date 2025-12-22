@@ -337,13 +337,18 @@ def _set_device_online_flag(scanner: str, online: bool):
         vendor = getattr(connection, 'vendor', '')
         cur = connection.cursor()
         if vendor == 'sqlite':
+            # Update `updated_at` only for rows where the online flag actually
+            # changes (prevents stamping server start time for unchanged rows).
             sql = (f"UPDATE agent_devicestatus SET online={val}, updated_at=CURRENT_TIMESTAMP "
-                   f"WHERE device_id IN (SELECT id FROM agent_device WHERE scanner_type='{esc}' AND scanner_linked=1 AND enabled=1)")
+                   f"WHERE device_id IN (SELECT id FROM agent_device WHERE scanner_type='{esc}' AND scanner_linked=1 AND enabled=1) "
+                   f"AND online != {val}")
         else:
-            # For Postgres/MySQL, CURRENT_TIMESTAMP is supported; include updated_at update as well
+            # Postgres/MySQL: update only rows where online differs from the
+            # desired value so CURRENT_TIMESTAMP is applied only on transitions.
             sql = (f"UPDATE agent_devicestatus SET online = {val}, updated_at = CURRENT_TIMESTAMP FROM agent_device "
                    f"WHERE agent_devicestatus.device_id = agent_device.id "
-                   f"AND agent_device.scanner_type = '{esc}' AND agent_device.scanner_linked = true AND agent_device.enabled = true")
+                   f"AND agent_device.scanner_type = '{esc}' AND agent_device.scanner_linked = true AND agent_device.enabled = true "
+                   f"AND agent_devicestatus.online <> {val}")
         try:
             cur.execute(sql)
             try:

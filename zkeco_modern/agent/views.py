@@ -269,13 +269,15 @@ def readers_start(request: HttpRequest):
                     # no prior status known for this device; skip updating to avoid writing server-time
                     continue
                 # if device was previously offline, set updated_at; otherwise preserve historical timestamp
+                # Only record `updated_at` when the device actually changes
+                # state from offline -> online. If it's already online, do
+                # not overwrite the historical timestamp.
                 if not ds.online:
                     ds.online = True
                     ds.door_state = ''
                     ds.updated_at = timezone.now()
                     ds.save(update_fields=['online', 'door_state', 'updated_at'])
                 else:
-                    # keep existing updated_at, but ensure door_state is cleared
                     if ds.door_state != '':
                         ds.door_state = ''
                         ds.save(update_fields=['door_state'])
@@ -298,7 +300,6 @@ def readers_start(request: HttpRequest):
                         logging.getLogger(__name__).info('readers_start -> broadcasting device=%s online=%s updated_at=%s', did, True, ua)
                     except Exception:
                         pass
-                    # logging already emitted above; avoid noisy stdout prints in production
                     broadcast_device_status(did, True, updated_at=ua)
                 except Exception:
                     pass
@@ -363,7 +364,6 @@ def readers_stop(request: HttpRequest):
                         )
                     except Exception:
                         pass
-                    # logging already emitted above; avoid noisy stdout prints in production
                     broadcast_device_status(did, False, updated_at=ua)
                 except Exception:
                     pass
@@ -484,9 +484,15 @@ def devices_crud_list(request: HttpRequest):
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
     from .models import Device
-    # Prefetch DeviceStatus so template can show exact state update timestamps
-    # Related name defaults to 'devicestatus_set' (no explicit related_name in model)
-    qs = Device.objects.order_by('name').prefetch_related('devicestatus_set')
+    # Annotate each Device with the most-recent DeviceStatus (by updated_at)
+    # so templates display the authoritative, latest timestamp.
+    from django.db.models import OuterRef, Subquery
+    from .models import DeviceStatus as _DS
+    latest = _DS.objects.filter(device=OuterRef('pk')).order_by('-updated_at')
+    qs = Device.objects.order_by('name').annotate(
+        latest_online=Subquery(latest.values('online')[:1]),
+        latest_updated_at=Subquery(latest.values('updated_at')[:1])
+    )
     # Filter: all (default) | controllers | new | readers
     flt = (request.GET.get('filter') or 'all').strip().lower()
     if flt == 'controllers':
@@ -801,6 +807,11 @@ def access_dashboard(request: HttpRequest):
     recent_events = list(DeviceEventLog.objects.order_by('-created_at')[:5].values('created_at','code'))
     recent_commands = list(CommandLog.objects.order_by('-created_at')[:5].values('created_at','command','status'))
     # Live device/door status panel context
+    # For the dashboard page-render we use authoritative persisted values
+    # from the DB (`DeviceStatus.updated_at`). Do NOT use runtime broadcast
+    # timestamps for the initial page render; those are transient and reflect
+    # process restarts rather than real device state-changes.
+
     # Build live device status payload with categories (centrale / dispozitive / cititoare)
     device_statuses = []
     for ds in DeviceStatus.objects.select_related('device').all():
@@ -821,7 +832,9 @@ def access_dashboard(request: HttpRequest):
                 type_badge = dev.type_badge()
             except Exception:
                 type_badge = device_type
-        # Serialize `updated_at` as ISO string for client-side JSON script
+        # Serialize `updated_at` as ISO string for client-side JSON script.
+        # Prefer the runtime broadcast timestamp (if present) so a page refresh
+        # shows the same recent 'last seen' as WebSocket-connected clients.
         ua_iso = None
         try:
             ua_iso = ds.updated_at.isoformat() if ds.updated_at is not None else None

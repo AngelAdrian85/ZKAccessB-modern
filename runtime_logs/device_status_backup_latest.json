@@ -1,0 +1,32 @@
+﻿[
+{
+  "model": "agent.devicestatus",
+  "pk": 1,
+  "fields": {
+    "device": 1,
+    "online": true,
+    "door_state": "",
+    "updated_at": "2025-12-19T05:55:32.664Z"
+  }
+},
+{
+  "model": "agent.devicestatus",
+  "pk": 2,
+  "fields": {
+    "device": 3,
+    "online": false,
+    "door_state": "",
+    "updated_at": "2025-12-19T05:57:53Z"
+  }
+},
+{
+  "model": "agent.devicestatus",
+  "pk": 3,
+  "fields": {
+    "device": 2,
+    "online": true,
+    "door_state": "",
+    "updated_at": "2025-12-19T05:57:53Z"
+  }
+}
+]
