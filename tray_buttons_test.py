@@ -9,7 +9,7 @@ except Exception as e:
     print(json.dumps({'ok': False, 'stage': 'django.setup', 'error': str(e)}))
     raise
 
-from zkeco_modern.agent.management.commands import tray_agent as T
+from agent.management.commands import tray_agent as T
 
 results = {
     'ok': True,

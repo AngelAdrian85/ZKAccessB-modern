@@ -1,5 +1,117 @@
 <!DOCTYPE html>
 <html><head><title>Device Status Summary</title><meta charset="utf-8" />
+{% load tz %}
+<script>
+// Poll device status and update table rows only when online state changes.
+(() => {
+  const api = '/agent/api/status_summary/';
+  const pollInterval = 3000;
+  let lastState = {}; // device_id -> online
+
+  function formatLocal(iso) {
+    if (!iso) return '-';
+    try {
+      const d = new Date(iso);
+      if (isNaN(d)) return iso;
+      const y = d.getFullYear();
+      const mm = String(d.getMonth()+1).padStart(2,'0');
+      const dd = String(d.getDate()).padStart(2,'0');
+      const hh = String(d.getHours()).padStart(2,'0');
+      const mi = String(d.getMinutes()).padStart(2,'0');
+      const ss = String(d.getSeconds()).padStart(2,'0');
+      return `${y}-${mm}-${dd} ${hh}:${mi}:${ss}`;
+    } catch (e) { return iso; }
+  }
+
+  function applyUpdates(rows) {
+    for (const r of rows) {
+      const id = String(r.id);
+      const tr = document.querySelector(`tr[data-device-id="${id}"]`);
+      const prev = lastState[id];
+      if (prev === undefined) {
+        // initial population
+        lastState[id] = r.online ? 1 : 0;
+        if (tr) {
+          const onlineTd = tr.querySelector('.col-online');
+          const updTd = tr.querySelector('.col-updated');
+          if (onlineTd) onlineTd.innerHTML = r.online ? '<span class="online">ONLINE</span>' : '<span class="offline">OFFLINE</span>';
+          if (updTd) updTd.textContent = formatLocal(r.updated_at);
+        }
+        continue;
+      }
+      const nowState = r.online ? 1 : 0;
+      if (nowState !== prev) {
+        // status changed; update UI row
+        lastState[id] = nowState;
+        if (tr) {
+          const onlineTd = tr.querySelector('.col-online');
+          const updTd = tr.querySelector('.col-updated');
+          if (onlineTd) onlineTd.innerHTML = nowState ? '<span class="online">ONLINE</span>' : '<span class="offline">OFFLINE</span>';
+          if (updTd) updTd.textContent = formatLocal(r.updated_at);
+        }
+      } else {
+        // no state change; keep timestamp as-is (do not show system time)
+      }
+    }
+  }
+
+  async function poll() {
+    try {
+      const resp = await fetch(api, {credentials: 'same-origin'});
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (!data.ok) return;
+      applyUpdates(data.rows || []);
+    } catch (e) {
+      // ignore transient errors
+    } finally {
+      setTimeout(poll, pollInterval);
+    }
+  }
+
+  // Start polling after DOM ready
+  document.addEventListener('DOMContentLoaded', () => setTimeout(poll, 500));
+})();
+  
+  // WebSocket client for realtime device.status updates
+(function(){
+  const wsScheme = location.protocol === 'https:' ? 'wss' : 'ws';
+  const wsUrl = `${wsScheme}://${location.host}/ws/monitor/`;
+  try {
+    const sock = new WebSocket(wsUrl);
+    sock.addEventListener('open', ()=>{console.debug('status_summary: WS connected');});
+    sock.addEventListener('message', ev=>{
+      try{
+        const msg = JSON.parse(ev.data);
+        if (msg.type === 'device.status'){
+          const d = msg;
+          const id = String(d.device_id);
+          const tr = document.querySelector(`tr[data-device-id="${id}"]`);
+          const nowState = d.online ? 1 : 0;
+          // insert new row if missing
+          if (!tr){
+            const tbody = document.querySelector('tbody');
+            if (!tbody) return;
+            const newTr = document.createElement('tr');
+            newTr.setAttribute('data-device-id', id);
+            newTr.innerHTML = `<td>${id}</td><td>${(d.name||'')}</td><td>${(d.serial||'')}</td><td class="col-online">${d.online?'<span class="online">ONLINE</span>':'<span class="offline">OFFLINE</span>'}</td><td>${(d.door_state||'')}</td><td class="col-updated">${formatLocal(d.updated_at)}</td>`;
+            tbody.appendChild(newTr);
+            lastState[id] = nowState;
+            return;
+          }
+          // update online & timestamp (always update timestamp when receiving an event)
+          const onlineTd = tr.querySelector('.col-online');
+          const updTd = tr.querySelector('.col-updated');
+          if (onlineTd) onlineTd.innerHTML = nowState ? '<span class="online">ONLINE</span>' : '<span class="offline">OFFLINE</span>';
+          if (updTd) updTd.textContent = formatLocal(d.updated_at);
+          lastState[id] = nowState;
+        }
+      }catch(e){ /* ignore parse errors */ }
+    });
+    sock.addEventListener('close', ()=>console.debug('status_summary: WS closed'));
+  } catch(e) { /* ignore websocket init errors in old browsers */ }
+})();
+</script>
 <style>
 body{font-family:Arial;background:#f5f9fc;margin:0;color:#222;}
 header{background:#1e6bb8;color:#fff;padding:10px 16px;font-size:18px;}
@@ -29,13 +141,13 @@ tr:nth-child(even){background:#fafbfc;}
     <thead><tr><th>ID</th><th>Name</th><th>Serial</th><th>Online</th><th>Door State</th><th>Updated</th></tr></thead>
     <tbody>
       {% for r in rows %}
-      <tr>
+      <tr data-device-id="{{ r.id }}">
         <td>{{ r.id }}</td>
         <td>{{ r.name }}</td>
         <td>{{ r.serial }}</td>
-        <td>{% if r.online %}<span class="online">ONLINE{% else %}<span class="offline">OFFLINE{% endif %}</span></td>
+        <td class="col-online">{% if r.online %}<span class="online">ONLINE{% else %}<span class="offline">OFFLINE{% endif %}</span></td>
         <td>{{ r.door_state }}</td>
-        <td>{{ r.updated_at }}</td>
+        <td class="col-updated">{% if r.updated_at %}{{ r.updated_at|localtime|date:"Y-m-d H:i:s" }}{% else %}-{% endif %}</td>
       </tr>
       {% empty %}
       <tr><td colspan="6">No status records yet.</td></tr>

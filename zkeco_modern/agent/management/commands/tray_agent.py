@@ -36,6 +36,7 @@ _LAST_ICON_STATE = None  # (server_running, center_running)
 _LISTENER_PROCS = []  # ACP/Elatec listener processes started by tray agent
 _PID_FILE = Path.home() / 'zkeco_tray_agent.pid'
 _START_TS = time.time()
+_DB_ERR_LAST = {}
 
 DEFAULT_HOST = '0.0.0.0'
 DEFAULT_PORT = 8000
@@ -286,6 +287,14 @@ def _write_tray_status(acp_on: bool, elatec_on: bool, server_state: str, center_
             'elatec_enabled': elatec_enabled,
             'color': color,
         }
+        # Preserve blocked flags and other important UI-controlled keys from previous file
+        try:
+            for k, v in st_prev.items():
+                if k.endswith('_blocked') or k.startswith('cmd_'):
+                    # keep blocked flags and transient cmd_* flags if present
+                    data[k] = v
+        except Exception:
+            pass
         p = _tray_status_path()
         tmp = p.with_suffix('.tmp')
         tmp.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
@@ -297,6 +306,173 @@ def _write_tray_status(acp_on: bool, elatec_on: bool, server_state: str, center_
         tmp.replace(p)
     except Exception:
         pass
+
+def _update_tray_status_fields(updates: dict):
+    """Merge arbitrary fields into existing tray_status.json and write atomically."""
+    try:
+        st = _read_tray_status() or {}
+        for k, v in (updates or {}).items():
+            st[k] = v
+        p = _tray_status_path()
+        tmp = p.with_suffix('.tmp')
+        tmp.write_text(json.dumps(st, ensure_ascii=False), encoding='utf-8')
+        try:
+            if p.exists():
+                p.unlink()
+        except Exception:
+            pass
+        tmp.replace(p)
+    except Exception:
+        logging.exception('Failed to update tray_status fields')
+
+def _set_device_online_flag(scanner: str, online: bool):
+    """Safely set DeviceStatus.online for devices matching scanner type.
+    Tries ORM update first; falls back to direct SQL. Works for sqlite/mysql/postgres.
+    """
+    try:
+        from django.db import connection
+        val = 1 if online else 0
+        # Build a safe-ish SQL string inlined with integers and escaped scanner value
+        esc = str(scanner).replace("'", "''")
+        vendor = getattr(connection, 'vendor', '')
+        cur = connection.cursor()
+        if vendor == 'sqlite':
+            # Update `updated_at` only for rows where the online flag actually
+            # changes (prevents stamping server start time for unchanged rows).
+            sql = (f"UPDATE agent_devicestatus SET online={val}, updated_at=CURRENT_TIMESTAMP "
+                   f"WHERE device_id IN (SELECT id FROM agent_device WHERE scanner_type='{esc}' AND scanner_linked=1 AND enabled=1) "
+                   f"AND online != {val}")
+        else:
+            # Postgres/MySQL: update only rows where online differs from the
+            # desired value so CURRENT_TIMESTAMP is applied only on transitions.
+            sql = (f"UPDATE agent_devicestatus SET online = {val}, updated_at = CURRENT_TIMESTAMP FROM agent_device "
+                   f"WHERE agent_devicestatus.device_id = agent_device.id "
+                   f"AND agent_device.scanner_type = '{esc}' AND agent_device.scanner_linked = true AND agent_device.enabled = true "
+                   f"AND agent_devicestatus.online <> {val}")
+        try:
+            cur.execute(sql)
+            try:
+                connection.commit()
+            except Exception:
+                pass
+            logging.info('Set DeviceStatus.online=%s for scanner=%s (rows affected=%s)', val, scanner, getattr(cur, 'rowcount', 'unknown'))
+            # Broadcast status for affected devices via channels if available
+            try:
+                from channels.layers import get_channel_layer
+                from asgiref.sync import async_to_sync
+                # retrieve affected device ids and current door_state/serial
+                cur2 = connection.cursor()
+                if vendor == 'sqlite':
+                    sel = ("SELECT agent_device.id, agent_device.serial_number, agent_devicestatus.door_state, agent_devicestatus.online, agent_devicestatus.updated_at "
+                           "FROM agent_device JOIN agent_devicestatus ON agent_devicestatus.device_id = agent_device.id "
+                           f"WHERE agent_device.scanner_type = '{esc}' AND agent_device.scanner_linked=1 AND agent_device.enabled=1")
+                    cur2.execute(sel)
+                else:
+                    sel = ("SELECT agent_device.id, agent_device.serial_number, agent_devicestatus.door_state, agent_devicestatus.online, agent_devicestatus.updated_at "
+                           "FROM agent_device JOIN agent_devicestatus ON agent_devicestatus.device_id = agent_device.id "
+                           f"WHERE agent_device.scanner_type = '{esc}' AND agent_device.scanner_linked = true AND agent_device.enabled = true")
+                    cur2.execute(sel)
+                rows = cur2.fetchall() or []
+                try:
+                    from agent.ws import broadcast_device_status
+                    for did, serial, door_state, online_db, updated_at in rows:
+                            try:
+                                # Normalize updated_at to ISO string when possible
+                                ua = None
+                                try:
+                                    if updated_at is not None:
+                                        # sqlite may return string, others may return datetime
+                                        import datetime as _dt
+                                        if isinstance(updated_at, _dt.datetime):
+                                            ua = updated_at.isoformat()
+                                        else:
+                                            ua = str(updated_at)
+                                except Exception:
+                                    ua = None
+                                try:
+                                    import logging
+                                    logging.getLogger(__name__).info(
+                                        'tray_agent (management cmd) -> broadcasting device=%s online=%s updated_at=%s serial=%s',
+                                        did, bool(online_db), ua, serial
+                                    )
+                                except Exception:
+                                    pass
+                                try:
+                                    print('tray_agent (management cmd) -> broadcasting device=%s online=%s updated_at=%s serial=%s' % (did, bool(online_db), ua, serial), flush=True)
+                                except Exception:
+                                    pass
+                                broadcast_device_status(did, bool(online_db), door_state=door_state, serial=serial, updated_at=ua)
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
+            except Exception:
+                pass
+            return
+        except Exception as e:
+            # Throttle noisy DB errors to once per minute per scanner
+            try:
+                now = time.time()
+                last = _DB_ERR_LAST.get(scanner, 0)
+                if (now - last) > 60:
+                    logging.error('SQL update failed for DeviceStatus.online for %s: %s', scanner, e)
+                    _DB_ERR_LAST[scanner] = now
+            except Exception:
+                logging.error('SQL update failed for DeviceStatus.online for %s: %s', scanner, e)
+            return
+    except Exception as e:
+        logging.error('DB connection failed while setting DeviceStatus.online for %s: %s', scanner, e)
+        return
+
+def _remove_heartbeat(scanner: str):
+    try:
+        name = 'acp' if scanner == 'acp' else 'elatec'
+        hb = Path.home() / f'zkeco_reader_heartbeat_{name}.json'
+        if hb.exists():
+            try:
+                hb.unlink()
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+def _set_blocked(name: str, value: bool):
+    try:
+        st = _read_tray_status()
+        prev = bool(st.get(f'{name}_blocked', False))
+        val = bool(value)
+        if prev == val:
+            return
+        st[f'{name}_blocked'] = val
+        # when blocking, set a cmd_stop marker for other agents
+        if val:
+            st[f'cmd_stop_{name}'] = True
+        else:
+            # remove transient stop command when unblocking
+            if f'cmd_stop_{name}' in st:
+                st.pop(f'cmd_stop_{name}', None)
+        # If operator blocks a reader, ensure the enabled flag remains True
+        # unless the reader is explicitly disabled in scripts/card_readers.json
+        try:
+            if val:
+                cfg = _read_listeners_config()
+                cfg_entry = (cfg or {}).get(name) or {}
+                cfg_disabled = (cfg_entry.get('enabled') is False)
+                if not cfg_disabled:
+                    st[f'{name}_enabled' if name+'_'+'enabled' in st else f'{name}_enabled'] = True
+                else:
+                    # keep config-driven disabled state
+                    pass
+        except Exception:
+            pass
+        _update_tray_status_fields(st)
+        logging.info('%s_blocked set to %s', name, val)
+        try:
+            _recompute_status_once()
+        except Exception:
+            pass
+    except Exception:
+        logging.exception('Error setting blocked flag')
 
 def _read_first_error_from_log(max_bytes: int = 32768) -> str:
     """Return a concise last-error summary from server.log.
@@ -337,7 +513,7 @@ def _start_comm_center(poll_interval=1.5, driver='stub'):
     global _CENTER
     if _CENTER is not None:
         return _CENTER
-    from zkeco_modern.agent.modern_comm_center import build_and_run_stub
+    from agent.modern_comm_center import build_and_run_stub
     _CENTER = build_and_run_stub(poll_interval=poll_interval, driver=driver)
     return _CENTER
 
@@ -365,6 +541,14 @@ def _start_listener(name: str):
     """Start a single listener based on config: 'acp' or 'elatec'."""
     global _LISTENER_PROCS
     try:
+        # Respect explicit UI block flags to avoid unwanted auto-start
+        try:
+            st = _read_tray_status()
+            if st.get(f'{name}_blocked', False):
+                logging.info('Start suppressed for %s due to %s_blocked flag', name, name)
+                return
+        except Exception:
+            pass
         cfg = _read_listeners_config()
         base = Path(getattr(settings, 'BASE_DIR', Path.cwd()))
         py = sys.executable
@@ -377,6 +561,11 @@ def _start_listener(name: str):
                     cf = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
                     p = subprocess.Popen([py, script, port], cwd=str(base.parent), creationflags=cf)
                     _LISTENER_PROCS.append(p)
+                    try:
+                        # mark devices online for this scanner when listener started
+                        _set_device_online_flag(name, True)
+                    except Exception:
+                        pass
         elif name == 'elatec':
             el = cfg.get('elatec', {'enabled': True, 'port': 'COM3'})
             if el.get('enabled', True):
@@ -385,6 +574,7 @@ def _start_listener(name: str):
                     com = str(el.get('port', 'COM3'))
                     cf = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
                     p = subprocess.Popen([py, script, com], cwd=str(base.parent), creationflags=cf)
+                    logging.info('Starting listener process: %s %s', script, port if name=='acp' else com)
                     _LISTENER_PROCS.append(p)
     except Exception:
         pass
@@ -393,6 +583,7 @@ def _stop_listener(name: str):
     """Stop processes matching a listener script."""
     target = 'card_reader_acp.py' if name == 'acp' else 'card_reader_elatec.py'
     try:
+        logging.info('Stopping listener: %s', name)
         # Stop tracked ones
         global _LISTENER_PROCS
         keep = []
@@ -408,21 +599,54 @@ def _stop_listener(name: str):
             except Exception:
                 pass
         _LISTENER_PROCS = keep
-        # Kill any OS processes by script name
-        subprocess.run(['powershell','-ExecutionPolicy','Bypass','-Command', f"Get-CimInstance Win32_Process | Where-Object {{ $_.CommandLine -like '*{target}*' }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force }}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # Kill any OS processes by script name, retrying if they reappear
+        try:
+            attempts = 3
+            remaining = None
+            for attempt in range(attempts):
+                out = subprocess.run(['powershell','-ExecutionPolicy','Bypass','-Command', f"Get-CimInstance Win32_Process | Where-Object {{ $_.CommandLine -like '*{target}*' }} | Select-Object -ExpandProperty ProcessId"], capture_output=True, text=True)
+                pids = [l.strip() for l in (out.stdout or '').splitlines() if l.strip()]
+                if not pids:
+                    remaining = []
+                    break
+                logging.warning('Processes still present for %s after stop (attempt %d): %s. Attempting forced kill.', target, attempt + 1, pids)
+                for pid in pids:
+                    try:
+                        subprocess.run(['taskkill','/F','/PID', pid, '/T'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    except Exception:
+                        pass
+                time.sleep(0.5 + attempt * 0.2)
+            # final check
+            out = subprocess.run(['powershell','-ExecutionPolicy','Bypass','-Command', f"Get-CimInstance Win32_Process | Where-Object {{ $_.CommandLine -like '*{target}*' }} | Select-Object -ExpandProperty ProcessId"], capture_output=True, text=True)
+            remaining = [l.strip() for l in (out.stdout or '').splitlines() if l.strip()]
+            if remaining:
+                logging.warning('Processes still present for %s after final stop attempts: %s', target, remaining)
+        except Exception:
+            pass
+        # Ensure heartbeat file removed and DB set to offline for this scanner
+        try:
+            _remove_heartbeat(name)
+        except Exception:
+            pass
+        try:
+            _set_device_online_flag(name, False)
+        except Exception:
+            pass
     except Exception:
         pass
 
 def _start_listeners():
     global _LISTENER_PROCS
     try:
+        # If UI or tray explicitly blocked a listener, do not start it here
+        st = _read_tray_status()
         cfg = _read_listeners_config()
         base = Path(getattr(settings, 'BASE_DIR', Path.cwd()))
         py = sys.executable
         # ACP
         try:
             acp = cfg.get('acp', {'enabled': True, 'port': 9001})
-            if acp.get('enabled', True):
+            if acp.get('enabled', True) and not bool(st.get('acp_blocked', False)):
                 script = str(base.parent / 'scripts' / 'card_reader_acp.py')
                 if Path(script).exists():
                     port = str(acp.get('port', 9001))
@@ -434,7 +658,7 @@ def _start_listeners():
         # Elatec
         try:
             el = cfg.get('elatec', {'enabled': True, 'port': 'COM3'})
-            if el.get('enabled', True):
+            if el.get('enabled', True) and not bool(st.get('elatec_blocked', False)):
                 script = str(base.parent / 'scripts' / 'card_reader_elatec.py')
                 if Path(script).exists():
                     com = str(el.get('port', 'COM3'))
@@ -925,15 +1149,18 @@ def _build_menu(icon, host, port):
             pystray.MenuItem('ACP: Disable', lambda: _run_toggle('acp','disable')),
             pystray.MenuItem('ACP: Set Port', lambda: (lambda v=_prompt_value('ACP Port','9001'): _run_toggle('acp','set', v))()),
             pystray.MenuItem('ACP: Start', lambda: threading.Thread(target=lambda: (_start_listener('acp'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
-            pystray.MenuItem('ACP: Stop', lambda: threading.Thread(target=lambda: (_stop_listener('acp'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
-            pystray.MenuItem('ACP: Restart', lambda: threading.Thread(target=lambda: (_stop_listener('acp'), time.sleep(1), _start_listener('acp'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
+            pystray.MenuItem('ACP: Stop', lambda: threading.Thread(target=lambda: (_set_blocked('acp', True), _stop_listener('acp'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
+            pystray.MenuItem('ACP: Restart', lambda: threading.Thread(target=lambda: (_set_blocked('acp', True), _stop_listener('acp'), time.sleep(1), _set_blocked('acp', False), _start_listener('acp'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
             pystray.MenuItem('---', pystray.Menu()),
             pystray.MenuItem('Elatec: Enable', lambda: _run_toggle('elatec','enable')),
             pystray.MenuItem('Elatec: Disable', lambda: _run_toggle('elatec','disable')),
             pystray.MenuItem('Elatec: Set COM', lambda: (lambda v=_prompt_value('Elatec COM','COM3'): _run_toggle('elatec','set', v))()),
             pystray.MenuItem('Elatec: Start', lambda: threading.Thread(target=lambda: (_start_listener('elatec'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
-            pystray.MenuItem('Elatec: Stop', lambda: threading.Thread(target=lambda: (_stop_listener('elatec'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
-            pystray.MenuItem('Elatec: Restart', lambda: threading.Thread(target=lambda: (_stop_listener('elatec'), time.sleep(1), _start_listener('elatec'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
+            pystray.MenuItem('Elatec: Stop', lambda: threading.Thread(target=lambda: (_set_blocked('elatec', True), _stop_listener('elatec'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
+            pystray.MenuItem('Elatec: Restart', lambda: threading.Thread(target=lambda: (_set_blocked('elatec', True), _stop_listener('elatec'), time.sleep(1), _set_blocked('elatec', False), _start_listener('elatec'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
+            pystray.MenuItem('---', pystray.Menu()),
+            pystray.MenuItem('ACP: Unblock', lambda: threading.Thread(target=lambda: (_set_blocked('acp', False), time.sleep(0.2), _recompute_status_once()), daemon=True).start()),
+            pystray.MenuItem('Elatec: Unblock', lambda: threading.Thread(target=lambda: (_set_blocked('elatec', False), time.sleep(0.2), _recompute_status_once()), daemon=True).start()),
         )
 
     def _recompute_status_once():
@@ -950,12 +1177,22 @@ def _build_menu(icon, host, port):
             st = _read_tray_status()
             acp_en = bool(st.get('acp_enabled', True))
             el_en = bool(st.get('elatec_enabled', True))
+            acp_blocked = bool(st.get('acp_blocked', False))
+            el_blocked = bool(st.get('elatec_blocked', False))
             _write_tray_status(acp_live, el_live, ('PORNIT' if srv else 'OPRIT'), cen)
-            # Nudge icon tooltip immediately
+            # Nudge icon tooltip immediately; blocked takes precedence over disabled
             if icon is not None:
                 tip = []
-                tip.append('ACP:' + ('ON' if acp_live else ('OPRIT' if acp_en else 'DISABLED')))
-                tip.append('Elatec:' + ('ON' if el_live else ('OPRIT' if el_en else 'DISABLED')))
+                def _reader_label(live, blocked, enabled):
+                    if live:
+                        return 'ON'
+                    if blocked:
+                        return 'OPRIT'
+                    if not enabled:
+                        return 'DISABLED'
+                    return 'OPRIT'
+                tip.append('ACP:' + _reader_label(acp_live, acp_blocked, acp_en))
+                tip.append('Elatec:' + _reader_label(el_live, el_blocked, el_en))
                 tip.append('Server:' + ('PORNIT' if srv else 'OPRIT'))
                 tip.append('CommCenter:' + ('PORNIT' if cen else 'OPRIT'))
                 tip.append(f'Licență:{_license_status()}')
@@ -970,8 +1207,8 @@ def _build_menu(icon, host, port):
         pystray.MenuItem('CommCenter', commcenter_menu),
         pystray.MenuItem('Card Readers', _card_readers_menu()),
         pystray.MenuItem('---', pystray.Menu()),  # Separator
-        pystray.MenuItem('Stop All Services', lambda: threading.Thread(target=lambda: (_stop_server(), _stop_comm_center(), _stop_listeners(), time.sleep(0.2), _recompute_status_once()), daemon=True).start()),
-        pystray.MenuItem('Start All Services', lambda: threading.Thread(target=lambda: (_start_server(host=host, port=port, asgi=True), _start_comm_center(), _start_listeners(), time.sleep(0.4), _recompute_status_once()), daemon=True).start()),
+        pystray.MenuItem('Stop All Services', lambda: threading.Thread(target=lambda: (_set_blocked('acp', True), _set_blocked('elatec', True), _stop_server(), _stop_comm_center(), _stop_listeners(), time.sleep(0.2), _recompute_status_once()), daemon=True).start()),
+        pystray.MenuItem('Start All Services', lambda: threading.Thread(target=lambda: (_update_tray_status_fields({'acp_enabled': True, 'elatec_enabled': True, 'cmd_start_acp': True, 'cmd_start_elatec': True}), _set_blocked('acp', False), _set_blocked('elatec', False), _start_server(host=host, port=port, asgi=True), _start_comm_center(), _start_listeners(), time.sleep(0.4), _recompute_status_once()), daemon=True).start()),
         pystray.MenuItem('---', pystray.Menu()),  # Separator
         pystray.MenuItem('Ajutor (RO)', lambda: threading.Thread(target=_show_help_ro, daemon=True).start()),
         pystray.MenuItem('Admin Menu', legacy_menu),
@@ -1128,6 +1365,19 @@ class Command(BaseCommand):
                     # Live reader state from processes (ground truth)
                     acp_live = _listener_running('acp')
                     el_live = _listener_running('elatec')
+                    # Respect explicit UI blocked flags immediately
+                    try:
+                        if st.get('acp_blocked', False):
+                            acp_live = False
+                            acp_reason = 'blocked'
+                        if st.get('elatec_blocked', False):
+                            el_live = False
+                            el_reason = 'blocked'
+                    except Exception:
+                        pass
+                    # record initial source reasons
+                    acp_reason = 'process' if acp_live else 'none'
+                    el_reason = 'process' if el_live else 'none'
                     any_running = (server_running or center_running or acp_live or el_live)
                     tip = []
                     # Reader status summaries from JSON if present; fall back to config hints
@@ -1206,18 +1456,83 @@ class Command(BaseCommand):
                                         pass
                                 except Exception:
                                     pass
+                            # After command handling, ensure DB reflects current live flags
+                            try:
+                                _set_device_online_flag('acp', bool(acp_live))
+                            except Exception:
+                                pass
+                            try:
+                                _set_device_online_flag('elatec', bool(el_live))
+                            except Exception:
+                                pass
                         except Exception:
                             pass
 
+                        # For virtual-mode readers, prefer DB DeviceStatus or heartbeat as liveness signals
+                        try:
+                            if (not el_live):
+                                try:
+                                    cfg = _read_listeners_config()
+                                    el_cfg = (cfg or {}).get('elatec') or {}
+                                    el_mode = str(el_cfg.get('mode','')).lower()
+                                    if el_mode == 'virtual':
+                                        try:
+                                            # Use raw SQL to check DeviceStatus.online to avoid Django app/model import
+                                            from django.db import connection
+                                            vendor = getattr(connection, 'vendor', '')
+                                            cur = connection.cursor()
+                                            if vendor == 'sqlite':
+                                                sql = ("SELECT 1 FROM agent_devicestatus JOIN agent_device ON agent_devicestatus.device_id=agent_device.id "
+                                                       "WHERE agent_device.scanner_type=? AND agent_device.scanner_linked=1 AND agent_device.enabled=1 AND agent_devicestatus.online=1 LIMIT 1")
+                                                params = ( 'elatec', )
+                                            else:
+                                                sql = ("SELECT 1 FROM agent_devicestatus JOIN agent_device ON agent_devicestatus.device_id=agent_device.id "
+                                                       "WHERE agent_device.scanner_type=%s AND agent_device.scanner_linked = true AND agent_device.enabled = true AND agent_devicestatus.online = 1 LIMIT 1")
+                                                params = ( 'elatec', )
+                                            try:
+                                                cur.execute(sql, params)
+                                                row = cur.fetchone()
+                                                has_online = bool(row)
+                                            except Exception as _e:
+                                                # Avoid continuous noisy logs; log the first error and then throttle
+                                                logging.debug('SQL check for DeviceStatus.online failed for elatec: %s', _e)
+                                                has_online = False
+                                            if has_online:
+                                                el_live = True
+                                                el_reason = 'db'
+                                                logging.info('Elatec virtual: treated as live due to DeviceStatus.online')
+                                            else:
+                                                hb = Path.home() / 'zkeco_reader_heartbeat_elatec.json'
+                                                if hb.exists():
+                                                    try:
+                                                        data = json.loads(hb.read_text(encoding='utf-8'))
+                                                        ts = float(data.get('ts') or 0)
+                                                        if (time.time() - ts) <= max(15.0, 5.0):
+                                                            el_live = True
+                                                            el_reason = 'heartbeat'
+                                                            logging.info('Elatec virtual: treated as live due to recent heartbeat')
+                                                    except Exception:
+                                                        pass
+                                        except Exception:
+                                            pass
+                                except Exception:
+                                    pass
+                        except Exception:
+                            pass
+                        # Log decision path for readers each loop (concise)
+                        try:
+                            logging.info('Reader decision: ACP live=%s reason=%s ; Elatec live=%s reason=%s', acp_live, acp_reason, el_live, el_reason)
+                        except Exception:
+                            pass
                         # Auto-restart listeners if enabled but not live (skip if user requested stop)
                         try:
-                            if acp_en and not acp_live and not bool(st.get('cmd_stop_acp')):
+                            if acp_en and not acp_live and not bool(st.get('cmd_stop_acp')) and not bool(st.get('acp_blocked', False)):
                                 logging.info('ACP listener down; attempting auto-restart')
                                 _start_listener('acp')
                                 time.sleep(0.2)
                                 acp_live = _listener_running('acp')
                             # Elatec only if enabled AND COM present (skip if user requested stop)
-                            if el_en and com_present and not el_live and not bool(st.get('cmd_stop_elatec')):
+                            if el_en and com_present and not el_live and not bool(st.get('cmd_stop_elatec')) and not bool(st.get('elatec_blocked', False)):
                                 logging.info('Elatec listener down; attempting auto-restart')
                                 _start_listener('elatec')
                                 time.sleep(0.2)
@@ -1234,8 +1549,18 @@ class Command(BaseCommand):
                                 return None
                         acp_age = _hb_age(str(Path.home() / 'zkeco_reader_heartbeat_acp.json'))
                         el_age = _hb_age(str(Path.home() / 'zkeco_reader_heartbeat_elatec.json'))
-                        tip.append('ACP:' + ('ON' if acp_live else ('OPRIT' if acp_en else 'DISABLED')))
-                        tip.append('Elatec:' + ('ON' if el_live else ('OPRIT' if el_en else 'DISABLED')))
+                        acp_blocked = bool(st.get('acp_blocked', False))
+                        el_blocked = bool(st.get('elatec_blocked', False))
+                        def _reader_label2(live, blocked, enabled):
+                            if live:
+                                return 'ON'
+                            if blocked:
+                                return 'OPRIT'
+                            if not enabled:
+                                return 'DISABLED'
+                            return 'OPRIT'
+                        tip.append('ACP:' + _reader_label2(acp_live, acp_blocked, acp_en))
+                        tip.append('Elatec:' + _reader_label2(el_live, el_blocked, el_en))
                         if acp_age is not None:
                             tip.append(f"ACP HB:{acp_age}s")
                         if el_age is not None:

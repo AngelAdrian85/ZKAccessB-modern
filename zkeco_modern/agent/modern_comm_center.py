@@ -35,7 +35,8 @@ from typing import Any, Dict, List, Optional, Protocol, Tuple, Callable
 
 from django.conf import settings
 from django.utils import timezone
-from django.db import transaction
+from django.db import transaction, IntegrityError
+from django.apps import apps
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from .event_codes import describe as describe_event_code
@@ -45,10 +46,17 @@ try:  # Redis optional
 except Exception:  # pragma: no cover
     redis = None
 
+# Prefer the current app Device model; fallback to legacy_models if present
+Device = None
 try:
-    from legacy_models.models import Device  # fallback shim
-except Exception:  # pragma: no cover
-    Device = None  # type: ignore
+    from agent.models import Device as DeviceModel  # type: ignore
+    Device = DeviceModel
+except Exception:
+    try:
+        from legacy_models.models import Device as LegacyDevice  # type: ignore
+        Device = LegacyDevice
+    except Exception:
+        Device = None
 
 LOG = logging.getLogger("modern_comm_center")
 
@@ -293,7 +301,131 @@ class ModernCommCenter(object):
                 if session.connect():
                     if self.state_store:
                         self.state_store.update_device(session.device_id, online=True)
-                    self._publish_event({"type": "device.online", "device_id": session.device_id, "sn": session.sn})
+                    # Persist authoritative DeviceStatus and broadcast its updated_at
+                    ua = None
+                    # Probe for real device activity (rtlog) before deciding to persist
+                    # a change in the DB. This prevents marking devices 'online' at
+                    # CommCenter start purely because the driver returned a connect
+                    # success; instead we require evidence (rtlog) that the device
+                    # is responsive.
+                    try:
+                        probe_lines = session.poll_rtlog()
+                    except Exception:
+                        probe_lines = []
+                    try:
+                        # Use apps.get_model to avoid module import/app registry inconsistencies
+                        DeviceStatus = apps.get_model('agent', 'DeviceStatus')
+                        # Update or create status row for this device
+                        try:
+                            with transaction.atomic():
+                                # Do NOT create DeviceStatus rows on commcenter startup. Creating here
+                                # records the commcenter/server start time in `updated_at`, which can
+                                # be mistaken for a real device state-change. Only update existing
+                                # status rows and skip creation.
+                                obj = DeviceStatus.objects.filter(device_id=session.device_id).first()
+                                if obj:
+                                    # Only persist when there's an actual state change.
+                                    prev_online = bool(obj.online)
+                                    changed = False
+                                    # Mark online only if we observed real activity from the device
+                                    # (probe_lines non-empty). This avoids writing the server
+                                    # start time into `updated_at` for devices that are not
+                                    # actually responsive at startup.
+                                    if not prev_online and probe_lines:
+                                        obj.online = True
+                                        changed = True
+                                    if obj.door_state != '':
+                                        obj.door_state = ''
+                                        changed = True
+                                    if changed:
+                                        # If this is a genuine transition from offline->online
+                                        # (we observed activity) then persist `updated_at`
+                                        # even if this is the first startup cycle. Otherwise,
+                                        # avoid stamping `updated_at` on the very first
+                                        # CommCenter cycle to prevent recording the server
+                                        # start time for devices that didn't actually
+                                        # change state.
+                                        should_persist_updated = False
+                                        if (not prev_online) and probe_lines:
+                                            should_persist_updated = True
+                                        elif getattr(self, 'cycles', 0) > 0:
+                                            should_persist_updated = True
+
+                                        if should_persist_updated:
+                                            obj.save(update_fields=['online', 'door_state', 'updated_at'])
+                                        else:
+                                            obj.save(update_fields=['online', 'door_state'])
+                                    try:
+                                        ua = getattr(obj, 'updated_at', None)
+                                        if ua is not None:
+                                            ua = ua.isoformat() if hasattr(ua, 'isoformat') else str(ua)
+                                    except Exception:
+                                        ua = None
+                                else:
+                                    # No prior status known for this device; skip creating a new row
+                                    ua = None
+                        except IntegrityError as e:
+                            LOG.warning('DeviceStatus persist IntegrityError device=%s: %s', session.device_id, e)
+                        except Exception as e:
+                            LOG.warning('DeviceStatus persist failed device=%s: %s', session.device_id, e)
+                    except Exception:
+                        # apps.get_model may fail in weird import states; fall back to local timestamp
+                        ua = None
+
+                    # For the initial startup broadcast we want clients to show a fresh 'last seen'
+                    # timestamp so the dashboard UI updates immediately. Use the current time for
+                    # the broadcast, but do NOT persist this value to the DB unless a real
+                    # device state change occurred (handled above by obj.save()).
+                    # Prefer the persisted DB timestamp when present; only fall back to
+                    # current time for devices without any persisted `DeviceStatus`.
+                    if ua:
+                        ua_broadcast = ua
+                    else:
+                        try:
+                            ua_broadcast = timezone.now().isoformat()
+                        except Exception:
+                            ua_broadcast = None
+
+                    try:
+                        from agent.ws import broadcast_device_status
+                        broadcast_device_status(session.device_id, True, serial=session.sn, updated_at=ua_broadcast)
+                        # Persist last broadcast timestamp to runtime file so WebSocket consumers
+                        # can show the most-recent 'last seen' value even if DB wasn't written.
+                        try:
+                            import json, os
+                            base = getattr(settings, 'BASE_DIR', os.getcwd())
+                            rt_dir = os.path.join(base, 'zkeco_modern', 'runtime_logs')
+                            os.makedirs(rt_dir, exist_ok=True)
+                            rt_file = os.path.join(rt_dir, 'last_status_broadcasts.json')
+                            data = {}
+                            if os.path.exists(rt_file):
+                                try:
+                                    with open(rt_file, 'r', encoding='utf-8') as fh:
+                                        data = json.load(fh) or {}
+                                except Exception:
+                                    data = {}
+                            data[str(session.device_id)] = ua_broadcast
+                            try:
+                                with open(rt_file, 'w', encoding='utf-8') as fh:
+                                    json.dump(data, fh)
+                            except Exception:
+                                pass
+                        except Exception:
+                            pass
+                    except Exception as e:
+                        try:
+                            LOG.warning('broadcast_device_status import/call failed: %s', e)
+                        except Exception:
+                            pass
+                        try:
+                            print('broadcast_device_status import/call failed:', e, flush=True)
+                        except Exception:
+                            pass
+                        # Fallback: publish simple device.online event (include updated_at if available)
+                        payload = {"type": "device.online", "device_id": session.device_id, "sn": session.sn}
+                        if ua:
+                            payload["updated_at"] = ua
+                        self._publish_event(payload)
 
     # ------------------------------------------------------------------
     # Command handling
@@ -409,7 +541,7 @@ class ModernCommCenter(object):
     # ------------------------------------------------------------------
     def _persist_rtlog(self, session: DeviceSession, lines: List[str]) -> None:
         try:
-            from zkeco_modern.agent import models  # fully-qualified to avoid app_label mismatch
+            from agent import models  # normalized import to match INSTALLED_APPS
             objs = [
                 models.DeviceRealtimeLog(
                     device_id=session.device_id,
@@ -429,7 +561,7 @@ class ModernCommCenter(object):
 
     def _persist_event_logs(self, session: DeviceSession, lines: List[str]) -> None:
         try:
-            from zkeco_modern.agent import models
+            from agent import models
             objs = []
             for raw in lines:
                 parts = raw.split(',')
@@ -455,6 +587,11 @@ class ModernCommCenter(object):
         if not self._channel_layer:
             return
         try:
+            try:
+                LOG.info('ModernCommCenter._publish_event -> monitor payload=%s', payload)
+            except Exception:
+                pass
+            # Avoid stdout fallback; structured logging above is sufficient
             async_to_sync(self._channel_layer.group_send)(
                 "monitor", {"type": "monitor_event", "payload": payload}
             )

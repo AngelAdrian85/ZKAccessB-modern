@@ -11,7 +11,7 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'zkeco_config.settings')
 django.setup()
 
 from datetime import date
-from zkeco_modern.agent.models import Employee, AccessLevel, EmployeeCard
+from agent.models import Employee, AccessLevel, EmployeeCard
 
 # Creează sau obține departament
 try:

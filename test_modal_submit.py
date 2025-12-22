@@ -129,7 +129,7 @@ if response.status_code == 200:
             print(f"  Nume: {data.get('name')}")
             
             # Verifică în baza de date
-            from zkeco_modern.agent.models import Employee
+            from agent.models import Employee
             emp = Employee.objects.get(id=data['id'])
             print(f"\n✓ Verificare baza de date:")
             print(f"  Nume complet: {emp.first_name} {emp.last_name}")

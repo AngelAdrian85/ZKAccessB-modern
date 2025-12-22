@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'zkeco_modern'))
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'zkeco_config.settings')
 django.setup()
 
-from zkeco_modern.agent.models import AccessLevel, Door, Device
+from agent.models import AccessLevel, Door, Device
 
 print("Creez date de test pentru Access Levels...")
 

@@ -2,7 +2,7 @@ import django
 import os
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mysite.settings')
 django.setup()
-from zkeco_modern.agent.models import AccessLevel
+from agent.models import AccessLevel
 levels = AccessLevel.objects.all()
 if not levels:
     print('Nu există niciun nivel de acces în baza de date.')

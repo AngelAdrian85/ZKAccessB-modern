@@ -145,6 +145,12 @@ try {
   # Optional config: scripts/card_readers.json
   $readerCfgPath = Join-Path 'scripts' 'card_readers.json'
   $ReaderCfg = $null
+  # Read existing tray_status.json to respect UI blocked flags
+  $trayStatusPath = Join-Path $PWD 'tray_status.json'
+  $trayStatus = $null
+  if (Test-Path $trayStatusPath) {
+    try { $trayStatus = Get-Content $trayStatusPath -Raw | ConvertFrom-Json } catch {}
+  }
   if (Test-Path $readerCfgPath) {
     try { $ReaderCfg = Get-Content $readerCfgPath -Raw | ConvertFrom-Json } catch {}
   }
@@ -158,6 +164,8 @@ try {
     }
     if ($acpEnabled) {
       Write-Host "[TRAY] Starting ACP listener on port $acpPort"
+      # Respect UI block flag if present
+      if ($trayStatus -and $trayStatus.acp_blocked -eq $true) { Write-Host "[TRAY] ACP start suppressed: acp_blocked flag set"; $acpEnabled = $false } 
       $p = Start-Process -FilePath $py -ArgumentList $acpScript, $acpPort -PassThru -WindowStyle Hidden
       if ($p) { $global:TrayChildPids += $p.Id }
     } else {
@@ -195,6 +203,8 @@ try {
       } else {
         Write-Host "[TRAY] Starting Elatec serial listener on $elatecPort"
       }
+      # Respect UI block flag if present
+      if ($trayStatus -and $trayStatus.elatec_blocked -eq $true) { Write-Host "[TRAY] Elatec start suppressed: elatec_blocked flag set"; $elatecEnabled = $false }
       try {
         $p2 = Start-Process -FilePath $py -ArgumentList $elatecScript, $elatecPort -PassThru -WindowStyle Hidden
         if ($p2) { $global:TrayChildPids += $p2.Id }
@@ -224,6 +234,13 @@ try {
   $allReadersOk = (($statusInit.acp_enabled -eq $false) -or ($statusInit.acp -eq 'ON')) -and (($statusInit.elatec_enabled -eq $false) -or ($statusInit.elatec -eq 'ON'))
   $colorInit = if(($statusInit.server -eq 'PORNIT') -and $allReadersOk){ 'green' } elseif(($statusInit.server -eq 'PORNIT') -or $allReadersOk){ 'yellow' } else { 'red' }
   $statusInit.color = $colorInit
+  # Preserve any existing blocked flags so UI STOP isn't clobbered
+  if ($trayStatus) {
+    if ($trayStatus.acp_blocked -eq $true) { $statusInit.acp_blocked = $true }
+    if ($trayStatus.elatec_blocked -eq $true) { $statusInit.elatec_blocked = $true }
+    if ($trayStatus.cmd_stop_acp -ne $null) { $statusInit.cmd_stop_acp = $trayStatus.cmd_stop_acp }
+    if ($trayStatus.cmd_stop_elatec -ne $null) { $statusInit.cmd_stop_elatec = $trayStatus.cmd_stop_elatec }
+  }
   Set-Content -Path (Join-Path $PWD 'tray_status.json') -Value ($statusInit | ConvertTo-Json -Depth 3) -Encoding UTF8
 } catch {}
 
@@ -234,22 +251,35 @@ if (Test-Path $manage) {
   Write-Host "[TRAY] Dry-run migration check (makemigrations --dry-run --check)"
   & $py $manage makemigrations --dry-run --check > $null 2> migration_dryrun_errors.log
   if ($LASTEXITCODE -ne 0) {
-    Write-Host "[TRAY] Model changes without migrations detected; creating migrations"
+    Write-Host "[TRAY] Model changes without migrations detected; attempting to create migrations"
     & $py $manage makemigrations 2>> migration_dryrun_errors.log
-    if ($LASTEXITCODE -ne 0) { Write-Error "[TRAY] makemigrations (post dry-run) failed"; exit 11 }
+    if ($LASTEXITCODE -ne 0) {
+      Write-Warning "[TRAY] makemigrations (post dry-run) failed; continuing startup without applying migrations. See migration_dryrun_errors.log"
+      Add-Content -Path migration_auto.log -Value ((Get-Date).ToString() + " makemigrations post-dryrun failed; startup continued")
+    } else {
+      Write-Host "[TRAY] makemigrations generated new migration files"
+    }
   } else {
     Write-Host "[TRAY] Dry-run OK (no new migrations needed)"
   }
   Write-Host "[TRAY] Verifying schema (migrate --check)"
   & $py $manage migrate --check > $null 2> migration_check_errors.log
   if ($LASTEXITCODE -ne 0) {
-    Write-Host "[TRAY] Pending migrations detected; applying"
+    Write-Host "[TRAY] Pending migrations detected; attempting to apply"
     & $py $manage makemigrations 2> migration_make_errors.log
-    if ($LASTEXITCODE -ne 0) { Write-Error "[TRAY] makemigrations failed"; exit 2 }
-    & $py $manage migrate 2> migration_run_errors.log
-    if ($LASTEXITCODE -ne 0) { Write-Error "[TRAY] migrate failed"; exit 3 }
-    Write-Host "[TRAY] Migrations applied successfully"
-    Add-Content -Path migration_auto.log -Value ((Get-Date).ToString() + " Applied migrations successfully")
+    if ($LASTEXITCODE -ne 0) {
+      Write-Warning "[TRAY] makemigrations failed; skipping automatic migration apply. See migration_make_errors.log"
+      Add-Content -Path migration_auto.log -Value ((Get-Date).ToString() + " makemigrations failed; skipped automatic apply")
+    } else {
+      & $py $manage migrate 2> migration_run_errors.log
+      if ($LASTEXITCODE -ne 0) {
+        Write-Warning "[TRAY] migrate failed; continuing startup. See migration_run_errors.log"
+        Add-Content -Path migration_auto.log -Value ((Get-Date).ToString() + " migrate failed; startup continued")
+      } else {
+        Write-Host "[TRAY] Migrations applied successfully"
+        Add-Content -Path migration_auto.log -Value ((Get-Date).ToString() + " Applied migrations successfully")
+      }
+    }
   }
   else {
     Write-Host "[TRAY] No pending migrations"
@@ -283,6 +313,14 @@ try {
   }
   $allReadersOk = (($statusRun.acp_enabled -eq $false) -or ($statusRun.acp -eq 'ON')) -and (($statusRun.elatec_enabled -eq $false) -or ($statusRun.elatec -eq 'ON'))
   $statusRun.color = if(($statusRun.server -eq 'PORNIT') -and $allReadersOk){ 'green' } elseif(($statusRun.server -eq 'PORNIT') -or $allReadersOk){ 'yellow' } else { 'red' }
+  # Preserve blocked flags if present so a UI STOP remains effective
+  if ($trayStatus) {
+    if ($trayStatus.acp_blocked -eq $true) { $statusRun.acp_blocked = $true }
+    if ($trayStatus.elatec_blocked -eq $true) { $statusRun.elatec_blocked = $true }
+    if ($trayStatus.cmd_stop_acp -ne $null) { $statusRun.cmd_stop_acp = $trayStatus.cmd_stop_acp }
+    if ($trayStatus.cmd_stop_elatec -ne $null) { $statusRun.cmd_stop_elatec = $trayStatus.cmd_stop_elatec }
+  }
   Set-Content -Path (Join-Path $PWD 'tray_status.json') -Value ($statusRun | ConvertTo-Json -Depth 3) -Encoding UTF8
 } catch {}
 & $py @('zkeco_modern/manage.py','tray_agent') @trayArgs
+ 
