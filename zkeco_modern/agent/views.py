@@ -2814,6 +2814,115 @@ def door_cancel_alarm(request: HttpRequest, device_id: int, door_id: str):
         _persist_and_broadcast_status(device_id, "ALARM_CLEARED")
     return JsonResponse({"ok": ok})
 
+
+def device_toggle(request: HttpRequest, device_id: int):
+    """API endpoint to toggle device `online` state.
+
+    Expects JSON body: { "online": true|false }
+    Persists DeviceStatus and broadcasts a `device.status` monitor event
+    with the authoritative `updated_at` timestamp.
+    """
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({"ok": False, "error": "unauthorized"}, status=403)
+    try:
+        import json
+        body = json.loads(request.body.decode('utf-8') or '{}')
+    except Exception:
+        body = {}
+    target = body.get('online')
+    if target is None:
+        return JsonResponse({'ok': False, 'error': 'missing_online_value'}, status=400)
+    try:
+        dev = Device.objects.get(pk=device_id)
+    except Device.DoesNotExist:
+        return JsonResponse({'ok': False, 'error': 'device_not_found'}, status=404)
+    try:
+        # If this device is a linked card reader, perform the service-level action
+        # so that the underlying reader process (ACP/Elatec) is started/stopped and
+        # all linked devices are updated consistently.
+        if getattr(dev, 'scanner_linked', False):
+            name = (getattr(dev, 'scanner_type', '') or '').strip().lower()
+            if name in ('acp', 'elatec'):
+                # Read/modify tray_status.json like readers_start/readers_stop
+                st = _read_json_safe(_tray_status_path())
+                if target:
+                    st[f'cmd_start_{name}'] = True
+                    st[f'cmd_stop_{name}'] = False
+                    st[name] = 'PORNESTE'
+                    st[f'{name}_blocked'] = False
+                else:
+                    st[f'cmd_stop_{name}'] = True
+                    st[f'cmd_start_{name}'] = False
+                    st[name] = 'OPRIT'
+                    st[f'{name}_blocked'] = True
+                _write_json_safe(_tray_status_path(), st)
+                # Update all linked devices' DeviceStatus rows (only existing rows)
+                linked_qs = Device.objects.filter(scanner_type=name, scanner_linked=True)
+                affected = list(linked_qs.values_list('id', flat=True))
+                from agent.models import DeviceStatus as _DS
+                for devlink in linked_qs:
+                    try:
+                        # Ensure a DeviceStatus exists for each linked device when user explicitly toggles
+                        ds_link, created_ds = _DS.objects.get_or_create(device=devlink)
+                        if target:
+                            # bring online
+                            if not ds_link.online or created_ds:
+                                ds_link.online = True
+                                ds_link.door_state = ''
+                                ds_link.updated_at = timezone.now()
+                                ds_link.save(update_fields=['online', 'door_state', 'updated_at'])
+                        else:
+                            # go offline
+                            if ds_link.online or created_ds:
+                                ds_link.online = False
+                                ds_link.updated_at = timezone.now()
+                                ds_link.save(update_fields=['online', 'updated_at'])
+                    except Exception:
+                        continue
+                # Broadcast statuses for affected devices
+                try:
+                    from agent.ws import broadcast_device_status
+                    from agent.models import DeviceStatus as _DS
+                    for did in affected:
+                        try:
+                            ds2 = _DS.objects.filter(device_id=did).first()
+                            ua = ds2.updated_at.isoformat() if ds2 and ds2.updated_at else None
+                        except Exception:
+                            ua = None
+                        try:
+                            broadcast_device_status(did, bool(target), updated_at=ua)
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+                # Return the status for the specific device_id (if we have a row)
+                ds = DeviceStatus.objects.filter(device=dev).first()
+                ua = ds.updated_at.isoformat() if ds and ds.updated_at else None
+                return JsonResponse({'ok': True, 'online': bool(ds.online) if ds else bool(target), 'updated_at': ua})
+
+        # Default: update single device status
+        ds, created = DeviceStatus.objects.get_or_create(device=dev)
+        ds.online = bool(target)
+        ds.save(update_fields=['online', 'updated_at'])
+        try:
+            ua = ds.updated_at.isoformat() if ds.updated_at else None
+        except Exception:
+            ua = None
+        try:
+            from channels.layers import get_channel_layer
+            import asyncio
+            layer = get_channel_layer()
+            if layer:
+                asyncio.get_event_loop().create_task(layer.group_send('monitor', {
+                    'type': 'monitor_event',
+                    'payload': {'type': 'device.status', 'device_id': device_id, 'online': ds.online, 'updated_at': ua}
+                }))
+        except Exception:
+            pass
+        return JsonResponse({'ok': True, 'online': ds.online, 'updated_at': ua})
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=500)
+
 def prom_metrics(request: HttpRequest):
     # Text exposition format for Prometheus scraping
     try:

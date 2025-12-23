@@ -89,6 +89,7 @@ urlpatterns = [
     path("api/devices/<int:device_id>/doors/<str:door_id>/cancel-alarm/", views.door_cancel_alarm, name="door-cancel-alarm"),
     path("api/devices/<int:device_id>/doors/<str:door_id>/lock/", views.door_lock, name="door-lock"),
     path("api/devices/<int:device_id>/doors/<str:door_id>/unlock/", views.door_unlock, name="door-unlock"),
+    path("api/devices/<int:device_id>/toggle/", views.device_toggle, name="device-toggle"),
     path("api/doors/<int:pk>/open/", views.door_pk_open, name="door-pk-open"),
     path("api/doors/<int:pk>/close/", views.door_pk_close, name="door-pk-close"),
     path("api/access/check/", views.access_check, name="access-check"),
