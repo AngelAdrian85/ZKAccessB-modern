@@ -108,7 +108,6 @@ urlpatterns = [
     path("api/readers/status", views.readers_status, name="agent-readers-status"),
     path("api/readers/start", views.readers_start, name="agent-readers-start"),
     path("api/readers/stop", views.readers_stop, name="agent-readers-stop"),
-    path("api/devices/<int:device_id>/toggle/", views.device_toggle, name="api-device-toggle"),
     path("diag/ws-log/", views.ws_diag_log, name="agent-ws-diag-log"),
     path("api/status_summary/", views.status_summary_json, name="agent-status-summary-json"),
 ]

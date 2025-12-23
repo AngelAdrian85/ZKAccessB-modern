@@ -26,7 +26,6 @@ try:
     import redis  # type: ignore
 except Exception:  # pragma: no cover
     redis = None
-import json
 
 
 def _read_heartbeat():
@@ -382,89 +381,6 @@ def readers_stop(request: HttpRequest):
     except Exception:
         pass
     return JsonResponse({'ok': True})
-
-
-@csrf_exempt
-def device_toggle(request: HttpRequest, device_id: int):
-    """Toggle device online state from dashboard (AJAX).
-
-    Expects POST with JSON {"online": true|false} or form field "online".
-    Updates/creates DeviceStatus and broadcasts via channels.
-    """
-    if not request.user.is_authenticated:
-        return JsonResponse({'ok': False, 'error': 'unauth'}, status=403)
-    # parse desired state
-    try:
-        payload = {}
-        if request.content_type and request.content_type.startswith('application/json'):
-            payload = json.loads(request.body.decode('utf-8') or '{}')
-        else:
-            payload = request.POST.dict()
-        desired = payload.get('online')
-        if isinstance(desired, str):
-            desired = desired.lower() in ('1','true','yes','on')
-        desired = bool(desired)
-    except Exception:
-        return JsonResponse({'ok': False, 'error': 'bad-payload'}, status=400)
-
-    # load tray status to enforce service dependencies
-    try:
-        st = _read_json_safe(_tray_status_path())
-    except Exception:
-        st = {}
-
-    try:
-        from .models import Device, DeviceStatus
-        dev = Device.objects.get(pk=device_id)
-    except Exception:
-        return JsonResponse({'ok': False, 'error': 'missing-device'}, status=404)
-
-    # Service dependency checks
-    if getattr(dev, 'scanner_linked', False):
-        stype = (getattr(dev, 'scanner_type', '') or '').lower()
-        if stype and not st.get(f'{stype}_enabled', True):
-            return JsonResponse({'ok': False, 'error': f'service-{stype}-disabled'}, status=409)
-    else:
-        # controllers depend on commcenter being available
-        if not st.get('commcenter'):
-            # no commcenter info; still allow but warn
-            pass
-
-    # Update or create DeviceStatus
-    try:
-        ds = DeviceStatus.objects.filter(device=dev).first()
-        created = False
-        if not ds:
-            # create new status row (this is a user action so allowed)
-            ds = DeviceStatus.objects.create(device=dev, online=desired, door_state='')
-            created = True
-        else:
-            if ds.online != desired:
-                ds.online = desired
-                ds.door_state = ''
-                ds.updated_at = timezone.now()
-                ds.save(update_fields=['online', 'door_state', 'updated_at'])
-            else:
-                # no state change; ensure door_state normalized
-                if ds.door_state != '':
-                    ds.door_state = ''
-                    ds.save(update_fields=['door_state'])
-        ua = None
-        try:
-            ua = ds.updated_at.isoformat() if ds.updated_at else None
-        except Exception:
-            ua = None
-    except Exception as e:
-        return JsonResponse({'ok': False, 'error': f'db-error:{e}'}, status=500)
-
-    # Broadcast new state to WS consumers
-    try:
-        from agent.ws import broadcast_device_status
-        broadcast_device_status(dev.id, bool(ds.online), serial=getattr(dev, 'serial_number', None), updated_at=ua)
-    except Exception:
-        pass
-
-    return JsonResponse({'ok': True, 'device_id': dev.id, 'online': bool(ds.online), 'updated_at': ua, 'created': created})
 
 
 def monitor(request: HttpRequest):
