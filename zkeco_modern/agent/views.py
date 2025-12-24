@@ -332,6 +332,8 @@ def readers_stop(request: HttpRequest):
         affected = list(qs.values_list('id', flat=True))
         # Only update `updated_at` when the online state actually changes (i.e. going offline).
         from agent.models import DeviceStatus as _DS
+        # Small cooldown to avoid overwriting a very recent user-initiated toggle.
+        COOLDOWN_SECONDS = 5.0
         for dev in qs:
             try:
                 # Avoid creating DeviceStatus rows on stop; only update existing records.
@@ -339,6 +341,17 @@ def readers_stop(request: HttpRequest):
                 if not ds:
                     continue
                 if ds.online:
+                    # If this status was updated very recently (e.g. user pressed Start),
+                    # don't immediately flip it to offline to avoid race conditions.
+                    try:
+                        if ds.updated_at is not None:
+                            age = (timezone.now() - ds.updated_at).total_seconds()
+                            if age < COOLDOWN_SECONDS:
+                                # preserve recent user-initiated state
+                                continue
+                    except Exception:
+                        # if any error computing age, fall back to changing state
+                        pass
                     # it was online -> now going offline, record timestamp
                     ds.online = False
                     ds.updated_at = timezone.now()

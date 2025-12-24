@@ -54,7 +54,11 @@
 <div style="margin-top:4px;">
   <h3 style="color:#5fc4ff;font-size:13px;font-weight:600;margin:0 0 6px 0;display:flex;justify-content:space-between;align-items:center;gap:8px;">
      📋 Monitorizare Evenimente
-     <input id="eventFilter" placeholder="Filtrează evenimente..." style="padding:4px 8px;background:#152a38;border:1px solid #1e303d;border-radius:4px;max-width:220px;color:#cfe9f8;font-size:12px;" oninput="filterEvents()" />
+      <span style="display:flex;align-items:center;gap:8px;">
+       <label style="color:#cfe9f8;font-size:12px;">Afișare RTLOG / door events</label>
+       <input type="checkbox" id="toggleRtlog" style="width:18px;height:18px;" />
+       <input id="eventFilter" placeholder="Filtrează evenimente..." style="padding:4px 8px;background:#152a38;border:1px solid #1e303d;border-radius:4px;max-width:220px;color:#cfe9f8;font-size:12px;" oninput="filterEvents()" />
+      </span>
   </h3>
   <div style="overflow:auto;max-height:520px;border:1px solid #1e303d;border-radius:6px;margin-top:4px;">
     <table id="event-grid">
@@ -544,6 +548,7 @@ function normalizeEvent(e){
 }
 function addEvent(obj){
   const e = normalizeEvent(obj);
+  // e._source may be set by the WebSocket handler to indicate origin/type
   const body=document.getElementById('events');
   const tr=document.createElement('tr');
   const alarm = (e.status||'').toUpperCase()==='ALARM' || /(alarm)/i.test(e.description||'');
@@ -594,6 +599,8 @@ function addEvent(obj){
     rowBackground = '#2d3d1e'; // Amber/yellowish for unknown cards initially
   }
   tr.style.background = rowBackground;
+  // preserve source/type for client-side filtering (e.g. 'rtlog.batch' or 'door.open')
+  try{ tr.dataset.eventSource = (e._source || obj._source || '').toString(); }catch{};
   tr.dataset.cardNo = e.card_no || '';
   
   // Create cells - action button will be in the last column (Acțiune)
@@ -629,6 +636,27 @@ function addEvent(obj){
   
   body.insertBefore(tr, body.firstChild);
   while(body.rows.length>500){ body.deleteRow(500); }
+}
+
+// --- RTLOG / door events client-side filter helpers ---
+function getShowRtlog(){
+  try{ const v = localStorage.getItem('monitor.show_rtlog'); return v === '1'; }catch{ return false; }
+}
+function setShowRtlog(val){
+  try{ localStorage.setItem('monitor.show_rtlog', val ? '1' : '0'); }catch{}
+  applyEventFilterToExistingRows();
+}
+function applyEventFilterToExistingRows(){
+  const show = getShowRtlog();
+  document.querySelectorAll('#events tr').forEach(r=>{
+    const src = (r.dataset.eventSource||'').toLowerCase();
+    const desc = (r.cells && r.cells[2] && r.cells[2].textContent || '').toLowerCase();
+    // hide if source is rtlog or a door.* event or description starts with rtlog
+    const isRtlog = src.includes('rtlog') || /^rtlog/.test(desc);
+    const isDoor = src.startsWith('door.') || /(^|\s)door\./.test(desc) || /door\.open|door\.close/.test(desc);
+    if((isRtlog || isDoor) && !show){ r.style.display = 'none'; }
+    else if(r.style.display==='none' && show){ r.style.display = ''; }
+  });
 }
 
 // Async function to check card ownership and update row styling
@@ -752,7 +780,10 @@ function wsConnect(){
       window.__wsStatus = 'online'; updateDiagnostics();
     } else if(data.type==='rtlog.batch'){
       const lineCount = (data && data.lines && data.lines.length) ? data.lines.length : 0;
-      addEvent({ point:data.point_id||'', description:`RTLOG x${lineCount}` });
+      // Only add RTLOG display if user enabled the toggle
+      if(getShowRtlog()){
+        addEvent({ point:data.point_id||'', description:`RTLOG x${lineCount}`, _source: 'rtlog.batch' });
+      }
     } else if(data.type==='event.batch'){
       if(data.descriptions && data.codes){
         data.descriptions.forEach((desc,i)=>{ addEvent({ point:data.point_id||'', description:desc, code:data.codes[i]}); });
@@ -786,7 +817,11 @@ function wsConnect(){
         const pid = (data.point_id||data.door_id||'');
         const map = window.__doorMap || {};
         const nm = (pid && map[pid] && map[pid].name) ? map[pid].name : '-';
-          addEvent({ description:data.type, point: pid, name: nm });
+          // Door events are filtered by toggle; still update device icons but only
+          // add a visible event row if user enabled showing door events
+          if(getShowRtlog()){
+            addEvent({ description:data.type, point: pid, name: nm, _source: data.type });
+          }
       } catch { addEvent({ description:data.type, point: (data.point_id||data.door_id||'') }); }
     } else { addEvent(data); }
   };
@@ -1047,6 +1082,16 @@ try {
   const ef = document.getElementById('eventFilter');
   if(ef){ ef.addEventListener('input',()=>filterEvents()); }
 } catch{}
+// Initialize RTLOG toggle state and bind handler
+try{
+  const cb = document.getElementById('toggleRtlog');
+  if(cb){
+    cb.checked = getShowRtlog();
+    cb.addEventListener('change', (ev)=>{ setShowRtlog(ev.target.checked); });
+    // apply initial filter to existing rows
+    applyEventFilterToExistingRows();
+  }
+}catch(e){ console.warn('toggle init failed', e); }
 async function populateDoors(){
   try{
     console.log('[Populate Doors] Starting...');
