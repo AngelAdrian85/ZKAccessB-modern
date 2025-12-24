@@ -832,6 +832,14 @@ function doorAction(id,door,action){
   console.log('[Door Action] Processing:', action, 'door:', doorId, 'device:', id);
   // Map UI actions to backend endpoints 1:1
   const endpointAction = action;
+  // Check door availability: do not attempt if door or its device is unavailable
+  try{
+    const doorObj = (window.__doorsCache||[]).find(d => String(d.id) === String(doorId));
+    if(doorObj && (!doorObj.enabled || !doorObj.device_enabled || !doorObj.device_online)){
+      addEvent({ description:`door.${action} BLOCKED (device unavailable) (id=${doorId})`, status:'ERR', verify_mode:'CLIENT', point: doorId });
+      return;
+    }
+  }catch(e){ /* ignore */ }
   // Enforce local lock semantics: when locked, block 'open' and 'normal-open'
   window.__doorLockMap = window.__doorLockMap || {};
   if(action!=='unlock' && (action==='open' || action==='normal-open') && window.__doorLockMap[doorId]){
@@ -936,6 +944,20 @@ function cancelAllAlarms(){
 function refreshDevices(){renderDevices();}
 async function testReadCard(){
   try{
+    // Prevent test-read when selected panel/device is offline
+    try{
+      const panelSel = document.getElementById('panelFilter');
+      if(panelSel && panelSel.value && panelSel.value !== 'all'){
+        const devId = panelSel.value;
+        const all = window.__allDoors || [];
+        // find any door with this device to check its device_online flag
+        const found = all.find(d => String(d.device_id) === String(devId));
+        if(found && found.device_online === false){
+          addEvent({ description:`TEST READ BLOCKED: selected device (id=${devId}) offline`, status:'ERR', verify_mode:'CLIENT' });
+          return;
+        }
+      }
+    }catch(e){ /* ignore guard errors */ }
     // Do NOT use selected door for Test Citire Card
     const cardInput = document.getElementById('testCardInput');
     let cardNumber = cardInput && cardInput.value ? cardInput.value.trim() : '';

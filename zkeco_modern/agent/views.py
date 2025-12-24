@@ -2180,15 +2180,27 @@ def doors_json_list(request: HttpRequest):
         from .models import Door
         qs = Door.objects.select_related('device').order_by('id')
         items = []
+        # Preload DeviceStatus for all devices referenced to minimize queries
+        device_ids = [getattr(d.device, 'id', None) for d in qs if getattr(d.device, 'id', None) is not None]
+        status_map = {}
+        if device_ids:
+            for ds in DeviceStatus.objects.filter(device_id__in=device_ids):
+                status_map[ds.device_id] = ds
         for d in qs:
             # Map is_open boolean to state string for UI
             state = _door_state_from_cache_or_model(d)
+            dev = getattr(d, 'device', None)
+            dev_id = getattr(dev, 'id', None) if dev else None
+            ds = status_map.get(dev_id)
             items.append({
                 'id': d.id,
                 'name': d.name or f"Door {d.id}",
-                'device_id': getattr(d.device,'id', None),
-                'device_name': getattr(d.device,'name', None),
-                'state': state,  # ADD THIS: state for door icon colors
+                'device_id': dev_id,
+                'device_name': getattr(dev, 'name', None) if dev else None,
+                'state': state,
+                'enabled': bool(d.enabled),
+                'device_enabled': bool(getattr(dev, 'enabled', False)) if dev else False,
+                'device_online': bool(ds.online) if ds is not None else False,
             })
         return JsonResponse({'items': items})
     except Exception as ex:
@@ -2676,6 +2688,41 @@ def recent_events_json(request: HttpRequest):
 def _enqueue(device_id: int, cmd: str, door: Door | None = None) -> bool:
     # Always persist a CommandLog even if CommCenter unavailable
     log = CommandLog.objects.create(device_id=device_id, door=door, command=cmd, status='PENDING')
+    # Protect actuations: do not enqueue commands for devices that are disabled
+    # or whose persisted DeviceStatus reports offline. This ensures that
+    # doors cannot be opened when the centrală is offline/disabled.
+    try:
+        dev = Device.objects.filter(id=device_id).first()
+        if dev is None:
+            log.status = 'ERR'
+            log.result = 'device-not-found'
+            log.save(update_fields=['status','result'])
+            return False
+        if not getattr(dev, 'enabled', True):
+            log.status = 'ERR'
+            log.result = 'device-disabled'
+            log.save(update_fields=['status','result'])
+            return False
+        ds = DeviceStatus.objects.filter(device=dev).first()
+        if ds is not None and not ds.online:
+            log.status = 'ERR'
+            log.result = 'device-offline'
+            log.save(update_fields=['status','result'])
+            return False
+        if ds is None:
+            # conservative: require an existing DeviceStatus to allow actuations
+            log.status = 'ERR'
+            log.result = 'device-status-missing'
+            log.save(update_fields=['status','result'])
+            return False
+    except Exception:
+        try:
+            log.status = 'ERR'
+            log.result = 'check-failed'
+            log.save(update_fields=['status','result'])
+        except Exception:
+            pass
+        return False
     # Immediate success for door control commands to satisfy synchronous expectations
     if cmd.startswith("DOOR_"):
         from django.utils import timezone as _tz
@@ -2750,79 +2797,85 @@ def door_open(request: HttpRequest, device_id: int, door_id: str):
     if not request.user.is_authenticated or not request.user.is_staff:
         return JsonResponse({"ok": False, "error": "unauthorized"}, status=403)
     ok = _enqueue(device_id, f"DOOR_OPEN:{door_id}")
-    if ok:
-        # Update door.is_open state in database
-        try:
-            door = Door.objects.get(id=door_id)
-            door.is_open = True
-            door.save(update_fields=['is_open', 'last_state_change'])
-            _set_lock_state(door.id, None)
-        except Door.DoesNotExist:
-            pass
-        _persist_and_broadcast_status(device_id, "OPEN")
-    return JsonResponse({"ok": ok})
+    if not ok:
+        return JsonResponse({"ok": False, "error": "device_unavailable"}, status=409)
+    # Update door.is_open state in database
+    try:
+        door = Door.objects.get(id=door_id)
+        door.is_open = True
+        door.save(update_fields=['is_open', 'last_state_change'])
+        _set_lock_state(door.id, None)
+    except Door.DoesNotExist:
+        pass
+    _persist_and_broadcast_status(device_id, "OPEN")
+    return JsonResponse({"ok": True})
 
 def door_close(request: HttpRequest, device_id: int, door_id: str):
     if not request.user.is_authenticated or not request.user.is_staff:
         return JsonResponse({"ok": False, "error": "unauthorized"}, status=403)
     ok = _enqueue(device_id, f"DOOR_CLOSE:{door_id}")
-    if ok:
-        # Update door.is_open state in database
-        try:
-            door = Door.objects.get(id=door_id)
-            door.is_open = False
-            door.save(update_fields=['is_open', 'last_state_change'])
-            _set_lock_state(door.id, None)
-        except Door.DoesNotExist:
-            pass
-        _persist_and_broadcast_status(device_id, "CLOSED")
-    return JsonResponse({"ok": ok})
+    if not ok:
+        return JsonResponse({"ok": False, "error": "device_unavailable"}, status=409)
+    # Update door.is_open state in database
+    try:
+        door = Door.objects.get(id=door_id)
+        door.is_open = False
+        door.save(update_fields=['is_open', 'last_state_change'])
+        _set_lock_state(door.id, None)
+    except Door.DoesNotExist:
+        pass
+    _persist_and_broadcast_status(device_id, "CLOSED")
+    return JsonResponse({"ok": True})
 
 def door_normal_open(request: HttpRequest, device_id: int, door_id: str):
     if not request.user.is_authenticated or not request.user.is_staff:
         return JsonResponse({"ok": False, "error": "unauthorized"}, status=403)
     ok = _enqueue(device_id, f"DOOR_NORMAL_OPEN:{door_id}")
-    if ok:
-        _set_lock_state(door_id, None)
-        _persist_and_broadcast_status(device_id, "NORMAL_OPEN")
-    return JsonResponse({"ok": ok})
+    if not ok:
+        return JsonResponse({"ok": False, "error": "device_unavailable"}, status=409)
+    _set_lock_state(door_id, None)
+    _persist_and_broadcast_status(device_id, "NORMAL_OPEN")
+    return JsonResponse({"ok": True})
 
 def door_lock(request: HttpRequest, device_id: int, door_id: str):
     if not request.user.is_authenticated or not request.user.is_staff:
         return JsonResponse({"ok": False, "error": "unauthorized"}, status=403)
     ok = _enqueue(device_id, f"DOOR_LOCK:{door_id}")
-    if ok:
-        try:
-            door = Door.objects.get(id=door_id)
-            door.is_open = False
-            door.save(update_fields=['is_open', 'last_state_change'])
-            _set_lock_state(door.id, 'LOCKED')
-        except Door.DoesNotExist:
-            _set_lock_state(door_id, 'LOCKED')
-        _persist_and_broadcast_status(device_id, "LOCKED")
-    return JsonResponse({"ok": ok})
+    if not ok:
+        return JsonResponse({"ok": False, "error": "device_unavailable"}, status=409)
+    try:
+        door = Door.objects.get(id=door_id)
+        door.is_open = False
+        door.save(update_fields=['is_open', 'last_state_change'])
+        _set_lock_state(door.id, 'LOCKED')
+    except Door.DoesNotExist:
+        _set_lock_state(door_id, 'LOCKED')
+    _persist_and_broadcast_status(device_id, "LOCKED")
+    return JsonResponse({"ok": True})
 
 def door_unlock(request: HttpRequest, device_id: int, door_id: str):
     if not request.user.is_authenticated or not request.user.is_staff:
         return JsonResponse({"ok": False, "error": "unauthorized"}, status=403)
     ok = _enqueue(device_id, f"DOOR_UNLOCK:{door_id}")
-    if ok:
-        try:
-            door = Door.objects.get(id=door_id)
-            door.save(update_fields=['last_state_change'])
-            _set_lock_state(door.id, None)
-        except Door.DoesNotExist:
-            _set_lock_state(door_id, None)
-        _persist_and_broadcast_status(device_id, "UNLOCKED")
-    return JsonResponse({"ok": ok})
+    if not ok:
+        return JsonResponse({"ok": False, "error": "device_unavailable"}, status=409)
+    try:
+        door = Door.objects.get(id=door_id)
+        door.save(update_fields=['last_state_change'])
+        _set_lock_state(door.id, None)
+    except Door.DoesNotExist:
+        _set_lock_state(door_id, None)
+    _persist_and_broadcast_status(device_id, "UNLOCKED")
+    return JsonResponse({"ok": True})
 
 def door_cancel_alarm(request: HttpRequest, device_id: int, door_id: str):
     if not request.user.is_authenticated or not request.user.is_staff:
         return JsonResponse({"ok": False, "error": "unauthorized"}, status=403)
     ok = _enqueue(device_id, f"DOOR_CANCEL_ALARM:{door_id}")
-    if ok:
-        _persist_and_broadcast_status(device_id, "ALARM_CLEARED")
-    return JsonResponse({"ok": ok})
+    if not ok:
+        return JsonResponse({"ok": False, "error": "device_unavailable"}, status=409)
+    _persist_and_broadcast_status(device_id, "ALARM_CLEARED")
+    return JsonResponse({"ok": True})
 
 
 def device_toggle(request: HttpRequest, device_id: int):
@@ -3010,8 +3063,11 @@ def door_pk_open(request: HttpRequest, pk: int):
     try:
         door = Door.objects.get(pk=pk)
         if door.device:
-            _enqueue(door.device.id, f"DOOR_OPEN:{door.id}", door=door)
-            door.is_open = True; door.save(update_fields=['is_open','last_state_change'])
+            ok = _enqueue(door.device.id, f"DOOR_OPEN:{door.id}", door=door)
+            if not ok:
+                return JsonResponse({'ok': False, 'error': 'device_unavailable'}, status=409)
+            door.is_open = True
+            door.save(update_fields=['is_open','last_state_change'])
             _persist_and_broadcast_status(door.device.id, 'OPEN')
         return JsonResponse({'ok': True})
     except Exception as e:
@@ -3023,8 +3079,11 @@ def door_pk_close(request: HttpRequest, pk: int):
     try:
         door = Door.objects.get(pk=pk)
         if door.device:
-            _enqueue(door.device.id, f"DOOR_CLOSE:{door.id}", door=door)
-            door.is_open = False; door.save(update_fields=['is_open','last_state_change'])
+            ok = _enqueue(door.device.id, f"DOOR_CLOSE:{door.id}", door=door)
+            if not ok:
+                return JsonResponse({'ok': False, 'error': 'device_unavailable'}, status=409)
+            door.is_open = False
+            door.save(update_fields=['is_open','last_state_change'])
             _persist_and_broadcast_status(door.device.id, 'CLOSED')
         return JsonResponse({'ok': True})
     except Exception as e:

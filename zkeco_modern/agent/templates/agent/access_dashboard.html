@@ -478,11 +478,15 @@ function renderDoorsTable(){
   }
   const rows = dashDoors.map(d=>{
     const st = doorStateIcon(d.state);
+    // Disable actions if door or device unavailable
+    const devAvailable = !!d.device_id && d.device_online && d.device_enabled && d.enabled;
+    const disabledAttr = devAvailable ? '' : 'disabled';
+    const disabledStyle = devAvailable ? '' : 'opacity:0.45;cursor:not-allowed;';
     const actionBtns = [
-      `<button onclick="onDashDoorAction(${d.id}, ${d.device_id||'null'}, 'open')" style="padding:2px 6px;font-size:9px;background:#2da44e;border:none;border-radius:4px;color:#0a1d2b;cursor:pointer;">Open</button>`,
-      `<button onclick="onDashDoorAction(${d.id}, ${d.device_id||'null'}, 'close')" style="padding:2px 6px;font-size:9px;background:#3da5d9;border:none;border-radius:4px;color:#0a1d2b;cursor:pointer;margin-left:4px;">Close</button>`,
-      `<button onclick="onDashDoorAction(${d.id}, ${d.device_id||'null'}, 'lock')" style="padding:2px 6px;font-size:9px;background:#c48a1f;border:none;border-radius:4px;color:#0a1d2b;cursor:pointer;margin-left:4px;">Lock</button>`,
-      `<button onclick="onDashDoorAction(${d.id}, ${d.device_id||'null'}, 'unlock')" style="padding:2px 6px;font-size:9px;background:#8bc34a;border:none;border-radius:4px;color:#0a1d2b;cursor:pointer;margin-left:4px;">Unlock</button>`
+      `<button ${disabledAttr} onclick="onDashDoorAction(${d.id}, ${d.device_id||'null'}, 'open')" style="padding:2px 6px;font-size:9px;background:#2da44e;border:none;border-radius:4px;color:#0a1d2b;${disabledStyle}">Open</button>`,
+      `<button ${disabledAttr} onclick="onDashDoorAction(${d.id}, ${d.device_id||'null'}, 'close')" style="padding:2px 6px;font-size:9px;background:#3da5d9;border:none;border-radius:4px;color:#0a1d2b;margin-left:4px;${disabledStyle}">Close</button>`,
+      `<button ${disabledAttr} onclick="onDashDoorAction(${d.id}, ${d.device_id||'null'}, 'lock')" style="padding:2px 6px;font-size:9px;background:#c48a1f;border:none;border-radius:4px;color:#0a1d2b;margin-left:4px;${disabledStyle}">Lock</button>`,
+      `<button ${disabledAttr} onclick="onDashDoorAction(${d.id}, ${d.device_id||'null'}, 'unlock')" style="padding:2px 6px;font-size:9px;background:#8bc34a;border:none;border-radius:4px;color:#0a1d2b;margin-left:4px;${disabledStyle}">Unlock</button>`
     ].join('');
     return `<tr data-door-id="${d.id}"><td>${d.name||'-'}</td><td><span style="color:${st.color};font-weight:700;">${st.icon} ${st.label}</span></td><td>${actionBtns}</td></tr>`;
   }).join('');
@@ -491,6 +495,14 @@ function renderDoorsTable(){
 
 async function onDashDoorAction(doorId, deviceId, action){
   if(!deviceId){ console.warn('Missing device for door', doorId); return; }
+  // Check availability: do not attempt if device/door not available
+  const doorObj = dashDoors.find(dd => String(dd.id) === String(doorId));
+  if(doorObj){
+    if(!doorObj.enabled || !doorObj.device_enabled || !doorObj.device_online){
+      addEventRow(`EROARE: centrala inactiva sau ușa nereceptivă pentru ușa #${doorId}`,'err');
+      return;
+    }
+  }
   const row = document.querySelector(`#liveDoorsBody tr[data-door-id="${doorId}"] td:nth-child(2)`);
   if(row){ row.innerHTML = badge('⟳ '+action.toUpperCase(),'warn'); }
   try{

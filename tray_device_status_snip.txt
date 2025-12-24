@@ -1,0 +1,793 @@
+﻿
+> zkeco_modern\logs\tray_agent.log:19390:2025-12-18 11:56:14,859 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T09:56:14.858813+00:00'}
+> zkeco_modern\logs\tray_agent.log:19391:2025-12-18 11:56:14,860 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T09:56:14.860786+00:00'}
+> zkeco_modern\logs\tray_agent.log:19392:2025-12-18 11:56:14,862 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T09:56:14.862863+00:00'}
+  zkeco_modern\logs\tray_agent.log:19393:2025-12-18 11:56:14,865 WARNING Persist rtlog failed device=: Conflicting 'devicerealtimelog' models in application 'agent': <class 'agent.
+models.DeviceRealtimeLog'> and <class 'zkeco_modern.agent.models.DeviceRealtimeLog'>.
+  zkeco_modern\logs\tray_agent.log:19394:2025-12-18 11:56:14,865 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:19400:2025-12-18 11:56:16,063 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T09:56:16.063792+00:00'}
+> zkeco_modern\logs\tray_agent.log:19401:2025-12-18 11:56:16,065 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T09:56:16.065788+00:00'}
+> zkeco_modern\logs\tray_agent.log:19402:2025-12-18 11:56:16,066 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T09:56:16.066800+00:00'}
+  zkeco_modern\logs\tray_agent.log:19403:2025-12-18 11:56:16,068 WARNING Persist rtlog failed device=: Conflicting 'devicerealtimelog' models in application 'agent': <class 'agent.
+models.DeviceRealtimeLog'> and <class 'zkeco_modern.agent.models.DeviceRealtimeLog'>.
+  zkeco_modern\logs\tray_agent.log:19404:2025-12-18 11:56:16,068 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:19414:2025-12-18 11:56:47,625 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T09:56:47.625917+00:00'}
+> zkeco_modern\logs\tray_agent.log:19415:2025-12-18 11:56:47,626 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T09:56:47.626922+00:00'}
+> zkeco_modern\logs\tray_agent.log:19416:2025-12-18 11:56:47,627 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T09:56:47.627921+00:00'}
+  zkeco_modern\logs\tray_agent.log:19417:2025-12-18 11:56:47,630 WARNING Persist rtlog failed device=: Conflicting 'devicerealtimelog' models in application 'agent': <class 'agent.
+models.DeviceRealtimeLog'> and <class 'zkeco_modern.agent.models.DeviceRealtimeLog'>.
+  zkeco_modern\logs\tray_agent.log:19418:2025-12-18 11:56:47,630 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:19424:2025-12-18 11:56:48,834 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T09:56:48.833601+00:00'}
+> zkeco_modern\logs\tray_agent.log:19425:2025-12-18 11:56:48,836 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T09:56:48.836599+00:00'}
+> zkeco_modern\logs\tray_agent.log:19426:2025-12-18 11:56:48,838 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T09:56:48.838598+00:00'}
+  zkeco_modern\logs\tray_agent.log:19427:2025-12-18 11:56:48,840 WARNING Persist rtlog failed device=: Conflicting 'devicerealtimelog' models in application 'agent': <class 'agent.
+models.DeviceRealtimeLog'> and <class 'zkeco_modern.agent.models.DeviceRealtimeLog'>.
+  zkeco_modern\logs\tray_agent.log:19428:2025-12-18 11:56:48,840 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:19438:2025-12-18 11:58:05,386 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T09:58:05.385163+00:00'}
+  zkeco_modern\logs\tray_agent.log:19439:2025-12-18 11:58:05,386 INFO Status loop started
+> zkeco_modern\logs\tray_agent.log:19440:2025-12-18 11:58:05,388 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T09:58:05.388108+00:00'}
+> zkeco_modern\logs\tray_agent.log:19441:2025-12-18 11:58:05,390 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T09:58:05.390109+00:00'}
+  zkeco_modern\logs\tray_agent.log:19442:2025-12-18 11:58:05,398 WARNING Persist rtlog failed device=: Conflicting 'devicerealtimelog' models in application 'agent': <class 'agent.
+models.DeviceRealtimeLog'> and <class 'zkeco_modern.agent.models.DeviceRealtimeLog'>.
+  zkeco_modern\logs\tray_agent.log:19443:2025-12-18 11:58:05,400 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:19834:2025-12-18 12:27:25,315 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:27:25.315125+00:00'}
+  zkeco_modern\logs\tray_agent.log:19835:2025-12-18 12:27:25,318 WARNING DeviceStatus persist failed device=2: NOT NULL constraint failed: agent_devicestatus.door_state
+> zkeco_modern\logs\tray_agent.log:19836:2025-12-18 12:27:25,318 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:27:25.318169+00:00'}
+  zkeco_modern\logs\tray_agent.log:19837:2025-12-18 12:27:25,320 WARNING DeviceStatus persist failed device=3: NOT NULL constraint failed: agent_devicestatus.door_state
+> zkeco_modern\logs\tray_agent.log:19838:2025-12-18 12:27:25,320 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:27:25.320136+00:00'}
+  zkeco_modern\logs\tray_agent.log:19839:2025-12-18 12:27:25,322 WARNING Persist rtlog failed device=: Conflicting 'devicerealtimelog' models in application 'agent': <class 'agent.
+models.DeviceRealtimeLog'> and <class 'zkeco_modern.agent.models.DeviceRealtimeLog'>.
+  zkeco_modern\logs\tray_agent.log:19840:2025-12-18 12:27:25,323 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:19847:2025-12-18 12:27:26,517 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:27:26.517372+00:00'}
+  zkeco_modern\logs\tray_agent.log:19848:2025-12-18 12:27:26,519 WARNING DeviceStatus persist failed device=2: NOT NULL constraint failed: agent_devicestatus.door_state
+> zkeco_modern\logs\tray_agent.log:19849:2025-12-18 12:27:26,519 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:27:26.519990+00:00'}
+  zkeco_modern\logs\tray_agent.log:19850:2025-12-18 12:27:26,522 WARNING DeviceStatus persist failed device=3: NOT NULL constraint failed: agent_devicestatus.door_state
+> zkeco_modern\logs\tray_agent.log:19851:2025-12-18 12:27:26,522 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:27:26.522047+00:00'}
+  zkeco_modern\logs\tray_agent.log:19852:2025-12-18 12:27:26,524 WARNING Persist rtlog failed device=: Conflicting 'devicerealtimelog' models in application 'agent': <class 'agent.
+models.DeviceRealtimeLog'> and <class 'zkeco_modern.agent.models.DeviceRealtimeLog'>.
+  zkeco_modern\logs\tray_agent.log:19853:2025-12-18 12:27:26,524 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:19863:2025-12-18 12:28:43,719 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:28:43.699595+00:00'}
+> zkeco_modern\logs\tray_agent.log:19864:2025-12-18 12:28:43,729 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:28:43.722716+00:00'}
+> zkeco_modern\logs\tray_agent.log:19865:2025-12-18 12:28:43,738 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:28:43.731726+00:00'}
+  zkeco_modern\logs\tray_agent.log:19866:2025-12-18 12:28:43,742 WARNING Persist rtlog failed device=: Conflicting 'devicerealtimelog' models in application 'agent': <class 'agent.
+models.DeviceRealtimeLog'> and <class 'zkeco_modern.agent.models.DeviceRealtimeLog'>.
+  zkeco_modern\logs\tray_agent.log:19867:2025-12-18 12:28:43,750 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:19873:2025-12-18 12:28:44,922 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:28:44.906115+00:00'}
+> zkeco_modern\logs\tray_agent.log:19874:2025-12-18 12:28:44,941 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:28:44.924991+00:00'}
+> zkeco_modern\logs\tray_agent.log:19875:2025-12-18 12:28:44,955 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:28:44.948079+00:00'}
+  zkeco_modern\logs\tray_agent.log:19876:2025-12-18 12:28:44,958 WARNING Persist rtlog failed device=: Conflicting 'devicerealtimelog' models in application 'agent': <class 'agent.
+models.DeviceRealtimeLog'> and <class 'zkeco_modern.agent.models.DeviceRealtimeLog'>.
+  zkeco_modern\logs\tray_agent.log:19877:2025-12-18 12:28:44,959 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:19887:2025-12-18 12:31:16,912 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:31:16.896738+00:00'}
+> zkeco_modern\logs\tray_agent.log:19888:2025-12-18 12:31:16,920 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:31:16.914611+00:00'}
+> zkeco_modern\logs\tray_agent.log:19889:2025-12-18 12:31:16,933 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:31:16.922620+00:00'}
+  zkeco_modern\logs\tray_agent.log:19890:2025-12-18 12:31:16,942 WARNING Persist rtlog failed device=: Conflicting 'devicerealtimelog' models in application 'agent': <class 'agent.
+models.DeviceRealtimeLog'> and <class 'zkeco_modern.agent.models.DeviceRealtimeLog'>.
+  zkeco_modern\logs\tray_agent.log:19891:2025-12-18 12:31:16,943 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:19897:2025-12-18 12:31:18,155 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:31:18.136608+00:00'}
+> zkeco_modern\logs\tray_agent.log:19898:2025-12-18 12:31:18,195 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:31:18.187607+00:00'}
+> zkeco_modern\logs\tray_agent.log:19899:2025-12-18 12:31:18,203 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:31:18.197607+00:00'}
+  zkeco_modern\logs\tray_agent.log:19900:2025-12-18 12:31:18,207 WARNING Persist rtlog failed device=: Conflicting 'devicerealtimelog' models in application 'agent': <class 'agent.
+models.DeviceRealtimeLog'> and <class 'zkeco_modern.agent.models.DeviceRealtimeLog'>.
+  zkeco_modern\logs\tray_agent.log:19901:2025-12-18 12:31:18,208 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:19912:2025-12-18 12:34:59,225 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:34:59.197500+00:00'}
+> zkeco_modern\logs\tray_agent.log:19913:2025-12-18 12:34:59,235 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:34:59.228342+00:00'}
+> zkeco_modern\logs\tray_agent.log:19914:2025-12-18 12:34:59,256 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:34:59.239337+00:00'}
+  zkeco_modern\logs\tray_agent.log:19915:2025-12-18 12:34:59,261 WARNING Persist rtlog failed device=: Conflicting 'devicerealtimelog' models in application 'agent': <class 'agent.
+models.DeviceRealtimeLog'> and <class 'zkeco_modern.agent.models.DeviceRealtimeLog'>.
+  zkeco_modern\logs\tray_agent.log:19916:2025-12-18 12:34:59,262 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:20604:2025-12-18 12:49:33,423 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:49:33.414387+00:00'}
+> zkeco_modern\logs\tray_agent.log:20605:2025-12-18 12:49:33,451 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:49:33.444376+00:00'}
+> zkeco_modern\logs\tray_agent.log:20606:2025-12-18 12:49:33,514 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:49:33.507374+00:00'}
+  zkeco_modern\logs\tray_agent.log:20607:2025-12-18 12:49:33,571 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:20608:2025-12-18 12:49:33,580 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:20702:2025-12-18 12:51:04,856 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:51:04.847603+00:00'}
+> zkeco_modern\logs\tray_agent.log:20703:2025-12-18 12:51:04,864 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:51:04.858550+00:00'}
+> zkeco_modern\logs\tray_agent.log:20704:2025-12-18 12:51:04,888 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:51:04.880550+00:00'}
+  zkeco_modern\logs\tray_agent.log:20705:2025-12-18 12:51:04,896 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:20706:2025-12-18 12:51:04,920 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:21188:2025-12-18 12:54:27,157 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:54:27.146673+00:00'}
+> zkeco_modern\logs\tray_agent.log:21189:2025-12-18 12:54:27,172 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:54:27.164212+00:00'}
+> zkeco_modern\logs\tray_agent.log:21190:2025-12-18 12:54:27,206 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T10:54:27.196465+00:00'}
+  zkeco_modern\logs\tray_agent.log:21191:2025-12-18 12:54:27,232 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:21192:2025-12-18 12:54:27,243 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:21920:2025-12-18 13:11:42,285 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T11:11:42.261411+00:00'}
+> zkeco_modern\logs\tray_agent.log:21921:2025-12-18 13:11:42,297 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T11:11:42.288293+00:00'}
+> zkeco_modern\logs\tray_agent.log:21922:2025-12-18 13:11:42,318 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T11:11:42.300406+00:00'}
+  zkeco_modern\logs\tray_agent.log:21923:2025-12-18 13:11:42,329 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:21924:2025-12-18 13:11:42,351 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:22140:2025-12-18 13:16:12,299 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T11:16:12.282245+00:00'}
+> zkeco_modern\logs\tray_agent.log:22141:2025-12-18 13:16:12,318 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T11:16:12.302907+00:00'}
+> zkeco_modern\logs\tray_agent.log:22142:2025-12-18 13:16:12,330 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T11:16:12.320607+00:00'}
+  zkeco_modern\logs\tray_agent.log:22143:2025-12-18 13:16:12,354 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:22144:2025-12-18 13:16:12,361 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:22313:2025-12-18 14:27:19,328 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T12:27:19.306370+00:00'}
+> zkeco_modern\logs\tray_agent.log:22314:2025-12-18 14:27:19,349 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T12:27:19.342427+00:00'}
+> zkeco_modern\logs\tray_agent.log:22315:2025-12-18 14:27:19,361 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T12:27:19.352027+00:00'}
+  zkeco_modern\logs\tray_agent.log:22316:2025-12-18 14:27:19,386 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:22317:2025-12-18 14:27:19,393 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:22755:2025-12-18 14:36:13,029 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T12:36:12.996079+00:00'}
+> zkeco_modern\logs\tray_agent.log:22756:2025-12-18 14:36:13,047 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T12:36:13.036621+00:00'}
+> zkeco_modern\logs\tray_agent.log:22757:2025-12-18 14:36:13,069 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T12:36:13.050496+00:00'}
+  zkeco_modern\logs\tray_agent.log:22758:2025-12-18 14:36:13,078 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:22759:2025-12-18 14:36:13,092 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:23250:2025-12-18 14:43:41,948 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T12:43:41.923610+00:00'}
+> zkeco_modern\logs\tray_agent.log:23251:2025-12-18 14:43:41,958 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T12:43:41.951052+00:00'}
+> zkeco_modern\logs\tray_agent.log:23252:2025-12-18 14:43:41,976 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T12:43:41.965017+00:00'}
+  zkeco_modern\logs\tray_agent.log:23253:2025-12-18 14:43:41,985 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:23254:2025-12-18 14:43:42,007 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:23661:2025-12-18 14:59:59,749 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T12:59:59.721443+00:00'}
+> zkeco_modern\logs\tray_agent.log:23662:2025-12-18 14:59:59,763 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T12:59:59.753533+00:00'}
+> zkeco_modern\logs\tray_agent.log:23663:2025-12-18 14:59:59,787 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-18T12:59:59.766532+00:00'}
+  zkeco_modern\logs\tray_agent.log:23664:2025-12-18 14:59:59,797 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:23665:2025-12-18 14:59:59,824 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:23757:2025-12-19 07:41:34,640 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T05:41:34.624341+00:00'}
+> zkeco_modern\logs\tray_agent.log:23758:2025-12-19 07:41:34,676 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T05:41:34.667551+00:00'}
+> zkeco_modern\logs\tray_agent.log:23759:2025-12-19 07:41:34,721 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T05:41:34.701150+00:00'}
+  zkeco_modern\logs\tray_agent.log:23760:2025-12-19 07:41:34,734 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:23761:2025-12-19 07:41:34,752 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:24641:2025-12-19 07:55:32,673 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T05:55:32.664397+00:00'}
+> zkeco_modern\logs\tray_agent.log:24642:2025-12-19 07:55:32,693 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T05:55:32.676958+00:00'}
+> zkeco_modern\logs\tray_agent.log:24643:2025-12-19 07:55:32,706 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T05:55:32.700520+00:00'}
+  zkeco_modern\logs\tray_agent.log:24644:2025-12-19 07:55:32,731 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:24645:2025-12-19 07:55:32,741 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:25025:2025-12-19 08:10:24,450 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T06:10:24.420781+00:00'}
+> zkeco_modern\logs\tray_agent.log:25026:2025-12-19 08:10:24,471 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T06:10:24.453452+00:00'}
+> zkeco_modern\logs\tray_agent.log:25027:2025-12-19 08:10:24,485 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T06:10:24.474541+00:00'}
+  zkeco_modern\logs\tray_agent.log:25028:2025-12-19 08:10:24,497 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:25029:2025-12-19 08:10:24,574 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:25284:2025-12-19 08:58:23,806 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T06:58:23.784910+00:00'}
+> zkeco_modern\logs\tray_agent.log:25285:2025-12-19 08:58:23,819 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T06:58:23.809732+00:00'}
+> zkeco_modern\logs\tray_agent.log:25286:2025-12-19 08:58:23,838 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T06:58:23.828351+00:00'}
+  zkeco_modern\logs\tray_agent.log:25287:2025-12-19 08:58:23,850 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:25288:2025-12-19 08:58:23,870 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:25793:2025-12-19 09:24:53,857 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T07:24:53.842217+00:00'}
+> zkeco_modern\logs\tray_agent.log:25794:2025-12-19 09:24:53,895 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T07:24:53.884589+00:00'}
+> zkeco_modern\logs\tray_agent.log:25795:2025-12-19 09:24:53,921 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T07:24:53.914550+00:00'}
+  zkeco_modern\logs\tray_agent.log:25796:2025-12-19 09:24:53,930 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:25797:2025-12-19 09:24:53,952 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:26488:2025-12-19 10:07:51,293 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T07:53:08.645370+00:00'}
+> zkeco_modern\logs\tray_agent.log:26489:2025-12-19 10:07:51,295 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T07:45:52.121160+00:00'}
+> zkeco_modern\logs\tray_agent.log:26490:2025-12-19 10:07:51,303 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T07:44:55.336023+00:00'}
+  zkeco_modern\logs\tray_agent.log:26491:2025-12-19 10:07:51,320 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:26492:2025-12-19 10:07:51,357 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:27090:2025-12-19 10:11:49,082 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T07:53:08.645370+00:00'}
+> zkeco_modern\logs\tray_agent.log:27091:2025-12-19 10:11:49,092 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T08:11:49.084254+00:00'}
+> zkeco_modern\logs\tray_agent.log:27092:2025-12-19 10:11:49,100 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T08:11:49.093257+00:00'}
+  zkeco_modern\logs\tray_agent.log:27093:2025-12-19 10:11:49,109 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:27094:2025-12-19 10:11:49,138 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:27330:2025-12-19 10:20:00,054 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T08:20:00.053689+00:00'}
+> zkeco_modern\logs\tray_agent.log:27331:2025-12-19 10:20:00,060 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T08:20:00.059689+00:00'}
+> zkeco_modern\logs\tray_agent.log:27332:2025-12-19 10:20:00,071 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T08:20:00.071690+00:00'}
+  zkeco_modern\logs\tray_agent.log:27333:2025-12-19 10:20:00,101 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:27334:2025-12-19 10:20:00,113 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:28389:2025-12-19 10:33:36,339 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T08:33:36.322537+00:00'}
+> zkeco_modern\logs\tray_agent.log:28390:2025-12-19 10:33:36,374 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T08:26:45+00:00'}
+> zkeco_modern\logs\tray_agent.log:28391:2025-12-19 10:33:36,474 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T08:26:45+00:00'}
+  zkeco_modern\logs\tray_agent.log:28392:2025-12-19 10:33:36,497 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:28393:2025-12-19 10:33:36,516 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:29213:2025-12-19 12:06:09,841 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T08:33:36.322537+00:00'}
+> zkeco_modern\logs\tray_agent.log:29214:2025-12-19 12:06:09,845 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T08:38:52+00:00'}
+> zkeco_modern\logs\tray_agent.log:29215:2025-12-19 12:06:09,862 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T10:06:09.851003+00:00'}
+  zkeco_modern\logs\tray_agent.log:29216:2025-12-19 12:06:09,892 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:29217:2025-12-19 12:06:09,911 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:29731:2025-12-19 12:09:32,406 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T08:33:36.322537+00:00'}
+> zkeco_modern\logs\tray_agent.log:29732:2025-12-19 12:09:32,410 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T10:09:32+00:00'}
+> zkeco_modern\logs\tray_agent.log:29733:2025-12-19 12:09:32,418 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T10:09:32+00:00'}
+  zkeco_modern\logs\tray_agent.log:29734:2025-12-19 12:09:32,455 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:29735:2025-12-19 12:09:32,476 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:32290:2025-12-19 13:22:12,023 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T11:21:05.620879+00:00'}
+> zkeco_modern\logs\tray_agent.log:32291:2025-12-19 13:22:12,026 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T11:21:04.076492+00:00'}
+> zkeco_modern\logs\tray_agent.log:32292:2025-12-19 13:22:12,036 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T11:21:04.094849+00:00'}
+  zkeco_modern\logs\tray_agent.log:32293:2025-12-19 13:22:12,052 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:32294:2025-12-19 13:22:12,076 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:33674:2025-12-19 13:39:07,744 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T11:37:58.193265+00:00'}
+  zkeco_modern\logs\tray_agent.log:33675:2025-12-19 13:39:07,750 INFO Status loop started
+> zkeco_modern\logs\tray_agent.log:33676:2025-12-19 13:39:07,754 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T11:36:22+00:00'}
+> zkeco_modern\logs\tray_agent.log:33677:2025-12-19 13:39:07,760 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T11:37:56.655958+00:00'}
+  zkeco_modern\logs\tray_agent.log:33678:2025-12-19 13:39:07,781 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:33679:2025-12-19 13:39:07,791 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:34297:2025-12-19 13:53:05,962 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T11:47:09.362857+00:00'}
+> zkeco_modern\logs\tray_agent.log:34298:2025-12-19 13:53:05,965 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T11:44:02.813145+00:00'}
+> zkeco_modern\logs\tray_agent.log:34299:2025-12-19 13:53:05,971 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T11:44:02.823183+00:00'}
+  zkeco_modern\logs\tray_agent.log:34300:2025-12-19 13:53:06,003 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:34301:2025-12-19 13:53:06,014 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:34609:2025-12-19 14:00:07,263 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T11:56:34.558466+00:00'}
+> zkeco_modern\logs\tray_agent.log:34610:2025-12-19 14:00:07,274 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T11:54:59+00:00'}
+> zkeco_modern\logs\tray_agent.log:34611:2025-12-19 14:00:07,284 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T11:54:59+00:00'}
+  zkeco_modern\logs\tray_agent.log:34612:2025-12-19 14:00:07,305 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:34613:2025-12-19 14:00:07,320 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:35316:2025-12-19 14:07:44,753 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T12:07:13.865991+00:00'}
+> zkeco_modern\logs\tray_agent.log:35317:2025-12-19 14:07:44,758 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T12:07:12.318636+00:00'}
+> zkeco_modern\logs\tray_agent.log:35318:2025-12-19 14:07:44,763 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T12:03:26.368678+00:00'}
+  zkeco_modern\logs\tray_agent.log:35319:2025-12-19 14:07:44,788 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:35320:2025-12-19 14:07:44,799 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:35719:2025-12-19 14:15:17,756 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T12:07:13.865991+00:00'}
+> zkeco_modern\logs\tray_agent.log:35720:2025-12-19 14:15:17,776 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T12:15:17.759723+00:00'}
+> zkeco_modern\logs\tray_agent.log:35721:2025-12-19 14:15:17,783 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T12:08:22+00:00'}
+  zkeco_modern\logs\tray_agent.log:35722:2025-12-19 14:15:17,810 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:35723:2025-12-19 14:15:17,821 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:36518:2025-12-19 14:24:40,566 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T12:07:13.865991+00:00'}
+> zkeco_modern\logs\tray_agent.log:36519:2025-12-19 14:24:40,569 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T12:15:17.759723+00:00'}
+> zkeco_modern\logs\tray_agent.log:36520:2025-12-19 14:24:40,573 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T12:18:21.839672+00:00'}
+  zkeco_modern\logs\tray_agent.log:36521:2025-12-19 14:24:40,599 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:36522:2025-12-19 14:24:40,609 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:38105:2025-12-19 14:35:12,568 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T12:07:13.865991+00:00'}
+  zkeco_modern\logs\tray_agent.log:38106:2025-12-19 14:35:12,568 INFO Status loop started
+> zkeco_modern\logs\tray_agent.log:38107:2025-12-19 14:35:12,571 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T12:15:17.759723+00:00'}
+> zkeco_modern\logs\tray_agent.log:38108:2025-12-19 14:35:12,595 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T12:35:12.575521+00:00'}
+  zkeco_modern\logs\tray_agent.log:38109:2025-12-19 14:35:12,610 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:38110:2025-12-19 14:35:12,636 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:38433:2025-12-19 14:45:39,704 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T12:39:54.622972+00:00'}
+> zkeco_modern\logs\tray_agent.log:38434:2025-12-19 14:45:39,715 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T12:15:17.759723+00:00'}
+> zkeco_modern\logs\tray_agent.log:38435:2025-12-19 14:45:39,720 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T12:35:12.575521+00:00'}
+  zkeco_modern\logs\tray_agent.log:38436:2025-12-19 14:45:39,752 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:38437:2025-12-19 14:45:39,761 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:38824:2025-12-19 14:52:32,341 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T12:51:24.171736+00:00'}
+> zkeco_modern\logs\tray_agent.log:38825:2025-12-19 14:52:32,345 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T12:48:04+00:00'}
+> zkeco_modern\logs\tray_agent.log:38826:2025-12-19 14:52:32,349 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T12:51:22.642685+00:00'}
+  zkeco_modern\logs\tray_agent.log:38827:2025-12-19 14:52:32,375 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:38828:2025-12-19 14:52:32,388 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:38993:2025-12-19 14:53:39,467 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T12:51:24.171736+00:00'}
+> zkeco_modern\logs\tray_agent.log:38994:2025-12-19 14:53:39,469 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T12:53:38+00:00'}
+> zkeco_modern\logs\tray_agent.log:38995:2025-12-19 14:53:39,472 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T12:53:38+00:00'}
+  zkeco_modern\logs\tray_agent.log:38996:2025-12-19 14:53:39,497 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:38997:2025-12-19 14:53:39,510 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:42313:2025-12-22 08:27:13,270 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T12:51:24.171736+00:00'}
+> zkeco_modern\logs\tray_agent.log:42314:2025-12-22 08:27:13,289 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T12:53:38+00:00'}
+> zkeco_modern\logs\tray_agent.log:42315:2025-12-22 08:27:13,294 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T12:53:38+00:00'}
+  zkeco_modern\logs\tray_agent.log:42316:2025-12-22 08:27:13,324 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:42317:2025-12-22 08:27:13,337 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:43372:2025-12-22 09:23:25,718 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T12:51:24.171736+00:00'}
+> zkeco_modern\logs\tray_agent.log:43373:2025-12-22 09:23:25,744 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-22T07:23:25.731319+00:00'}
+> zkeco_modern\logs\tray_agent.log:43374:2025-12-22 09:23:25,786 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-22T07:23:25.777687+00:00'}
+  zkeco_modern\logs\tray_agent.log:43375:2025-12-22 09:23:25,839 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:43376:2025-12-22 09:23:25,849 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:43676:2025-12-22 09:26:24,084 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-19T12:51:24.171736+00:00'}
+> zkeco_modern\logs\tray_agent.log:43677:2025-12-22 09:26:24,105 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-22T07:26:24.088537+00:00'}
+> zkeco_modern\logs\tray_agent.log:43678:2025-12-22 09:26:24,111 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-22T07:24:11+00:00'}
+  zkeco_modern\logs\tray_agent.log:43679:2025-12-22 09:26:24,127 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:43680:2025-12-22 09:26:24,136 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:45138:2025-12-22 09:41:45,137 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-22T07:33:30.709208+00:00'}
+> zkeco_modern\logs\tray_agent.log:45139:2025-12-22 09:41:45,155 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-22T07:41:45.148916+00:00'}
+> zkeco_modern\logs\tray_agent.log:45140:2025-12-22 09:41:45,186 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-22T07:41:45.168020+00:00'}
+  zkeco_modern\logs\tray_agent.log:45141:2025-12-22 09:41:45,215 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:45142:2025-12-22 09:41:45,224 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:45790:2025-12-22 09:53:32,772 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-22T07:33:30.709208+00:00'}
+  zkeco_modern\logs\tray_agent.log:45791:2025-12-22 09:53:32,775 INFO Status loop started
+> zkeco_modern\logs\tray_agent.log:45792:2025-12-22 09:53:32,778 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-22T07:41:45.148916+00:00'}
+> zkeco_modern\logs\tray_agent.log:45793:2025-12-22 09:53:32,787 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-22T07:41:45.168020+00:00'}
+  zkeco_modern\logs\tray_agent.log:45794:2025-12-22 09:53:32,853 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:45795:2025-12-22 09:53:32,867 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:45887:2025-12-22 09:54:26,806 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-22T07:33:30.709208+00:00'}
+> zkeco_modern\logs\tray_agent.log:45888:2025-12-22 09:54:26,825 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-22T07:54:26.809534+00:00'}
+> zkeco_modern\logs\tray_agent.log:45889:2025-12-22 09:54:26,835 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-22T07:54:26.829817+00:00'}
+  zkeco_modern\logs\tray_agent.log:45890:2025-12-22 09:54:26,856 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:45891:2025-12-22 09:54:26,883 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:46947:2025-12-22 10:39:20,001 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-22T07:33:30.709208+00:00'}
+  zkeco_modern\logs\tray_agent.log:46948:2025-12-22 10:39:20,002 INFO Status loop started
+> zkeco_modern\logs\tray_agent.log:46949:2025-12-22 10:39:20,014 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-22T08:39:20.005296+00:00'}
+> zkeco_modern\logs\tray_agent.log:46950:2025-12-22 10:39:20,039 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-22T07:55:11.849313+00:00'}
+  zkeco_modern\logs\tray_agent.log:46951:2025-12-22 10:39:20,096 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:46952:2025-12-22 10:39:20,212 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:47792:2025-12-22 14:40:35,171 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-22T07:33:30.709208+00:00'}
+> zkeco_modern\logs\tray_agent.log:47793:2025-12-22 14:40:35,175 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-22T08:39:20.005296+00:00'}
+> zkeco_modern\logs\tray_agent.log:47794:2025-12-22 14:40:35,180 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-22T07:55:11.849313+00:00'}
+  zkeco_modern\logs\tray_agent.log:47795:2025-12-22 14:40:35,215 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:47796:2025-12-22 14:40:35,240 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:48799:2025-12-22 14:56:52,087 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-22T12:45:24.632520+00:00'}
+> zkeco_modern\logs\tray_agent.log:48800:2025-12-22 14:56:52,090 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-22T08:39:20.005296+00:00'}
+> zkeco_modern\logs\tray_agent.log:48801:2025-12-22 14:56:52,101 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-22T07:55:11.849313+00:00'}
+  zkeco_modern\logs\tray_agent.log:48802:2025-12-22 14:56:52,148 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:48803:2025-12-22 14:56:52,159 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:48903:2025-12-23 07:23:21,355 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-22T12:45:24.632520+00:00'}
+> zkeco_modern\logs\tray_agent.log:48904:2025-12-23 07:23:21,365 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-22T08:39:20.005296+00:00'}
+> zkeco_modern\logs\tray_agent.log:48905:2025-12-23 07:23:21,405 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-22T07:55:11.849313+00:00'}
+  zkeco_modern\logs\tray_agent.log:48906:2025-12-23 07:23:21,450 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:48907:2025-12-23 07:23:21,462 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:56728:2025-12-23 08:57:35,294 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T05:23:38.352009+00:00'}
+> zkeco_modern\logs\tray_agent.log:56729:2025-12-23 08:57:35,298 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T06:10:48.083338+00:00'}
+> zkeco_modern\logs\tray_agent.log:56730:2025-12-23 08:57:35,308 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T06:10:50.278595+00:00'}
+  zkeco_modern\logs\tray_agent.log:56731:2025-12-23 08:57:35,337 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:56732:2025-12-23 08:57:35,352 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:57317:2025-12-23 09:01:53,101 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T06:57:51.018707+00:00'}
+> zkeco_modern\logs\tray_agent.log:57318:2025-12-23 09:01:53,106 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T06:10:48.083338+00:00'}
+> zkeco_modern\logs\tray_agent.log:57319:2025-12-23 09:01:53,126 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T06:59:52.266804+00:00'}
+  zkeco_modern\logs\tray_agent.log:57320:2025-12-23 09:01:53,153 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:57321:2025-12-23 09:01:53,164 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:57878:2025-12-23 09:26:13,268 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T06:57:51.018707+00:00'}
+> zkeco_modern\logs\tray_agent.log:57879:2025-12-23 09:26:13,274 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T06:10:48.083338+00:00'}
+> zkeco_modern\logs\tray_agent.log:57880:2025-12-23 09:26:13,279 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T06:59:52.266804+00:00'}
+  zkeco_modern\logs\tray_agent.log:57881:2025-12-23 09:26:13,315 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:57882:2025-12-23 09:26:13,340 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:58009:2025-12-23 09:37:48,487 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T06:57:51.018707+00:00'}
+> zkeco_modern\logs\tray_agent.log:58010:2025-12-23 09:37:48,500 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T06:10:48.083338+00:00'}
+> zkeco_modern\logs\tray_agent.log:58011:2025-12-23 09:37:48,513 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T06:59:52.266804+00:00'}
+  zkeco_modern\logs\tray_agent.log:58012:2025-12-23 09:37:48,560 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:58013:2025-12-23 09:37:48,570 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:58156:2025-12-23 09:41:47,874 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T06:57:51.018707+00:00'}
+> zkeco_modern\logs\tray_agent.log:58157:2025-12-23 09:41:47,877 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T06:10:48.083338+00:00'}
+> zkeco_modern\logs\tray_agent.log:58158:2025-12-23 09:41:47,895 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T06:59:52.266804+00:00'}
+  zkeco_modern\logs\tray_agent.log:58159:2025-12-23 09:41:47,912 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:58160:2025-12-23 09:41:47,944 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:58500:2025-12-23 10:45:46,143 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T06:57:51.018707+00:00'}
+> zkeco_modern\logs\tray_agent.log:58501:2025-12-23 10:45:46,146 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T06:10:48.083338+00:00'}
+> zkeco_modern\logs\tray_agent.log:58502:2025-12-23 10:45:46,151 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T06:59:52.266804+00:00'}
+  zkeco_modern\logs\tray_agent.log:58503:2025-12-23 10:45:46,195 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:58504:2025-12-23 10:45:46,211 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:58589:2025-12-23 10:55:22,600 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T06:57:51.018707+00:00'}
+> zkeco_modern\logs\tray_agent.log:58590:2025-12-23 10:55:22,603 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T06:10:48.083338+00:00'}
+> zkeco_modern\logs\tray_agent.log:58591:2025-12-23 10:55:22,612 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T06:59:52.266804+00:00'}
+  zkeco_modern\logs\tray_agent.log:58592:2025-12-23 10:55:22,642 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:58593:2025-12-23 10:55:22,666 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:58981:2025-12-23 11:01:16,739 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T06:57:51.018707+00:00'}
+> zkeco_modern\logs\tray_agent.log:58982:2025-12-23 11:01:16,743 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T06:10:48.083338+00:00'}
+> zkeco_modern\logs\tray_agent.log:58983:2025-12-23 11:01:16,758 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T08:56:11+00:00'}
+  zkeco_modern\logs\tray_agent.log:58984:2025-12-23 11:01:16,794 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:58985:2025-12-23 11:01:16,809 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:59424:2025-12-23 11:12:57,826 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T09:12:57.815071+00:00'}
+> zkeco_modern\logs\tray_agent.log:59425:2025-12-23 11:12:57,831 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T06:10:48.083338+00:00'}
+> zkeco_modern\logs\tray_agent.log:59426:2025-12-23 11:12:57,862 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T09:03:14+00:00'}
+  zkeco_modern\logs\tray_agent.log:59427:2025-12-23 11:12:57,887 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:59428:2025-12-23 11:12:57,899 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:59655:2025-12-23 11:15:28,399 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T09:15:28.382468+00:00'}
+> zkeco_modern\logs\tray_agent.log:59656:2025-12-23 11:15:28,404 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T09:13:16+00:00'}
+> zkeco_modern\logs\tray_agent.log:59657:2025-12-23 11:15:28,426 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T09:13:04+00:00'}
+  zkeco_modern\logs\tray_agent.log:59658:2025-12-23 11:15:28,458 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:59659:2025-12-23 11:15:28,476 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:71663:2025-12-23 14:31:04,726 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T12:31:04.719531+00:00'}
+> zkeco_modern\logs\tray_agent.log:71664:2025-12-23 14:31:04,729 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T09:16:07.211019+00:00'}
+> zkeco_modern\logs\tray_agent.log:71665:2025-12-23 14:31:04,758 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T12:31:04.750710+00:00'}
+  zkeco_modern\logs\tray_agent.log:71666:2025-12-23 14:31:04,787 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:71667:2025-12-23 14:31:04,797 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:72057:2025-12-23 14:33:34,943 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T12:33:19.023034+00:00'}
+> zkeco_modern\logs\tray_agent.log:72058:2025-12-23 14:33:34,946 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T09:16:07.211019+00:00'}
+> zkeco_modern\logs\tray_agent.log:72059:2025-12-23 14:33:34,956 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T12:31:04.750710+00:00'}
+  zkeco_modern\logs\tray_agent.log:72060:2025-12-23 14:33:34,986 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:72061:2025-12-23 14:33:35,011 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:72169:2025-12-23 14:34:26,080 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T12:33:19.023034+00:00'}
+> zkeco_modern\logs\tray_agent.log:72170:2025-12-23 14:34:26,115 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T12:34:26.092126+00:00'}
+> zkeco_modern\logs\tray_agent.log:72171:2025-12-23 14:34:26,137 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T12:34:26.128444+00:00'}
+  zkeco_modern\logs\tray_agent.log:72172:2025-12-23 14:34:26,167 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:72173:2025-12-23 14:34:26,193 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:72865:2025-12-23 14:58:18,549 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T12:37:57.698362+00:00'}
+> zkeco_modern\logs\tray_agent.log:72866:2025-12-23 14:58:18,558 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T12:34:26.092126+00:00'}
+> zkeco_modern\logs\tray_agent.log:72867:2025-12-23 14:58:18,572 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T12:34:26.128444+00:00'}
+  zkeco_modern\logs\tray_agent.log:72868:2025-12-23 14:58:18,597 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:72869:2025-12-23 14:58:18,610 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:75353:2025-12-24 07:55:55,509 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-24T05:23:01.665190+00:00'}
+> zkeco_modern\logs\tray_agent.log:75354:2025-12-24 07:55:55,544 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T12:34:26.092126+00:00'}
+> zkeco_modern\logs\tray_agent.log:75355:2025-12-24 07:55:55,594 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T12:34:26.128444+00:00'}
+  zkeco_modern\logs\tray_agent.log:75356:2025-12-24 07:55:55,608 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:75357:2025-12-24 07:55:55,634 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:76004:2025-12-24 08:50:29,587 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-24T05:56:32.058001+00:00'}
+> zkeco_modern\logs\tray_agent.log:76005:2025-12-24 08:50:29,591 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T12:34:26.092126+00:00'}
+> zkeco_modern\logs\tray_agent.log:76006:2025-12-24 08:50:29,613 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T12:34:26.128444+00:00'}
+  zkeco_modern\logs\tray_agent.log:76007:2025-12-24 08:50:29,629 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:76008:2025-12-24 08:50:29,660 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:76716:2025-12-24 08:55:04,917 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-24T05:56:32.058001+00:00'}
+> zkeco_modern\logs\tray_agent.log:76717:2025-12-24 08:55:04,920 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T12:34:26.092126+00:00'}
+> zkeco_modern\logs\tray_agent.log:76718:2025-12-24 08:55:04,923 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T12:34:26.128444+00:00'}
+  zkeco_modern\logs\tray_agent.log:76719:2025-12-24 08:55:04,942 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:76720:2025-12-24 08:55:04,956 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:76733:2025-12-24 09:02:19,236 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-24T05:56:32.058001+00:00'}
+  zkeco_modern\logs\tray_agent.log:76734:2025-12-24 09:02:19,237 INFO Status loop started
+> zkeco_modern\logs\tray_agent.log:76735:2025-12-24 09:02:19,241 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T12:34:26.092126+00:00'}
+> zkeco_modern\logs\tray_agent.log:76736:2025-12-24 09:02:19,247 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T12:34:26.128444+00:00'}
+  zkeco_modern\logs\tray_agent.log:76737:2025-12-24 09:02:19,282 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:76738:2025-12-24 09:02:19,310 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:78548:2025-12-24 09:21:30,560 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-24T07:03:51.441372+00:00', 'origin': 'agent.modern_comm_center.connect_all'}
+> zkeco_modern\logs\tray_agent.log:78549:2025-12-24 09:21:30,566 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T12:34:26.092126+00:00', 'origin': 'agent.modern_comm_center.connect_all'}
+> zkeco_modern\logs\tray_agent.log:78550:2025-12-24 09:21:30,584 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-23T12:34:26.128444+00:00', 'origin': 'agent.modern_comm_center.connect_all'}
+  zkeco_modern\logs\tray_agent.log:78551:2025-12-24 09:21:30,604 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:78552:2025-12-24 09:21:30,619 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:78620:2025-12-24 09:22:05,240 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-24T07:03:51.441372+00:00', 'origin': 'agent.modern_comm_center.connect_all'}
+> zkeco_modern\logs\tray_agent.log:78621:2025-12-24 09:22:05,262 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-24T07:22:05.243875+00:00', 'origin': 'agent.modern_comm_center.connect_all'}
+> zkeco_modern\logs\tray_agent.log:78622:2025-12-24 09:22:05,277 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-24T07:22:05.271593+00:00', 'origin': 'agent.modern_comm_center.connect_all'}
+  zkeco_modern\logs\tray_agent.log:78623:2025-12-24 09:22:05,294 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:78624:2025-12-24 09:22:05,302 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:79145:2025-12-24 10:09:07,669 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-24T07:23:04.449467+00:00', 'origin': 'agent.modern_comm_center.connect_all'}
+> zkeco_modern\logs\tray_agent.log:79146:2025-12-24 10:09:07,672 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-24T07:22:05.243875+00:00', 'origin': 'agent.modern_comm_center.connect_all'}
+> zkeco_modern\logs\tray_agent.log:79147:2025-12-24 10:09:07,681 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-24T07:22:05.271593+00:00', 'origin': 'agent.modern_comm_center.connect_all'}
+  zkeco_modern\logs\tray_agent.log:79148:2025-12-24 10:09:07,709 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:79149:2025-12-24 10:09:07,742 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:79341:2025-12-24 10:17:15,335 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-24T08:09:16.028015+00:00', 'origin': 'agent.modern_comm_center.connect_all'}
+> zkeco_modern\logs\tray_agent.log:79342:2025-12-24 10:17:15,339 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-24T07:22:05.243875+00:00', 'origin': 'agent.modern_comm_center.connect_all'}
+> zkeco_modern\logs\tray_agent.log:79343:2025-12-24 10:17:15,351 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-24T07:22:05.271593+00:00', 'origin': 'agent.modern_comm_center.connect_all'}
+  zkeco_modern\logs\tray_agent.log:79344:2025-12-24 10:17:15,362 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:79345:2025-12-24 10:17:15,371 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:80891:2025-12-24 10:28:25,888 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-24T08:17:55.557618+00:00', 'origin': 'agent.modern_comm_center.connect_all'}
+> zkeco_modern\logs\tray_agent.log:80892:2025-12-24 10:28:25,891 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-24T07:22:05.243875+00:00', 'origin': 'agent.modern_comm_center.connect_all'}
+> zkeco_modern\logs\tray_agent.log:80893:2025-12-24 10:28:25,902 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-24T08:19:19.522262+00:00', 'origin': 'agent.modern_comm_center.connect_all'}
+  zkeco_modern\logs\tray_agent.log:80894:2025-12-24 10:28:25,916 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:80895:2025-12-24 10:28:25,936 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:81023:2025-12-24 10:29:21,260 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-24T08:28:54.885341+00:00', 'origin': 'agent.modern_comm_center.connect_all'}
+> zkeco_modern\logs\tray_agent.log:81024:2025-12-24 10:29:21,271 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-24T08:29:21.264348+00:00', 'origin': 'agent.modern_comm_center.connect_all'}
+> zkeco_modern\logs\tray_agent.log:81025:2025-12-24 10:29:21,290 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-24T08:29:21.281800+00:00', 'origin': 'agent.modern_comm_center.connect_all'}
+  zkeco_modern\logs\tray_agent.log:81026:2025-12-24 10:29:21,320 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:81027:2025-12-24 10:29:21,343 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+> zkeco_modern\logs\tray_agent.log:81456:2025-12-24 10:39:46,534 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 1, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-24T08:31:00.656701+00:00', 'origin': 'agent.modern_comm_center.connect_all'}
+> zkeco_modern\logs\tray_agent.log:81457:2025-12-24 10:39:46,537 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 2, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-24T08:29:21.264348+00:00', 'origin': 'agent.modern_comm_center.connect_all'}
+> zkeco_modern\logs\tray_agent.log:81458:2025-12-24 10:39:46,546 INFO broadcast_device_status -> group_send monitor payload={'type': 'device.status', 'device_id': 3, 'serial': '', 
+'online': True, 'door_state': None, 'updated_at': '2025-12-24T08:29:21.281800+00:00', 'origin': 'agent.modern_comm_center.connect_all'}
+  zkeco_modern\logs\tray_agent.log:81459:2025-12-24 10:39:46,583 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 1, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+  zkeco_modern\logs\tray_agent.log:81460:2025-12-24 10:39:46,612 INFO ModernCommCenter._publish_event -> monitor payload={'type': 'rtlog.batch', 'device_id': 2, 'lines': ['2025-11-
+20 10:00:05,1,0,0,200,0,0']}
+
+
