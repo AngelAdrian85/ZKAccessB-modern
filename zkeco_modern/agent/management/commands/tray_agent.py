@@ -332,30 +332,81 @@ def _set_device_online_flag(scanner: str, online: bool):
     try:
         from django.db import connection
         val = 1 if online else 0
-        # Build a safe-ish SQL string inlined with integers and escaped scanner value
         esc = str(scanner).replace("'", "''")
-        vendor = getattr(connection, 'vendor', '')
         cur = connection.cursor()
-        if vendor == 'sqlite':
-            # Update `updated_at` only for rows where the online flag actually
-            # changes (prevents stamping server start time for unchanged rows).
-            sql = (f"UPDATE agent_devicestatus SET online={val}, updated_at=CURRENT_TIMESTAMP "
-                   f"WHERE device_id IN (SELECT id FROM agent_device WHERE scanner_type='{esc}' AND scanner_linked=1 AND enabled=1) "
-                   f"AND online != {val}")
-        else:
-            # Postgres/MySQL: update only rows where online differs from the
-            # desired value so CURRENT_TIMESTAMP is applied only on transitions.
-            sql = (f"UPDATE agent_devicestatus SET online = {val}, updated_at = CURRENT_TIMESTAMP FROM agent_device "
-                   f"WHERE agent_devicestatus.device_id = agent_device.id "
-                   f"AND agent_device.scanner_type = '{esc}' AND agent_device.scanner_linked = true AND agent_device.enabled = true "
-                   f"AND agent_devicestatus.online <> {val}")
+        # Small cooldown: avoid stomping a very recent user-initiated change.
+        COOLDOWN_SECONDS = 5.0
         try:
-            cur.execute(sql)
-            try:
-                connection.commit()
-            except Exception:
-                pass
-            logging.info('Set DeviceStatus.online=%s for scanner=%s (rows affected=%s)', val, scanner, getattr(cur, 'rowcount', 'unknown'))
+            # Retrieve candidate rows and their timestamps
+            vendor = getattr(connection, 'vendor', '')
+            if vendor == 'sqlite':
+                sel = ("SELECT agent_device.id, agent_devicestatus.online, agent_devicestatus.updated_at "
+                       "FROM agent_device JOIN agent_devicestatus ON agent_devicestatus.device_id = agent_device.id "
+                       f"WHERE agent_device.scanner_type = '{esc}' AND agent_device.scanner_linked=1 AND agent_device.enabled=1")
+                cur.execute(sel)
+            else:
+                sel = ("SELECT agent_device.id, agent_devicestatus.online, agent_devicestatus.updated_at "
+                       "FROM agent_device JOIN agent_devicestatus ON agent_devicestatus.device_id = agent_device.id "
+                       f"WHERE agent_device.scanner_type = '{esc}' AND agent_device.scanner_linked = true AND agent_device.enabled = true")
+                cur.execute(sel)
+            rows = cur.fetchall() or []
+            ids_to_update = []
+            now_ts = time.time()
+            for did, online_db, updated_at in rows:
+                try:
+                    online_db_bool = bool(online_db)
+                except Exception:
+                    online_db_bool = bool(online_db)
+                # Only consider rows where the online flag actually differs
+                if online_db_bool == bool(val):
+                    continue
+                # If changing to offline, skip rows updated very recently
+                if val == 0 and updated_at is not None:
+                    try:
+                        # Normalize updated_at to timestamp seconds
+                        if isinstance(updated_at, str):
+                            # Attempt parse ISO-like string
+                            try:
+                                import datetime as _dt
+                                from django.utils.dateparse import parse_datetime
+                                d = parse_datetime(updated_at)
+                                if d is not None:
+                                    updated_ts = d.timestamp()
+                                else:
+                                    updated_ts = None
+                            except Exception:
+                                updated_ts = None
+                        else:
+                            updated_ts = updated_at.timestamp() if hasattr(updated_at, 'timestamp') else None
+                        if updated_ts is not None and (now_ts - float(updated_ts)) < COOLDOWN_SECONDS:
+                            # Skip this row to avoid overwriting recent user action
+                            continue
+                    except Exception:
+                        pass
+                ids_to_update.append(did)
+
+            if not ids_to_update:
+                logging.info('No DeviceStatus rows to update for scanner=%s after cooldown filter', scanner)
+                # proceed to broadcasting current states below
+            else:
+                # Perform update for selected device ids
+                id_list = ','.join(str(int(x)) for x in ids_to_update)
+                try:
+                    if vendor == 'sqlite':
+                        upd = (f"UPDATE agent_devicestatus SET online={val}, updated_at=CURRENT_TIMESTAMP "
+                               f"WHERE device_id IN ({id_list})")
+                        cur.execute(upd)
+                    else:
+                        # Use generic CURRENT_TIMESTAMP for DBs that support it
+                        upd = (f"UPDATE agent_devicestatus SET online = {val}, updated_at = CURRENT_TIMESTAMP WHERE device_id IN ({id_list})")
+                        cur.execute(upd)
+                    try:
+                        connection.commit()
+                    except Exception:
+                        pass
+                    logging.info('Set DeviceStatus.online=%s for scanner=%s (rows affected=%s)', val, scanner, getattr(cur, 'rowcount', 'unknown'))
+                except Exception as e:
+                    logging.error('SQL update failed while setting DeviceStatus for %s: %s', scanner, e)
             # Broadcast status for affected devices via channels if available
             try:
                 from channels.layers import get_channel_layer

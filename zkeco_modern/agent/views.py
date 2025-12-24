@@ -261,23 +261,19 @@ def readers_start(request: HttpRequest):
         from agent.models import DeviceStatus as _DS
         for dev in qs:
             try:
-                # Do NOT create DeviceStatus rows here. Creating status rows at server/tray start
-                # records the server start time in `updated_at` which can be mistaken for a real
-                # device state-change. Only update existing status rows; skip creation.
-                ds = _DS.objects.filter(device=dev).first()
-                if not ds:
-                    # no prior status known for this device; skip updating to avoid writing server-time
-                    continue
-                # if device was previously offline, set updated_at; otherwise preserve historical timestamp
-                # Only record `updated_at` when the device actually changes
-                # state from offline -> online. If it's already online, do
-                # not overwrite the historical timestamp.
-                if not ds.online:
+                # This path is invoked by an explicit user action (readers_start).
+                # Creating DeviceStatus rows here is acceptable because the operator
+                # explicitly requested the readers to start; persist the authoritative
+                # online state so the UI and other services can act on it.
+                ds, created = _DS.objects.get_or_create(device=dev, defaults={'online': True, 'door_state': ''})
+                # If newly created or previously offline -> mark online and record timestamp
+                if created or not ds.online:
                     ds.online = True
                     ds.door_state = ''
                     ds.updated_at = timezone.now()
                     ds.save(update_fields=['online', 'door_state', 'updated_at'])
                 else:
+                    # already online; ensure door_state normalized
                     if ds.door_state != '':
                         ds.door_state = ''
                         ds.save(update_fields=['door_state'])
