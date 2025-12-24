@@ -379,6 +379,7 @@ const dashDevices = JSON.parse(document.getElementById('dashboardDevices')?.text
 let dashDoors = JSON.parse(document.getElementById('dashboardDoors')?.textContent || '[]');
 let currentDeviceMode = 'central';
 let dashLastCard = '';
+const dashOverrides = {}; // deviceId -> expiry ms since epoch (local override after user toggle)
 
 function badge(text, kind){
   const cls = kind==='err' ? 'badge err' : (kind==='warn' ? 'badge warn' : 'badge ok');
@@ -437,7 +438,13 @@ async function toggleDevice(deviceId, currentOnline){
     if(j && j.ok){
       // update local state
       const idx = dashDevices.findIndex(d => String(d.device__id) === String(deviceId));
-      if(idx >= 0){ dashDevices[idx].online = !!j.online; dashDevices[idx].updated_at = j.updated_at || dashDevices[idx].updated_at; }
+      if(idx >= 0){
+        dashDevices[idx].online = !!j.online;
+        dashDevices[idx].updated_at = j.updated_at || dashDevices[idx].updated_at;
+        dashDevices[idx].ts = j.updated_at || new Date().toISOString();
+      }
+      // set a short local override so incoming WS messages don't immediately overwrite user's action
+      dashOverrides[String(deviceId)] = Date.now() + 7000; // 7s
       // apply visual state
       if(j.online){ btn.classList.add('active'); btn.classList.add('pulse'); btn.textContent = 'Oprit'; }
       else { btn.classList.remove('active'); btn.classList.remove('pulse'); btn.textContent = 'Pornește'; }
@@ -754,16 +761,32 @@ function escapeHtml(str){
     if(!id) return;
     // find by device__id or device__serial_number
     const idx = dashDevices.findIndex(d => String(d.device__id) === String(id) || String(d.device__id) === String(p.device__id) || String(d.device__serial_number) === String(p.serial));
-    // Only use server-provided `updated_at`. If absent, keep existing value (don't insert client time).
+    const incomingTs = p.updated_at ? Date.parse(p.updated_at) : Date.now();
+    const curTs = (idx >= 0 && (dashDevices[idx].ts || dashDevices[idx].updated_at)) ? Date.parse(dashDevices[idx].ts || dashDevices[idx].updated_at) : 0;
+    // respect local override set when user toggles device
+    const overrideExpiry = dashOverrides[String(id)];
+    if(overrideExpiry && Date.now() < overrideExpiry){
+      console.log('Dashboard: ignoring incoming device.status due to local override', id);
+      return;
+    }
+    // ignore older incoming statuses
+    if(curTs > incomingTs){
+      console.log('Dashboard: ignored older device.status for', id, {incoming: p.updated_at, current: dashDevices[idx] && (dashDevices[idx].ts || dashDevices[idx].updated_at)});
+      return;
+    }
     const updated_at = (p.updated_at !== undefined && p.updated_at !== null && p.updated_at !== '') ? p.updated_at : (idx >= 0 ? dashDevices[idx].updated_at : null);
     if(idx >= 0){
-      dashDevices[idx].online = !!p.online;
+      // Only update `online` when the payload explicitly includes it.
+      if(Object.prototype.hasOwnProperty.call(p, 'online')){
+        dashDevices[idx].online = !!p.online;
+      }
       dashDevices[idx].updated_at = updated_at;
+      dashDevices[idx].ts = p.updated_at || new Date().toISOString();
       // also update door_state if present
       if(typeof p.door_state !== 'undefined') dashDevices[idx].door_state = p.door_state;
     } else {
       // push a minimal entry so render shows it
-      dashDevices.push({ device__id: id, device__name: p.name || ('Device '+id), online: !!p.online, updated_at: updated_at, category: 'other', type_badge: p.type_badge||'' });
+      dashDevices.push({ device__id: id, device__name: p.name || ('Device '+id), online: Object.prototype.hasOwnProperty.call(p,'online') ? !!p.online : true, updated_at: updated_at, ts: p.updated_at || new Date().toISOString(), category: 'other', type_badge: p.type_badge||'' });
     }
     renderDeviceTable(currentDeviceMode);
   }
