@@ -2689,7 +2689,8 @@ def _enqueue(device_id: int, cmd: str, door: Door | None = None) -> bool:
         import agent.modern_comm_center as mcc
         center = getattr(mcc, 'ACTIVE_CENTER', None)
         if center is None:
-            center = build_and_run_stub(poll_interval=1.0, driver='stub')
+            # Use 'auto' driver detection so we don't poll stub data with stale timestamps.
+            center = build_and_run_stub(poll_interval=1.0, driver='auto')
             mcc.ACTIVE_CENTER = center
         try:
             center.enqueue_command(device_id, cmd)
@@ -3541,7 +3542,8 @@ def comm_center_start(request: HttpRequest):
     try:
         from agent.modern_comm_center import build_and_run_stub
         import agent.modern_comm_center as mcc
-        mcc.ACTIVE_CENTER = build_and_run_stub(poll_interval=1.0, driver='stub')
+        # Start CommCenter with automatic driver selection (prefer real drivers over stub)
+        mcc.ACTIVE_CENTER = build_and_run_stub(poll_interval=1.0, driver='auto')
         return JsonResponse({'ok': True,'message':'started'})
     except Exception as e:
         return JsonResponse({'ok': False,'error': str(e)}, status=500)
