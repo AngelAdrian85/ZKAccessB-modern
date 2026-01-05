@@ -8,9 +8,17 @@ from django.db.models import Max
 from .models import DeviceRealtimeLog, DeviceEventLog, DeviceStatus, Device
 from .models import Door, TimeSegment, Holiday, AccessLevel, Employee
 from .models import CommandLog, EmployeeAccessCache, EmployeeCard
+try:
+    from .models import AuditLog
+except ImportError:
+    AuditLog = None
 from .forms import (DoorForm, TimeSegmentFormWithDays, HolidayForm, AccessLevelForm,
                     EmployeeForm, EmployeeExtendedForm, DeptForm, AreaForm,
                     AccessLogFilterForm, DeviceExtendedForm)
+try:
+    from .forms import IssueCardForm
+except ImportError:
+    IssueCardForm = None
 try:
     from legacy_models.models import Area as LegacyArea, AccessLog as LegacyAccessLog, Dept
 except Exception:  # pragma: no cover
@@ -960,7 +968,7 @@ def menu_personnel(request: HttpRequest):
 
     # Preload logs for Logs tab (prefer agent.AuditLog; fallback to LegacyAccessLog)
     try:
-        audit_logs = list(AuditLog.objects.all()[:200])
+        audit_logs = list(AuditLog.objects.all()[:200]) if AuditLog else []
     except Exception:
         audit_logs = []
     legacy_logs = []
@@ -1489,7 +1497,7 @@ def issuecard_create(request: HttpRequest):
     if not request.user.is_authenticated or not request.user.is_staff:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
-    if not LegacyIssueCard:
+    if not IssueCardForm:
         return render(request,'agent/issuecard_form.html',{'form': None, 'missing': True})
     if request.method == 'POST':
         form = IssueCardForm(request.POST)
@@ -1501,7 +1509,7 @@ def issuecard_edit(request: HttpRequest, pk: int):
     if not request.user.is_authenticated or not request.user.is_staff:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
-    if not LegacyIssueCard:
+    if not IssueCardForm:
         return render(request,'agent/issuecard_form.html',{'form': None, 'missing': True})
     obj = EmployeeCard.objects.get(pk=pk)
     if request.method == 'POST':
@@ -1513,7 +1521,7 @@ def issuecard_edit(request: HttpRequest, pk: int):
 def issuecard_delete(request: HttpRequest, pk: int):
     if not request.user.is_authenticated or not request.user.is_staff or request.method != 'POST':
         return JsonResponse({'ok': False,'error':'unauthorized'}, status=403)
-    if not LegacyIssueCard:
+    if not IssueCardForm:
         return JsonResponse({'ok': False,'error':'missing-model'}, status=400)
     try: EmployeeCard.objects.filter(pk=pk).delete(); return JsonResponse({'ok': True})
     except Exception as e: return JsonResponse({'ok': False,'error': str(e)}, status=400)

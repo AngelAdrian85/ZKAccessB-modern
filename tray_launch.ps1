@@ -14,17 +14,17 @@ try {
   if(Test-Path $configFile){
     try {
       $raw = Get-Content $configFile -ErrorAction SilentlyContinue | Select-String -Pattern '^port\s*=\s*(\d+)' | ForEach-Object { $_.Matches[0].Groups[1].Value } | Select-Object -First 1
-      if($raw){ $cfgPort = [int]$raw }
+      if($null -ne $raw){ $cfgPort = [int]$raw }
     } catch {}
   }
   $portsToKill = @($Port)
-  if($cfgPort -and ($cfgPort -ne $Port)){ $portsToKill += $cfgPort }
+  if($null -ne $cfgPort -and ($cfgPort -ne $Port)){ $portsToKill += $cfgPort }
   foreach($p in ($portsToKill | Sort-Object -Unique)){
     Write-Host "[TRAY] Scanning port $p"
     $pids = netstat -ano | Select-String ":$p" | ForEach-Object { ($_ -split " +")[-1] } | Sort-Object -Unique
-    foreach($pid in $pids){
-      if($pid -match '^[0-9]+$'){
-        try { Stop-Process -Id [int]$pid -Force -ErrorAction SilentlyContinue; Write-Host "[TRAY] Killed PID $pid on port $p" } catch {}
+    foreach($proc_id in $pids){
+      if($proc_id -match '^[0-9]+$'){
+        try { Stop-Process -Id [int]$proc_id -Force -ErrorAction SilentlyContinue; Write-Host "[TRAY] Killed PID $proc_id on port $p" } catch {}
       }
     }
   }
@@ -92,8 +92,8 @@ try {
           } catch {}
         }
       }
-      foreach($pid in ($toKill | Sort-Object -Unique)){
-        try { Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue; Write-Host "[TRAY] Killed non-venv PID $pid" } catch {}
+      foreach($proc_id in ($toKill | Sort-Object -Unique)){
+        try { Stop-Process -Id $proc_id -Force -ErrorAction SilentlyContinue; Write-Host "[TRAY] Killed non-venv PID $proc_id" } catch {}
       }
     } catch {}
   } else {
@@ -158,14 +158,14 @@ try {
   if (Test-Path $acpScript) {
     $acpEnabled = $true
     $acpPort = '9001'
-    if ($ReaderCfg -and $ReaderCfg.acp) {
+    if ($null -ne $ReaderCfg -and $null -ne $ReaderCfg.acp) {
       if ($ReaderCfg.acp.enabled -eq $false) { $acpEnabled = $false }
-      if ($ReaderCfg.acp.port) { $acpPort = [string]$ReaderCfg.acp.port }
+      if ($null -ne $ReaderCfg.acp.port) { $acpPort = [string]$ReaderCfg.acp.port }
     }
     if ($acpEnabled) {
       Write-Host "[TRAY] Starting ACP listener on port $acpPort"
       # Respect UI block flag if present
-      if ($trayStatus -and $trayStatus.acp_blocked -eq $true) { Write-Host "[TRAY] ACP start suppressed: acp_blocked flag set"; $acpEnabled = $false } 
+      if ($null -ne $trayStatus -and $trayStatus.acp_blocked -eq $true) { Write-Host "[TRAY] ACP start suppressed: acp_blocked flag set"; $acpEnabled = $false } 
       $p = Start-Process -FilePath $py -ArgumentList $acpScript, $acpPort -PassThru -WindowStyle Hidden
       if ($p) { $global:TrayChildPids += $p.Id }
     } else {
@@ -180,17 +180,17 @@ try {
     $elatecEnabled = $true
     $elatecPort = 'COM3'
     $elatecMode = 'serial'
-    if ($ReaderCfg -and $ReaderCfg.elatec) {
+    if ($null -ne $ReaderCfg -and $null -ne $ReaderCfg.elatec) {
       if ($ReaderCfg.elatec.enabled -eq $false) { $elatecEnabled = $false }
-      if ($ReaderCfg.elatec.port) { $elatecPort = [string]$ReaderCfg.elatec.port }
-      if ($ReaderCfg.elatec.mode) { $elatecMode = [string]$ReaderCfg.elatec.mode }
+      if ($null -ne $ReaderCfg.elatec.port) { $elatecPort = [string]$ReaderCfg.elatec.port }
+      if ($null -ne $ReaderCfg.elatec.mode) { $elatecMode = [string]$ReaderCfg.elatec.mode }
     }
     # Auto-disable if COM port not present (only for non-virtual mode)
     if ($elatecMode -ne 'virtual') {
       try {
         $ports = (Get-CimInstance Win32_SerialPort | Select-Object -ExpandProperty DeviceID) 2> $null
       } catch { $ports = @() }
-      if ($elatecEnabled -and (-not $ports -or ($ports -notcontains $elatecPort))) {
+      if ($elatecEnabled -and ($null -eq $ports -or ($ports -notcontains $elatecPort))) {
         Write-Warning "[TRAY] Elatec port '$elatecPort' not found; disabling Elatec"
         $elatecEnabled = $false
       }
@@ -204,7 +204,7 @@ try {
         Write-Host "[TRAY] Starting Elatec serial listener on $elatecPort"
       }
       # Respect UI block flag if present
-      if ($trayStatus -and $trayStatus.elatec_blocked -eq $true) { Write-Host "[TRAY] Elatec start suppressed: elatec_blocked flag set"; $elatecEnabled = $false }
+      if ($null -ne $trayStatus -and $trayStatus.elatec_blocked -eq $true) { Write-Host "[TRAY] Elatec start suppressed: elatec_blocked flag set"; $elatecEnabled = $false }
       try {
         $p2 = Start-Process -FilePath $py -ArgumentList $elatecScript, $elatecPort -PassThru -WindowStyle Hidden
         if ($p2) { $global:TrayChildPids += $p2.Id }
@@ -236,10 +236,10 @@ try {
   $statusInit.color = $colorInit
   # Preserve any existing blocked flags so UI STOP isn't clobbered
   if ($trayStatus) {
-    if ($trayStatus.acp_blocked -eq $true) { $statusInit.acp_blocked = $true }
-    if ($trayStatus.elatec_blocked -eq $true) { $statusInit.elatec_blocked = $true }
-    if ($trayStatus.cmd_stop_acp -ne $null) { $statusInit.cmd_stop_acp = $trayStatus.cmd_stop_acp }
-    if ($trayStatus.cmd_stop_elatec -ne $null) { $statusInit.cmd_stop_elatec = $trayStatus.cmd_stop_elatec }
+    if ($true -eq $trayStatus.acp_blocked) { $statusInit.acp_blocked = $true }
+    if ($true -eq $trayStatus.elatec_blocked) { $statusInit.elatec_blocked = $true }
+    if (($trayStatus.cmd_stop_acp | Measure-Object).Count -gt 0) { $statusInit.cmd_stop_acp = $trayStatus.cmd_stop_acp }
+    if (($trayStatus.cmd_stop_elatec | Measure-Object).Count -gt 0) { $statusInit.cmd_stop_elatec = $trayStatus.cmd_stop_elatec }
   }
   Set-Content -Path (Join-Path $PWD 'tray_status.json') -Value ($statusInit | ConvertTo-Json -Depth 3) -Encoding UTF8
 } catch {}
@@ -315,10 +315,10 @@ try {
   $statusRun.color = if(($statusRun.server -eq 'PORNIT') -and $allReadersOk){ 'green' } elseif(($statusRun.server -eq 'PORNIT') -or $allReadersOk){ 'yellow' } else { 'red' }
   # Preserve blocked flags if present so a UI STOP remains effective
   if ($trayStatus) {
-    if ($trayStatus.acp_blocked -eq $true) { $statusRun.acp_blocked = $true }
-    if ($trayStatus.elatec_blocked -eq $true) { $statusRun.elatec_blocked = $true }
-    if ($trayStatus.cmd_stop_acp -ne $null) { $statusRun.cmd_stop_acp = $trayStatus.cmd_stop_acp }
-    if ($trayStatus.cmd_stop_elatec -ne $null) { $statusRun.cmd_stop_elatec = $trayStatus.cmd_stop_elatec }
+    if ($true -eq $trayStatus.acp_blocked) { $statusRun.acp_blocked = $true }
+    if ($true -eq $trayStatus.elatec_blocked) { $statusRun.elatec_blocked = $true }
+    if (($trayStatus.cmd_stop_acp | Measure-Object).Count -gt 0) { $statusRun.cmd_stop_acp = $trayStatus.cmd_stop_acp }
+    if (($trayStatus.cmd_stop_elatec | Measure-Object).Count -gt 0) { $statusRun.cmd_stop_elatec = $trayStatus.cmd_stop_elatec }
   }
   Set-Content -Path (Join-Path $PWD 'tray_status.json') -Value ($statusRun | ConvertTo-Json -Depth 3) -Encoding UTF8
 } catch {}
