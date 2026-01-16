@@ -31,6 +31,14 @@ media/
 staticfiles/
 tray_status.json
 
+# App runtime output
+**/runtime_logs/
+**/runtime_logs/**
+
+# DB backups (generated)
+zkeco_modern/backups/
+zkeco_modern/backups/**
+
 # OS files
 .DS_Store
 Thumbs.db
