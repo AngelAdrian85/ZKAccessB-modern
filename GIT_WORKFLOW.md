@@ -1,16 +1,22 @@
-# Git Workflow — Complete Your PR
+# Git Workflow — Keep Repo Clean & Portable
 
-Since git is not available in the agent execution environment, you need to run these commands locally from your machine to finalize the porting work.
+Goal: at any moment you can clone/pull this repo on another PC (e.g. at work) and get a clean, usable checkout.
+
+Rules of thumb:
+- Keep `main` stable and clean (no local uncommitted changes on `main`).
+- Do all work on a branch (`feature/...` for ready work, `wip/...` for in-progress work).
+- Push your branch to GitHub so you can continue from another machine.
+- Generated artifacts must stay out of git (`.venv/`, `__pycache__/`, logs, backups, etc.).
 
 ## Step 1: Create and Switch to a New Branch
 
 ```powershell
 Set-Location 'C:\Users\AngelAdrian\Desktop\Acces\ZKAccessB'
 git status
-# You should see all the modified/untracked files from this session
+# You should see a clean working tree on main (recommended)
 
-# Create a new feature branch
-git checkout -b port/python3/commands-and-migrations
+# Create a branch for your work
+git checkout -b wip/office-sync-YYYY-MM-DD
 ```
 
 ## Step 2: Review Changes (Optional but Recommended)
@@ -44,20 +50,24 @@ git commit -m "port(commands+ci+db): modernize management commands, expand tests
 - Added legacy code inventory and prioritized porting roadmap"
 ```
 
-## Step 5: Push Branch to Remote
+## Step 5: Push Branch to Remote (So You Can Continue Elsewhere)
 
 ```powershell
-git push -u origin port/python3/commands-and-migrations
+git push -u origin wip/office-sync-YYYY-MM-DD
+
+# On another PC:
+# git clone <repo_url>
+# git checkout wip/office-sync-YYYY-MM-DD
 ```
 
-## Step 6: Open PR on GitHub
+## Step 6: Open PR on GitHub (When Ready)
 
 Go to your repository on GitHub (https://github.com/YOUR_OWNER/ZKAccessB):
 1. Click "Compare & pull request" (GitHub will show a prompt after pushing)
 2. Or click "Branches" and then "New pull request" for the branch
 3. Set base to `main` (or `master` if that's your default)
-4. Set compare to `port/python3/commands-and-migrations`
-5. Copy and paste the content from `port_plan/PR_DESCRIPTION.md` into the PR body
+4. Set compare to your branch (e.g. `feature/...`)
+5. Add a clear description of what changed and how to test
 6. Click "Create pull request"
 
 ## Step 7: Code Review & Merge
@@ -73,10 +83,10 @@ Go to your repository on GitHub (https://github.com/YOUR_OWNER/ZKAccessB):
 git branch -r
 
 # Show the latest commits on the branch
-git log --oneline -10 port/python3/commands-and-migrations
+git log --oneline -10 wip/office-sync-YYYY-MM-DD
 
 # Compare to main
-git log --oneline main..port/python3/commands-and-migrations
+git log --oneline main..wip/office-sync-YYYY-MM-DD
 ```
 
 ## If You Need to Make Additional Changes
@@ -97,7 +107,7 @@ git push
 # Discard all local changes (BE CAREFUL)
 git reset --hard HEAD
 
-# Or switch back to main
+# Or switch back to main (recommended)
 git checkout main
 ```
 
@@ -105,15 +115,17 @@ git checkout main
 
 | Command | Purpose |
 |---------|---------|
-| `git checkout -b port/python3/commands-and-migrations` | Create and switch to new branch |
+| `git checkout -b wip/office-sync-YYYY-MM-DD` | Create and switch to new WIP branch |
 | `git status` | See what's changed |
 | `git diff` | See detailed changes |
 | `git add -A` | Stage all changes |
 | `git commit -m "message"` | Commit changes |
-| `git push -u origin port/python3/commands-and-migrations` | Push branch to remote |
+| `git push -u origin wip/office-sync-YYYY-MM-DD` | Push branch to remote |
 | `git log --oneline -10` | View last 10 commits |
 | `git branch -r` | List remote branches |
 
 ---
 
-**All your workspace files are ready to commit!** Run these commands from your PowerShell terminal and your PR will be on GitHub. The work is production-ready and documented for review.
+If `git status` is noisy, it usually means either:
+- you’re on `main` with uncommitted changes (move work to a branch), or
+- generated files are being created locally (add/verify `.gitignore`).
