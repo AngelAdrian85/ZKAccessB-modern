@@ -8,14 +8,30 @@
 .access-tab.active{background:#3da5d9;color:#fff;border-color:#3da5d9;}
 .card-panel{background:#0f2433;border:1px solid #3d6a8b;border-radius:4px;padding:10px;}
 .card-panel h3{margin:0 0 8px 0;color:#9fd2f1;font-size:13px;letter-spacing:0.2px;}
-.compact-table{width:100%;border-collapse:collapse;font-size:11px;background:#102637;}
-.compact-table thead{background:linear-gradient(90deg,#1a3a52 0%,#3da5d9 100%);color:#fff;}
-.compact-table th,.compact-table td{padding:6px 8px;border:1px solid #2d6a8b;text-align:left;color:#e8f0f8;}
+.compact-table{width:100%;border-collapse:collapse;font-size:9px;background:#163247;}
+.compact-table thead{background:linear-gradient(to bottom,#3da5d9 0%,#2d7ba5 100%);color:#fff;}
+.compact-table thead th{padding:3px 4px;text-align:left;font-weight:700;border-right:1px solid #2d7ba5;white-space:nowrap;font-size:9px;text-transform:uppercase;letter-spacing:0.2px;}
+.compact-table thead th:last-child{border-right:none;}
+.compact-table tbody tr{border-bottom:1px solid #3d6a8b;transition:background 0.1s;}
+.compact-table tbody tr:nth-child(even){background:#0f2433;}
+.compact-table tbody tr:hover{background:#1e4a6b;}
+.compact-table td{padding:2px 4px;border-right:1px solid #3d6a8b;color:#e8f0f8;}
+.compact-table td:last-child{border-right:none;}
 .btn-small{padding:6px 12px;border:none;border-radius:3px;font-size:11px;font-weight:700;cursor:pointer;color:#fff;text-decoration:none;display:inline-block;}
 .btn-primary{background:#3da5d9;}
 .btn-success{background:#2da44e;}
 .btn-danger{background:#d94a3d;}
 .pagination{margin-top:8px;display:flex;gap:8px;align-items:center;color:#9fd2f1;font-size:11px;}
+
+/* Modal */
+#segmentModalBackdrop{position:fixed;inset:0;background:rgba(0,0,0,0.60);display:none;align-items:center;justify-content:center;z-index:2000;padding:12px;opacity:0;transition:opacity 160ms ease;backdrop-filter:blur(2px);}
+#segmentModalBackdrop.is-open{opacity:1;}
+#segmentModal{background:#122536;border:1px solid #3d6a8b;border-radius:8px;width:min(980px,96vw);max-height:92vh;box-shadow:0 28px 70px rgba(0,0,0,0.65);overflow:hidden;display:flex;flex-direction:column;transform:translateY(10px) scale(0.985);opacity:0;transition:transform 180ms ease, opacity 180ms ease;}
+#segmentModalBackdrop.is-open #segmentModal{transform:translateY(0) scale(1);opacity:1;}
+#segmentModalHeader{background:linear-gradient(90deg,#1a3a52 0%,#3da5d9 70%,#2ebf96 100%);color:#fff;font-weight:900;font-size:12px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;}
+#segmentModalHeader button{background:rgba(255,255,255,0.10);border:1px solid rgba(255,255,255,0.18);color:#fff;width:30px;height:30px;border-radius:50%;cursor:pointer;font-weight:900;}
+#segmentModalHeader button:hover{background:rgba(255,255,255,0.16);}
+#segmentModalBody{padding:12px;overflow:auto;}
 </style>
 
 <div class="access-shell">
@@ -29,7 +45,7 @@
   <div class="card-panel">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
       <h3>⏱️ Time Segments</h3>
-      <a class="btn-small btn-primary" href="{% url 'crud-segment-create' %}">+ Add Segment</a>
+      <button class="btn-small btn-primary" type="button" data-seg-action="add" data-url="{% url 'crud-segment-create' %}?modal=1">+ Add Segment</button>
     </div>
     <table class="compact-table">
       <thead><tr><th>Name</th><th>Start</th><th>End</th><th>Days</th><th style="width:150px;">Actions</th></tr></thead>
@@ -38,10 +54,8 @@
         <tr>
           <td>{{ s.name }}</td><td>{{ s.start_time }}</td><td>{{ s.end_time }}</td><td>{{ s.days_display }}</td>
           <td>
-            <a class="btn-small btn-success" href="{% url 'crud-segment-edit' s.id %}">Edit</a>
-            <form method='post' action='{% url "crud-segment-delete" s.id %}' style='display:inline' onsubmit='return confirm("Delete segment?")'>
-              {% csrf_token %}<button class="btn-small btn-danger" type="submit">Del</button>
-            </form>
+            <button class="btn-small btn-success" type="button" data-seg-action="edit" data-url="{% url 'crud-segment-edit' s.id %}?modal=1">Edit</button>
+            <button class="btn-small btn-danger" type="button" data-seg-action="del" data-id="{{ s.id }}">Del</button>
           </td>
         </tr>
         {% empty %}<tr><td colspan="5" style="text-align:center;color:#9fd2f1;">No segments</td></tr>{% endfor %}
@@ -54,4 +68,173 @@
     </div>
   </div>
 </div>
+
+<div id="segmentModalBackdrop" role="dialog" aria-modal="true">
+  <div id="segmentModal">
+    <div id="segmentModalHeader">
+      <span id="segmentModalTitle">Segment</span>
+      <button type="button" id="segmentModalClose" title="Close">✕</button>
+    </div>
+    <div id="segmentModalBody"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const backdrop = document.getElementById('segmentModalBackdrop');
+  const body = document.getElementById('segmentModalBody');
+  const title = document.getElementById('segmentModalTitle');
+  const closeBtn = document.getElementById('segmentModalClose');
+
+  let currentUrl = null;
+
+  function getCookie(name){
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if(parts.length === 2) return parts.pop().split(';').shift();
+    return '';
+  }
+  function getCSRF(){ return getCookie('csrftoken'); }
+
+  function openModal(){
+    backdrop.style.display = 'flex';
+    requestAnimationFrame(()=> backdrop.classList.add('is-open'));
+  }
+  function closeModal(){
+    backdrop.classList.remove('is-open');
+    window.setTimeout(()=>{ backdrop.style.display = 'none'; }, 180);
+    currentUrl = null;
+  }
+
+  closeBtn?.addEventListener('click', closeModal);
+  backdrop?.addEventListener('click', (e)=>{ if(e && e.target === backdrop) closeModal(); });
+  document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape' && backdrop.style.display === 'flex') closeModal(); });
+
+  async function loadIntoModal(url, modalTitle){
+    currentUrl = url;
+    title.textContent = modalTitle || 'Segment';
+    body.innerHTML = '<div style="color:#9fd2f1;font-size:11px;">Loading...</div>';
+    openModal();
+    const resp = await fetch(url, {headers:{'X-Requested-With':'XMLHttpRequest'}});
+    const html = await resp.text();
+    body.innerHTML = html;
+    wireModalBody();
+  }
+
+  function wireModalBody(){
+    body.querySelectorAll('[data-modal-close="1"]').forEach(btn => btn.addEventListener('click', closeModal));
+    body.querySelectorAll('[data-modal-reload="1"]').forEach(btn => btn.addEventListener('click', ()=> window.location.reload()));
+
+    const saved = body.querySelector('[data-segment-saved="1"]');
+    if(saved){
+      // Auto-refresh after a short pause
+      window.setTimeout(()=> window.location.reload(), 350);
+      return;
+    }
+
+    const form = body.querySelector('form[data-modal-form="1"]');
+    if(form){
+      form.addEventListener('submit', async (e)=>{
+        e.preventDefault();
+        const url = currentUrl || window.location.href;
+
+        const hasActionModal = window.zkActionModal && typeof window.zkActionModal.open === 'function' && typeof window.zkActionModal.setState === 'function';
+        if(hasActionModal){
+          try{
+            window.zkActionModal.open({mode:'', module:'', title:'UPDATE', subtitle:'Salvare date'});
+            window.zkActionModal.setState('loading', 'UPDATE ÎN CURS', 'Se salvează datele...');
+          }catch(_e){}
+        }
+
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: {'X-Requested-With':'XMLHttpRequest','X-CSRFToken': getCSRF()},
+          body: new FormData(form)
+        });
+        const html = await resp.text();
+        body.innerHTML = html;
+        wireModalBody();
+
+        const savedNow = Boolean(body.querySelector('[data-segment-saved="1"]'));
+        if(savedNow){
+          if(hasActionModal){
+            try{
+              window.zkActionModal.setState('success', 'UPDATE REALIZAT CU SUCCES', 'Datele au fost salvate.');
+              window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 900);
+            }catch(_e){}
+          }
+        } else {
+          if(hasActionModal){
+            try{
+              window.zkActionModal.setState('error', 'UPDATE NEREUȘIT', 'Verifică câmpurile din formular.');
+              window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1400);
+            }catch(_e){}
+          }
+        }
+      });
+    }
+  }
+
+  async function deleteSegment(id){
+    if(!id) return;
+    if(window.zkConfirmDialog){
+      const ok = await zkConfirmDialog({title:'Confirmare',message:'Ștergi intervalul?',okText:'Șterge',cancelText:'Renunță',variant:'danger'});
+      if(!ok) return;
+    } else {
+      if(!confirm('Delete segment?')) return;
+    }
+    const hasActionModal = window.zkActionModal && typeof window.zkActionModal.open === 'function' && typeof window.zkActionModal.setState === 'function';
+    if(hasActionModal){
+      try{
+        window.zkActionModal.open({mode:'', module:'', title:'ȘTERGERE', subtitle:'Operațiune'});
+        window.zkActionModal.setState('loading', 'ȘTERGERE ÎN CURS', 'Se șterge înregistrarea...');
+      }catch(_e){}
+    }
+
+    try{
+      const resp = await fetch('{% url "crud-segment-delete" 0 %}'.replace('/0/', `/${encodeURIComponent(String(id))}/`), {
+        method: 'POST',
+        headers: {'X-CSRFToken': getCSRF()}
+      });
+      const data = await resp.json();
+      if(data && data.ok){
+        if(hasActionModal){
+          try{
+            window.zkActionModal.setState('success', 'ȘTERS CU SUCCES', 'Înregistrarea a fost ștearsă.');
+            window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 900);
+          }catch(_e){}
+        }
+        window.location.reload();
+      } else {
+        const msg = (data && data.error) ? String(data.error) : 'Delete failed';
+        if(hasActionModal){
+          try{ window.zkActionModal.setState('error', 'ȘTERGERE NEREUȘITĂ', msg); }catch(_e){}
+        } else {
+          alert(msg);
+        }
+      }
+    }catch(err){
+      const msg = (err && err.message) ? err.message : String(err);
+      if(hasActionModal){
+        try{ window.zkActionModal.setState('error', 'ȘTERGERE NEREUȘITĂ', msg); }catch(_e){}
+      } else {
+        alert(msg);
+      }
+    }
+  }
+
+  document.addEventListener('click', (e)=>{
+    const el = e.target && e.target.closest ? e.target.closest('[data-seg-action]') : null;
+    if(!el) return;
+    const action = el.getAttribute('data-seg-action');
+    if(action === 'add'){
+      loadIntoModal(el.getAttribute('data-url'), '✚ Add Segment');
+    } else if(action === 'edit'){
+      loadIntoModal(el.getAttribute('data-url'), '✎ Edit Segment');
+    } else if(action === 'del'){
+      deleteSegment(el.getAttribute('data-id'));
+    }
+  });
+})();
+</script>
 {% endblock %}

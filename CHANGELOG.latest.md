@@ -1,5 +1,34 @@
 # Changelog — latest save
 
+Commit: (pending)
+Merged into: main
+Date: 2026-01-16
+Author: local workspace
+
+Summary
+-------
+Rapid UI/UX upgrade focused on consistent, lightweight operation feedback across modules (IMPORT / EXPORT / UPDATE / ȘTERGERE): one unified Action Modal with Romanian live messages, operation-only animations, and better success/error visuals. Also reused the existing “Se încarcă pagina…” spinner as a global Busy Overlay and wired Dashboard backup to show proper progress/success/failure feedback.
+
+High-level changes
+------------------
+- Consistent operation animation during `loading` (spinner + progress) inside Action Modal; no heavy blur/glow/open-close animations.
+- Reused the same spinner from the navigation loading overlay for a consistent look across the app.
+- Added nicer success/error backgrounds (green/red) for final states: EXPORT/IMPORT/UPDATE/ȘTERGERE.
+- Added a global Busy Overlay API (`window.zkBusy`) that can be used anywhere for quick feedback.
+- Dashboard: backup now shows modal progress + success/error; Server/DB badges now reflect live status instead of staying static.
+
+Files changed (main)
+-------------------
+- M zkeco_modern/agent/templates/agent/base_legacy.html — Busy Overlay + Action Modal spinner unification + success/error styling.
+- A zkeco_modern/agent/templates/agent/base_embed_legacy.html — same UI parity for embedded tabs.
+- M zkeco_modern/agent/templates/agent/menu_access.html — UPDATE/ȘTERGERE operations wrapped with Action Modal feedback.
+- M zkeco_modern/agent/templates/agent/segments_crud_list.html — UPDATE/ȘTERGERE operations wrapped with Action Modal feedback.
+- M zkeco_modern/agent/templates/agent/menu_personnel.html — logs export uses Action Modal feedback.
+- M zkeco_modern/agent/templates/agent/menu_personnel_modern.html — logs export uses Action Modal feedback.
+- M zkeco_modern/agent/templates/agent/access_dashboard.html — backup uses modal feedback; live Server/DB badge updates.
+
+---
+
 Commit: 69fb99e6 — "Fix: DeviceStatus updated_at handling and UI timestamp consistency"
 Merged into: main (merge commit 5d9660eb)
 Date: 2025-12-22

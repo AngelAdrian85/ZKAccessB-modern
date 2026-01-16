@@ -1,0 +1,599 @@
+{% load static %}
+<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>{% block title %}Access Control{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'agent/dashboard.css' %}">
+  <link rel="stylesheet" href="{% static 'agent/legacy_layout.css' %}">
+  <link rel="icon" type="image/svg+xml" href="{% static 'agent/favicon.svg' %}">
+  <style>
+    /* ========== MODERN BLUE-GRAY THEME (embed) ========== */
+    :root {
+      --azure-gradient: linear-gradient(90deg, #1a3a52 0%, #3da5d9 100%);
+      --azure-dark: #1a3a52;
+      --azure-mid: #2d5a7b;
+      --azure-light: #3da5d9;
+      --blue-accent: #2da44e;
+      --dark-bg: #0f1519;
+      --light-text: #e8f0f8;
+      --border-color: #3d6a8b;
+      --accent-orange: #d97e4a;
+
+      /* Align embed background with base_legacy */
+      --bg-primary: #0f2a47;
+      --bg-secondary: #1a3a52;
+      --bg-tertiary: #2a4a62;
+      --text-light: #e8f1f8;
+      --text-muted: #a8c5d8;
+    }
+
+    body {
+      background: var(--bg-primary);
+      color: var(--text-light);
+    }
+
+    .main-wrap{
+      background: linear-gradient(180deg, rgba(26,58,82,0.25) 0%, rgba(15,42,71,0.35) 40%, rgba(10,26,39,0.55) 100%);
+      padding: 12px;
+      min-height: 100vh;
+    }
+
+    /* Keep tooltip styling consistent with base_legacy */
+    .op[data-tip], a[data-tip], button[data-tip] { position:relative; }
+    .op[data-tip]:hover::after, a[data-tip]:hover::after, button[data-tip]:hover::after {
+      content: attr(data-tip);
+      position:absolute;
+      left:50%;
+      transform:translateX(-50%);
+      bottom:-38px;
+      background:#222; color:#fff; padding:6px 10px; border-radius:6px;
+      font-size:12px; line-height:1.2; white-space:normal; width:max-content; max-width:240px;
+      box-shadow:0 2px 6px rgba(0,0,0,0.35); z-index:50;
+    }
+    .op[data-tip]:hover::before, a[data-tip]:hover::before, button[data-tip]:hover::before {
+      content:""; position:absolute; left:50%; transform:translateX(-50%); bottom:-12px; width:0; height:0;
+      border-left:6px solid transparent; border-right:6px solid transparent; border-top:6px solid #222; z-index:51;
+    }
+
+    /* ===== Unified Action Modal (Import/Export/Live messages) ===== */
+    /* Lightweight modal base (override any heavy effects from shared CSS) */
+    .modal-overlay { background: rgba(0, 0, 0, 0.60); backdrop-filter: none; }
+    .modal-panel { background: #1e4a6b; border: 2px solid #3da5d9; box-shadow: 0 12px 28px rgba(0,0,0,0.45); }
+
+    /* ===== Global Busy Overlay (same animation as main UI) ===== */
+    @keyframes zkBusySpin { to { transform: rotate(360deg); } }
+    .zk-busy { display:none; position:fixed; inset:0; align-items:center; justify-content:center; z-index:1500; }
+    .zk-busy.is-open { display:flex; }
+    .zk-busy-panel {
+      width: min(420px, calc(100vw - 28px));
+      padding: 18px 22px;
+      border-radius: 12px;
+      text-align: center;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: linear-gradient(180deg, rgba(30,30,30,0.95) 0%, rgba(20,20,20,0.95) 100%);
+      box-shadow: 0 18px 40px rgba(0,0,0,0.55);
+    }
+    .zk-busy-visual { display:flex; align-items:center; justify-content:center; height: 40px; margin-bottom: 10px; }
+    .zk-busy-spinner {
+      width: 32px; height: 32px;
+      border: 4px solid rgba(255,255,255,0.22);
+      border-top-color: #09f;
+      border-radius: 999px;
+      animation: zkBusySpin 0.8s linear infinite;
+    }
+    .zk-busy-mark {
+      width: 32px; height: 32px;
+      border-radius: 999px;
+      display:none;
+      align-items:center; justify-content:center;
+      font-weight: 1000;
+      font-size: 18px;
+      border: 2px solid rgba(255,255,255,0.18);
+      color: #fff;
+      background: rgba(255,255,255,0.06);
+    }
+    .zk-busy-title { color:#fff; font-size: 16px; font-weight: 900; letter-spacing: .2px; }
+    .zk-busy-msg { color: rgba(255,255,255,0.80); font-size: 13px; margin-top: 4px; white-space: pre-wrap; }
+
+    .zk-busy[data-state="loading"] .zk-busy-spinner{ display:block; }
+    .zk-busy[data-state="loading"] .zk-busy-mark{ display:none; }
+    .zk-busy[data-state="success"] .zk-busy-spinner{ display:none; }
+    .zk-busy[data-state="success"] .zk-busy-mark{ display:flex; border-color: rgba(46,191,150,0.35); background: rgba(46,191,150,0.16); }
+    .zk-busy[data-state="success"] .zk-busy-panel{ border-color: rgba(46,191,150,0.35); background: linear-gradient(180deg, rgba(9,44,35,0.96) 0%, rgba(16,26,28,0.96) 100%); }
+    .zk-busy[data-state="error"] .zk-busy-spinner{ display:none; }
+    .zk-busy[data-state="error"] .zk-busy-mark{ display:flex; border-color: rgba(217,74,61,0.40); background: rgba(217,74,61,0.14); }
+    .zk-busy[data-state="error"] .zk-busy-panel{ border-color: rgba(217,74,61,0.40); background: linear-gradient(180deg, rgba(52,18,18,0.96) 0%, rgba(16,26,28,0.96) 100%); }
+
+    .zk-action { display:none; position:fixed; inset:0; align-items:center; justify-content:center; z-index:1400; }
+    .zk-action.is-open { display:flex; }
+    .zk-action-panel {
+      width:min(720px, calc(100vw - 28px));
+      max-height:92vh;
+      padding: 10px;
+      border-radius: 2px;
+      border: 2px solid #3da5d9;
+      background: #1e4a6b;
+      box-shadow: 0 12px 28px rgba(0,0,0,0.45);
+      overflow:hidden;
+      position:relative;
+    }
+    .zk-action-panel::before{
+      display:none;
+      content:none;
+    }
+    .zk-action-header {
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+      padding: 4px 6px;
+      border-radius: 2px;
+      background: #163247;
+      border-bottom: 1px solid #3da5d9;
+      position:relative;
+      z-index:1;
+    }
+    .zk-action-title { font-weight: 900; font-size: 12px; letter-spacing: .3px; color: #9fd2f1; text-transform: uppercase; }
+    .zk-action-subtitle { font-weight: 700; font-size: 12px; color: rgba(207,233,248,0.85); margin-top:2px; }
+    .zk-action-body { position:relative; z-index:1; padding: 10px 6px 2px; color:#cfe9f8; }
+    .zk-action-row { display:flex; gap:10px; align-items:flex-start; flex-wrap:wrap; }
+    .zk-action-visual {
+      width: 64px; height: 64px;
+      border-radius: 2px;
+      border: 1px solid #3d6a8b;
+      background: #163247;
+      display:flex; align-items:center; justify-content:center;
+      position:relative;
+      overflow:hidden;
+    }
+    /* Spinner (match the navigation overlay animation) */
+    .zk-action-visual .ring{
+      position:absolute;
+      width: 32px; height: 32px;
+      border-radius: 999px;
+      border: 4px solid rgba(255,255,255,0.22);
+      border-top-color: #09f;
+      opacity: 0;
+      transform: rotate(0deg);
+      pointer-events:none;
+      will-change: transform;
+    }
+    .zk-action-visual .mark{
+      font-size: 22px; font-weight: 900; line-height: 1;
+      color: #e8f1f8;
+      text-shadow: none;
+      transform: none;
+    }
+    .zk-action-visual::after{
+      display:none;
+      content:none;
+    }
+    .zk-action-status { flex:1; min-width: 260px; }
+    .zk-action-status .big { font-size: 18px; font-weight: 1000; letter-spacing: .3px; text-transform: uppercase; }
+    .zk-action-status .muted { color: rgba(207,233,248,0.75); font-size: 12px; white-space:pre-wrap; }
+    .zk-action-progress { height: 10px; border-radius: 999px; background: rgba(255,255,255,0.08); overflow:hidden; border: 1px solid rgba(255,255,255,0.10); margin-top: 10px; }
+    @keyframes zkIndeterminate { 0%{ transform: translateX(-120%);} 50%{ transform: translateX(140%);} 100%{ transform: translateX(140%);} }
+    .zk-action-progress > div {
+      height: 100%;
+      width: 42%;
+      background: rgba(61,165,217,0.70);
+      transform: translateX(-120%);
+      animation: zkIndeterminate 1.15s ease-in-out infinite;
+      will-change: transform;
+    }
+    .zk-action-meta { margin-top: 10px; padding: 8px; border-radius: 2px; border: 1px solid rgba(61,106,139,0.75); background: rgba(22,50,71,0.65); }
+    .zk-action-meta details summary { cursor:pointer; color:#9fd2f1; font-weight:900; }
+    .zk-action-meta .zk-help { margin-top: 8px; }
+    .zk-action-meta .zk-help-grid { display:grid; grid-template-columns: 1fr; gap: 8px; }
+    .zk-action-meta .zk-help-card { border: 1px solid rgba(61,106,139,0.65); background: rgba(15,36,51,0.55); border-radius: 2px; padding: 8px; }
+    .zk-action-meta .zk-help-title { font-weight: 900; font-size: 11px; letter-spacing: .2px; color:#e8f1f8; text-transform: uppercase; margin-bottom: 6px; }
+    .zk-action-meta .zk-help-card ul { margin: 0; padding-left: 16px; color: rgba(207,233,248,0.92); font-size: 12px; line-height: 1.35; }
+    .zk-action-meta .zk-help-code { white-space: pre-wrap; word-break: break-word; margin: 0; padding: 8px; border: 1px solid rgba(255,255,255,0.08); border-radius: 2px; background: rgba(0,0,0,0.20); max-width: 100%; overflow:auto; }
+    .zk-action-meta .zk-help-foot { margin-top: 8px; color: rgba(207,233,248,0.80); font-size: 12px; }
+    @media (min-width: 740px){
+      .zk-action-meta .zk-help-grid { grid-template-columns: 1fr 1fr; }
+    }
+    .zk-action-controls { display:flex; align-items:center; justify-content:flex-end; gap:8px; padding-top: 10px; position:relative; z-index:1; flex-wrap:wrap; }
+    .zk-action-controls .btn-secondary, .zk-action-controls .btn-primary { padding: 7px 12px; border-radius: 10px; font-weight: 900; font-size: 12px; }
+    .zk-action-file { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-top: 8px; }
+    .zk-action-file input[type="file"]{ max-width: 520px; }
+    .zk-action[data-state="idle"] .zk-action-progress,
+    .zk-action[data-state="success"] .zk-action-progress,
+    .zk-action[data-state="error"] .zk-action-progress { display:none; }
+    .zk-action[data-state="loading"] .zk-action-visual .ring { opacity: 1; animation: zkBusySpin 0.8s linear infinite; }
+    .zk-action[data-state="loading"] .zk-action-visual .mark { opacity: 0; }
+    .zk-action[data-state="idle"] .zk-action-visual .mark,
+    .zk-action[data-state="success"] .zk-action-visual .mark,
+    .zk-action[data-state="error"] .zk-action-visual .mark { opacity: 1; }
+    .zk-action[data-state="idle"] .zk-action-visual .ring,
+    .zk-action[data-state="success"] .zk-action-visual .ring,
+    .zk-action[data-state="error"] .zk-action-visual .ring { opacity: 0; }
+    .zk-action[data-state="success"] .zk-action-visual { border-color: rgba(46,191,150,0.35); }
+    .zk-action[data-state="error"] .zk-action-visual { border-color: rgba(217,74,61,0.40); }
+
+    .zk-action[data-state="success"] .zk-action-panel { border-color: rgba(46,191,150,0.55); background: linear-gradient(180deg, rgba(22,74,58,0.85) 0%, rgba(30,74,107,0.92) 60%, rgba(30,74,107,1) 100%); }
+    .zk-action[data-state="error"] .zk-action-panel { border-color: rgba(217,74,61,0.60); background: linear-gradient(180deg, rgba(74,22,22,0.82) 0%, rgba(30,74,107,0.92) 60%, rgba(30,74,107,1) 100%); }
+
+    /* No open/close animations (hover-only animations request) */
+    .zk-action.is-open .zk-action-panel, .zk-action.is-closing .zk-action-panel { animation:none; transform:none; opacity:1; }
+  </style>
+</head>
+<body>
+  <div id="loading-modal" class="modal-overlay zk-busy" aria-hidden="true" data-state="loading" style="display:none;">
+    <div class="zk-busy-panel" role="status" aria-live="polite">
+      <div class="zk-busy-visual" aria-hidden="true">
+        <div class="zk-busy-spinner"></div>
+        <div id="zkBusyMark" class="zk-busy-mark">✓</div>
+      </div>
+      <div id="zkBusyTitle" class="zk-busy-title">Se încarcă...</div>
+      <div id="zkBusyMsg" class="zk-busy-msg"></div>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div class="content">
+      <div class="main-wrap">
+        {% block content %}{% endblock %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Global Action Modal (Import/Export + live status) -->
+  <div id="zkActionOverlay" class="modal-overlay zk-action" aria-hidden="true" data-state="idle" data-mode="">
+    <div class="modal-panel zk-action-panel" role="dialog" aria-modal="true" aria-labelledby="zkActionTitle">
+      <div class="zk-action-header">
+        <div>
+          <div id="zkActionTitle" class="zk-action-title">ACȚIUNE</div>
+          <div id="zkActionSubtitle" class="zk-action-subtitle">Import / Export</div>
+        </div>
+        <button type="button" id="zkActionClose" class="zk-icon-btn" aria-label="Închide">×</button>
+      </div>
+      <div class="zk-action-body">
+        <div class="zk-action-row">
+          <div class="zk-action-visual" aria-hidden="true">
+            <div class="ring"></div>
+            <div id="zkActionMark" class="mark">⇅</div>
+          </div>
+          <div class="zk-action-status">
+            <div id="zkActionBig" class="big">GATA</div>
+            <div id="zkActionMsg" class="muted">Alege o acțiune.</div>
+            <div class="zk-action-progress"><div></div></div>
+            <div id="zkActionFileRow" class="zk-action-file" style="display:none;">
+              <input type="file" id="zkActionFile" accept=".csv,text/csv" />
+              <button type="button" id="zkActionRunImport" class="btn-secondary" title="Importă din fișierul CSV selectat">📤 IMPORTĂ</button>
+            </div>
+          </div>
+        </div>
+        <div id="zkActionMeta" class="zk-action-meta" style="display:none;">
+          <details>
+            <summary>Ajutor format CSV</summary>
+            <div class="zk-help">
+              <div class="zk-help-grid">
+                <div class="zk-help-card">
+                  <div class="zk-help-title">Reguli</div>
+                  <ul>
+                    <li>Separator coloane: <b>;</b></li>
+                    <li>Folosește <b>EXPORT</b> ca șablon (păstrează ordinea coloanelor)</li>
+                    <li>Pentru câmpuri de tip listă (ex: uși/intervale): separator <b>|</b></li>
+                    <li>Nu modifica header-ul; completează doar valorile pe rânduri</li>
+                  </ul>
+                </div>
+                <div class="zk-help-card">
+                  <div class="zk-help-title">Header (coloane)</div>
+                  <pre id="zkActionSchema" class="zk-help-code"></pre>
+                </div>
+              </div>
+              <div class="zk-help-foot">Dacă importul eșuează, verifică separatorul și valorile obligatorii.</div>
+            </div>
+          </details>
+        </div>
+      </div>
+      <div class="zk-action-controls">
+        <button type="button" id="zkActionCancel" class="btn-secondary">Închide</button>
+        <button type="button" id="zkActionRunExport" class="btn-primary" style="display:none;">📥 EXPORTĂ</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  // Minimal, automatic Romanian tooltips for any buttons/links inside embeds.
+  (function initAutoTooltipsEmbed(){
+    function cleanLabel(raw){
+      if(!raw) return '';
+      let s = String(raw);
+      s = s.replace(/\s+/g, ' ').trim();
+      try {
+        s = s.replace(/^[^\p{L}\p{N}]+/u, '').trim();
+      } catch (e) {
+        s = s.replace(/^[^A-Za-z0-9\u0102\u0103\u00C2\u00E2\u00CE\u00EE\u0218\u0219\u021A\u021B]+/, '').trim();
+      }
+      return s;
+    }
+
+    const TRANSLATIONS = {
+      '×': 'Închide',
+      'close': 'Închide',
+      'cancel': 'Renunță',
+      'save': 'Salvează',
+      'ok': 'Confirmă',
+      'confirm': 'Confirmă',
+      'delete': 'Șterge',
+      'del': 'Șterge',
+      'edit': 'Editează',
+      'ping': 'Ping (verifică conectivitatea)',
+      'test port': 'Test port (verifică dacă portul răspunde)',
+      'filter': 'Filtrează',
+      'reset': 'Resetează',
+      'prev': 'Pagina anterioară',
+      'next': 'Pagina următoare',
+      'back': 'Înapoi',
+      'return to list': 'Înapoi la listă',
+      'refresh status': 'Reîncarcă statusul',
+      'go monitor': 'Deschide monitorizarea'
+    };
+
+    function translateLabel(label){
+      const key = String(label || '').trim().toLowerCase();
+      if(!key) return '';
+      if(TRANSLATIONS[key]) return TRANSLATIONS[key];
+      if(key === '«') return 'Pagina anterioară';
+      if(key === '»') return 'Pagina următoare';
+      return label;
+    }
+
+    function computeTooltip(el){
+      let raw = el.getAttribute('data-tip') || (el.dataset ? el.dataset.tip : '') || '';
+      if(!raw) raw = el.getAttribute('aria-label') || '';
+      if(!raw) {
+        if(el.tagName === 'INPUT') raw = el.value || '';
+        else raw = (el.innerText || el.textContent || '').trim();
+      }
+      const rawTrim = String(raw || '').trim();
+      if(rawTrim === '✕' || rawTrim === '×') raw = 'Închide';
+      if(rawTrim === '«') raw = 'Pagina anterioară';
+      if(rawTrim === '»') raw = 'Pagina următoare';
+      let label = cleanLabel(raw);
+      if(!label) return '';
+      return translateLabel(label);
+    }
+
+    const SELECTOR = 'button, a[role="button"], a.btn, a[class*="btn-"], a[class*=" btn"], input[type="button"], input[type="submit"], [data-tip]';
+    function applyTooltips(root){
+      const elements = [];
+      if(root && root.nodeType === 1) {
+        if(root.matches && root.matches(SELECTOR)) elements.push(root);
+        if(root.querySelectorAll) elements.push(...root.querySelectorAll(SELECTOR));
+      } else {
+        elements.push(...document.querySelectorAll(SELECTOR));
+      }
+      for(const el of elements) {
+        const existing = (el.getAttribute('title') || '').trim();
+        if(existing) continue;
+        const t = computeTooltip(el);
+        if(t) el.setAttribute('title', t);
+      }
+    }
+
+    applyTooltips(document);
+    try {
+      const obs = new MutationObserver((mutations) => {
+        for(const m of mutations) for(const n of (m.addedNodes||[])) if(n && n.nodeType===1) applyTooltips(n);
+      });
+      obs.observe(document.body, {childList:true, subtree:true});
+    } catch (e) {}
+  })();
+
+  // ======= Global Action Modal (Import/Export) =======
+  (function(){
+    const overlay = document.getElementById('zkActionOverlay');
+    if(!overlay) return;
+
+    const titleEl = document.getElementById('zkActionTitle');
+    const subEl = document.getElementById('zkActionSubtitle');
+    const bigEl = document.getElementById('zkActionBig');
+    const msgEl = document.getElementById('zkActionMsg');
+    const markEl = document.getElementById('zkActionMark');
+    const btnClose = document.getElementById('zkActionClose');
+    const btnCancel = document.getElementById('zkActionCancel');
+    const btnExport = document.getElementById('zkActionRunExport');
+    const btnImport = document.getElementById('zkActionRunImport');
+    const fileRow = document.getElementById('zkActionFileRow');
+    const fileInput = document.getElementById('zkActionFile');
+    const meta = document.getElementById('zkActionMeta');
+    const schemaEl = document.getElementById('zkActionSchema');
+
+    const CSV_SCHEMAS = {
+      area: 'id;name;code;parent_code;remarks',
+      device: 'id;name;serial_number;device_type;comm_mode;ip_address;port;enabled;scanner_linked;scanner_type;rs485_port;rs485_baudrate;rs485_address;area_name;time_zone',
+      dst: 'id;name;start_month;start_week;start_weekday;start_hour;start_minute;end_month;end_week;end_weekday;end_hour;end_minute;offset_minutes',
+      command: 'id;command;device_serial;device_name;door_name',
+      door: 'id;name;device_serial;device_name;location;normally_open;enabled',
+      'time-segment': 'id;name;start_time;end_time;days_mask',
+      holiday: 'id;date;name;description',
+      'access-level': 'id;name;description;doors;time_segments',
+      employee: 'id;legacy_userid;first_name;last_name;card_number;dept_id;dept_name;mobile_phone;gender;active;acc_startdate;acc_enddate',
+      department: 'id;name;code',
+      issuecard: 'id;employee_id;employee_legacy_userid;employee_name;card_number;slot;status;site_code;valid_until',
+    };
+
+    function _getCookie(name){
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if(parts.length === 2) return parts.pop().split(';').shift();
+      return '';
+    }
+    function _getCSRF(){ return _getCookie('csrftoken'); }
+
+    let current = { mode:'', module:'', title:'', subtitle:'', schema:'', onDone:null };
+    function isOpen(){ return overlay.classList.contains('is-open'); }
+
+    function _setState(state, big, msg){
+      overlay.setAttribute('data-state', state || 'idle');
+      if(bigEl) bigEl.textContent = big || '';
+      if(msgEl) msgEl.textContent = msg || '';
+      if(markEl){
+        if(state === 'loading') markEl.textContent = '…';
+        else if(state === 'success') markEl.textContent = '✓';
+        else if(state === 'error') markEl.textContent = '!';
+        else markEl.textContent = '⇅';
+      }
+    }
+
+    function open(opts){
+      const o = opts || {};
+      current = {
+        mode: String(o.mode || ''),
+        module: String(o.module || ''),
+        title: String(o.title || 'ACȚIUNE'),
+        subtitle: String(o.subtitle || ''),
+        schema: String(o.schema || ''),
+        onDone: (typeof o.onDone === 'function') ? o.onDone : null,
+      };
+      if(titleEl) titleEl.textContent = current.title;
+      if(subEl) subEl.textContent = current.subtitle || 'Import / Export';
+
+      const mode = current.mode;
+      const mod = (current.module || '').toLowerCase().trim();
+      const schema = current.schema || CSV_SCHEMAS[mod] || '';
+      if(meta) meta.style.display = schema ? 'block' : 'none';
+      if(schemaEl) schemaEl.textContent = schema || '';
+      if(fileRow) fileRow.style.display = (mode === 'import') ? 'flex' : 'none';
+      if(btnExport) btnExport.style.display = (mode === 'export') ? 'inline-flex' : 'none';
+      if(fileInput) fileInput.value = '';
+
+      if(mode === 'import') _setState('idle', 'IMPORT', 'Alege un fișier CSV și apasă IMPORTĂ.');
+      else if(mode === 'export') _setState('idle', 'EXPORT', 'Apasă EXPORTĂ pentru a descărca fișierul CSV.');
+      else _setState('idle', 'GATA', 'Alege o acțiune.');
+
+      overlay.classList.remove('is-closing');
+      overlay.classList.add('is-open');
+      overlay.setAttribute('aria-hidden', 'false');
+    }
+
+    function close(){
+      if(!isOpen()) return;
+      overlay.classList.add('is-closing');
+      overlay.setAttribute('aria-hidden', 'true');
+      window.setTimeout(()=>{
+        overlay.classList.remove('is-open');
+        overlay.classList.remove('is-closing');
+      }, 150);
+    }
+
+    async function _runImport(){
+      if(!fileInput || !fileInput.files || fileInput.files.length === 0){
+        _setState('error', 'IMPORT NEREUȘIT', 'Selectează fișierul CSV.');
+        return;
+      }
+      const f = fileInput.files[0];
+      _setState('loading', 'IMPORT ÎN CURS', 'Se încarcă fișierul și se validează rândurile...');
+      try{
+        const fd = new FormData();
+        fd.append('file', f);
+        const url = `/agent/api/csv/${encodeURIComponent(String(current.module || ''))}/import/`;
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRFToken': _getCSRF() || ''
+          },
+          body: fd
+        });
+        const ctype = String(resp.headers.get('content-type') || '').toLowerCase();
+        let data = null;
+        if(ctype.includes('application/json')) data = await resp.json();
+        else {
+          const text = await resp.text();
+          throw new Error('Răspuns invalid de la server (nu este JSON). ' + String(text || '').slice(0, 200));
+        }
+        if(!data || !data.ok){
+          const errMsg = (data && (data.error || data.message)) ? String(data.error || data.message) : String(resp.status);
+          _setState('error', 'IMPORT NEREUȘIT', errMsg);
+          return;
+        }
+        const errs = (data.errors && Array.isArray(data.errors)) ? data.errors : [];
+        const summary = `IMPORT REALIZAT CU SUCCES\ncreate=${data.created||0}  update=${data.updated||0}  eșuate=${data.failed||0}`;
+        const tail = errs.length ? ('\n\nErori (primele):\n' + errs.slice(0, 15).map(e=>`row ${e.row}: ${e.error}`).join('\n')) : '';
+        _setState('success', 'IMPORT REALIZAT CU SUCCES', summary + tail);
+        if(current.onDone){
+          try{ await current.onDone(data); }catch(_e){}
+        }
+      }catch(err){
+        const msg = (err && err.message) ? err.message : String(err);
+        _setState('error', 'IMPORT NEREUȘIT', msg);
+      }
+    }
+
+    function _runExport(){
+      const mod = String(current.module || '').trim();
+      if(!mod){ _setState('error', 'EXPORT NEREUȘIT', 'Modul invalid.'); return; }
+      _setState('loading', 'EXPORT ÎN CURS', 'Se pregătește fișierul CSV...');
+      window.setTimeout(()=>{
+        _setState('success', 'EXPORT REALIZAT CU SUCCES', 'Descărcarea a fost inițiată.');
+      }, 650);
+      window.location = `/agent/api/csv/${encodeURIComponent(mod)}/export/`;
+    }
+
+    overlay.addEventListener('click', (e)=>{ if(e.target === overlay) close(); });
+    btnClose?.addEventListener('click', close);
+    btnCancel?.addEventListener('click', close);
+    document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape' && isOpen()) { e.preventDefault(); close(); } });
+    btnImport?.addEventListener('click', _runImport);
+    btnExport?.addEventListener('click', _runExport);
+
+    window.zkActionModal = {
+      open,
+      close,
+      setState: _setState,
+      openCsvImport: function(module, title, subtitle, onDone){
+        open({mode:'import', module: module, title: title || 'IMPORT', subtitle: subtitle || 'Import CSV', onDone});
+      },
+      openCsvExport: function(module, title, subtitle){
+        open({mode:'export', module: module, title: title || 'EXPORT', subtitle: subtitle || 'Export CSV'});
+      }
+    };
+  })();
+
+  // Global busy overlay (available for any embed button scenarios)
+  (function(){
+    if(window.zkBusy) return;
+    const overlay = document.getElementById('loading-modal');
+    if(!overlay) return;
+    const titleEl = document.getElementById('zkBusyTitle');
+    const msgEl = document.getElementById('zkBusyMsg');
+    const markEl = document.getElementById('zkBusyMark');
+
+    function _open(state, title, msg){
+      overlay.setAttribute('data-state', state || 'loading');
+      overlay.classList.add('is-open');
+      overlay.style.display = 'flex';
+      overlay.setAttribute('aria-hidden', 'false');
+      if(titleEl) titleEl.textContent = title || '';
+      if(msgEl) msgEl.textContent = msg || '';
+      if(markEl){
+        if(state === 'success') markEl.textContent = '✓';
+        else if(state === 'error') markEl.textContent = '!';
+      }
+    }
+    function hide(){
+      overlay.classList.remove('is-open');
+      overlay.style.display = 'none';
+      overlay.setAttribute('aria-hidden', 'true');
+      overlay.setAttribute('data-state', 'loading');
+    }
+
+    window.zkBusy = {
+      loading: function(title, msg){ _open('loading', title || 'Se încarcă...', msg || ''); },
+      success: function(title, msg, autoCloseMs){
+        _open('success', title || 'GATA', msg || '');
+        const ms = (autoCloseMs === 0 || autoCloseMs === false) ? 0 : (Number(autoCloseMs) || 1200);
+        if(ms > 0) window.setTimeout(hide, ms);
+      },
+      error: function(title, msg, autoCloseMs){
+        _open('error', title || 'Eroare', msg || '');
+        const ms = (autoCloseMs === 0 || autoCloseMs === false) ? 0 : (Number(autoCloseMs) || 1600);
+        if(ms > 0) window.setTimeout(hide, ms);
+      },
+      hide,
+    };
+  })();
+  </script>
+</body>
+</html>

@@ -454,6 +454,48 @@ input[type="checkbox"] {
 .status-bad { color: #d94a3d; }
 .status-ok::before { content: '✔'; margin-right: 3px; }
 .status-bad::before { content: '✖'; margin-right: 3px; }
+
+/* Centered animated toast (success/info/warn/danger) */
+.zk-toast {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10050;
+  min-width: 260px;
+  max-width: 70vw;
+  text-align: center;
+  padding: 10px 14px;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  box-shadow: 0 10px 26px rgba(0,0,0,.55);
+  border: 2px solid #3da5d9;
+  background: rgba(15,36,51,0.96);
+  color: #e9f6ff;
+  opacity: 0;
+  pointer-events: none;
+}
+.zk-toast.show {
+  display: block;
+  animation: zkToastIn .18s ease-out forwards;
+}
+.zk-toast.hide {
+  animation: zkToastOut .16s ease-in forwards;
+}
+.zk-toast.info { border-color: #3da5d9; color: #d7f1ff; }
+.zk-toast.success { border-color: #2ecc71; color: #dbffea; }
+.zk-toast.warn { border-color: #ffd166; color: #fff4d6; }
+.zk-toast.danger { border-color: #d94a3d; color: #ffd0cc; }
+@keyframes zkToastIn {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes zkToastOut {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to { opacity: 0; transform: translate(-50%, -50%) scale(0.98); }
+}
 </style>
 
 <div class="personnel-container">
@@ -466,7 +508,7 @@ input[type="checkbox"] {
     <div class="tab" data-tab="cards">💳 Carduri</div>
     <div class="tab" data-tab="logs">📊 Loguri</div>
   </div>
-  <div id="toast" style="display:none; position: fixed; right: 12px; bottom: 12px; background: #163247; color: #cfe9ff; border: 1px solid #3d6a8b; padding: 8px 12px; border-radius: 2px; font-size: 11px; box-shadow: 0 2px 6px rgba(0,0,0,.3); z-index: 9999;">OK</div>
+  <div id="toast" class="zk-toast" style="display:none;">OK</div>
 
   <!-- TAB: Employees -->
   <div class="tab-content active" id="tab-employees">
@@ -702,21 +744,22 @@ input[type="checkbox"] {
         <tbody id="cards-tbody">
           {% if cards %}
             {% for c in cards %}
-            <tr>
+            <tr data-card-id="{{ c.id }}">
               <td>{{ c.id }}</td>
               <td>{{ c.card_number }}</td>
               <td>{{ c.employee.last_name }} {{ c.employee.first_name }}</td>
-              <td><span class="badge badge-active">Activ</span></td>
+              <td>{{ c.slot|default:"additional" }}</td>
+              <td><span class="badge {% if c.status == 'Active' %}badge-active{% else %}badge-pending{% endif %}">{{ c.status|default:"Active" }}</span></td>
               <td>{{ c.created_at|date:"Y-m-d" }}</td>
-              <td>-</td>
+              <td>{% if c.valid_until %}{{ c.valid_until|date:"Y-m-d" }}{% else %}-{% endif %}</td>
               <td class="action-cell">
-                    <a href="#" class="action-link" onclick="editCardModal({{ c.id }}, '{{ c.card_number }}', '{{ c.employee.last_name }} {{ c.employee.first_name }}'); return false;">✏️ Edit</a>
+                <a href="#" class="action-link" onclick="editCardById('{{ c.id }}'); return false;">✏️ Edit</a>
                 <a href="#" class="action-link delete" onclick="deleteCard({{ c.id }}); return false;">🗑️ Șterge</a>
               </td>
             </tr>
             {% endfor %}
           {% else %}
-            <tr><td colspan="7" class="empty-state">Nu există carduri emise.</td></tr>
+            <tr><td colspan="8" class="empty-state">Nu există carduri emise.</td></tr>
           {% endif %}
         </tbody>
       </table>
@@ -854,9 +897,9 @@ input[type="checkbox"] {
       <div class="filter-field">
         <label>Modul:</label>
         <select id="log-module-filter">
-          <option value="">Toate</option>
-          <option value="personnel">Personal</option>
-          <option value="department">Departamente</option>
+          <option value="personnel">Toate (Personal)</option>
+          <option value="employees">Angajați</option>
+          <option value="departments">Departamente</option>
           <option value="cards">Carduri</option>
         </select>
       </div>
@@ -1100,12 +1143,24 @@ function loadDeptTree() {
     });
 }
 
-function showToast(text) {
+let __toastTimer = null;
+function showToast(text, variant) {
   const t = document.getElementById('toast');
   if (!t) return;
+  const v = (variant || 'info').toLowerCase();
   t.textContent = text;
+  t.classList.remove('info','success','warn','danger','show','hide');
+  t.classList.add(['success','warn','danger'].includes(v) ? v : 'info');
   t.style.display = 'block';
-  setTimeout(() => { t.style.display = 'none'; }, 1800);
+  // restart animation
+  void t.offsetWidth;
+  t.classList.add('show');
+  if (__toastTimer) clearTimeout(__toastTimer);
+  __toastTimer = setTimeout(() => {
+    t.classList.remove('show');
+    t.classList.add('hide');
+    setTimeout(() => { t.style.display = 'none'; t.classList.remove('hide'); }, 170);
+  }, 1600);
 }
 
 function closeDeptModal() {
@@ -1484,80 +1539,93 @@ function loadDepartments() {
 }
 
 function deleteDept(id) {
-  if (!confirm('Sigur ștergi acest departament?')) return;
-  
-  fetch(`/agent/crud/depts/${id}/delete/`, {
-    method: 'POST',
-    headers: {
-      'X-CSRFToken': getCookie('csrftoken')
-    }
-  })
-  .then(r => {
-    if (r.ok) {
-      loadDepartments();
-      loadDeptTree();
-      showToast('Departament șters');
-    } else {
-      alert('Eroare la ștergere!');
-    }
-  })
-  .catch(e => alert('Eroare de rețea!'));
+  const run = ()=>{
+    fetch(`/agent/crud/depts/${id}/delete/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': getCookie('csrftoken')
+      }
+    })
+    .then(r => {
+      if (r.ok) {
+        loadDepartments();
+        loadDeptTree();
+        showToast('Departament șters');
+      } else {
+        alert('Eroare la ștergere!');
+      }
+    })
+    .catch(e => alert('Eroare de rețea!'));
+  };
+  const msg = 'Sigur ștergi acest departament?';
+  if(window.zkConfirmDialog){ zkConfirmDialog({title:'Confirmare',message:msg,okText:'Șterge',cancelText:'Renunță',variant:'danger'}).then(ok=>{ if(ok) run(); }); return; }
+  if (!confirm(msg)) return;
+  run();
 }
 
 // Load Cards
 function loadCards() {
   const tbody = document.getElementById('cards-tbody');
-  tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Încărcare...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Încărcare...</td></tr>';
   
   fetch('/agent/crud/issuecards/')
     .then(r => r.json())
     .then(data => {
       const cards = data.items || data || [];
       if (cards.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nu există carduri emise.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nu există carduri emise.</td></tr>';
         return;
       }
       
       tbody.innerHTML = cards.map(c => `
-        <tr>
+        <tr data-card-id="${c.id}">
           <td>${c.id || '-'}</td>
           <td>${c.card_number || c.card || '-'}</td>
           <td>${c.employee_name || c.employee || c.userid || '-'}</td>
           <td>${c.slot || '-'}</td>
           <td><span class="badge ${c.status === 'Active' ? 'badge-active' : 'badge-pending'}">${c.status || 'Unknown'}</span></td>
-          <td>${c.issue_date || '-'}</td>
+          <td>${(c.issue_date && String(c.issue_date).includes('T')) ? String(c.issue_date).split('T')[0] : (c.issue_date || '-')}</td>
           <td>${c.valid_until || '-'}</td>
           <td class="action-cell">
             <a href="#" class="action-link" onclick="editCardById('${c.id}'); return false;">✏️ Edit</a>
-            ${c.slot==='additional' ? `<a href="#" class="action-link delete" onclick="deleteCard(${c.id}); return false;">🗑️ Șterge</a>` : ''}
+            <a href="#" class="action-link delete" onclick="deleteCard(${c.id}); return false;">🗑️ Șterge</a>
           </td>
         </tr>
       `).join('');
     })
     .catch(e => {
       console.error('Error:', e);
-      tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Eroare la încărcare!</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Eroare la încărcare!</td></tr>';
     });
 }
 
 function deleteCard(id) {
-  if (!confirm('Sigur ștergi acest card?')) return;
-  
-  fetch(`/agent/crud/issuecards/${id}/delete/`, {
-    method: 'POST',
-    headers: {
-      'X-CSRFToken': getCookie('csrftoken')
-    }
-  })
-  .then(r => {
-    if (r.ok) {
-      loadCards();
-      alert('Card șters!');
-    } else {
-      alert('Eroare la ștergere!');
-    }
-  })
-  .catch(e => alert('Eroare de rețea!'));
+  const run = ()=>{
+    fetch(`/agent/crud/issuecards/${id}/delete/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': getCookie('csrftoken')
+      }
+    })
+    .then(async r => {
+      if (r.ok) {
+        loadCards();
+        showToast('Card șters', 'danger');
+        return;
+      }
+      let msg = 'Eroare la ștergere!';
+      try {
+        const j = await r.json();
+        if (j && j.error) msg = 'Eroare la ștergere: ' + j.error;
+      } catch(e) { /* ignore */ }
+      showToast(msg, 'danger');
+    })
+    .catch(() => showToast('Eroare de rețea la ștergere', 'danger'));
+  };
+  const msg = 'Sigur ștergi acest card?';
+  if(window.zkConfirmDialog){ zkConfirmDialog({title:'Confirmare',message:msg,okText:'Șterge',cancelText:'Renunță',variant:'danger'}).then(ok=>{ if(ok) run(); }); return; }
+  if (!confirm(msg)) return;
+  run();
 }
 
 // Card Modals
@@ -1712,15 +1780,17 @@ function submitCard() {
     valid_until: document.getElementById('card-valid-until').value || null,
     slot: document.getElementById('card-slot').value || 'additional'
   };
-  if (!data.card_number || !data.employee_id) { alert('Număr card și Angajat sunt obligatorii'); return; }
+  if (!data.card_number || !data.employee_id) { showToast('Număr card și Angajat sunt obligatorii', 'warn'); return; }
   fetch('/agent/crud/issuecards/new/', {
     method:'POST',
     headers:{ 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type':'application/json' },
     body: JSON.stringify(data)
   }).then(r => {
-    if (r.ok) { closeCardModal(); loadCards(); showToast('Card emis'); }
-    else alert('Eroare la emitere card');
-  }).catch(() => alert('Eroare de rețea'));
+    if (r.ok) { closeCardModal(); loadCards(); showToast('Card emis', 'success'); return null; }
+    return r.json().catch(()=>({})).then(j => { throw new Error(j && j.error ? j.error : 'emitere eșuată'); });
+  }).catch((e) => {
+    showToast('Eroare la emitere: ' + (e && e.message ? e.message : 'necunoscut'), 'danger');
+  });
 }
 
 function submitEditCard() {
@@ -1731,15 +1801,17 @@ function submitEditCard() {
     employee_id: document.getElementById('edit-card-employee').value || null,
     valid_until: document.getElementById('edit-card-valid-until').value || null
   };
-  if (!data.card_number || !data.employee_id) { alert('Număr card și Angajat sunt obligatorii'); return; }
+  if (!data.card_number || !data.employee_id) { showToast('Număr card și Angajat sunt obligatorii', 'warn'); return; }
   fetch(`/agent/crud/issuecards/${id}/update/`, {
     method:'POST',
     headers:{ 'X-CSRFToken': getCookie('csrftoken'), 'Content-Type':'application/json' },
     body: JSON.stringify(data)
   }).then(r => {
-    if (r.ok) { closeEditCardModal(); loadCards(); showToast('Card actualizat'); }
-    else alert('Eroare la actualizare card');
-  }).catch(() => alert('Eroare de rețea'));
+    if (r.ok) { closeEditCardModal(); loadCards(); showToast('Card actualizat', 'success'); return null; }
+    return r.json().catch(()=>({})).then(j => { throw new Error(j && j.error ? j.error : 'actualizare eșuată'); });
+  }).catch((e) => {
+    showToast('Eroare la actualizare: ' + (e && e.message ? e.message : 'necunoscut'), 'danger');
+  });
 }
 
 // Scan card via backend wait endpoint and fill into the given input
@@ -1757,16 +1829,16 @@ function scanCardInto(inputId){
     .then(d=>{
       if(d && d.ok && d.card_number){
         if(input){ input.value = d.card_number; input.dispatchEvent(new Event('input')); }
-        showToast('Card citit (' + (d.source||'') + ')');
+        showToast('Card citit (' + (d.source||'') + ')', 'info');
       } else {
-        alert('Nu s-a citit niciun card (timeout)');
+        showToast('Nu s-a citit niciun card (timeout)', 'warn');
       }
     })
     .catch(e => {
       if (e && e.name === 'AbortError') {
-        alert('Scanare întreruptă (timeout)');
+        showToast('Scanare întreruptă (timeout)', 'warn');
       } else {
-        alert('Eroare la citirea cardului');
+        showToast('Eroare la citirea cardului', 'danger');
       }
     })
     .finally(()=> {
@@ -1780,12 +1852,12 @@ function loadLogs() {
   const tbody = document.getElementById('logs-tbody');
   tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Încărcare...</td></tr>';
   
-  const module = document.getElementById('log-module-filter').value;
+  const module = document.getElementById('log-module-filter').value || 'personnel';
   const dateFrom = document.getElementById('log-date-from').value;
   const dateTo = document.getElementById('log-date-to').value;
   
   const params = new URLSearchParams();
-  if (module) params.append('module', module);
+  params.append('module', module);
   if (dateFrom) params.append('from', dateFrom);
   if (dateTo) params.append('to', dateTo);
   
@@ -1821,23 +1893,27 @@ function filterLogs() {
 
 // Employee Functions
 function deleteEmployee(id) {
-  if (!confirm('Sigur ștergi acest angajat? Acțiunea este ireversibilă!')) return;
-  
-  fetch(`/agent/crud/employees/${id}/delete/`, {
-    method: 'POST',
-    headers: {
-      'X-CSRFToken': getCookie('csrftoken')
-    }
-  })
-  .then(r => {
-    if (r.ok) {
-      location.reload();
-      alert('Angajat șters!');
-    } else {
-      alert('Eroare la ștergere!');
-    }
-  })
-  .catch(e => alert('Eroare de rețea!'));
+  const run = ()=>{
+    fetch(`/agent/crud/employees/${id}/delete/`, {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': getCookie('csrftoken')
+      }
+    })
+    .then(r => {
+      if (r.ok) {
+        location.reload();
+        alert('Angajat șters!');
+      } else {
+        alert('Eroare la ștergere!');
+      }
+    })
+    .catch(e => alert('Eroare de rețea!'));
+  };
+  const msg = 'Sigur ștergi acest angajat? Acțiunea este ireversibilă!';
+  if(window.zkConfirmDialog){ zkConfirmDialog({title:'Confirmare',message:msg,okText:'Șterge',cancelText:'Renunță',variant:'danger'}).then(ok=>{ if(ok) run(); }); return; }
+  if (!confirm(msg)) return;
+  run();
 }
 
 function filterEmployees() {
@@ -1865,20 +1941,47 @@ function clearFilters() {
 }
 
 function exportEmployees() {
+  if(window.zkActionModal && typeof window.zkActionModal.openCsvExport === 'function'){
+    window.zkActionModal.openCsvExport('employee', 'EXPORT – ANGAJAȚI', 'Export CSV (separator ;)');
+    return;
+  }
   window.location.href = '/agent/crud/employees/export/';
 }
 
 function exportLogs() {
-  const rows = Array.from(document.querySelectorAll('#logs-tbody tr'))
-    .map(tr => Array.from(tr.querySelectorAll('td')).map(td => `"${td.textContent.trim()}"`).join(','));
-  const csv = 'Data/Ora,Modul,Acțiune,Utilizator,Entitate,Detalii\n' + rows.join('\n');
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'logs_' + new Date().toISOString().split('T')[0] + '.csv';
-  a.click();
-  URL.revokeObjectURL(url);
+  const hasModal = window.zkActionModal && typeof window.zkActionModal.open === 'function' && typeof window.zkActionModal.setState === 'function';
+  if(hasModal){
+    try{
+      window.zkActionModal.open({mode:'', module:'', title:'EXPORT – LOGURI', subtitle:'Export CSV'});
+      window.zkActionModal.setState('loading', 'EXPORT ÎN CURS', 'Se pregătește fișierul CSV...');
+    }catch(_e){}
+  }
+
+  try{
+    const rows = Array.from(document.querySelectorAll('#logs-tbody tr'))
+      .map(tr => Array.from(tr.querySelectorAll('td')).map(td => `"${td.textContent.trim()}"`).join(','));
+    const csv = 'Data/Ora,Modul,Acțiune,Utilizator,Entitate,Detalii\n' + rows.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'logs_' + new Date().toISOString().split('T')[0] + '.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+
+    if(hasModal){
+      try{
+        window.zkActionModal.setState('success', 'EXPORT REALIZAT CU SUCCES', 'Fișierul a fost generat și descărcarea a fost inițiată.');
+        window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1200);
+      }catch(_e){}
+    }
+  }catch(err){
+    if(hasModal){
+      try{ window.zkActionModal.setState('error', 'EXPORT NEREUȘIT', (err && err.message) ? err.message : String(err)); }catch(_e){}
+    } else {
+      alert('Eroare la export!');
+    }
+  }
 }
 
 // Select All Checkboxes
@@ -1890,6 +1993,10 @@ document.getElementById('select-all-emp').addEventListener('change', function() 
 
 // Employee Functions
 function importEmployees() {
+  if(window.zkActionModal && typeof window.zkActionModal.openCsvImport === 'function'){
+    window.zkActionModal.openCsvImport('employee', 'IMPORT – ANGAJAȚI', 'Import CSV (separator ;)', async ()=>{ location.reload(); });
+    return;
+  }
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = '.csv,.xlsx';
@@ -1932,6 +2039,10 @@ function clearDeptSearch() {
 }
 
 function importDepartments() {
+  if(window.zkActionModal && typeof window.zkActionModal.openCsvImport === 'function'){
+    window.zkActionModal.openCsvImport('department', 'IMPORT – DEPARTAMENTE', 'Import CSV (separator ;)', async ()=>{ try{ loadDepartments(); }catch(_e){} });
+    return;
+  }
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = '.csv,.xlsx';
@@ -1952,6 +2063,10 @@ function importDepartments() {
 }
 
 function exportDepartments() {
+  if(window.zkActionModal && typeof window.zkActionModal.openCsvExport === 'function'){
+    window.zkActionModal.openCsvExport('department', 'EXPORT – DEPARTAMENTE', 'Export CSV (separator ;)');
+    return;
+  }
   fetch('/agent/crud/depts/tree/')
     .then(r => r.json())
     .then(data => {
@@ -2010,8 +2125,9 @@ function filterCards() {
   
   document.querySelectorAll('#cards-tbody tr[data-card-id]').forEach(row => {
     const text = row.textContent.toLowerCase();
-    const statusCell = row.querySelector('td:nth-child(4)');
-    const cardStatus = statusCell ? statusCell.textContent.trim() : '';
+    const statusCell = row.querySelector('td:nth-child(5)');
+    const badge = statusCell ? statusCell.querySelector('.badge') : null;
+    const cardStatus = (badge || statusCell) ? (badge ? badge.textContent.trim() : statusCell.textContent.trim()) : '';
     
     const searchMatch = !search || text.includes(search);
     const statusMatch = !status || cardStatus === status;
@@ -2027,6 +2143,10 @@ function clearCardFilters() {
 }
 
 function importCards() {
+  if(window.zkActionModal && typeof window.zkActionModal.openCsvImport === 'function'){
+    window.zkActionModal.openCsvImport('issuecard', 'IMPORT – CARDURI', 'Import CSV (separator ;)', async ()=>{ try{ loadCards(); }catch(_e){} });
+    return;
+  }
   const input = document.createElement('input');
   input.type = 'file';
   input.accept = '.csv,.xlsx';
@@ -2047,6 +2167,10 @@ function importCards() {
 }
 
 function exportCards() {
+  if(window.zkActionModal && typeof window.zkActionModal.openCsvExport === 'function'){
+    window.zkActionModal.openCsvExport('issuecard', 'EXPORT – CARDURI', 'Export CSV (separator ;)');
+    return;
+  }
   fetch('/agent/crud/issuecards/')
     .then(r => r.json())
     .then(data => {

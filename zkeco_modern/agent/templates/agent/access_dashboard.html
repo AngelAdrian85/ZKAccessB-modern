@@ -8,13 +8,58 @@
 .panel { padding: 4px !important; }
 .panel h2 { margin: 0 0 2px 0; font-size: 9px; }
 .panel h3 { margin: 3px 0 2px 0; font-size: 8px; }
-table { font-size: 8.5px; }
-table th, table td { padding: 2px 3px; }
+table { font-size: 8.8px; border-collapse: collapse; background: #163247; }
+table thead { background: linear-gradient(to bottom, #3da5d9 0%, #2d7ba5 100%); color: #fff; }
+table th, table td { padding: 2px 4px; }
+table th { text-transform: uppercase; letter-spacing: 0.2px; border-right: 1px solid #2d7ba5; white-space: nowrap; }
+table th:last-child { border-right: none; }
+table tbody tr { border-bottom: 1px solid #3d6a8b; transition: background 0.1s; }
+table tbody tr:nth-child(even) { background: #0f2433; }
+table tbody tr:hover { background: #1e4a6b; }
+table tbody td { border-right: 1px solid #3d6a8b; color: #e8f0f8; }
+table tbody td:last-child { border-right: none; }
 .metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; font-size: 8px; line-height: 1.15; }
 .op { padding: 3px 7px; font-size: 9px; }
-.modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); }
-.modal.show { display: flex; align-items: center; justify-content: center; }
-.modal-content { background: #2d5a7b; padding: 20px; border-radius: 8px; width: 90%; max-width: 500px; border: 2px solid #3da5d9; }
+.modal {
+  display: flex;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.60);
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 160ms ease, visibility 160ms ease;
+  backdrop-filter: blur(2px);
+}
+.modal.show {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+.modal-content {
+  background: #2d5a7b;
+  padding: 14px;
+  border-radius: 10px;
+  width: 90%;
+  max-width: 560px;
+  border: 2px solid #3da5d9;
+  box-shadow: 0 28px 70px rgba(0,0,0,0.65);
+  transform: translateY(10px) scale(0.985);
+  opacity: 0;
+  transition: transform 180ms ease, opacity 180ms ease;
+  position: relative;
+}
+.modal.show .modal-content {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
 .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; border-bottom: 1px solid #3da5d9; padding-bottom: 8px; }
 .modal-header h2 { margin: 0; font-size: 16px; color: #3da5d9; }
 .modal-close { background: none; border: none; color: #e8f0f8; font-size: 20px; cursor: pointer; }
@@ -33,28 +78,13 @@ table th, table td { padding: 2px 3px; }
   border-radius: 6px; 
 }
 #employeeModal .modal-inner { 
-  background: #ffffff; 
-  border: 1px solid #7db3d9; 
-  border-radius: 4px; 
-  overflow: hidden; 
+  background: transparent;
+  border: 1px solid rgba(125,179,217,0.55);
+  border-radius: 8px;
+  overflow: hidden;
 }
 #employeeModal .modal-titlebar { 
-  background: linear-gradient(to bottom, #3da5d9 0%, #2d7ba5 100%); 
-  color: #ffffff; 
-  padding: 4px 8px; 
-  display: flex; 
-  align-items: center; 
-  gap: 6px; 
-  font-size: 12px; 
-  font-weight: 600; 
-}
-#employeeModal .modal-titlebar::before { 
-  content: ""; 
-  width: 10px; 
-  height: 10px; 
-  background: #1e4a6b; 
-  border: 1px solid #5a9dc9; 
-  display: inline-block; 
+  display: none;
 }
 #employeeModal .modal-body-wrapper { 
   max-height: 75vh; 
@@ -62,18 +92,56 @@ table th, table td { padding: 2px 3px; }
 }
 #employeeModal .modal-close { 
   position: absolute; 
-  top: 8px; 
-  right: 8px; 
-  background: #d97e4a; 
-  color: #fff; 
-  border: none; 
-  border-radius: 50%; 
-  width: 20px; 
-  height: 20px; 
-  font-size: 14px; 
-  line-height: 1; 
-  cursor: pointer; 
-  z-index: 1001; 
+  top: 10px;
+  right: 10px;
+  background: rgba(15,42,71,0.55);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.22);
+  border-radius: 9px;
+  width: 30px;
+  height: 30px;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 1001;
+}
+#employeeModal .modal-close:hover { background: rgba(15,42,71,0.72); border-color: rgba(255,255,255,0.30); }
+
+/* Device Modal - match employee frame, but hide redundant titlebar (title is inside the loaded form) */
+#deviceModal .modal-content {
+  max-width: 1040px;
+  width: 96%;
+  background: linear-gradient(135deg, #1e4a6b 0%, #2d5a7b 50%, #1e4a6b 100%);
+  padding: 3px;
+  border-radius: 10px;
+}
+#deviceModal .modal-inner {
+  background: transparent;
+  border: 1px solid rgba(125,179,217,0.55);
+  border-radius: 8px;
+  overflow: hidden;
+}
+#deviceModal .modal-titlebar { display: none; }
+#deviceModal .modal-body-wrapper { max-height: 82vh; overflow-y: auto; }
+#deviceModal .modal-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(15,42,71,0.55);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.22);
+  border-radius: 9px;
+  width: 30px;
+  height: 30px;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  z-index: 1001;
+}
+#deviceModal .modal-close:hover { background: rgba(15,42,71,0.72); border-color: rgba(255,255,255,0.30); }
+
+@media (prefers-reduced-motion: reduce) {
+  .modal, .modal-content { transition: none !important; }
 }
 .live-switch { display:flex; gap:4px; margin:3px 0 5px 0; }
 .live-switch button { padding:5px 9px; border-radius:8px; border:1px solid #3da5d9; background:#0f2738; color:#e8f0f8; cursor:pointer; font-size:10px; font-weight:600; }
@@ -83,9 +151,12 @@ table th, table td { padding: 2px 3px; }
 .badge.warn { background:#3c2a14; color:#f2b94b; border:1px solid rgba(242,185,75,0.4); }
 .badge.err { background:#3a1d1f; color:#ff8c99; border:1px solid rgba(255,140,153,0.45); }
 .badge .pulse-dot { width:6px; height:6px; border-radius:50%; background: currentColor; display:inline-block; animation: heartbeat 1.1s ease-in-out infinite; box-shadow: 0 0 4px currentColor; }
-.health-list { display:flex; flex-wrap:wrap; gap:3px; font-size:8px; }
-.health-row { flex: 1 1 120px; min-width: 120px; display:flex; justify-content:space-between; align-items:center; background:rgba(18,42,63,0.6); border:1px solid rgba(61,165,217,0.18); padding:3px 4px; border-radius:5px; }
- .backup-progress { flex: 1 1 auto; height:4px; margin-left:6px; background:rgba(61,165,217,0.18); border-radius:4px; overflow:hidden; position:relative; display:none; }
+.health-list { display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:3px; font-size:8px; }
+.health-row { min-width: 0; display:flex; justify-content:space-between; align-items:center; background:rgba(18,42,63,0.6); border:1px solid rgba(61,165,217,0.18); padding:3px 4px; border-radius:5px; overflow:hidden; gap:6px; }
+.health-row > span:first-child { white-space: nowrap; }
+.health-row .badge { min-width:0; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.health-row.backup-row { grid-column: 1 / -1; flex-wrap: wrap; gap: 3px; }
+.backup-progress { flex: 1 0 100%; height:4px; margin-left:0; background:rgba(61,165,217,0.18); border-radius:4px; overflow:hidden; position:relative; display:none; }
  .backup-progress.active { display:block; }
  .backup-progress::after { content:""; position:absolute; left:-30%; top:0; width:30%; height:100%; background:linear-gradient(90deg,#2da44e,#3da5d9); animation: backupRun 1.1s linear infinite; }
 @keyframes heartbeat { 0%,100%{transform:scale(1);} 50%{transform:scale(1.18);} }
@@ -134,7 +205,7 @@ table th, table td { padding: 2px 3px; }
       <div class="health-row"><span>Bază de date</span><span class="badge ok" id="dbStatus"><span class="pulse-dot"></span>Connected</span></div>
       <div class="health-row"><span>WebSocket</span><span class="badge warn" id="wsConnStatus"><span class="pulse-dot"></span>Pending</span></div>
       <div class="health-row"><span>CommCenter</span><span class="badge warn" id="ccStatus"><span class="pulse-dot"></span>Checking</span></div>
-      <div class="health-row"><span>Backup</span><span class="badge warn" id="backupStatus"><span class="pulse-dot"></span>Checking</span><div class="backup-progress" id="backupProgress"></div></div>
+      <div class="health-row backup-row"><span>Backup</span><span class="badge warn" id="backupStatus"><span class="pulse-dot"></span>Checking</span><div class="backup-progress" id="backupProgress"></div></div>
       <div class="health-row"><span>Heartbeat</span><span class="badge warn" id="hbStatus"><span class="pulse-dot"></span>Checking</span></div>
     </div>
   </section>
@@ -307,6 +378,20 @@ function closeEmployeeModal() {
 function closeDeviceModal() { 
   document.getElementById('deviceModal').classList.remove('show'); 
 }
+
+// Modal UX: click outside to close + Escape to close
+document.addEventListener('click', (e) => {
+  const target = e.target;
+  if(!(target instanceof HTMLElement)) return;
+  if(target.classList.contains('modal') && target.classList.contains('show')){
+    target.classList.remove('show');
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if(e.key !== 'Escape') return;
+  document.querySelectorAll('.modal.show').forEach(m => m.classList.remove('show'));
+});
 
 function openQuickAddDevice() {
   const modal = document.getElementById('deviceModal');
@@ -540,6 +625,7 @@ async function refreshDoorsLive(){
 function setBadge(elId, text, kind){
   const el = document.getElementById(elId); if(!el) return;
   el.className = kind==='err' ? 'badge err' : (kind==='warn' ? 'badge warn' : 'badge ok');
+  el.title = text || '';
   el.innerHTML = `<span class="pulse-dot"></span>${text}`;
 }
 
@@ -548,6 +634,9 @@ async function refreshHealth(){
   try{
     const hb = await fetch('/agent/health/');
     const hbData = await hb.json();
+    // If /agent/health/ answered, Django is running; and DB is reachable (this endpoint queries DB).
+    setBadge('djangoStatus','✓ Running','ok');
+    setBadge('dbStatus','✓ Connected','ok');
     if(hbData.heartbeat){
       const last = hbData.heartbeat.last_cycle; const backend = hbData.heartbeat.backend;
       if(last){
@@ -570,7 +659,11 @@ async function refreshHealth(){
       const backupRow = document.getElementById('backupStatus');
       if(backupRow){ backupRow.style.cursor = 'pointer'; backupRow.title = 'Click pentru a porni backup (dacă este configurat)'; backupRow.onclick = triggerBackup; }
     }
-  }catch(err){ setBadge('hbStatus','offline','err'); }
+  }catch(err){
+    setBadge('djangoStatus','✗ Offline','err');
+    setBadge('dbStatus','✗ Offline','err');
+    setBadge('hbStatus','offline','err');
+  }
   try{
     const rs = await fetch('{% url "agent-readers-status" %}');
     const rj = await rs.json();
@@ -616,18 +709,54 @@ async function refreshHealth(){
 async function triggerBackup(){
   try{
     startBackupProgress();
+
+    const hasActionModal = window.zkActionModal && typeof window.zkActionModal.open === 'function' && typeof window.zkActionModal.setState === 'function';
+    const hasBusy = window.zkBusy && typeof window.zkBusy.loading === 'function';
+    if(hasActionModal){
+      window.zkActionModal.open({mode:'', module:'', title:'BACKUP', subtitle:'Bază de date'});
+      window.zkActionModal.setState('loading', 'BACKUP ÎN CURS', 'Se execută backup-ul bazei de date...');
+    } else if(hasBusy){
+      window.zkBusy.loading('BACKUP ÎN CURS', 'Se execută backup-ul bazei de date...');
+    }
+
     const resp = await fetch('/agent/api/backup/run', { method:'POST', headers:{'X-Requested-With':'XMLHttpRequest'} });
     const j = await resp.json();
     if(j.ok){
       const size = j.bytes ? `, ${Math.round(j.bytes/1024)} KB` : '';
       setBadge('backupStatus', j.file || 'backup OK', 'ok');
       addEventRow(`Backup finalizat (${j.file||'fisier necunoscut'}${size})`,'ok');
+
+      const doneMsg = `Backup finalizat cu succes.\n${j.file ? ('Fișier: ' + j.file + size) : ('Fișier: necunoscut' + size)}`;
+      if(hasActionModal){
+        window.zkActionModal.setState('success', 'BACKUP REALIZAT CU SUCCES', doneMsg);
+        window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1400);
+      } else if(hasBusy){
+        window.zkBusy.success('BACKUP REALIZAT CU SUCCES', doneMsg, 1400);
+      }
     }
     else {
       addEventRow('Backup indisponibil: '+(j.error||'necunoscut'),'err');
       if(j.output){ addEventRow('Detalii dump: '+String(j.output).slice(0,200),'warn'); }
+
+      const errMsg = String(j.error || 'necunoscut');
+      if(hasActionModal){
+        window.zkActionModal.setState('error', 'BACKUP NEREUȘIT', errMsg);
+        window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1800);
+      } else if(hasBusy){
+        window.zkBusy.error('BACKUP NEREUȘIT', errMsg, 1800);
+      }
     }
-  }catch(err){ addEventRow('Backup eroare: '+err.message,'err'); }
+  }catch(err){
+    const msg = (err && err.message) ? err.message : String(err);
+    addEventRow('Backup eroare: '+msg,'err');
+    if(window.zkActionModal && typeof window.zkActionModal.open === 'function' && typeof window.zkActionModal.setState === 'function'){
+      window.zkActionModal.open({mode:'', module:'', title:'BACKUP', subtitle:'Bază de date'});
+      window.zkActionModal.setState('error', 'BACKUP NEREUȘIT', msg);
+      window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1800);
+    } else if(window.zkBusy && typeof window.zkBusy.error === 'function'){
+      window.zkBusy.error('BACKUP NEREUȘIT', msg, 1800);
+    }
+  }
   finally { stopBackupProgress(); }
 }
 

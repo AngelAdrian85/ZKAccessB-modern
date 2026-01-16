@@ -834,13 +834,38 @@
   });
   document.getElementById('logs-refresh').addEventListener('click', ()=>loadLogs({}));
   document.getElementById('logs-export').addEventListener('click', ()=>{
-    const rows = Array.from(document.querySelectorAll('#logs-tbody tr'))
-      .map(tr => Array.from(tr.querySelectorAll('td')).map(td => '"' + td.textContent.trim().replace(/"/g,'""') + '"'));
-    const csv = ['Data,Modul,Entitate,Pers,Eveniment,Detalii'].concat(rows.map(r=>r.join(','))).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = 'logs.csv'; a.click();
-    URL.revokeObjectURL(url);
+    const hasModal = window.zkActionModal && typeof window.zkActionModal.open === 'function' && typeof window.zkActionModal.setState === 'function';
+    if(hasModal){
+      try{
+        window.zkActionModal.open({mode:'', module:'', title:'EXPORT – LOGURI', subtitle:'Export CSV'});
+        window.zkActionModal.setState('loading', 'EXPORT ÎN CURS', 'Se pregătește fișierul CSV...');
+      }catch(_e){}
+    }
+    try{
+      const rows = Array.from(document.querySelectorAll('#logs-tbody tr'))
+        .map(tr => Array.from(tr.querySelectorAll('td')).map(td => '"' + td.textContent.trim().replace(/"/g,'""') + '"'));
+      const csv = ['Data,Modul,Entitate,Angajat,Eveniment,Detalii'].concat(rows.map(r=>r.join(','))).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'logs_export_' + new Date().toISOString().split('T')[0] + '.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+
+      if(hasModal){
+        try{
+          window.zkActionModal.setState('success', 'EXPORT REALIZAT CU SUCCES', 'Fișierul a fost generat și descărcarea a fost inițiată.');
+          window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1200);
+        }catch(_e){}
+      }
+    }catch(err){
+      if(hasModal){
+        try{ window.zkActionModal.setState('error', 'EXPORT NEREUȘIT', (err && err.message) ? err.message : String(err)); }catch(_e){}
+      } else {
+        alert('Eroare la export!');
+      }
+    }
   });
 
   // ===== EMPLOYEES: Actions =====
@@ -912,29 +937,38 @@
   document.getElementById('emp-tbody').addEventListener('click', (e)=>{
     const a = e.target.closest('a[data-emp-delete]'); if (!a) return;
     e.preventDefault(); const id = a.getAttribute('data-emp-delete');
-    if (confirm('Ștergi angajatul?')) {
+    const run = ()=>{
       fetch(`{% url 'crud-employee-delete' 0 %}`.replace('0', id), { method:'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') } })
         .then(r=>r.ok ? location.reload() : alert('Eroare'))
         .catch(e => alert('Eroare: '+e));
-    }
+    };
+    const msg = 'Ștergi angajatul?';
+    if(window.zkConfirmDialog){ zkConfirmDialog({title:'Confirmare',message:msg,okText:'Șterge',cancelText:'Renunță',variant:'danger'}).then(ok=>{ if(ok) run(); }); }
+    else if(confirm(msg)){ run(); }
   });
   document.getElementById('dept-tbody').addEventListener('click', (e)=>{
     const a = e.target.closest('a[data-dept-delete]'); if (!a) return;
     e.preventDefault(); const id = a.getAttribute('data-dept-delete');
-    if (confirm('Ștergi departamentul?')) {
+    const run = ()=>{
       fetch(`{% url 'crud-dept-delete' 0 %}`.replace('0', id), { method:'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') } })
         .then(r=>r.ok ? loadDepts('') : alert('Eroare'))
         .catch(e => alert('Eroare: '+e));
-    }
+    };
+    const msg = 'Ștergi departamentul?';
+    if(window.zkConfirmDialog){ zkConfirmDialog({title:'Confirmare',message:msg,okText:'Șterge',cancelText:'Renunță',variant:'danger'}).then(ok=>{ if(ok) run(); }); }
+    else if(confirm(msg)){ run(); }
   });
   document.getElementById('card-tbody').addEventListener('click', (e)=>{
     const a = e.target.closest('a[data-card-delete]'); if (!a) return;
     e.preventDefault(); const id = a.getAttribute('data-card-delete');
-    if (confirm('Ștergi cardul?')) {
+    const run = ()=>{
       fetch(`{% url 'crud-issuecard-delete' 0 %}`.replace('0', id), { method:'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') } })
         .then(r=>r.ok ? loadCards('') : alert('Eroare'))
         .catch(e => alert('Eroare: '+e));
-    }
+    };
+    const msg = 'Ștergi cardul?';
+    if(window.zkConfirmDialog){ zkConfirmDialog({title:'Confirmare',message:msg,okText:'Șterge',cancelText:'Renunță',variant:'danger'}).then(ok=>{ if(ok) run(); }); }
+    else if(confirm(msg)){ run(); }
   });
 
   // ===== FORM SUBMISSIONS =====
@@ -1065,13 +1099,38 @@
   });
   document.getElementById('logs-refresh').addEventListener('click', ()=>loadLogs({}));
   document.getElementById('logs-export').addEventListener('click', ()=>{
-    const rows = Array.from(document.querySelectorAll('#logs-tbody tr'))
-      .map(tr => Array.from(tr.querySelectorAll('td')).map(td => '"' + td.textContent.trim().replace(/"/g,'""') + '"'));
-    const csv = ['Data,Modul,Entitate,Angajat,Eveniment,Detalii'].concat(rows.map(r=>r.join(','))).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = 'logs_export_' + new Date().toISOString().split('T')[0] + '.csv'; a.click();
-    URL.revokeObjectURL(url);
+    const hasModal = window.zkActionModal && typeof window.zkActionModal.open === 'function' && typeof window.zkActionModal.setState === 'function';
+    if(hasModal){
+      try{
+        window.zkActionModal.open({mode:'', module:'', title:'EXPORT – LOGURI', subtitle:'Export CSV'});
+        window.zkActionModal.setState('loading', 'EXPORT ÎN CURS', 'Se pregătește fișierul CSV...');
+      }catch(_e){}
+    }
+    try{
+      const rows = Array.from(document.querySelectorAll('#logs-tbody tr'))
+        .map(tr => Array.from(tr.querySelectorAll('td')).map(td => '"' + td.textContent.trim().replace(/"/g,'""') + '"'));
+      const csv = ['Data,Modul,Entitate,Angajat,Eveniment,Detalii'].concat(rows.map(r=>r.join(','))).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'logs_export_' + new Date().toISOString().split('T')[0] + '.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+
+      if(hasModal){
+        try{
+          window.zkActionModal.setState('success', 'EXPORT REALIZAT CU SUCCES', 'Fișierul a fost generat și descărcarea a fost inițiată.');
+          window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1200);
+        }catch(_e){}
+      }
+    }catch(err){
+      if(hasModal){
+        try{ window.zkActionModal.setState('error', 'EXPORT NEREUȘIT', (err && err.message) ? err.message : String(err)); }catch(_e){}
+      } else {
+        alert('Eroare la export!');
+      }
+    }
   });
 
   // ===== EMPLOYEES: Actions =====
@@ -1136,29 +1195,38 @@
   document.getElementById('emp-tbody').addEventListener('click', (e)=>{
     const a = e.target.closest('a[data-emp-delete]'); if (!a) return;
     e.preventDefault(); const id = a.getAttribute('data-emp-delete');
-    if (confirm('Ești sigur? Ștergi angajatul ID ' + id + '?')) {
+    const run = ()=>{
       fetch(`{% url 'crud-employee-delete' 0 %}`.replace('0', id), { method:'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') } })
         .then(r=>r.ok ? location.reload() : alert('Eroare la ștergere'))
         .catch(e => alert('Eroare: '+e));
-    }
+    };
+    const msg = 'Ești sigur? Ștergi angajatul ID ' + id + '?';
+    if(window.zkConfirmDialog){ zkConfirmDialog({title:'Confirmare',message:msg,okText:'Șterge',cancelText:'Renunță',variant:'danger'}).then(ok=>{ if(ok) run(); }); }
+    else if(confirm(msg)){ run(); }
   });
   document.getElementById('dept-tbody').addEventListener('click', (e)=>{
     const a = e.target.closest('a[data-dept-delete]'); if (!a) return;
     e.preventDefault(); const id = a.getAttribute('data-dept-delete');
-    if (confirm('Ești sigur? Ștergi departamentul ID ' + id + '?')) {
+    const run = ()=>{
       fetch(`{% url 'crud-dept-delete' 0 %}`.replace('0', id), { method:'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') } })
         .then(r=>r.ok ? loadDepts('') : alert('Eroare la ștergere'))
         .catch(e => alert('Eroare: '+e));
-    }
+    };
+    const msg = 'Ești sigur? Ștergi departamentul ID ' + id + '?';
+    if(window.zkConfirmDialog){ zkConfirmDialog({title:'Confirmare',message:msg,okText:'Șterge',cancelText:'Renunță',variant:'danger'}).then(ok=>{ if(ok) run(); }); }
+    else if(confirm(msg)){ run(); }
   });
   document.getElementById('card-tbody').addEventListener('click', (e)=>{
     const a = e.target.closest('a[data-card-delete]'); if (!a) return;
     e.preventDefault(); const id = a.getAttribute('data-card-delete');
-    if (confirm('Ești sigur? Ștergi cardul ID ' + id + '?')) {
+    const run = ()=>{
       fetch(`{% url 'crud-issuecard-delete' 0 %}`.replace('0', id), { method:'POST', headers: { 'X-CSRFToken': getCookie('csrftoken') } })
         .then(r=>r.ok ? loadCards('') : alert('Eroare la ștergere'))
         .catch(e => alert('Eroare: '+e));
-    }
+    };
+    const msg = 'Ești sigur? Ștergi cardul ID ' + id + '?';
+    if(window.zkConfirmDialog){ zkConfirmDialog({title:'Confirmare',message:msg,okText:'Șterge',cancelText:'Renunță',variant:'danger'}).then(ok=>{ if(ok) run(); }); }
+    else if(confirm(msg)){ run(); }
   });
 
   function getCookie(name) {
