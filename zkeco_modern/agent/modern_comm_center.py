@@ -32,6 +32,7 @@ import threading
 import configparser
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Protocol, Tuple, Callable
+from collections import deque
 
 from django.conf import settings
 from django.utils import timezone
@@ -40,6 +41,7 @@ from django.apps import apps
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 from .event_codes import describe as describe_event_code
+from .event_codes import describe_door_event_type, describe_verify_mode
 
 try:  # Redis optional
     import redis  # type: ignore
@@ -246,6 +248,18 @@ class ModernCommCenter(object):
         self.total_rtlog_lines = 0
         self.total_event_logs = 0
         self.cycles = 0
+        # New-log download throttling (prevents hammering devices every poll cycle)
+        self._last_download_ts: float = 0.0
+        try:
+            self.download_cooldown_s: float = float(os.getenv('COMM_DOWNLOAD_COOLDOWN', '15'))
+        except Exception:
+            self.download_cooldown_s = 15.0
+        # Lightweight per-device rtlog de-duplication (prevents infinite repeats)
+        self._rtlog_last_line: Dict[int, str] = {}
+        # Rolling per-device event-log de-duplication (prevents repeated downloads creating duplicates)
+        self._event_recent: Dict[int, set[str]] = {}
+        self._event_recent_order: Dict[int, deque[str]] = {}
+        self.event_dedupe_window: int = 500
         self.state_store = None
         try:
             from .state import DeviceStateStore
@@ -455,19 +469,39 @@ class ModernCommCenter(object):
             elif cmd.startswith("DOOR_OPEN"):
                 door = cmd.split(":", 1)[1] if ":" in cmd else "0"
                 session.driver.controldevice(int(door), 1, 1)
-                self._publish_event({"type": "door.open", "device_id": device_id, "door": door})
+                self._publish_event({
+                    "type": "door.open",
+                    "device_id": device_id,
+                    "door": door,
+                    "event_description": describe_door_event_type("door.open"),
+                })
             elif cmd.startswith("DOOR_CLOSE"):
                 door = cmd.split(":", 1)[1] if ":" in cmd else "0"
                 session.driver.controldevice(int(door), 1, 0)
-                self._publish_event({"type": "door.close", "device_id": device_id, "door": door})
+                self._publish_event({
+                    "type": "door.close",
+                    "device_id": device_id,
+                    "door": door,
+                    "event_description": describe_door_event_type("door.close"),
+                })
             elif cmd.startswith("DOOR_NORMAL_OPEN"):
                 door = cmd.split(":", 1)[1] if ":" in cmd else "0"
                 session.driver.control_normal_open(int(door), 1)
-                self._publish_event({"type": "door.normal_open", "device_id": device_id, "door": door})
+                self._publish_event({
+                    "type": "door.normal_open",
+                    "device_id": device_id,
+                    "door": door,
+                    "event_description": describe_door_event_type("door.normal_open"),
+                })
             elif cmd.startswith("DOOR_CANCEL_ALARM"):
                 door = cmd.split(":", 1)[1] if ":" in cmd else "0"
                 session.driver.cancel_alarm(door)
-                self._publish_event({"type": "door.cancel_alarm", "device_id": device_id, "door": door})
+                self._publish_event({
+                    "type": "door.cancel_alarm",
+                    "device_id": device_id,
+                    "door": door,
+                    "event_description": describe_door_event_type("door.cancel_alarm"),
+                })
         except Exception as e:  # pragma: no cover
             LOG.error("Command '%s' failed for device %s: %s", cmd, device_id, e)
 
@@ -475,9 +509,14 @@ class ModernCommCenter(object):
     # Monitoring & polling
     # ------------------------------------------------------------------
     def _should_download(self) -> bool:
-        if not self.download_hours:
+        # Always enforce a cooldown so we don't download on every poll.
+        now_ts = time.time()
+        if (now_ts - self._last_download_ts) < self.download_cooldown_s:
             return False
         current_hour = timezone.now().hour
+        # If hours are not configured, enable downloads all day (but throttled above).
+        if not self.download_hours:
+            return True
         return current_hour in self.download_hours
 
     def _poll_cycle(self) -> None:
@@ -495,15 +534,19 @@ class ModernCommCenter(object):
                         self.state_store.update_device(s.device_id, online=True)
                     self._publish_event({"type": "rtlog.batch", "device_id": s.device_id, "lines": rt_lines})
                 if self._should_download():
+                    self._last_download_ts = time.time()
                     new_logs = s.down_new_logs()
                     if new_logs:
                         codes = []
                         descs = []
+                        verify_modes = []
                         for raw in new_logs:
                             parts = raw.split(',')
                             code = parts[4] if len(parts) > 4 else ''
+                            verify = parts[5] if len(parts) > 5 else ''
                             codes.append(code)
                             descs.append(describe_event_code(code))
+                            verify_modes.append(describe_verify_mode(verify))
                         self._persist_event_logs(s, new_logs)
                         self.total_event_logs += len(new_logs)
                         self._publish_event({
@@ -512,6 +555,7 @@ class ModernCommCenter(object):
                             "count": len(new_logs),
                             "codes": codes,
                             "descriptions": descs,
+                            "verify_modes": verify_modes,
                         })
         self.heartbeat_backend.set("last_cycle", time.time())
         self.cycles += 1
@@ -542,19 +586,37 @@ class ModernCommCenter(object):
     def _persist_rtlog(self, session: DeviceSession, lines: List[str]) -> None:
         try:
             from agent import models  # normalized import to match INSTALLED_APPS
-            objs = [
-                models.DeviceRealtimeLog(
-                    device_id=session.device_id,
-                    sn=session.sn,
-                    raw=raw,
-                ) for raw in lines
-            ]
+            # Filter duplicates and obvious heartbeat/noise lines.
+            filtered: List[str] = []
+            last = self._rtlog_last_line.get(session.device_id)
+            for raw in lines:
+                raw = (raw or '').strip()
+                if not raw:
+                    continue
+                if last and raw == last:
+                    continue
+                parts = [p.strip() for p in raw.split(',')]
+                # Common rtlog format: ts,pin,card,door,code,verify,...
+                pin = parts[1] if len(parts) > 1 else ''
+                card = parts[2] if len(parts) > 2 else ''
+                door = parts[3] if len(parts) > 3 else ''
+                code = parts[4] if len(parts) > 4 else ''
+                # Drop noisy repeats that look like a keepalive (no card, no door).
+                if code == '200' and (card in ('', '0', '000000', '00000000')) and (door in ('', '0')):
+                    last = raw
+                    continue
+                filtered.append(raw)
+                last = raw
+            self._rtlog_last_line[session.device_id] = last or self._rtlog_last_line.get(session.device_id, '')
+
+            objs = [models.DeviceRealtimeLog(device_id=session.device_id, sn=session.sn, raw=raw) for raw in filtered]
             models.DeviceRealtimeLog.objects.bulk_create(objs, ignore_conflicts=True)
             if self.state_store:
-                for raw in lines:
+                for raw in filtered:
                     parts = raw.split(',')
                     if len(parts) > 4:
-                        door = parts[4]
+                        # door is typically at index 3 (index 4 is event code)
+                        door = parts[3]
                         self.state_store.update_door(session.device_id, door, 'activity')
         except Exception as e:  # pragma: no cover
             LOG.warning("Persist rtlog failed device=%s: %s", session.sn, e)
@@ -562,8 +624,37 @@ class ModernCommCenter(object):
     def _persist_event_logs(self, session: DeviceSession, lines: List[str]) -> None:
         try:
             from agent import models
-            objs = []
+            # Filter duplicates for this device (both within batch and across recent batches)
+            dev_id = session.device_id
+            recent = self._event_recent.get(dev_id)
+            order = self._event_recent_order.get(dev_id)
+            if recent is None:
+                recent = set()
+                self._event_recent[dev_id] = recent
+            if order is None:
+                order = deque(maxlen=self.event_dedupe_window)
+                self._event_recent_order[dev_id] = order
+
+            filtered: List[str] = []
             for raw in lines:
+                raw = (raw or '').strip()
+                if not raw:
+                    continue
+                if raw in recent:
+                    continue
+                filtered.append(raw)
+                recent.add(raw)
+                order.append(raw)
+                # deque maxlen handles trimming order; we need to trim set accordingly
+                while len(order) > self.event_dedupe_window:
+                    old = order.popleft()
+                    try:
+                        recent.discard(old)
+                    except Exception:
+                        pass
+
+            objs = []
+            for raw in filtered:
                 parts = raw.split(',')
                 timestamp = parts[0] if parts else ''
                 code = parts[4] if len(parts) > 4 else ''
@@ -574,11 +665,13 @@ class ModernCommCenter(object):
                     code=code,
                     raw_line=raw,
                 ))
-            models.DeviceEventLog.objects.bulk_create(objs, ignore_conflicts=True)
+            if objs:
+                models.DeviceEventLog.objects.bulk_create(objs, ignore_conflicts=True)
             if self.state_store:
-                for raw in lines:
+                for raw in filtered:
                     parts = raw.split(',')
-                    door = parts[4] if len(parts) > 4 else '0'
+                    # door is typically at index 3 (index 4 is event code)
+                    door = parts[3] if len(parts) > 3 else '0'
                     self.state_store.update_door(session.device_id, door, 'event')
         except Exception as e:  # pragma: no cover
             LOG.warning("Persist event logs failed device=%s: %s", session.sn, e)
@@ -671,6 +764,13 @@ class LegacyDriverAdapter(StubDriver):
         self._addr = getattr(dev, 'com_address', None)
         self._port = getattr(dev, 'com_port', None)
 
+    def _allow_stub_fallback(self) -> bool:
+        # IMPORTANT: StubDriver generates simulated logs (Door Open/Close, RTLOG noise).
+        # In real deployments we must not fabricate events when hardware is unreachable.
+        return str(os.getenv('COMM_ALLOW_STUB_FALLBACK', '') or '').strip().lower() in (
+            '1', 'true', 'yes', 'y', 'on'
+        )
+
     def _socket_connect(self):  # pragma: no cover (network optional)
         if not (self._addr and self._port):
             return False
@@ -694,13 +794,27 @@ class LegacyDriverAdapter(StubDriver):
     def connect(self):
         if self._socket_connect():
             return {"result": 1, "hcommpro": 1, "transport": "socket"}
-        return super().connect()
+        if self._allow_stub_fallback():
+            return super().connect()
+        return {"result": -1, "error": "connect_failed"}
 
     def disconnect(self):
         if self._sock:
             self._socket_disconnect()
             return {"result": 1}
-        return super().disconnect()
+        if self._allow_stub_fallback():
+            return super().disconnect()
+        return {"result": 1}
+
+    def get_transaction(self, newlog=False):
+        if self._sock is None and not self._allow_stub_fallback():
+            return {"result": -1, "error": "not_connected"}
+        return super().get_transaction(newlog=newlog)
+
+    def get_rtlog(self):
+        if self._sock is None and not self._allow_stub_fallback():
+            return {"result": -1, "error": "not_connected"}
+        return super().get_rtlog()
 
 
 def build_and_run_stub(poll_interval=1.0,

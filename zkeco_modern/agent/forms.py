@@ -1,5 +1,5 @@
 from django import forms
-from .models import Door, TimeSegment, Holiday, AccessLevel, Employee, EmployeeCard, Device
+from .models import Door, TimeSegment, Holiday, AccessLevel, Employee, EmployeeCard, Device, DSTime
 try:
     from legacy_models.models import (
         Area as LegacyArea,
@@ -41,6 +41,27 @@ class HolidayForm(forms.ModelForm):
         widgets = {
             "name": forms.TextInput(attrs={"class": "txt"}),
             "description": forms.Textarea(attrs={"rows": 3}),
+        }
+
+class DSTimeForm(forms.ModelForm):
+    class Meta:
+        model = DSTime
+        fields = [
+            "name",
+            "start_month",
+            "start_week",
+            "start_weekday",
+            "start_hour",
+            "start_minute",
+            "end_month",
+            "end_week",
+            "end_weekday",
+            "end_hour",
+            "end_minute",
+            "offset_minutes",
+        ]
+        widgets = {
+            "name": forms.TextInput(attrs={"class": "txt", "placeholder": "ex: Romania"}),
         }
 
 
@@ -465,6 +486,45 @@ class DeviceExtendedForm(forms.ModelForm):
         self.fields['rs485_baudrate'].initial = 9600
         self.fields['scanner_linked'] = forms.BooleanField(required=False, label='Scanner Linked', widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}))
         self.fields['scanner_type'] = forms.ChoiceField(required=False, label='Scanner Type', choices=[('', 'Select'), ('acp', 'ACP TCP'), ('elatec', 'Elatec Serial')], widget=forms.Select(attrs={'class': 'form-control'}))
+
+        # Populate Zone/Area dropdown from legacy Areas.
+        # Keep the field as a CharField to avoid rejecting values not yet present in legacy,
+        # but render as <select> so the UI always shows available zones.
+        try:
+            from legacy_models.models import Area as LegacyArea  # type: ignore
+        except Exception:  # pragma: no cover
+            LegacyArea = None
+
+        try:
+            items = []
+            if LegacyArea is not None:
+                items = list(LegacyArea.objects.all().values('id', 'areaname'))
+            names = []
+            for it in items:
+                n = (it.get('areaname') or '').strip()
+                if n:
+                    names.append(n)
+            names = sorted(set(names), key=lambda s: s.lower())
+
+            current_val = ''
+            try:
+                if self.is_bound:
+                    current_val = (self.data.get('area_name') or '').strip()
+                else:
+                    current_val = (self.initial.get('area_name') or getattr(self.instance, 'area_name', '') or '').strip()
+            except Exception:
+                current_val = ''
+
+            choices = [('', '— Selectează zonă —')]
+            if current_val and current_val not in names:
+                choices.append((current_val, current_val))
+            choices.extend([(n, n) for n in names])
+
+            self.fields['area_name'].widget = forms.Select(attrs={'class': 'form-control area-select'})
+            self.fields['area_name'].widget.choices = choices
+        except Exception:
+            # Best-effort only; if legacy DB isn't ready, keep default widget.
+            pass
     
     def clean(self):
         cleaned = super().clean()

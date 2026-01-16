@@ -1,0 +1,284 @@
+{% extends 'agent/base_legacy.html' %}
+{% block content %}
+<style>
+  /* Match PERSONAL screenshot (container + tabs) */
+  .reports-container{max-width:98%;margin:6px auto;background:#1e4a6b;padding:6px;border-radius:2px;border:2px solid #3da5d9;}
+  .reports-title{color:#7db3d9;border-bottom:1px solid #3da5d9;padding-bottom:4px;margin:0 0 6px 0;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:.3px;}
+  .reports-tabs{display:flex;gap:2px;margin-bottom:6px;border-bottom:1px solid #3d6a8b;overflow-x:auto;flex-wrap:nowrap;}
+  .reports-tab{padding:4px 12px;background:#163247;border:1px solid #3d6a8b;border-bottom:none;color:#9fd2f1;cursor:pointer;text-decoration:none;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;border-radius:2px 2px 0 0;transition:all 0.2s;white-space:nowrap;}
+  .reports-tab:hover{color:#7db3d9;}
+  .reports-tab.active{background:#3da5d9;color:#fff;border-color:#3da5d9;}
+
+  .panel{background:transparent;border:1px solid #3d6a8b;border-radius:2px;padding:6px;}
+  .panel h3{margin:0 0 6px 0;color:#7db3d9;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.3px;}
+
+  /* Filter bar like PERSONAL */
+  .filter-row{display:flex;gap:6px;flex-wrap:wrap;align-items:flex-end;margin:4px 0;}
+  .filter-row label{color:#e8f0f8;font-weight:600;font-size:9px;display:block;}
+  .filter-row input,.filter-row select{background:rgba(10,26,39,0.65);border:1px solid rgba(61,165,217,0.35);color:#e8f0f8;border-radius:2px;padding:3px 6px;font-size:9px;}
+
+  .btn-small{padding:3px 8px;background:#3da5d9;color:#fff;border:1px solid #2c8ec0;border-radius:2px;font-size:9px;cursor:pointer;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:3px;transition:all 0.2s;}
+  .btn-small:hover{background:#2c8ec0;transform:translateY(-1px);}
+  .btn-secondary{background:#2d5a7b;border-color:#3d6a8b;}
+  .btn-secondary:hover{background:#3d6a8b;}
+
+  .pagination{margin-top:6px;display:flex;gap:6px;align-items:center;color:#9fd2f1;font-size:9px;flex-wrap:wrap;}
+  .muted{color:#9fd2f1;font-size:9px;}
+</style>
+
+<div class="reports-container">
+  <div class="reports-title">RAPOARTE</div>
+  <div class="reports-tabs">
+    <a class="reports-tab {% if tab == 'accesslog' %}active{% endif %}" href="/agent/menu/reports/?tab=accesslog">Acces</a>
+    <a class="reports-tab {% if tab == 'device' %}active{% endif %}" href="/agent/menu/reports/?tab=device">Dispozitive</a>
+    <a class="reports-tab {% if tab == 'personal' %}active{% endif %}" href="/agent/menu/reports/?tab=personal">Personal</a>
+    <a class="reports-tab {% if tab == 'system' %}active{% endif %}" href="/agent/menu/reports/?tab=system">Sistem</a>
+  </div>
+
+  <div class="panel">
+    {% if tab == 'accesslog' %}
+      <h3>📋 AccessLog (intrări / ieșiri)</h3>
+      <form method="get">
+        <input type="hidden" name="tab" value="accesslog" />
+        <div class="filter-row">
+          <div>
+            <label>From</label>
+            <input type="datetime-local" name="from" value="{{ filters.from_val }}" />
+          </div>
+          <div>
+            <label>To</label>
+            <input type="datetime-local" name="to" value="{{ filters.to_val }}" />
+          </div>
+          <div>
+            <label>Card</label>
+            <input type="text" name="card" value="{{ access_filters.card }}" />
+          </div>
+          <div>
+            <label>Ușă</label>
+            <input type="text" name="door" value="{{ access_filters.door }}" />
+          </div>
+          <div>
+            <label>UserID / PIN</label>
+            <input type="text" name="person" value="{{ access_filters.person }}" />
+          </div>
+          <div>
+            <label>Status</label>
+            <select name="status">
+              <option value="" {% if not access_filters.status %}selected{% endif %}>All</option>
+              <option value="accepted" {% if access_filters.status == 'accepted' or access_filters.status == 'acceptat' %}selected{% endif %}>Acceptat</option>
+              <option value="denied" {% if access_filters.status == 'denied' or access_filters.status == 'respins' %}selected{% endif %}>Respins</option>
+            </select>
+          </div>
+          <div>
+            <label>Verify</label>
+            <input type="text" name="verify" value="{{ access_filters.verify }}" placeholder="card/pin/..." />
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn-small btn-primary" type="submit">Search</button>
+            <a class="btn-small btn-secondary" href="/agent/menu/reports/?tab=accesslog">Clear</a>
+          </div>
+        </div>
+      </form>
+      {% if missing_accesslog %}
+        <div class="muted" style="color:#ffb3b3;">AccessLog indisponibil (nu există sursă RTLog/EventLog).</div>
+      {% endif %}
+
+      {% if page_exists %}
+        <div class="muted">Total {{ page.paginator.count }} Entry / {{ page.paginator.num_pages }} Page</div>
+        <table class="compact-table">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>ZONA</th>
+              <th>Device Name</th>
+              <th>Event point</th>
+              <th>Event Description</th>
+              <th>Card Number</th>
+              <th>Personnel No.</th>
+              <th>Name</th>
+              <th>Department</th>
+              <th>User</th>
+              <th>Status</th>
+              <th>Verify Mode</th>
+              <th>Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in access_rows %}
+              <tr>
+                <td>{{ r.action_time }}</td>
+                <td>{{ r.area_name }}</td>
+                <td>{{ r.device_name }}</td>
+                <td>{{ r.event_point|default:'-' }}</td>
+                <td>{% if r.event_description %}{{ r.event_description }}{% else %}-{% endif %}</td>
+                <td>{{ r.card_number }}</td>
+                <td>{{ r.employee_pin }}</td>
+                <td>{{ r.employee_name }}</td>
+                <td>{{ r.department_name }}</td>
+                <td>{{ r.operator|default:'' }}</td>
+                <td>{{ r.status_text }}</td>
+                <td>{{ r.verify_mode }}</td>
+                <td>{{ r.remarks }}</td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="13">No entries</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        <div class="pagination">
+          {% if page.paginator.count %}
+            <span>{{ page.start_index }}-{{ page.end_index }} / {{ page.paginator.count }}</span>
+          {% endif %}
+          {% if page.has_previous %}
+            <a class="btn-small btn-primary" href="?{{ query_no_page }}&page=1">«</a>
+            <a class="btn-small btn-primary" href="?{{ query_no_page }}&page={{ page.previous_page_number }}">‹</a>
+          {% endif %}
+          <span>{{ page.number }}/{{ page.paginator.num_pages }}</span>
+          {% if page.has_next %}
+            <a class="btn-small btn-primary" href="?{{ query_no_page }}&page={{ page.next_page_number }}">›</a>
+            <a class="btn-small btn-primary" href="?{{ query_no_page }}&page={{ page.paginator.num_pages }}">»</a>
+          {% endif %}
+        </div>
+      {% endif %}
+
+    {% else %}
+      {% if tab == 'device' %}
+        <h3>🛠️ Device Status (modificări dispozitive)</h3>
+      {% elif tab == 'personal' %}
+        <h3>👤 Personal Status (modificări personal + carduri)</h3>
+      {% else %}
+        <h3>🧾 Log Events (modificări sistem)</h3>
+      {% endif %}
+
+      <form method="get">
+        <input type="hidden" name="tab" value="{{ tab }}" />
+        <div class="filter-row">
+          <div>
+            <label>User name <a class="muted" style="margin-left:6px;" href="?{{ query_no_page }}&user=">All users</a></label>
+            <input type="text" name="user" value="{{ filters.user }}" />
+          </div>
+          <div>
+            <label>Action flag</label>
+            <select name="action">
+              <option value="all" {% if filters.action == 'all' %}selected{% endif %}>All</option>
+              <option value="create" {% if filters.action == 'create' %}selected{% endif %}>Add</option>
+              <option value="update" {% if filters.action == 'update' %}selected{% endif %}>Modify</option>
+              <option value="delete" {% if filters.action == 'delete' %}selected{% endif %}>Delete</option>
+              <option value="others" {% if filters.action == 'others' %}selected{% endif %}>Others</option>
+            </select>
+          </div>
+          <div>
+            <label>From</label>
+            <input type="datetime-local" name="from" value="{{ filters.from_val }}" />
+          </div>
+          <div>
+            <label>To</label>
+            <input type="datetime-local" name="to" value="{{ filters.to_val }}" />
+          </div>
+          <div style="min-width:220px;">
+            <label>Search</label>
+            <input type="text" name="q" value="{{ filters.q }}" placeholder="object/descriere..." style="width:100%;" />
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn-small btn-primary" type="submit">Search</button>
+            <a class="btn-small btn-secondary" href="/agent/menu/reports/?tab={{ tab }}&user={{ current_username }}">Clear</a>
+          </div>
+        </div>
+      </form>
+
+      {% if page_exists %}
+        <div class="muted">Total {{ page.paginator.count }} Entry / {{ page.paginator.num_pages }} Page</div>
+
+        {% if tab == 'system' %}
+          <table class="compact-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>ZONA</th>
+                <th>Device Name</th>
+                <th>Event point</th>
+                <th>Event Description</th>
+                <th>Card Number</th>
+                <th>Personnel No.</th>
+                <th>Name</th>
+                <th>Department</th>
+                <th>User</th>
+                <th>Status</th>
+                <th>Verify Mode</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in system_rows %}
+                <tr>
+                  <td>{{ r.action_time }}</td>
+                  <td>{{ r.area_name }}</td>
+                  <td>{{ r.device_name }}</td>
+                  <td>{{ r.event_point|default:'-' }}</td>
+                  <td>{% if r.event_description %}{{ r.event_description }}{% else %}-{% endif %}</td>
+                  <td>{{ r.card_number }}</td>
+                  <td>{{ r.employee_pin }}</td>
+                  <td>{{ r.employee_name }}</td>
+                  <td>{{ r.department_name }}</td>
+                  <td>{{ r.operator|default:'' }}</td>
+                  <td>{{ r.status_text }}</td>
+                  <td>{{ r.verify_mode }}</td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="12">No entries</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <table class="compact-table">
+            <thead>
+              <tr>
+                <th>Action Time</th>
+                <th>Object Type</th>
+                <th>Object Description</th>
+                <th>Action Identification</th>
+                <th>User</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in page.object_list %}
+                <tr>
+                  <td>{{ r.timestamp }}</td>
+                  <td>{{ r.module }}</td>
+                  <td>{% if r.entity_name %}{{ r.entity_name }}{% else %}{{ r.entity_id }}{% endif %}</td>
+                  <td>
+                    {% if r.action == 'create' %}Add
+                    {% elif r.action == 'update' %}Modify
+                    {% elif r.action == 'delete' %}Delete
+                    {% else %}Others{% endif %}
+                  </td>
+                  <td>{{ r.user|default:'system' }}</td>
+                  <td>{{ r.details|default:''|truncatechars:120 }}</td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="6">No entries</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% endif %}
+
+        <div class="pagination">
+          {% if page.paginator.count %}
+            <span>{{ page.start_index }}-{{ page.end_index }} / {{ page.paginator.count }}</span>
+          {% endif %}
+          {% if page.has_previous %}
+            <a class="btn-small btn-primary" href="?{{ query_no_page }}&page=1">«</a>
+            <a class="btn-small btn-primary" href="?{{ query_no_page }}&page={{ page.previous_page_number }}">‹</a>
+          {% endif %}
+          <span>{{ page.number }}/{{ page.paginator.num_pages }}</span>
+          {% if page.has_next %}
+            <a class="btn-small btn-primary" href="?{{ query_no_page }}&page={{ page.next_page_number }}">›</a>
+            <a class="btn-small btn-primary" href="?{{ query_no_page }}&page={{ page.paginator.num_pages }}">»</a>
+          {% endif %}
+        </div>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

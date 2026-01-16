@@ -1,0 +1,109 @@
+{% load tz %}
+<style>
+  .status-embed { color: var(--text-light, #e8f0f8); }
+  .status-panels { display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+  .status-card {
+    background: linear-gradient(180deg, rgba(18,48,63,0.72), rgba(11,36,48,0.88));
+    border: 1px solid rgba(61,165,217,0.16);
+    padding: 8px 10px;
+    border-radius: 10px;
+    min-width: 130px;
+    box-shadow: 0 10px 18px rgba(0,0,0,0.22);
+  }
+  .status-card .stat { font-size: 16px; font-weight: 900; color: var(--color-primary, #3da5d9); line-height: 1.05; }
+  .status-card .label { font-size: 10px; color: var(--text-muted, #a8c5d8); text-transform: uppercase; letter-spacing: 0.2px; }
+
+  /* Fallback table-shell styling if included outside ECHIPAMENTE */
+  .status-embed .table-shell {
+    border: 1px solid var(--border-color, #3a5a72);
+    border-radius: 4px;
+    overflow: hidden;
+    background: rgba(15, 42, 71, 0.25);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.28);
+  }
+  .status-embed .table-shell table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 9px;
+    background: #163247;
+    color: var(--text-light, #e8f0f8);
+  }
+  .status-embed .table-shell thead {
+    background: linear-gradient(to bottom, #3da5d9 0%, #2d7ba5 100%);
+    color: #fff;
+  }
+  .status-embed .table-shell th {
+    padding: 3px 4px;
+    text-align: left;
+    font-weight: 900;
+    border-right: 1px solid #2d7ba5;
+    border-bottom: 1px solid rgba(61, 106, 139, 0.95);
+    text-transform: uppercase;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .status-embed .table-shell td {
+    padding: 2px 4px;
+    border-right: 1px solid rgba(61, 106, 139, 0.80);
+    border-bottom: 1px solid rgba(61, 106, 139, 0.60);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: top;
+  }
+  .status-embed .table-shell th:last-child, .status-embed .table-shell td:last-child { border-right: none; }
+  .status-embed .table-shell tbody tr:hover { background: #1e4a6b; }
+  .status-embed .table-shell tbody tr:nth-child(even) { background: #0f2433; }
+
+  .status-embed .td-center-muted { text-align: center; color: var(--text-muted, #a8c5d8); }
+  .status-embed col.col-id { width: 52px; }
+  .status-embed col.col-name { width: 240px; }
+  .status-embed col.col-serial { width: 220px; }
+  .status-embed col.col-status { width: 110px; }
+  .status-embed col.col-door { width: 160px; }
+  .status-embed col.col-updated { width: 170px; }
+
+  .status-badge { display:inline-flex; align-items:center; gap:6px; font-weight:900; }
+  .dot { display:inline-block; width:8px; height:8px; border-radius:50%; box-shadow:0 0 8px rgba(0,0,0,0.25); }
+  .online .dot { background:#2da44e; box-shadow:0 0 8px rgba(45,164,78,0.24); }
+  .offline .dot { background:#cf222e; box-shadow:0 0 8px rgba(207,34,46,0.24); }
+  .online .txt { color:#2da44e; }
+  .offline .txt { color:#cf222e; }
+</style>
+<div class="status-embed">
+  <div class="status-panels">
+    <div class="status-card"><div class="stat">{{ summary.total }}</div><div class="label">Total</div></div>
+    <div class="status-card"><div class="stat">{{ summary.online }}</div><div class="label">Online</div></div>
+    <div class="status-card"><div class="stat">{{ summary.doors_open }}</div><div class="label">Uși deschise</div></div>
+  </div>
+  <div class="table-shell">
+    <table>
+      <colgroup>
+        <col class="col-id" />
+        <col class="col-name" />
+        <col class="col-serial" />
+        <col class="col-status" />
+        <col class="col-door" />
+        <col class="col-updated" />
+      </colgroup>
+      <thead><tr><th>ID</th><th>Nume</th><th>Serial</th><th>Status</th><th>Ușă</th><th>Actualizat</th></tr></thead>
+      <tbody>
+        {% for r in rows %}
+        <tr data-device-id="{{ r.id }}">
+          <td>{{ r.id }}</td>
+          <td>{{ r.name }}</td>
+          <td>{{ r.serial }}</td>
+          <td class="{% if r.online %}online{% else %}offline{% endif %}"><span class="status-badge"><span class="dot"></span><span class="txt">{% if r.online %}ONLINE{% else %}OFFLINE{% endif %}</span></span></td>
+          <td>{{ r.door_state|default:"" }}</td>
+          <td>{% if r.updated_at %}{{ r.updated_at|localtime|date:"Y-m-d H:i:s" }}{% else %}-{% endif %}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="td-center-muted">Nu există înregistrări de status.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>

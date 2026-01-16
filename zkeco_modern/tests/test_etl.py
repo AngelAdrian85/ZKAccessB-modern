@@ -10,9 +10,9 @@ class ETLSmoke(TestCase):
         ic_csv = os.path.join(base, 'issuecard_sample.csv')
         dev_csv = os.path.join(base, 'device_sample.csv')
 
-        from zkeco_modern.etl.employee import import_employees_from_csv
-        from zkeco_modern.etl.issuecard import import_issuecards_from_csv
-        from zkeco_modern.etl.device import import_devices_from_csv
+        from etl.employee import import_employees_from_csv
+        from etl.issuecard import import_issuecards_from_csv
+        from etl.device import import_devices_from_csv
         from legacy_models.models import Employee, IssueCard, Device
 
         # Run ETL

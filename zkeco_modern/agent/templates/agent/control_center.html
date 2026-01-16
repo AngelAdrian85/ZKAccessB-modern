@@ -86,7 +86,12 @@ async function stopCenter(){
   catch(e){ alert('Stop failed'); }
 }
 async function shutdownServer(){
-  if(!confirm('Shutdown server now?')) return;
+  if(window.zkConfirmDialog){
+    const ok = await zkConfirmDialog({title:'Confirmare',message:'Oprești serverul acum?',okText:'Oprește',cancelText:'Renunță',variant:'danger'});
+    if(!ok) return;
+  } else {
+    if(!confirm('Shutdown server now?')) return;
+  }
   try { const r=await fetch('/agent/shutdown/', {method:'POST', headers:{'X-CSRFToken':getCSRF()}}); const j=await r.json(); document.getElementById('shutdownMsg').textContent=j.ok?'Server shutting down...':'Failed'; }
   catch(e){ document.getElementById('shutdownMsg').textContent='Error'; }
 }

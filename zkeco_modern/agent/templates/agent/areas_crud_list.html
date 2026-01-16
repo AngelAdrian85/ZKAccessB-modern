@@ -13,7 +13,7 @@
 <td>{{ a.areaname }}</td>
 <td>
 <a href="{% url 'crud-area-edit' a.id %}" data-tip="Editează">Edit</a>
-<form method="post" action="{% url 'crud-area-delete' a.id %}" style="display:inline" onsubmit="return confirm('Ștergi?');">{% csrf_token %}<button data-tip="Șterge">X</button></form>
+<form method="post" action="{% url 'crud-area-delete' a.id %}" style="display:inline" onsubmit="return (window.zkConfirmThenSubmit ? zkConfirmThenSubmit(this,{title:'Confirmare',message:'Ștergi zona?',okText:'Șterge',cancelText:'Renunță',variant:'danger'}) : confirm('Ștergi?'));">{% csrf_token %}<button data-tip="Șterge">X</button></form>
 </td>
 </tr>
 {% endfor %}

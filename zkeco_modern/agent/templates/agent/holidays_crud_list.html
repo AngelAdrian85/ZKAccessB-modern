@@ -41,7 +41,7 @@
           <td>{{ h.description|default:'-' }}</td>
           <td>
             <a class="btn-small btn-success" href="{% url 'crud-holiday-edit' h.id %}">Edit</a>
-            <form method='post' action='{% url "crud-holiday-delete" h.id %}' style='display:inline' onsubmit='return confirm("Delete holiday?")'>
+            <form method='post' action='{% url "crud-holiday-delete" h.id %}' style='display:inline' onsubmit='return (window.zkConfirmThenSubmit ? zkConfirmThenSubmit(this,{title:"Confirmare",message:"Ștergi sărbătoarea?",okText:"Șterge",cancelText:"Renunță",variant:"danger"}) : confirm("Delete holiday?"))'>
               {% csrf_token %}<button class="btn-small btn-danger" type="submit">Del</button>
             </form>
           </td>

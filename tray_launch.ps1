@@ -248,43 +248,25 @@ try {
 Write-Host "[TRAY] Checking migrations"
 $manage = "zkeco_modern/manage.py"
 if (Test-Path $manage) {
-  Write-Host "[TRAY] Dry-run migration check (makemigrations --dry-run --check)"
-  & $py $manage makemigrations --dry-run --check > $null 2> migration_dryrun_errors.log
+  # IMPORTANT: Do NOT auto-generate migrations in an automatic startup script.
+  # This script should only apply existing migrations.
+  Write-Host "[TRAY] Applying migrations (migrate --noinput)"
+  $migrateOut = Join-Path $PWD 'migration_run.log'
+  $migrateErr = Join-Path $PWD 'migration_run_errors.log'
+  try {
+    & $py $manage 'migrate' '--noinput' "--settings=$Settings" 1> $migrateOut 2> $migrateErr
+  } catch {
+    Write-Error "[TRAY] migrate threw an exception: $_"
+    Add-Content -Path migration_auto.log -Value ((Get-Date).ToString() + " migrate exception; startup aborted")
+    exit 1
+  }
   if ($LASTEXITCODE -ne 0) {
-    Write-Host "[TRAY] Model changes without migrations detected; attempting to create migrations"
-    & $py $manage makemigrations 2>> migration_dryrun_errors.log
-    if ($LASTEXITCODE -ne 0) {
-      Write-Warning "[TRAY] makemigrations (post dry-run) failed; continuing startup without applying migrations. See migration_dryrun_errors.log"
-      Add-Content -Path migration_auto.log -Value ((Get-Date).ToString() + " makemigrations post-dryrun failed; startup continued")
-    } else {
-      Write-Host "[TRAY] makemigrations generated new migration files"
-    }
-  } else {
-    Write-Host "[TRAY] Dry-run OK (no new migrations needed)"
+    Write-Error "[TRAY] migrate failed (exit=$LASTEXITCODE). See migration_run_errors.log"
+    Add-Content -Path migration_auto.log -Value ((Get-Date).ToString() + " migrate failed; startup aborted")
+    exit 1
   }
-  Write-Host "[TRAY] Verifying schema (migrate --check)"
-  & $py $manage migrate --check > $null 2> migration_check_errors.log
-  if ($LASTEXITCODE -ne 0) {
-    Write-Host "[TRAY] Pending migrations detected; attempting to apply"
-    & $py $manage makemigrations 2> migration_make_errors.log
-    if ($LASTEXITCODE -ne 0) {
-      Write-Warning "[TRAY] makemigrations failed; skipping automatic migration apply. See migration_make_errors.log"
-      Add-Content -Path migration_auto.log -Value ((Get-Date).ToString() + " makemigrations failed; skipped automatic apply")
-    } else {
-      & $py $manage migrate 2> migration_run_errors.log
-      if ($LASTEXITCODE -ne 0) {
-        Write-Warning "[TRAY] migrate failed; continuing startup. See migration_run_errors.log"
-        Add-Content -Path migration_auto.log -Value ((Get-Date).ToString() + " migrate failed; startup continued")
-      } else {
-        Write-Host "[TRAY] Migrations applied successfully"
-        Add-Content -Path migration_auto.log -Value ((Get-Date).ToString() + " Applied migrations successfully")
-      }
-    }
-  }
-  else {
-    Write-Host "[TRAY] No pending migrations"
-    Add-Content -Path migration_auto.log -Value ((Get-Date).ToString() + " No migrations needed")
-  }
+  Write-Host "[TRAY] Migrations OK"
+  Add-Content -Path migration_auto.log -Value ((Get-Date).ToString() + " Migrations OK")
 } else {
   Write-Warning "[TRAY] manage.py not found at $manage; skipping migrations"
   Add-Content -Path migration_auto.log -Value ((Get-Date).ToString() + " manage.py missing; skipped migrations")
@@ -297,7 +279,7 @@ if($NoCommCenter){ $trayArgs += '--no-commcenter' }
 if(-not $WSGI){ $trayArgs += '--asgi' }
 $trayArgs += @('--driver','auto','--port',"$Port")
 Write-Host "[TRAY] Collecting static files"
-& $py $manage collectstatic --noinput > $null 2> collectstatic_errors.log
+& $py $manage 'collectstatic' '--noinput' "--settings=$Settings" > $null 2> collectstatic_errors.log
 if($LASTEXITCODE -ne 0){ Write-Warning "[TRAY] collectstatic reported errors; see collectstatic_errors.log" }
 Write-Host "[TRAY] Starting tray agent"
 # Run tray_agent in the foreground so actions are visible in terminal
@@ -322,5 +304,5 @@ try {
   }
   Set-Content -Path (Join-Path $PWD 'tray_status.json') -Value ($statusRun | ConvertTo-Json -Depth 3) -Encoding UTF8
 } catch {}
-& $py @('zkeco_modern/manage.py','tray_agent') @trayArgs
+& $py @('zkeco_modern/manage.py','tray_agent',"--settings=$Settings") @trayArgs
  

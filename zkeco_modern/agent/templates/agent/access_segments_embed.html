@@ -1,0 +1,47 @@
+<div class="access-pane" data-tab="segments">
+  <div class="action-bar">
+    <div class="action-left">
+      <span class="access-badge">Intervale</span>
+      <span class="hint">Intervale orare + zile (permisiuni)</span>
+    </div>
+    <div class="action-right">
+      <button class="btn-secondary btn-small" type="button" data-access-ui="reload" title="Reîncarcă lista de intervale">🔄 Reîncarcă</button>
+      <button class="btn-secondary btn-small" type="button" data-access-ui="export" title="Exportă CSV (format importabil)">📥 Export</button>
+      <button class="btn-secondary btn-small" type="button" data-access-ui="import" data-access-module="time-segment" data-access-title="Intervale" title="Importă intervale din CSV">📤 Import</button>
+      <button class="btn-secondary btn-small" type="button" data-access-ui="logs" data-access-module="time-segment" data-access-title="Intervale" title="Deschide logurile pentru intervale">📋 Loguri</button>
+      {% if can_edit %}
+      <button class="btn-primary btn-small" type="button" data-access-open="1" data-title="Adaugă interval" data-url="{% url 'crud-segment-create' %}?modal=1" title="Adaugă un interval nou">+ Adaugă interval</button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="table-shell">
+    <table>
+      <thead><tr><th>Nume</th><th>Start</th><th>End</th><th>Zile</th><th class="col-w-150">Acțiuni</th></tr></thead>
+      <tbody>
+        {% for s in page.object_list %}
+        <tr>
+          <td>{{ s.name }}</td>
+          <td>{{ s.start_time }}</td>
+          <td>{{ s.end_time }}</td>
+          <td>{{ s.days_display }}</td>
+          <td>
+            {% if can_edit %}
+            <button type="button" class="btn-success btn-small" data-access-open="1" data-title="Editează interval" data-url="{% url 'crud-segment-edit' s.id %}?modal=1" title="Editează intervalul">Editează</button>
+            <button type="button" class="btn-danger btn-small" data-access-del="1" data-confirm="Ștergi intervalul?" data-url="{% url 'crud-segment-delete' s.id %}" title="Șterge intervalul">Șterge</button>
+            {% else %}-{% endif %}
+          </td>
+        </tr>
+        {% empty %}
+          <tr><td colspan="5" class="td-center-muted">Nu există intervale</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="access-pager">
+    <span>{{ page.number }}/{{ page.paginator.num_pages }}</span>
+    {% if page.has_previous %}<a class="btn-secondary btn-small" data-access-page="1" href="{{ request.path }}?embed=1&page={{ page.previous_page_number }}">«</a>{% endif %}
+    {% if page.has_next %}<a class="btn-secondary btn-small" data-access-page="1" href="{{ request.path }}?embed=1&page={{ page.next_page_number }}">»</a>{% endif %}
+  </div>
+</div>

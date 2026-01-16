@@ -1,0 +1,18 @@
+<style>
+.segment-saved{background:#0a1a27;border:1px solid #2f5876;border-radius:6px;padding:14px;}
+.segment-saved h3{margin:0 0 8px 0;color:#9fd2f1;font-size:14px;}
+.segment-saved p{margin:0;color:#e8f0f8;font-size:11px;}
+.segment-saved .actions{margin-top:12px;display:flex;gap:10px;justify-content:flex-end;}
+.segment-saved .btn{padding:7px 13px;border:none;border-radius:4px;font-size:11px;font-weight:800;cursor:pointer;color:#fff;}
+.segment-saved .btn-primary{background:#3da5d9;}
+.segment-saved .btn-secondary{background:#2f5876;}
+</style>
+
+<div class="segment-saved" data-segment-saved="1">
+  <h3>Segment {{ obj.name }} {% if created %}created{% else %}updated{% endif %}</h3>
+  <p>Modificarea a fost salvată.</p>
+  <div class="actions">
+    <button type="button" class="btn btn-secondary" data-modal-close="1">Close</button>
+    <button type="button" class="btn btn-primary" data-modal-reload="1">Refresh list</button>
+  </div>
+</div>

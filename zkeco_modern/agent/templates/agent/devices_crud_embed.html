@@ -1,0 +1,148 @@
+{% load tz %}
+<style>
+  .embed-device-wrap { background: transparent; padding: 0; }
+  .filter-bar { display:flex; gap:6px; flex-wrap:wrap; margin: 0 0 8px 0; }
+  .filter-chip { background: linear-gradient(90deg,#102638 0%,#16344a 100%); color:#cfe9ff; border:1px solid #3d6a8b; padding:6px 12px; border-radius:14px; font-size:11px; text-decoration:none; }
+  .filter-chip.active { background: linear-gradient(90deg,#1a3a52 0%, #3da5d9 100%); color:#fff; border-color:#3da5d9; }
+  /* Parent (.table-shell in menu_device.html) provides the outer chrome/border */
+  .table-wrapper { overflow-x:auto; }
+  /* Ultra-compact grid like Personal */
+  .embed-device-wrap .compact-table { width:100%; border-collapse:collapse; table-layout:fixed; font-size:9px; background:#163247; color:#e8f1f8; }
+  .embed-device-wrap .compact-table thead { background: linear-gradient(to bottom, #3da5d9 0%, #2d7ba5 100%); color:#fff; }
+  .embed-device-wrap .compact-table th { padding:3px 4px; text-align:left; font-weight:800; text-transform:uppercase; letter-spacing:.2px; border-right:1px solid #2d7ba5; border-bottom:1px solid rgba(61,106,139,0.95); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .embed-device-wrap .compact-table th:last-child { border-right:none; }
+  .embed-device-wrap .compact-table td { padding:2px 4px; border-right:1px solid rgba(61,106,139,0.80); border-bottom:1px solid rgba(61,106,139,0.60); color:#e8f1f8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .embed-device-wrap .compact-table td:last-child { border-right:none; }
+  .embed-device-wrap .compact-table tbody tr:nth-child(even) { background:#0f2433; }
+  .embed-device-wrap .compact-table tbody tr:hover { background:#1e4a6b; }
+  .type-controller { background: rgba(50,255,126,0.15); color:#8ef3b7; border:1px solid rgba(50,255,126,0.45); padding:2px 6px; border-radius:10px; font-size:10px; margin-left:6px; }
+  .type-reader { background: rgba(160,32,240,0.15); color:#d0a2ff; border:1px solid rgba(160,32,240,0.45); padding:2px 6px; border-radius:10px; font-size:10px; margin-left:6px; }
+  .status { padding:3px 8px; border-radius:10px; font-weight:700; font-size:10px; }
+  .status.on { background:#2da44e; color:#fff; }
+  .status.off { background:#d97e4a; color:#fff; }
+  .actions { display:flex; gap:4px; align-items:center; }
+  .action-link { color:#3da5d9; text-decoration:none; font-size:9px; padding:2px 4px; border-radius:2px; transition: all 0.2s; border: 1px solid transparent; }
+  .action-link:hover { background:#3da5d9; color:#fff; border-color: rgba(255,255,255,0.12); }
+  .action-link.delete { color:#d94a3d; }
+  .action-link.delete:hover { background:#d94a3d; color:#fff; }
+</style>
+<div class="embed-device-wrap">
+  <style>
+    .embed-action-overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:9999;background:rgba(0,0,0,0.45);} 
+    .embed-action-overlay .panel{width:min(520px,92vw);padding:18px 16px;border-radius:8px;border:1px solid #3d6a8b;background:#163247;box-shadow:0 20px 40px rgba(0,0,0,0.6);text-align:center;transform:scale(.94);opacity:0;animation:overlayIn 180ms ease-out forwards;}
+    .embed-action-overlay.success .panel{border-color:#2da44e;}
+    .embed-action-overlay.error .panel{border-color:#ff6b6b;}
+    .embed-action-overlay .title{font-weight:800;font-size:12px;margin-bottom:6px;color:#e8f0f8;}
+    .embed-action-overlay.success .title{color:#9fd2f1;}
+    .embed-action-overlay.error .title{color:#ff9999;}
+    .embed-action-overlay .msg{font-size:11px;color:#e8f0f8;line-height:1.35;}
+    .embed-action-overlay .bar{height:6px;border-radius:6px;background:#0f2433;border:1px solid #3d6a8b;margin-top:12px;overflow:hidden;}
+    .embed-action-overlay .bar>div{height:100%;width:0%;background:#3da5d9;animation:barRun 900ms linear forwards;}
+    .embed-action-overlay.success .bar>div{background:#2da44e;}
+    .embed-action-overlay.error .bar>div{background:#ff6b6b;}
+    @keyframes overlayIn{to{transform:scale(1);opacity:1;}}
+    @keyframes barRun{to{width:100%;}}
+  </style>
+
+  <div id="embedActionOverlay" class="embed-action-overlay" aria-hidden="true">
+    <div class="panel">
+      <div class="title" id="embedActionTitle">Rezultat</div>
+      <div class="msg" id="embedActionMsg"></div>
+      <div class="bar"><div></div></div>
+    </div>
+  </div>
+
+  <div class="filter-bar">
+    {% with af=active_filter|default:'all' %}
+    {% if embed_base_url %}
+      {% with tab=embed_tab|default:'devices' %}
+      <a class="filter-chip {% if af == 'all' %}active{% endif %}" href="{{ embed_base_url }}?tab={{ tab }}&filter=all">Toate</a>
+      <a class="filter-chip {% if af == 'controllers' %}active{% endif %}" href="{{ embed_base_url }}?tab={{ tab }}&filter=controllers">Centrale</a>
+      <a class="filter-chip {% if af == 'new' %}active{% endif %}" href="{{ embed_base_url }}?tab={{ tab }}&filter=new">Dispozitive Noi</a>
+      <a class="filter-chip {% if af == 'readers' %}active{% endif %}" href="{{ embed_base_url }}?tab={{ tab }}&filter=readers">Cititoare (ACP/Elatec)</a>
+      {% endwith %}
+    {% else %}
+      <a class="filter-chip {% if af == 'all' %}active{% endif %}" href="?embedded=1&filter=all">Toate</a>
+      <a class="filter-chip {% if af == 'controllers' %}active{% endif %}" href="?embedded=1&filter=controllers">Centrale</a>
+      <a class="filter-chip {% if af == 'new' %}active{% endif %}" href="?embedded=1&filter=new">Dispozitive Noi</a>
+      <a class="filter-chip {% if af == 'readers' %}active{% endif %}" href="?embedded=1&filter=readers">Cititoare (ACP/Elatec)</a>
+    {% endif %}
+    {% endwith %}
+    <span style="margin-left:auto;font-size:10px;color:#a8c5d8;">Legendă: verde=centrală, violet=cititor</span>
+  </div>
+  <div class="table-wrapper">
+    {% if page.object_list %}
+    <table class="compact-table">
+      <colgroup>
+        <col style="width:44px;" />
+        <col style="width:240px;" />
+        <col style="width:160px;" />
+        <col style="width:120px;" />
+        <col style="width:56px;" />
+        <col style="width:72px;" />
+        <col style="width:90px;" />
+        <col style="width:120px;" />
+        <col style="width:84px;" />
+        <col style="width:116px;" />
+        <col style="width:120px;" />
+      </colgroup>
+      <thead><tr><th>ID</th><th>Nume</th><th>Serial</th><th>IP</th><th>Port</th><th>Mod</th><th>Firmware</th><th>Zonă</th><th>Status</th><th>Actualizat</th><th>Acțiuni</th></tr></thead>
+      <tbody>
+        {% for device in page.object_list %}
+        <tr>
+          <td><strong>#{{ device.id }}</strong></td>
+          <td><strong>{{ device.name }}</strong>{% if device.scanner_linked %}<span class="type-reader">Reader</span>{% elif device.device_type %}<span class="type-controller">{{ device.device_type }}</span>{% endif %}</td>
+          <td>{{ device.serial_number|default:"—" }}</td>
+          <td>{{ device.ip_address|default:"—" }}</td>
+          <td>{{ device.port|default:"4370" }}</td>
+          <td>{{ device.get_comm_mode_display }}</td>
+          <td>{{ device.firmware_version|default:"—" }}</td>
+          <td>{{ device.area_name|default:"—" }}</td>
+          <td>{% if device.latest_online %}<span class="status on">ONLINE</span>{% else %}<span class="status off">OFFLINE</span>{% endif %}</td>
+          <td>{% if device.latest_updated_at %}<small class="ts" data-ts="{{ device.latest_updated_at|date:'c' }}">{{ device.latest_updated_at|date:"d.m H:i" }}</small>{% elif device.last_contact %}<small class="ts" data-ts="{{ device.last_contact|date:'c' }}">{{ device.last_contact|date:"d.m H:i" }}</small>{% else %}<small>—</small>{% endif %}</td>
+          <td class="actions">
+            <a href="{% url 'crud-device-edit' device.id %}?next={{ request.get_full_path|urlencode }}" target="_blank" class="action-link" title="Editează dispozitivul" onclick="if(window.openDeviceModal){ openDeviceModal(this.href, '✏️ Editează Dispozitiv #{{ device.id }}'); return false; }">Edit</a>
+            <a href="#" class="action-link delete" title="Șterge dispozitivul" onclick="deleteEmbeddedDevice({{ device.id }}); return false;">Șterge</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      <div style="padding:16px;color:#a8c5d8;">Niciun dispozitiv.</div>
+    {% endif %}
+  </div>
+</div>
+<script>
+function getCookie(name){let v=null;if(document.cookie&&document.cookie!==''){document.cookie.split(';').forEach(c=>{c=c.trim();if(c.substring(0,name.length+1)===(name+'=')){v=decodeURIComponent(c.substring(name.length+1));}});}return v;}
+function showEmbedActionOverlay(message, ok){
+  const el = document.getElementById('embedActionOverlay');
+  if(!el) return;
+  const t = document.getElementById('embedActionTitle');
+  const m = document.getElementById('embedActionMsg');
+  if(t) t.textContent = ok ? 'Succes' : 'Eroare';
+  if(m) m.textContent = message || '';
+  el.classList.remove('success','error');
+  el.classList.add(ok ? 'success' : 'error');
+  el.style.display = 'flex';
+  setTimeout(()=>{ el.style.display = 'none'; }, 1100);
+}
+
+function deleteEmbeddedDevice(id){
+  const doDelete = ()=>{
+    fetch('/agent/crud/devices/' + id + '/delete/', {method:'POST', headers:{'X-CSRFToken': getCookie('csrftoken')}})
+      .then(r=>r.json()).then(d=>{
+        if(d && d.ok){ showEmbedActionOverlay('Dispozitiv șters cu succes!', true); setTimeout(()=>location.reload(), 900); }
+        else { showEmbedActionOverlay('Eroare ștergere: ' + ((d && d.error) || 'Necunoscut'), false); }
+      }).catch(e=> showEmbedActionOverlay('Eroare: ' + (e && e.message ? e.message : e), false));
+  };
+  if(window.zkConfirmDialog){
+    zkConfirmDialog({title:'Confirmare',message:'Ștergi dispozitivul?',okText:'Șterge',cancelText:'Renunță',variant:'danger'}).then(ok=>{ if(ok) doDelete(); });
+    return;
+  }
+  if(!confirm('Ștergi dispozitivul?')) return;
+  doDelete();
+}
+
+document.querySelectorAll('.ts[data-ts]').forEach(el=>{const s=el.getAttribute('data-ts');const d=new Date(s);if(!isNaN(d)){const day=('0'+d.getDate()).slice(-2);const month=('0'+(d.getMonth()+1)).slice(-2);const time=d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});el.textContent=`${day}.${month} ${time}`;}});
+</script>

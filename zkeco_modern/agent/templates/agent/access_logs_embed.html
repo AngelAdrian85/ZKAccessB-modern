@@ -1,0 +1,45 @@
+<div class="access-pane" data-tab="logs">
+  <div class="action-bar">
+    <div class="action-left">
+      <span class="access-badge">Loguri</span>
+      <span class="hint">Jurnal evenimente acces (listă compactă)</span>
+    </div>
+    <div class="action-right" style="display:flex;gap:8px;flex-wrap:wrap;">
+      <a class="btn-secondary btn-small" href="/agent/menu/reports/?tab=accesslog" title="Vezi logurile complete în RAPOARTE">Deschide raport</a>
+    </div>
+  </div>
+
+  {% if missing %}
+    <div class="hint" style="color:#ffbdbd;">Model AccessLog indisponibil (legacy). Se afișează fallback din logurile locale.</div>
+  {% endif %}
+
+  {% if page %}
+  <div class="table-shell">
+    <table>
+      <thead><tr><th>Data</th><th>UserID</th><th>Card</th><th>Ușă</th><th>Device</th><th>Tip</th><th>Rezultat</th><th>Info</th></tr></thead>
+      <tbody>
+        {% for e in page.object_list %}
+        <tr>
+          <td>{{ e.timestamp }}</td>
+          <td>{% if e.userid %}{{ e.userid.userid }}{% endif %}</td>
+          <td>{{ e.cardno }}</td>
+          <td>{% if e.door %}{{ e.door.name }}{% endif %}</td>
+          <td>{% if e.device %}{{ e.device.device_name }}{% endif %}</td>
+          <td>{{ e.event_type }}</td>
+          <td>{{ e.result }}</td>
+          <td>{{ e.info|truncatechars:60 }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="access-pager">
+    <span>{{ page.number }}/{{ page.paginator.num_pages }}</span>
+    {% if page.has_previous %}<a class="btn-secondary btn-small" data-access-page="1" href="{{ request.path }}?{{ qs }}&page={{ page.previous_page_number }}">«</a>{% endif %}
+    {% if page.has_next %}<a class="btn-secondary btn-small" data-access-page="1" href="{{ request.path }}?{{ qs }}&page={{ page.next_page_number }}">»</a>{% endif %}
+  </div>
+  {% else %}
+    <div class="hint">Nu sunt date.</div>
+  {% endif %}
+</div>

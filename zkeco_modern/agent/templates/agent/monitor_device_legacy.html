@@ -1,0 +1,140 @@
+{% extends 'agent/base_legacy.html' %}
+{% load tz %}
+{% block title %}Monitorizare dispozitive (formular vechi){% endblock %}
+{% block content %}
+<style>
+  :root {
+    --md-bg: #0f2a47;
+    --md-panel: #1a3a52;
+    --md-ink: #e8f1f8;
+    --md-muted: #a8c5d8;
+    --md-border: #3a5a72;
+    --md-accent: #3da5d9;
+    --md-success: #2da44e;
+    --md-warn: #d97e4a;
+  }
+  .legacy-wrap { margin: 14px; }
+  .legacy-card { background: var(--md-panel); border: 1px solid var(--md-border); border-radius: 6px; box-shadow: 0 6px 18px rgba(0,0,0,0.35); }
+  .legacy-header { display:flex; align-items:center; justify-content:space-between; padding: 12px 14px; border-bottom:1px solid var(--md-border); background: linear-gradient(90deg,#12304a 0%,#1f4663 100%); color: var(--md-ink); }
+  .legacy-header h2 { margin:0; font-size:16px; }
+  .legacy-actions { display:flex; gap:8px; flex-wrap:wrap; }
+  .legacy-actions a { color:#fff; text-decoration:none; padding:7px 10px; border-radius:4px; font-size:12px; border:1px solid transparent; }
+  .legacy-actions a.primary { background: var(--md-accent); border-color: #2d95c9; }
+  .legacy-actions a.secondary { background: #23435c; border-color: var(--md-border); color: var(--md-ink); }
+  .legacy-body { padding: 12px 14px; background: var(--md-bg); }
+  .filter-row { display:flex; gap:10px; align-items:center; margin-bottom:10px; }
+  .filter-row input { flex:1; padding:8px 10px; border-radius:4px; border:1px solid var(--md-border); background: #102c48; color: var(--md-ink); }
+  .table-shell { border:1px solid var(--md-border); border-radius:6px; overflow:hidden; background:#0f1e31; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th { background: linear-gradient(90deg,#1a3a52 0%, #3da5d9 100%); color:#fff; padding:8px; text-align:left; }
+  td { padding:7px 8px; border-bottom:1px solid #1f3a52; color: var(--md-ink); }
+  tr:nth-child(even) td { background: #122841; }
+  .pill { display:inline-block; padding:3px 8px; border-radius:12px; font-weight:700; font-size:11px; }
+  .pill.on { background: var(--md-success); color:#fff; }
+  .pill.off { background: var(--md-warn); color:#fff; }
+  .pill.unknown { background:#5b708a; color:#fff; }
+  .ops button { padding:5px 8px; border-radius:4px; border:1px solid var(--md-border); background:#163653; color: var(--md-ink); cursor:pointer; font-size:11px; margin-right:6px; }
+  .ops button:hover { background: var(--md-accent); border-color: var(--md-accent); color:#fff; }
+  .ops button.danger { background:#d97e4a; border-color:#d97e4a; color:#fff; }
+  .ops button.secondary { background:#274862; }
+  .muted { color: var(--md-muted); font-size:11px; }
+</style>
+<div class="legacy-wrap">
+  <div class="legacy-card">
+    <div class="legacy-header">
+      <h2>Monitorizare dispozitive – formular vechi</h2>
+      <div class="legacy-actions">
+        <a class="secondary" href="{% url 'agent-menu-device' %}">Înapoi la modulul Device</a>
+        <a class="secondary" href="{% url 'agent-status-summary' %}" target="_blank">Status dispozitive</a>
+        <a class="primary" href="{% url 'agent-monitor' %}" target="_blank">Monitorizare live</a>
+      </div>
+    </div>
+    <div class="legacy-body">
+      <div class="filter-row">
+        <input id="legacyFilter" type="text" placeholder="Caută după ID, nume, serial sau IP" />
+        <span class="muted">Acțiuni rapide pe ușa 0</span>
+      </div>
+      <div class="table-shell">
+        <table id="legacyTable">
+          <thead>
+            <tr><th>ID</th><th>Serial / Nume</th><th>IP</th><th>Tip</th><th>Firmware</th><th>Status</th><th>Actualizat</th><th>Acțiuni</th></tr>
+          </thead>
+          <tbody>
+            {% for d in devices %}
+              <tr data-q="{{ d.id }} {{ d.serial_number|default:'' }} {{ d.name|default:'' }} {{ d.ip_address|default:'' }}">
+                <td><strong>#{{ d.id }}</strong></td>
+                <td>
+                  <div><strong>{{ d.serial_number|default:'(fără serial)' }}</strong></div>
+                  <div class="muted">{{ d.name|default:'(fără nume)' }}</div>
+                </td>
+                <td>{{ d.ip_address|default:'—' }}</td>
+                <td>{{ d.device_type|default:'—' }}</td>
+                <td>{{ d.firmware_version|default:'—' }}</td>
+                <td>
+                  {% if d.latest_online is None %}<span class="pill unknown">NECUNOSCUT</span>{% elif d.latest_online %}<span class="pill on">ONLINE</span>{% else %}<span class="pill off">OFFLINE</span>{% endif %}
+                </td>
+                <td>
+                  {% if d.latest_updated_at %}
+                    <span class="muted ts" data-ts="{{ d.latest_updated_at|date:'c' }}">{{ d.latest_updated_at|date:"d.m H:i" }}</span>
+                  {% else %}
+                    <span class="muted">—</span>
+                  {% endif %}
+                </td>
+                <td class="ops">
+                  <button data-action="open" data-id="{{ d.id }}">Deschide</button>
+                  <button data-action="close" data-id="{{ d.id }}" class="secondary">Închide</button>
+                  <button data-action="normal-open" data-id="{{ d.id }}" class="secondary">Normal</button>
+                  <button data-action="cancel-alarm" data-id="{{ d.id }}" class="danger">Alarmă Off</button>
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="8" style="text-align:center; padding:14px; color: var(--md-muted);">Nu există dispozitive.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(function(){
+  const filter = document.getElementById('legacyFilter');
+  const rows = Array.from(document.querySelectorAll('#legacyTable tbody tr'));
+  function applyFilter(){
+    const term = (filter.value || '').toLowerCase();
+    rows.forEach(r=>{
+      const q = (r.getAttribute('data-q') || '').toLowerCase();
+      r.style.display = !term || q.includes(term) ? '' : 'none';
+    });
+  }
+  filter.addEventListener('input', applyFilter);
+  applyFilter();
+
+  function normalizeTs(){
+    document.querySelectorAll('.ts[data-ts]').forEach(el=>{
+      const iso = el.getAttribute('data-ts');
+      const d = new Date(iso);
+      if(!isNaN(d.valueOf())){
+        const day = ('0'+d.getDate()).slice(-2);
+        const month = ('0'+(d.getMonth()+1)).slice(-2);
+        const time = d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        el.textContent = `${day}.${month} ${time}`;
+      }
+    });
+  }
+  normalizeTs();
+
+  function callDoor(deviceId, action){
+    fetch(`/agent/api/devices/${deviceId}/doors/0/${action}/`).then(r=>r.json()).then(()=>{})
+      .catch(()=>{});
+  }
+  document.querySelectorAll('.ops button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const id = btn.getAttribute('data-id');
+      const action = btn.getAttribute('data-action');
+      if(id && action){ callDoor(id, action); }
+    });
+  });
+})();
+</script>
+{% endblock %}

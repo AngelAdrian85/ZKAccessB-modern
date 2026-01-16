@@ -47,9 +47,10 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "legacy_models",  # legacy shim
+    "legacy_models.apps.LegacyModelsConfig",  # legacy reconstructed models
     "django_extensions",
-    "agent",  # Changed from zkeco_modern.agent to agent
+    "agent.apps.AgentConfig",
+    "iaccess_port.apps.IAccessPortConfig",
     "channels",
 ]
 
@@ -57,7 +58,7 @@ INSTALLED_APPS = [
 try:
     import legacy_models  # type: ignore
 except Exception:
-    INSTALLED_APPS = [a for a in INSTALLED_APPS if a != "legacy_models"]
+    INSTALLED_APPS = [a for a in INSTALLED_APPS if a != "legacy_models.apps.LegacyModelsConfig"]
 
 # When opting into legacy exploration, enable the local stub app which
 # renders legacy templates for demo purposes.

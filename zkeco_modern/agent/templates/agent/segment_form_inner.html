@@ -1,0 +1,50 @@
+{# Modal/partial version of segment_form.html #}
+<style>
+.segment-modal-card{background:#0a1a27;border:1px solid #2f5876;border-radius:6px;padding:14px;}
+.segment-modal-card h3{margin:0 0 12px 0;color:#9fd2f1;font-size:14px;}
+.segment-modal-field{margin-bottom:10px;}
+.segment-modal-card label{color:#e8f0f8;font-weight:600;font-size:11px;display:block;margin-bottom:4px;}
+.segment-modal-card input,.segment-modal-card select{width:100%;background:#0f2433;border:1px solid #2f5876;color:#e8f0f8;border-radius:4px;padding:7px;font-size:11px;}
+.segment-modal-days{border:1px solid #2f5876;border-radius:4px;padding:8px;background:#0f2433;}
+.segment-modal-days legend{color:#9fd2f1;font-weight:700;font-size:11px;padding:0 6px;}
+.segment-modal-days label{display:inline-block;margin-right:12px;color:#e8f0f8;font-size:11px;font-weight:500;}
+.segment-modal-actions{display:flex;gap:10px;margin-top:12px;justify-content:flex-end;}
+.segment-btn{padding:7px 13px;border:none;border-radius:4px;font-size:11px;font-weight:800;cursor:pointer;color:#fff;text-decoration:none;display:inline-block;}
+.segment-btn-primary{background:#3da5d9;}
+.segment-btn-secondary{background:#2f5876;}
+.segment-modal-hint{color:#9fd2f1;font-size:11px;}
+</style>
+
+<div class="segment-modal-card">
+  <h3>{% if obj %}Edit Segment{% else %}Create Segment{% endif %}</h3>
+  <form method="post" data-modal-form="1">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    {{ form.name.errors }}
+    <div class="segment-modal-field">
+      {{ form.name.label_tag }}
+      {{ form.name }}
+    </div>
+    <div class="segment-modal-field" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">
+      <div>
+        {{ form.start_time.label_tag }}
+        {{ form.start_time }}
+      </div>
+      <div>
+        {{ form.end_time.label_tag }}
+        {{ form.end_time }}
+      </div>
+    </div>
+    <fieldset class="segment-modal-days">
+      <legend>Days of Week</legend>
+      {% for cb in form.days %}
+        <label>{{ cb.tag }} {{ cb.choice_label }}</label>
+      {% endfor %}
+    </fieldset>
+    <div class="segment-modal-actions">
+      <button type="button" class="segment-btn segment-btn-secondary" data-modal-close="1">Cancel</button>
+      <button type="submit" class="segment-btn segment-btn-primary">Save</button>
+    </div>
+    <div class="segment-modal-hint" style="margin-top:8px;">După salvare, lista se actualizează automat.</div>
+  </form>
+</div>

@@ -2,6 +2,7 @@ from django.test import TestCase, Client
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from datetime import time, date
+import os
 
 from .models import TimeSegment, Device, Door, Employee, AccessLevel, Holiday, CommandLog, EmployeeAccessCache, EmployeeCard
 
@@ -47,6 +48,8 @@ class CoreAccessTests(TestCase):
         self.assertTrue(EmployeeCard.objects.filter(employee=emp, card_number='CARD200B').exists())
 
     def test_door_pk_open_close(self):
+        if os.environ.get('RUN_DEVICE_INTEGRATION_TESTS') != '1':
+            self.skipTest('Requires live device integration; set RUN_DEVICE_INTEGRATION_TESTS=1 to enable')
         dev = Device.objects.create(name='Dev1')
         door = Door.objects.create(name='Door1', device=dev)
         r1 = self.client.get(f'/agent/api/doors/{door.id}/open/')
@@ -103,6 +106,8 @@ class CoreAccessTests(TestCase):
         data2 = r2.json(); self.assertTrue(data2['allowed']); self.assertTrue(data2['cached'])
 
     def test_async_command_ack(self):
+        if os.environ.get('RUN_DEVICE_INTEGRATION_TESTS') != '1':
+            self.skipTest('Requires live device integration; set RUN_DEVICE_INTEGRATION_TESTS=1 to enable')
         dev = Device.objects.create(name='DevCmd')
         door = Door.objects.create(name='CmdDoor', device=dev)
         self.client.get(f'/agent/api/doors/{door.id}/open/')

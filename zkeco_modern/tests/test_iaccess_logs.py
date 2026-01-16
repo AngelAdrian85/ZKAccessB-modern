@@ -1,6 +1,6 @@
 from django.test import TestCase, RequestFactory
 from django.urls import reverse
-from zkeco_modern.iaccess_port import views
+from iaccess_port import views
 
 from legacy_models.models import AccessLog, Employee, Door, Device
 from django.utils import timezone

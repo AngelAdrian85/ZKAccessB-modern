@@ -45,7 +45,7 @@
           <td>{{ d.state }}</td>
           <td>
             <a class="btn-small btn-success" href="{% url 'crud-door-edit' d.id %}">Edit</a>
-            <form method='post' action='{% url "crud-door-delete" d.id %}' style='display:inline' onsubmit='return confirm("Delete door?")'>
+            <form method='post' action='{% url "crud-door-delete" d.id %}' style='display:inline' onsubmit='return (window.zkConfirmThenSubmit ? zkConfirmThenSubmit(this,{title:"Confirmare",message:"Ștergi ușa?",okText:"Șterge",cancelText:"Renunță",variant:"danger"}) : confirm("Delete door?"))'>
               {% csrf_token %}<button class="btn-small btn-danger" type="submit">Del</button>
             </form>
           </td>

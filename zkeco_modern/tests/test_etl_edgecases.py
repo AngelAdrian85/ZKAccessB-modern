@@ -8,7 +8,7 @@ class ETLEdgeCases(TestCase):
         base = os.path.normpath(base)
         emp_csv = os.path.join(base, 'employee_nonascii.csv')
 
-        from zkeco_modern.etl.employee import import_employees_from_csv
+        from etl.employee import import_employees_from_csv
         from legacy_models.models import Employee
 
         r = import_employees_from_csv(emp_csv, commit=True, update=False)
@@ -22,7 +22,7 @@ class ETLEdgeCases(TestCase):
         base = os.path.normpath(base)
         bad_csv = os.path.join(base, 'employee_badrows.csv')
 
-        from zkeco_modern.etl.employee import import_employees_from_csv
+        from etl.employee import import_employees_from_csv
 
         # should skip or create where possible without raising
         r = import_employees_from_csv(bad_csv, commit=True, update=False)
@@ -34,7 +34,7 @@ class ETLEdgeCases(TestCase):
         base = os.path.normpath(base)
         emp_csv = os.path.join(base, 'employee_sample.csv')
 
-        from zkeco_modern.etl.employee import import_employees_from_csv
+        from etl.employee import import_employees_from_csv
         from legacy_models.models import Employee
 
         # first run: batch_size=1
