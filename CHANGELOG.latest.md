@@ -1,6 +1,6 @@
 # Changelog — latest save
 
-Commit: (pending)
+Commit: 0aef9f36 — "UI: unified Action Modal feedback + dashboard backup modal"
 Merged into: main
 Date: 2026-01-16
 Author: local workspace
