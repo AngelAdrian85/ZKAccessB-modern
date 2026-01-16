@@ -52,6 +52,7 @@ if (Test-Path '.\zkeco_modern\manage.py') {
 } else { Write-Host 'manage.py not found; skipping migrations.' -ForegroundColor Yellow }
 
 Write-Host "[7/7] Launching services (CommCenter + server + tray headless) ..." -ForegroundColor Cyan
+$env:COMM_DOWNLOAD_COOLDOWN = '60'
 Start-Process -WindowStyle Hidden .\.venv\Scripts\python.exe -ArgumentList '.\zkeco_modern\manage.py','run_commcenter','--interval','2.0','--driver','auto'
 Start-Process -WindowStyle Hidden .\.venv\Scripts\python.exe -ArgumentList '.\zkeco_modern\manage.py','runserver','0.0.0.0:8000'
 & .\.venv\Scripts\python.exe .\zkeco_modern\tray_agent.py --headless --auto --run-server --backup-interval=30 --set=server_port=8000

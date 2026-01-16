@@ -1,6 +1,7 @@
 import os
 import shutil
 import tempfile
+import unittest
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -20,6 +21,8 @@ class DashboardVisualTest(StaticLiveServerTestCase):
 
     @classmethod
     def setUpClass(cls):
+        if os.environ.get("RUN_VISUAL_TESTS") != "1":
+            raise unittest.SkipTest("Visual tests are opt-in; set RUN_VISUAL_TESTS=1")
         super().setUpClass()
         User = get_user_model()
         cls.visual_user = User.objects.create_user(

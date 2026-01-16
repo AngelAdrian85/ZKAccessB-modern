@@ -7,6 +7,42 @@ import os
 _bad_markers = ("ZKTeco", "python-support", "Python26", os.path.join("zkeco", "units"))
 
 
+def _ensure_modern_on_path():
+    """Ensure the modern Django project root (`zkeco_modern/`) is importable.
+
+    Pytest imports tests as `agent.*` (module inside `zkeco_modern/agent`).
+    When running from repo root, adding `zkeco_modern` to sys.path makes that work.
+    """
+    try:
+        repo_root = os.path.dirname(__file__)
+        modern_dir = os.path.join(repo_root, 'zkeco_modern')
+        if not os.path.isdir(modern_dir):
+            return
+
+        # Remove existing occurrences
+        sys.path[:] = [p for p in sys.path if p not in (modern_dir,)]
+
+        # Force modern_dir to the very front.
+        sys.path.insert(0, modern_dir)
+
+        # Move CWD entry (""), and repo_root after modern_dir so `import agent`
+        # resolves to `zkeco_modern/agent` (the installed Django app), not the
+        # root-level proxy package and not the `zkeco_modern.*` namespace package.
+        for special in ('', repo_root):
+            try:
+                while special in sys.path[0:2]:
+                    sys.path.remove(special)
+            except Exception:
+                pass
+        # Re-add repo_root and CWD entry after modern_dir (keep behavior but lower priority)
+        if repo_root not in sys.path:
+            sys.path.insert(1, repo_root)
+        if '' not in sys.path:
+            sys.path.insert(2, '')
+    except Exception:
+        return
+
+
 def _filter_sys_path():
     removed = []
     new = []
@@ -34,4 +70,5 @@ def _filter_sys_path():
 
 
 # Run the filter as early as possible
+_ensure_modern_on_path()
 _filter_sys_path()

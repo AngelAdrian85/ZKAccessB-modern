@@ -40,6 +40,7 @@ set COMM_WRAP=%BASE%run_commcenter_service.cmd
 (
   echo @echo off
   echo set DJANGO_SETTINGS_MODULE=zkeco_config.settings
+  echo set COMM_DOWNLOAD_COOLDOWN=60
   echo "%PY%" "%BASE%zkeco_modern\manage.py" run_commcenter --interval 2.0 --driver auto
 ) > "%COMM_WRAP%"
 

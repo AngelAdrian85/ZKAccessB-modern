@@ -44,7 +44,7 @@
           <td>{% for s in l.time_segments.all %}{{ s.name }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</td>
           <td>
             <a class="btn-small btn-success" href="{% url 'crud-access-level-edit' l.id %}">Edit</a>
-            <form method='post' action='{% url "crud-access-level-delete" l.id %}' style='display:inline' onsubmit='return confirm("Delete level?")'>
+            <form method='post' action='{% url "crud-access-level-delete" l.id %}' style='display:inline' onsubmit='return (window.zkConfirmThenSubmit ? zkConfirmThenSubmit(this,{title:"Confirmare",message:"Ștergi nivelul de acces?",okText:"Șterge",cancelText:"Renunță",variant:"danger"}) : confirm("Delete level?"))'>
               {% csrf_token %}<button class="btn-small btn-danger" type="submit">Del</button>
             </form>
           </td>

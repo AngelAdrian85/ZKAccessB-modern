@@ -93,6 +93,8 @@ if (Test-Path '.\zkeco_modern\manage.py') {
 Write-Host 'Starting CommCenter (persistent background)' -ForegroundColor Cyan
 Log 'CommCenter starting persistent'
 try {
+    # Throttle new-log downloads (prevents duplicates/spam)
+    $env:COMM_DOWNLOAD_COOLDOWN = '60'
     $ccProc = Start-Process -FilePath $PythonExe -ArgumentList '.\zkeco_modern\manage.py','run_commcenter','--interval','2.0','--driver','auto' -PassThru -WindowStyle Hidden
     Start-Sleep -Seconds 3
     if ($ccProc.HasExited) { Fail 'CommCenter exited early' } else { Log "CommCenter PID=$($ccProc.Id)" }

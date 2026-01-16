@@ -5,7 +5,7 @@ from django.shortcuts import render
 from django.utils import timezone
 from django.db.models import Max
 
-from .models import DeviceRealtimeLog, DeviceEventLog, DeviceStatus, Device
+from .models import DeviceRealtimeLog, DeviceEventLog, DeviceStatus, Device, DSTime
 from .models import Door, TimeSegment, Holiday, AccessLevel, Employee
 from .models import CommandLog, EmployeeAccessCache, EmployeeCard
 try:
@@ -14,7 +14,7 @@ except ImportError:
     AuditLog = None
 from .forms import (DoorForm, TimeSegmentFormWithDays, HolidayForm, AccessLevelForm,
                     EmployeeForm, EmployeeExtendedForm, DeptForm, AreaForm,
-                    AccessLogFilterForm, DeviceExtendedForm)
+                    AccessLogFilterForm, DeviceExtendedForm, DSTimeForm)
 try:
     from .forms import IssueCardForm
 except ImportError:
@@ -34,6 +34,38 @@ try:
     import redis  # type: ignore
 except Exception:  # pragma: no cover
     redis = None
+
+
+def _audit_log(request: HttpRequest, *, module: str, action: str, entity_id: int, entity_name: str = '', details: str = '') -> None:
+    """Best-effort audit trail writer.
+
+    Writes to agent.AuditLog when available. Never raises.
+    """
+    if AuditLog is None:
+        return
+    try:
+        AuditLog.objects.create(
+            module=(module or '').lower(),
+            action=(action or '').lower(),
+            entity_id=int(entity_id),
+            entity_name=entity_name or '',
+            user=getattr(getattr(request, 'user', None), 'username', None),
+            ip_address=(request.META.get('REMOTE_ADDR') if hasattr(request, 'META') else None),
+            details=details or '',
+        )
+    except Exception:
+        return
+
+
+def _qs_without_page(request: HttpRequest) -> str:
+    """Return current querystring without 'page=' (for pagination links)."""
+    try:
+        q = request.GET.copy()
+        if 'page' in q:
+            q.pop('page')
+        return q.urlencode()
+    except Exception:
+        return ''
 
 
 def _read_heartbeat():
@@ -404,9 +436,32 @@ def monitor(request: HttpRequest):
     if not request.user.is_authenticated:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
+    template = 'agent/monitor.html'
+    embedded = request.GET.get('embedded') == '1'
+    if embedded:
+        template = 'agent/monitor_embed.html'
     if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-        return JsonResponse({"html": render(request, 'agent/monitor.html').content.decode('utf-8')})
-    return render(request, 'agent/monitor.html')
+        return JsonResponse({"html": render(request, template).content.decode('utf-8')})
+    resp = render(request, template)
+    # Allow same-origin framing only for the embedded variant (used inside the Echipamente tab).
+    if embedded:
+        resp['X-Frame-Options'] = 'SAMEORIGIN'
+    return resp
+
+
+def monitor_device_legacy(request: HttpRequest):
+    """Preserve the pre-refactor device form under Monitoring."""
+    if not request.user.is_authenticated:
+        from django.contrib.auth.views import redirect_to_login
+        return redirect_to_login(request.get_full_path())
+    from django.db.models import OuterRef, Subquery
+    from .models import Device, DeviceStatus as _DS
+    latest = _DS.objects.filter(device=OuterRef('pk')).order_by('-updated_at')
+    devices = Device.objects.order_by('id').annotate(
+        latest_online=Subquery(latest.values('online')[:1]),
+        latest_updated_at=Subquery(latest.values('updated_at')[:1])
+    )
+    return render(request, 'agent/monitor_device_legacy.html', {'devices': devices})
 
 def status_summary(request: HttpRequest):
     if not request.user.is_authenticated:
@@ -427,7 +482,10 @@ def status_summary(request: HttpRequest):
         'online': sum(1 for r in rows if r['online']),
         'doors_open': sum(1 for r in rows if r['door_state'] == 'OPEN'),
     }
-    return render(request, 'agent/status_summary.html', {'rows': rows, 'summary': summary})
+    template = 'agent/status_summary.html'
+    if request.GET.get('embedded') == '1':
+        template = 'agent/status_summary_embed.html'
+    return render(request, template, {'rows': rows, 'summary': summary})
 
 
 def status_summary_json(request: HttpRequest):
@@ -519,7 +577,10 @@ def devices_crud_list(request: HttpRequest):
     elif flt == 'new':
         qs = qs.filter(scanner_linked=False).exclude(device_type__in=['access_panel','door_controller','two_door_panel','multi_door_panel'])
     page = _paginate(qs, request)
-    return render(request,'agent/devices_crud_list.html',{'page': page, 'active_filter': flt})
+    template = 'agent/devices_crud_list.html'
+    if request.GET.get('embedded') == '1':
+        template = 'agent/devices_crud_embed.html'
+    return render(request, template, {'page': page, 'active_filter': flt})
 
 def device_ping(request: HttpRequest):
     if not request.user.is_authenticated:
@@ -757,52 +818,355 @@ def device_discover(request: HttpRequest):
         'note': 'If no results, check firewall ICMP rules or try TCP scan'
     })
 
+
+def device_discover_apply(request: HttpRequest):
+    """Create or update devices directly from discovery UI."""
+    if not request.user.is_authenticated or request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    import json
+    try:
+        payload = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        payload = request.POST.dict()
+    action = payload.get('action')
+    ip = (payload.get('ip') or '').strip()
+    if not ip:
+        return JsonResponse({'ok': False, 'error': 'missing-ip'}, status=400)
+    port = int(payload.get('port', 4370) or 4370)
+    name = (payload.get('name') or f'Centrală {ip}').strip()
+    serial = (payload.get('serial_number') or '').strip()
+    device_id = payload.get('device_id')
+
+    try:
+        if action == 'change_ip':
+            target_ip = (payload.get('target_ip') or ip).strip()
+            dev = None
+            if device_id:
+                dev = Device.objects.filter(pk=int(device_id)).first()
+            if not dev and serial:
+                dev = Device.objects.filter(serial_number=serial).first()
+            if not dev:
+                dev = Device.objects.filter(ip_address=ip).first()
+            if not dev:
+                return JsonResponse({'ok': False, 'error': 'device-not-found'}, status=404)
+            dev.ip_address = target_ip
+            dev.port = port
+            dev.save(update_fields=['ip_address', 'port'])
+            _audit_log(
+                request,
+                module='device',
+                action='update',
+                entity_id=dev.id,
+                entity_name=getattr(dev, 'name', '') or '',
+                details=f"change_ip {ip} -> {target_ip} port={port}",
+            )
+            try:
+                from legacy_models.models import Device as LegacyDevice  # type: ignore
+                legacy = LegacyDevice.objects.filter(sn=dev.serial_number or dev.name).first()
+                if legacy:
+                    legacy.com_address = target_ip
+                    legacy.save(update_fields=['com_address'])
+            except Exception:
+                pass
+            return JsonResponse({'ok': True, 'id': dev.id, 'ip': dev.ip_address, 'updated': True})
+
+        # Default: create or update existing device by IP/serial
+        dev, created = Device.objects.get_or_create(
+            ip_address=ip,
+            defaults={
+                'name': name,
+                'serial_number': serial or name,
+                'port': port,
+                'device_type': 'access_panel',
+                'comm_mode': 'tcp',
+                'enabled': True,
+            }
+        )
+        if not created:
+            dev.name = name or dev.name
+            if serial:
+                dev.serial_number = serial
+            dev.port = port
+            dev.enabled = True
+            dev.save(update_fields=['name','serial_number','port','enabled'])
+
+        _audit_log(
+            request,
+            module='device',
+            action=('create' if created else 'update'),
+            entity_id=dev.id,
+            entity_name=getattr(dev, 'name', '') or '',
+            details=f"discover_apply ip={ip} port={port} sn={getattr(dev, 'serial_number', '')}",
+        )
+
+        # Sync minimal legacy device record for migration continuity
+        try:
+            from legacy_models.models import Device as LegacyDevice, Area as LegacyArea  # type: ignore
+            legacy_defaults = {
+                'device_name': dev.name,
+                'fw_version': dev.firmware_version,
+                'com_address': ip,
+                'com_port': str(port),
+            }
+            legacy, _ = LegacyDevice.objects.get_or_create(sn=dev.serial_number or dev.name, defaults=legacy_defaults)
+            legacy.device_name = dev.name
+            legacy.com_address = ip
+            legacy.com_port = str(port)
+            if dev.area_name:
+                area = LegacyArea.objects.filter(areaname=dev.area_name).first()
+                if area:
+                    legacy.area = area
+            legacy.save()
+        except Exception:
+            pass
+
+        return JsonResponse({'ok': True, 'id': dev.id, 'ip': dev.ip_address, 'created': created})
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=400)
+
 def device_create(request: HttpRequest):
     if not request.user.is_authenticated or not request.user.is_staff:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
+
+    def _safe_return_url() -> str:
+        from django.urls import reverse
+        from django.utils.http import url_has_allowed_host_and_scheme
+
+        default_url = reverse('crud-devices-list')
+        candidate = (
+            request.POST.get('next')
+            or request.GET.get('next')
+            or request.META.get('HTTP_REFERER')
+        )
+        if not candidate:
+            return default_url
+        if url_has_allowed_host_and_scheme(
+            url=candidate,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure(),
+        ):
+            return candidate
+        return default_url
+
     if request.method == 'POST':
         form = DeviceExtendedForm(request.POST)
         if form.is_valid():
             obj = form.save()
+            _audit_log(
+                request,
+                module='device',
+                action='create',
+                entity_id=obj.id,
+                entity_name=getattr(obj, 'name', '') or '',
+                details=f"ip={getattr(obj, 'ip_address', None)} port={getattr(obj, 'port', None)} sn={getattr(obj, 'serial_number', '')}",
+            )
             is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
             if is_ajax:
-                return JsonResponse({'ok': True, 'id': obj.id, 'message': 'Device created'})
-            return render(request,'agent/device_saved.html',{'obj': obj, 'created': True})
+                return JsonResponse(
+                    {
+                        'ok': True,
+                        'id': obj.id,
+                        'created': True,
+                        'message': 'Dispozitiv creat cu succes!',
+                        'redirect_url': _safe_return_url(),
+                    }
+                )
+            from django.shortcuts import redirect
+            return redirect(_safe_return_url())
         else:
             is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
             if is_ajax:
+                from django.template.loader import render_to_string
+
                 errors = {k: v[0] if v else '' for k, v in form.errors.items()}
-                return JsonResponse({'ok': False, 'error': 'Form validation failed', 'errors': errors}, status=400)
+                html = render_to_string(
+                    'agent/device_form_modal.html',
+                    {
+                        'form': form,
+                        'action_url': request.path,
+                        'next_url': _safe_return_url(),
+                        'mode': 'create',
+                    },
+                    request=request,
+                )
+                return JsonResponse(
+                    {
+                        'ok': False,
+                        'error': 'Form validation failed',
+                        'errors': errors,
+                        'html': html,
+                    },
+                    status=400,
+                )
             return render(request,'agent/device_form.html',{'form': form})
     else:
         form = DeviceExtendedForm()
         # ✅ ADAUGĂ SUPORT AJAX PENTRU MODAL
         is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
         if is_ajax:
-            return render(request, 'agent/device_form_fragment.html', {'form': form})
-    return render(request,'agent/device_form.html',{'form': form})
+            return render(
+                request,
+                'agent/device_form_modal.html',
+                {
+                    'form': form,
+                    'action_url': request.path,
+                    'next_url': _safe_return_url(),
+                    'mode': 'create',
+                },
+            )
+    return render(request,'agent/device_form.html',{'form': form, 'next_url': _safe_return_url()})
 
 def device_edit(request: HttpRequest, pk: int):
     if not request.user.is_authenticated or not request.user.is_staff:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
+
+    def _safe_return_url() -> str:
+        from django.urls import reverse
+        from django.utils.http import url_has_allowed_host_and_scheme
+
+        default_url = reverse('crud-devices-list')
+        candidate = (
+            request.POST.get('next')
+            or request.GET.get('next')
+            or request.META.get('HTTP_REFERER')
+        )
+        if not candidate:
+            return default_url
+        if url_has_allowed_host_and_scheme(
+            url=candidate,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure(),
+        ):
+            return candidate
+        return default_url
+
     from agent.models import Device
     obj = Device.objects.get(pk=pk)
     if request.method == 'POST':
+        before = {
+            'name': obj.name,
+            'serial_number': obj.serial_number,
+            'device_type': obj.device_type,
+            'comm_mode': obj.comm_mode,
+            'ip_address': obj.ip_address,
+            'port': obj.port,
+            'area_name': obj.area_name,
+            'time_zone': obj.time_zone,
+            'enabled': obj.enabled,
+            'auto_sync_time': obj.auto_sync_time,
+            'clear_on_add': obj.clear_on_add,
+            'scanner_linked': obj.scanner_linked,
+            'scanner_type': obj.scanner_type,
+        }
         form = DeviceExtendedForm(request.POST, instance=obj)
         if form.is_valid():
-            saved = form.save(); return render(request,'agent/device_saved.html',{'obj': saved, 'created': False})
+            saved = form.save()
+            try:
+                after = {
+                    'name': saved.name,
+                    'serial_number': saved.serial_number,
+                    'device_type': saved.device_type,
+                    'comm_mode': saved.comm_mode,
+                    'ip_address': saved.ip_address,
+                    'port': saved.port,
+                    'area_name': saved.area_name,
+                    'time_zone': saved.time_zone,
+                    'enabled': saved.enabled,
+                    'auto_sync_time': saved.auto_sync_time,
+                    'clear_on_add': saved.clear_on_add,
+                    'scanner_linked': saved.scanner_linked,
+                    'scanner_type': saved.scanner_type,
+                }
+                changes = []
+                for k, v_before in before.items():
+                    v_after = after.get(k)
+                    if v_before != v_after:
+                        changes.append(f"{k}: {v_before} -> {v_after}")
+                details = '; '.join(changes)[:2000]
+            except Exception:
+                details = ''
+            _audit_log(
+                request,
+                module='device',
+                action='update',
+                entity_id=saved.id,
+                entity_name=getattr(saved, 'name', '') or '',
+                details=details,
+            )
+            is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+            if is_ajax:
+                return JsonResponse(
+                    {
+                        'ok': True,
+                        'id': saved.id,
+                        'created': False,
+                        'message': 'Dispozitiv actualizat cu succes!',
+                        'redirect_url': _safe_return_url(),
+                    }
+                )
+            from django.shortcuts import redirect
+            return redirect(_safe_return_url())
+        else:
+            is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+            if is_ajax:
+                from django.template.loader import render_to_string
+
+                errors = {k: v[0] if v else '' for k, v in form.errors.items()}
+                html = render_to_string(
+                    'agent/device_form_modal.html',
+                    {
+                        'form': form,
+                        'obj': obj,
+                        'action_url': request.path,
+                        'next_url': _safe_return_url(),
+                        'mode': 'edit',
+                    },
+                    request=request,
+                )
+                return JsonResponse(
+                    {
+                        'ok': False,
+                        'error': 'Form validation failed',
+                        'errors': errors,
+                        'html': html,
+                    },
+                    status=400,
+                )
     else:
         form = DeviceExtendedForm(instance=obj)
-    return render(request,'agent/device_form.html',{'form': form, 'obj': obj})
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        if is_ajax:
+            return render(
+                request,
+                'agent/device_form_modal.html',
+                {
+                    'form': form,
+                    'obj': obj,
+                    'action_url': request.path,
+                    'next_url': _safe_return_url(),
+                    'mode': 'edit',
+                },
+            )
+    return render(request,'agent/device_form.html',{'form': form, 'obj': obj, 'next_url': _safe_return_url()})
 
 def device_delete(request: HttpRequest, pk: int):
     if not request.user.is_authenticated or not request.user.is_staff or request.method != 'POST':
         return JsonResponse({'ok': False,'error':'unauthorized'}, status=403)
     from agent.models import Device
     try:
-        Device.objects.filter(pk=pk).delete(); return JsonResponse({'ok': True})
+        obj = Device.objects.filter(pk=pk).first()
+        Device.objects.filter(pk=pk).delete()
+        if obj is not None:
+            _audit_log(
+                request,
+                module='device',
+                action='delete',
+                entity_id=int(pk),
+                entity_name=getattr(obj, 'name', '') or '',
+            )
+        return JsonResponse({'ok': True})
     except Exception as e:
         return JsonResponse({'ok': False,'error': str(e)}, status=400)
 
@@ -967,8 +1331,17 @@ def menu_personnel(request: HttpRequest):
         cards_list = []
 
     # Preload logs for Logs tab (prefer agent.AuditLog; fallback to LegacyAccessLog)
+    # IMPORTANT: keep PERSONAL Loguri scoped to PERSONAL modules even on first page render.
+    # Otherwise non-personnel (e.g. door/device) logs can appear until the JS refresh runs.
     try:
-        audit_logs = list(AuditLog.objects.all()[:200]) if AuditLog else []
+        audit_logs = (
+            list(
+                AuditLog.objects.filter(module__in=['employee', 'department', 'issuecard'])
+                .order_by('-timestamp')[:200]
+            )
+            if AuditLog
+            else []
+        )
     except Exception:
         audit_logs = []
     legacy_logs = []
@@ -1004,13 +1377,884 @@ def menu_device(request: HttpRequest):
     if not request.user.is_authenticated:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
-    return render(request, 'agent/menu_device.html')
+    from .models import Device
+    from django.db.models import OuterRef, Subquery
+    from .models import DeviceStatus as _DS
+
+    latest = _DS.objects.filter(device=OuterRef('pk')).order_by('-updated_at')
+    qs = Device.objects.order_by('name').annotate(
+        latest_online=Subquery(latest.values('online')[:1]),
+        latest_updated_at=Subquery(latest.values('updated_at')[:1])
+    )
+    flt = (request.GET.get('filter') or 'all').strip().lower()
+    if flt == 'controllers':
+        qs = qs.filter(device_type__in=['access_panel','door_controller','two_door_panel','multi_door_panel'], scanner_linked=False)
+    elif flt == 'readers':
+        qs = qs.filter(scanner_linked=True)
+    elif flt == 'new':
+        qs = qs.filter(scanner_linked=False).exclude(device_type__in=['access_panel','door_controller','two_door_panel','multi_door_panel'])
+
+    devices_page = _paginate(qs, request)
+
+    # Preload status summary for Monitorizare dispozitive tab
+    status_rows = []
+    for ds in DeviceStatus.objects.select_related('device').all():
+        status_rows.append({
+            'id': ds.device.id,
+            'name': ds.device.name,
+            'serial': ds.device.serial_number,
+            'online': ds.online,
+            'door_state': ds.door_state,
+            'updated_at': ds.updated_at,
+        })
+    status_summary_data = {
+        'total': len(status_rows),
+        'online': sum(1 for r in status_rows if r['online']),
+        'doors_open': sum(1 for r in status_rows if r['door_state'] == 'OPEN'),
+    }
+
+    return render(request, 'agent/menu_device.html', {
+        'devices_page': devices_page,
+        'devices_filter': flt,
+        'status_rows': status_rows,
+        'status_summary': status_summary_data,
+    })
 
 def menu_access_control(request: HttpRequest):
     if not request.user.is_authenticated:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
-    return render(request, 'agent/menu_access_control.html')
+    return render(request, 'agent/menu_access.html')
+
+
+def menu_reports(request: HttpRequest):
+    if not request.user.is_authenticated:
+        from django.contrib.auth.views import redirect_to_login
+        return redirect_to_login(request.get_full_path())
+
+    tab = (request.GET.get('tab') or 'accesslog').strip().lower()
+    tab = tab if tab in ('accesslog', 'device', 'personal', 'system') else 'accesslog'
+
+    # Shared filters
+    user_param_present = 'user' in request.GET
+    user_q = (request.GET.get('user') or '').strip() if user_param_present else (getattr(getattr(request, 'user', None), 'username', '') or '').strip()
+    action_q = (request.GET.get('action') or '').strip().lower()
+    q = (request.GET.get('q') or '').strip()
+    date_from = (request.GET.get('from') or '').strip()
+    date_to = (request.GET.get('to') or '').strip()
+
+    page = None
+    page_exists = False
+    missing_accesslog = False
+    access_rows = []
+    system_rows = []
+
+    def _paginate_list(items, request_obj, per_page=50):
+        from django.core.paginator import Paginator
+        paginator = Paginator(items, per_page)
+        page_number = request_obj.GET.get('page') or 1
+        return paginator.get_page(page_number)
+
+    def _dedupe_remote_rows(items, window_seconds: int = 3):
+        """Drop near-duplicate Remote* entries (typically caused by retries/acks).
+
+        Keeps newest entries because we iterate in already-sorted (desc) order.
+        """
+        kept = []
+        last_seen = {}
+        for it in items:
+            try:
+                desc = str(it.get('event_description') or '')
+                if not desc.lower().startswith('remote'):
+                    kept.append(it)
+                    continue
+                ts = it.get('_ts')
+                # Best-effort timestamp
+                if not ts:
+                    kept.append(it)
+                    continue
+                key = (
+                    desc.strip().lower(),
+                    str(it.get('door_name') or it.get('event_point') or '').strip().lower(),
+                    str(it.get('device_name') or '').strip().lower(),
+                    str(it.get('operator') or '').strip().lower(),
+                )
+                prev = last_seen.get(key)
+                if prev and abs((prev - ts).total_seconds()) <= window_seconds:
+                    continue
+                last_seen[key] = ts
+                kept.append(it)
+            except Exception:
+                kept.append(it)
+        return kept
+
+    if tab == 'accesslog':
+        # AccessLog is primarily sourced from durable AuditLog (module=accesslog/door)
+        # because device event downloads can be unavailable on some firmwares.
+        # Fallback to Device RTLog/EventLog persistence if no audit events exist.
+        from .models import DeviceRealtimeLog as _RT, DeviceEventLog as _EV, Door as _Door, Device as _Device, Employee as _Employee
+        from .event_codes import describe as _describe_code
+        from .event_codes import describe_verify_mode as _describe_verify
+        from django.utils.dateparse import parse_datetime, parse_date
+        from django.db.models import Q
+        import json as _json
+
+        # Common filters
+        card_q = (request.GET.get('card') or '').strip()
+        door_q = (request.GET.get('door') or '').strip()
+        status_q = (request.GET.get('status') or '').strip().lower()
+        verify_q = (request.GET.get('verify') or '').strip().lower()
+        person_q = (request.GET.get('person') or '').strip()  # interpreted as UserID/PIN
+
+        # --- A) AuditLog access events (API/test + door commands) ---
+        audit_items = []
+        if AuditLog is not None:
+            try:
+                audit_qs = AuditLog.objects.filter(module__in=['accesslog', 'door']).order_by('-timestamp')
+            except Exception:
+                audit_qs = None
+
+            if audit_qs is not None:
+                # Date range
+                if date_from:
+                    dt = parse_datetime(date_from)
+                    if not dt:
+                        d = parse_date(date_from)
+                        if d:
+                            from datetime import datetime, time
+                            dt = timezone.make_aware(datetime.combine(d, time.min))
+                    elif timezone.is_naive(dt):
+                        dt = timezone.make_aware(dt)
+                    if dt:
+                        audit_qs = audit_qs.filter(timestamp__gte=dt)
+                if date_to:
+                    dt = parse_datetime(date_to)
+                    if not dt:
+                        d = parse_date(date_to)
+                        if d:
+                            from datetime import datetime, time
+                            dt = timezone.make_aware(datetime.combine(d, time.max))
+                    elif timezone.is_naive(dt):
+                        dt = timezone.make_aware(dt)
+                    if dt:
+                        audit_qs = audit_qs.filter(timestamp__lte=dt)
+
+                # Apply basic text filters at queryset level (best-effort)
+                if card_q:
+                    audit_qs = audit_qs.filter(details__icontains=card_q)
+                if door_q:
+                    audit_qs = audit_qs.filter(Q(details__icontains=door_q) | Q(entity_name__icontains=door_q))
+                if person_q:
+                    audit_qs = audit_qs.filter(details__icontains=person_q)
+                if verify_q:
+                    audit_qs = audit_qs.filter(details__icontains=verify_q)
+                if status_q in ('accepted', 'acceptat'):
+                    audit_qs = audit_qs.exclude(action__in=['denied'])
+                elif status_q in ('denied', 'respins'):
+                    audit_qs = audit_qs.filter(action__in=['denied'])
+
+                # Limit to keep response fast; merged list is still sorted later.
+                audit_rows = list(audit_qs[:500])
+                device_ids = set()
+                door_ids = set()
+                parsed = []
+                for a in audit_rows:
+                    details_raw = getattr(a, 'details', '') or ''
+                    payload = {}
+                    try:
+                        payload = _json.loads(details_raw) if details_raw and details_raw.strip().startswith('{') else {}
+                    except Exception:
+                        payload = {}
+                    dev_id_val = payload.get('device_id')
+                    door_id_val = payload.get('door_id')
+                    if dev_id_val is not None:
+                        try:
+                            device_ids.add(int(dev_id_val))
+                        except Exception:
+                            pass
+                    if door_id_val is not None:
+                        try:
+                            door_ids.add(int(door_id_val))
+                        except Exception:
+                            pass
+                    parsed.append((a, payload))
+
+                # Bulk backfill department names when missing in payload
+                missing_dept_emp_ids = set()
+                missing_dept_cards = set()
+                for (_a, pl) in parsed:
+                    if str(pl.get('department_name') or '').strip():
+                        continue
+                    ev = pl.get('employee_id')
+                    if ev is not None:
+                        try:
+                            missing_dept_emp_ids.add(int(ev))
+                        except Exception:
+                            pass
+                    cv = str(pl.get('card_number') or '').strip()
+                    if cv:
+                        missing_dept_cards.add(cv)
+
+                dept_by_emp_id_backfill = {}
+                if missing_dept_emp_ids or missing_dept_cards:
+                    q_emp = Q()
+                    if missing_dept_emp_ids:
+                        q_emp |= Q(id__in=sorted(missing_dept_emp_ids))
+                    if missing_dept_cards:
+                        q_emp |= Q(card_number__in=sorted(missing_dept_cards)) | Q(secondary_card_number__in=sorted(missing_dept_cards))
+                    for e in _Employee.objects.filter(q_emp):
+                        try:
+                            dpt = getattr(e, 'dept', None)
+                            dept_name_val = (getattr(dpt, 'DeptName', '') or getattr(dpt, 'deptname', '') or '') if dpt else ''
+                        except Exception:
+                            dept_name_val = ''
+                        dept_by_emp_id_backfill[getattr(e, 'id', 0)] = dept_name_val
+
+                device_map = {d.id: d for d in _Device.objects.filter(id__in=sorted(device_ids))} if device_ids else {}
+                door_map_by_id = {d.id: d for d in _Door.objects.filter(id__in=sorted(door_ids)).select_related('device')} if door_ids else {}
+
+                for (a, payload) in parsed:
+                    ts = getattr(a, 'timestamp', None)
+                    ts_local = timezone.localtime(ts) if ts else timezone.localtime(timezone.now())
+                    card = str(payload.get('card_number') or '').strip()
+                    emp_name = str(payload.get('employee_name') or '').strip()
+                    dept_name = str(payload.get('department_name') or '').strip()
+                    emp_pin = payload.get('employee_pin')
+                    if emp_pin is None:
+                        emp_pin = payload.get('employee_id')
+                    emp_pin = '' if emp_pin is None else str(emp_pin)
+
+                    door_id_val = payload.get('door_id')
+                    door_name = str(payload.get('door_name') or '').strip()
+                    dev_id_val = payload.get('device_id')
+                    dev_name = str(payload.get('device_name') or '').strip()
+                    area_name = str(payload.get('area_name') or '').strip()
+                    ip_addr = ''
+
+                    door_obj = None
+                    try:
+                        if door_id_val is not None:
+                            door_obj = door_map_by_id.get(int(door_id_val))
+                    except Exception:
+                        door_obj = None
+                    if door_obj and not door_name:
+                        door_name = getattr(door_obj, 'name', '') or ''
+
+                    dev_obj = None
+                    try:
+                        if dev_id_val is not None:
+                            dev_obj = device_map.get(int(dev_id_val))
+                    except Exception:
+                        dev_obj = None
+                    if dev_obj and not dev_name:
+                        dev_name = getattr(dev_obj, 'name', '') or ''
+                    if dev_obj and not area_name:
+                        area_name = getattr(dev_obj, 'area_name', '') or ''
+                    if dev_obj:
+                        ip_addr = getattr(dev_obj, 'ip_address', '') or ''
+
+                    # Backfill department from Employee record if missing
+                    if not dept_name:
+                        try:
+                            emp_id_val = payload.get('employee_id')
+                            if emp_id_val is not None:
+                                try:
+                                    dept_name = dept_by_emp_id_backfill.get(int(emp_id_val), '')
+                                except Exception:
+                                    dept_name = ''
+                            if not dept_name and card:
+                                emp_obj = _Employee.objects.filter(Q(card_number=card) | Q(secondary_card_number=card)).first()
+                                if emp_obj is not None:
+                                    dpt = getattr(emp_obj, 'dept', None)
+                                    if dpt:
+                                        dept_name = getattr(dpt, 'DeptName', '') or getattr(dpt, 'deptname', '') or ''
+                        except Exception:
+                            pass
+
+                    event_desc = str(payload.get('event_description') or '').strip()
+                    verify_label = _describe_verify(str(payload.get('verify_mode') or ''))
+                    status_text = str(payload.get('status_text') or '').strip()
+                    if not status_text:
+                        act = str(getattr(a, 'action', '') or '').lower()
+                        status_text = 'ACCEPTAT' if act != 'denied' else 'RESPINS'
+                    status_display = (f"{ip_addr} - {door_name} {status_text}").strip() if ip_addr else status_text
+
+                    # Show operator only for remote actions (door commands or accesslog remote_open)
+                    operator = ''
+                    try:
+                        mod = str(getattr(a, 'module', '') or '').lower()
+                        is_remote = bool(payload.get('remote_open')) or event_desc.lower().startswith('remote')
+                        if mod == 'door' or is_remote:
+                            operator = (getattr(a, 'user', None) or '')
+                    except Exception:
+                        operator = ''
+
+                    audit_items.append({
+                        '_ts': ts_local,
+                        'action_time': ts_local.strftime('%Y-%m-%d %H:%M:%S'),
+                        'event_point': door_name or '-',
+                        'event_description': event_desc,
+                        'card_number': card,
+                        'door_name': door_name,
+                        'device_name': dev_name,
+                        'area_name': area_name,
+                        'employee_pin': emp_pin,
+                        'employee_name': emp_name,
+                        'department_name': dept_name,
+                        'status_text': status_display,
+                        'verify_mode': verify_label,
+                        'operator': operator,
+                        'remarks': '',
+                    })
+
+        # --- B) Hardware device logs (RTLog/EventLog persisted) ---
+        device_items = []
+        raw_field = 'raw_line'
+        created_field = 'created_at'
+        base_qs = None
+        try:
+            if _EV.objects.exists():
+                base_qs = _EV.objects.all().order_by('-created_at')
+                raw_field = 'raw_line'
+            else:
+                base_qs = _RT.objects.all().order_by('-created_at')
+                raw_field = 'raw'
+        except Exception:
+            base_qs = None
+
+        if base_qs is not None:
+            qs = base_qs
+            # Drop the noisy keepalive pattern that polluted reports
+            try:
+                if raw_field == 'raw':
+                    qs = qs.exclude(raw__contains=',0,0,200,0,0')
+                elif raw_field == 'raw_line':
+                    qs = qs.exclude(raw_line__contains=',0,0,200,0,0')
+            except Exception:
+                pass
+
+            # Filters: from/to (date or datetime-local) apply to created_at
+            if date_from:
+                dt = parse_datetime(date_from)
+                if not dt:
+                    d = parse_date(date_from)
+                    if d:
+                        from datetime import datetime, time
+                        dt = timezone.make_aware(datetime.combine(d, time.min))
+                elif timezone.is_naive(dt):
+                    dt = timezone.make_aware(dt)
+                if dt:
+                    qs = qs.filter(**{f"{created_field}__gte": dt})
+            if date_to:
+                dt = parse_datetime(date_to)
+                if not dt:
+                    d = parse_date(date_to)
+                    if d:
+                        from datetime import datetime, time
+                        dt = timezone.make_aware(datetime.combine(d, time.max))
+                elif timezone.is_naive(dt):
+                    dt = timezone.make_aware(dt)
+                if dt:
+                    qs = qs.filter(**{f"{created_field}__lte": dt})
+
+            card_q = (request.GET.get('card') or '').strip()
+            door_q = (request.GET.get('door') or '').strip()
+            status_q = (request.GET.get('status') or '').strip().lower()
+            verify_q = (request.GET.get('verify') or '').strip().lower()
+            person_q = (request.GET.get('person') or '').strip()  # interpreted as UserID/PIN
+
+            if card_q:
+                qs = qs.filter(**{f"{raw_field}__icontains": card_q})
+            if door_q:
+                qs = qs.filter(**{f"{raw_field}__icontains": f",{door_q},"})
+            if person_q:
+                qs = qs.filter(**{f"{raw_field}__icontains": f",{person_q},"})
+            if status_q in ('accepted', 'acceptat'):
+                qs = qs.filter(**{f"{raw_field}__icontains": ',200,'})
+            elif status_q in ('denied', 'respins'):
+                qs = qs.filter(**{f"{raw_field}__icontains": ',201,'})
+            if verify_q:
+                qs = qs.filter(**{f"{raw_field}__icontains": verify_q})
+
+            # Keep it bounded for merge
+            rows = list(qs[:800])
+            device_ids = sorted({getattr(r, 'device_id', None) for r in rows if getattr(r, 'device_id', None) is not None})
+            device_map = {d.id: d for d in _Device.objects.filter(id__in=device_ids)} if device_ids else {}
+
+            door_keys = set()
+            card_values = set()
+            pin_values = set()
+            parsed_lines = []
+            for r in rows:
+                raw_line = (getattr(r, raw_field, '') or '').strip()
+                parts = [p.strip() for p in raw_line.split(',')]
+                ts_str = parts[0] if len(parts) > 0 else ''
+                pin = parts[1] if len(parts) > 1 else ''
+                card = parts[2] if len(parts) > 2 else ''
+                door_no = parts[3] if len(parts) > 3 else ''
+                code = parts[4] if len(parts) > 4 else ''
+                verify_mode = parts[5] if len(parts) > 5 else ''
+                dev_id = getattr(r, 'device_id', None)
+                # Drop known noisy repeat pattern
+                if str(code) == '200' and str(card).strip() in ('', '0', '000000', '00000000') and str(door_no).strip() in ('', '0'):
+                    continue
+                if dev_id is not None and door_no:
+                    door_keys.add((dev_id, door_no))
+                if card and card not in ('0', '000000', '00000000'):
+                    card_values.add(card)
+                if pin and pin not in ('0',):
+                    pin_values.add(pin)
+                parsed_lines.append((r, ts_str, pin, card, door_no, code, verify_mode))
+
+            door_map = {}
+            if door_keys:
+                dids = sorted({k[0] for k in door_keys})
+                names = sorted({k[1] for k in door_keys})
+                for d in _Door.objects.filter(device_id__in=dids, name__in=names).select_related('device'):
+                    door_map[(d.device_id, str(getattr(d, 'name', '') or ''))] = d
+
+            emp_by_card = {}
+            emp_by_pin = {}
+            dept_by_emp_id = {}
+            emp_id_by_card = {}
+            emp_id_by_pin = {}
+            if card_values or pin_values:
+                q_emp = Q()
+                if card_values:
+                    q_emp |= Q(card_number__in=card_values) | Q(secondary_card_number__in=card_values)
+                pin_ints = []
+                for p in pin_values:
+                    try:
+                        pin_ints.append(int(str(p)))
+                    except Exception:
+                        pass
+                if pin_ints:
+                    q_emp |= Q(legacy_userid__in=pin_ints)
+                emps = _Employee.objects.filter(q_emp)
+                for e in emps:
+                    full = (f"{getattr(e,'first_name','') or ''} {getattr(e,'last_name','') or ''}").strip()
+                    eid = getattr(e, 'id', None)
+                    if getattr(e, 'card_number', None):
+                        emp_by_card[str(e.card_number)] = full
+                        if eid is not None:
+                            emp_id_by_card[str(e.card_number)] = eid
+                    if getattr(e, 'secondary_card_number', None):
+                        emp_by_card[str(e.secondary_card_number)] = full
+                        if eid is not None:
+                            emp_id_by_card[str(e.secondary_card_number)] = eid
+                    if getattr(e, 'legacy_userid', None) is not None:
+                        emp_by_pin[str(getattr(e, 'legacy_userid'))] = full
+                        if eid is not None:
+                            emp_id_by_pin[str(getattr(e, 'legacy_userid'))] = eid
+                    try:
+                        dpt = getattr(e, 'dept', None)
+                        dept_name = (getattr(dpt, 'DeptName', '') or getattr(dpt, 'deptname', '') or '') if dpt else ''
+                    except Exception:
+                        dept_name = ''
+                    dept_by_emp_id[getattr(e, 'id', 0)] = dept_name
+
+            for (_r, ts_str, pin, card, door_no, code, verify_mode) in parsed_lines:
+                dev_id = getattr(_r, 'device_id', None)
+                dev_obj = device_map.get(dev_id)
+                dev_name = getattr(dev_obj, 'name', '') if dev_obj else ''
+                area_name = getattr(dev_obj, 'area_name', '') if dev_obj else ''
+                ip_addr = getattr(dev_obj, 'ip_address', '') if dev_obj else ''
+                created_at = getattr(_r, created_field, None) or timezone.now()
+
+                door_obj = door_map.get((dev_id, str(door_no)))
+                door_name = getattr(door_obj, 'name', '') if door_obj else (door_no or '')
+
+                verify_label = _describe_verify(str(verify_mode))
+                base_desc = _describe_code(str(code)) or (f"Code {code}" if code else '')
+                # Legacy-friendly naming for accepted opens
+                desc = base_desc
+                if str(code) == '200':
+                    if verify_label == 'Only Fingerprint':
+                        desc = 'Normal Fingerprint Open'
+                    else:
+                        desc = 'Normal Punch Open'
+                elif str(code) == '201':
+                    desc = 'Access Denied' if (emp_by_card.get(str(card)) or emp_by_pin.get(str(pin))) else 'Unregistered Card'
+                elif str(code) in ('100', '101'):
+                    desc = base_desc
+
+                status_text = 'ACCEPTAT' if str(code) == '200' else ('RESPINS' if str(code) == '201' else desc)
+                employee_name = emp_by_card.get(str(card), '') or emp_by_pin.get(str(pin), '') or ''
+                employee_pin = pin
+                dept_name = ''
+                try:
+                    emp_id = None
+                    if card:
+                        emp_id = emp_id_by_card.get(str(card))
+                    if emp_id is None and pin:
+                        emp_id = emp_id_by_pin.get(str(pin))
+                    if emp_id is not None:
+                        dept_name = dept_by_emp_id.get(int(emp_id), '')
+                except Exception:
+                    dept_name = ''
+
+                status_display = (f"{ip_addr} - {door_name} {status_text}").strip() if ip_addr else status_text
+                device_items.append({
+                    '_ts': timezone.localtime(created_at) if created_at else timezone.localtime(timezone.now()),
+                    'action_time': ts_str or (timezone.localtime(created_at).strftime('%Y-%m-%d %H:%M:%S') if created_at else ''),
+                    'event_point': door_name or '-',
+                    'event_description': desc,
+                    'card_number': card,
+                    'door_name': door_name,
+                    'device_name': dev_name,
+                    'area_name': area_name,
+                    'employee_pin': employee_pin,
+                    'employee_name': employee_name,
+                    'department_name': dept_name,
+                    'status_text': status_display,
+                    'verify_mode': verify_label,
+                    'operator': '',
+                    'remarks': '',
+                })
+
+        # Merge + sort newest first
+        merged = []
+        merged.extend(audit_items)
+        merged.extend(device_items)
+        if not merged:
+            missing_accesslog = True
+        merged.sort(key=lambda x: x.get('_ts') or timezone.localtime(timezone.now()), reverse=True)
+        merged = _dedupe_remote_rows(merged, window_seconds=3)
+        page = _paginate_list(merged, request, per_page=50)
+        page_exists = True
+        access_rows = list(getattr(page, 'object_list', []) or [])
+
+    else:
+        # AuditLog-backed tabs
+        qs = AuditLog.objects.all().order_by('-timestamp') if AuditLog else None
+        if qs is not None:
+            if tab == 'device':
+                qs = qs.filter(module__in=['device', 'door'])
+            elif tab == 'personal':
+                qs = qs.filter(module__in=['employee', 'department', 'issuecard'])
+            elif tab == 'system':
+                # Legacy-like "All Access Control Events": merge audit + hardware logs
+                qs = qs.filter(module__in=['accesslog', 'door'])
+
+            if user_q:
+                qs = qs.filter(user__icontains=user_q)
+
+            if action_q and action_q != 'all':
+                if action_q in ('create', 'update', 'delete'):
+                    qs = qs.filter(action=action_q)
+                elif action_q == 'others':
+                    qs = qs.exclude(action__in=['create', 'update', 'delete'])
+
+            if q:
+                from django.db.models import Q
+                qs = qs.filter(Q(entity_name__icontains=q) | Q(details__icontains=q) | Q(module__icontains=q))
+
+            # Date range
+            from django.utils.dateparse import parse_datetime
+            if date_from:
+                dt = parse_datetime(date_from)
+                if dt:
+                    qs = qs.filter(timestamp__gte=dt)
+            if date_to:
+                dt = parse_datetime(date_to)
+                if dt:
+                    qs = qs.filter(timestamp__lte=dt)
+
+            if tab == 'system':
+                # System Log Events: show access-control events from BOTH audit trail and hardware scans.
+                from django.utils.dateparse import parse_datetime, parse_date
+                from django.db.models import Q
+                import json as _json
+                from .event_codes import describe as _describe_code
+                from .event_codes import describe_verify_mode as _describe_verify
+                from .models import DeviceRealtimeLog as _RT, DeviceEventLog as _EV, Door as _Door, Device as _Device, Employee as _Employee
+
+                # A) Audit-derived rows (bounded)
+                audit_rows = []
+                audit_src = list(qs[:500])
+
+                parsed_audit = []
+                audit_device_ids = set()
+                for a in audit_src:
+                    details_raw = getattr(a, 'details', '') or ''
+                    payload = {}
+                    try:
+                        payload = _json.loads(details_raw) if details_raw and details_raw.strip().startswith('{') else {}
+                    except Exception:
+                        payload = {}
+                    dev_id_val = payload.get('device_id')
+                    if dev_id_val is not None:
+                        try:
+                            audit_device_ids.add(int(dev_id_val))
+                        except Exception:
+                            pass
+                    parsed_audit.append((a, payload))
+
+                audit_device_map = {d.id: d for d in _Device.objects.filter(id__in=sorted(audit_device_ids))} if audit_device_ids else {}
+
+                for a, payload in parsed_audit:
+                    ts = getattr(a, 'timestamp', None)
+                    ts_local = timezone.localtime(ts) if ts else timezone.localtime(timezone.now())
+                    event_desc = str(payload.get('event_description') or '')
+
+                    dev_name = str(payload.get('device_name') or '').strip()
+                    area_name = str(payload.get('area_name') or '').strip()
+                    try:
+                        dev_id_val = payload.get('device_id')
+                        if dev_id_val is not None:
+                            dev_obj = audit_device_map.get(int(dev_id_val))
+                            if dev_obj and not dev_name:
+                                dev_name = getattr(dev_obj, 'name', '') or ''
+                            if dev_obj and not area_name:
+                                area_name = getattr(dev_obj, 'area_name', '') or ''
+                    except Exception:
+                        pass
+
+                    operator = ''
+                    try:
+                        mod = str(getattr(a, 'module', '') or '').lower()
+                        is_remote = bool(payload.get('remote_open')) or event_desc.lower().startswith('remote')
+                        if mod == 'door' or is_remote:
+                            operator = (getattr(a, 'user', None) or '')
+                    except Exception:
+                        operator = ''
+
+                    audit_rows.append({
+                        '_ts': ts_local,
+                        'action_time': ts_local.strftime('%Y-%m-%d %H:%M:%S'),
+                        'area_name': area_name,
+                        'device_name': dev_name,
+                        'event_point': str(payload.get('door_name') or payload.get('door_id') or ''),
+                        'event_description': event_desc,
+                        'card_number': str(payload.get('card_number') or ''),
+                        'employee_pin': str(payload.get('employee_pin') or payload.get('employee_id') or ''),
+                        'employee_name': str(payload.get('employee_name') or ''),
+                        'department_name': str(payload.get('department_name') or ''),
+                        'status_text': str(payload.get('status_text') or ''),
+                        'verify_mode': _describe_verify(str(payload.get('verify_mode') or '')),
+                        'operator': operator,
+                        'remarks': '',
+                    })
+
+                # B) Hardware-derived rows (latest, bounded; enriched)
+                hw_rows = []
+                raw_field = 'raw_line'
+                created_field = 'created_at'
+                base_qs = None
+                try:
+                    if _EV.objects.exists():
+                        base_qs = _EV.objects.all().order_by('-created_at')
+                        raw_field = 'raw_line'
+                    else:
+                        base_qs = _RT.objects.all().order_by('-created_at')
+                        raw_field = 'raw'
+                except Exception:
+                    base_qs = None
+
+                if base_qs is not None:
+                    hw_qs = base_qs
+
+                    # Apply search/date filters (best-effort, same as UI)
+                    if q:
+                        hw_qs = hw_qs.filter(**{f"{raw_field}__icontains": q})
+
+                    if date_from:
+                        dt = parse_datetime(date_from)
+                        if not dt:
+                            d = parse_date(date_from)
+                            if d:
+                                from datetime import datetime, time
+                                dt = timezone.make_aware(datetime.combine(d, time.min))
+                        elif timezone.is_naive(dt):
+                            dt = timezone.make_aware(dt)
+                        if dt:
+                            hw_qs = hw_qs.filter(**{f"{created_field}__gte": dt})
+                    if date_to:
+                        dt = parse_datetime(date_to)
+                        if not dt:
+                            d = parse_date(date_to)
+                            if d:
+                                from datetime import datetime, time
+                                dt = timezone.make_aware(datetime.combine(d, time.max))
+                        elif timezone.is_naive(dt):
+                            dt = timezone.make_aware(dt)
+                        if dt:
+                            hw_qs = hw_qs.filter(**{f"{created_field}__lte": dt})
+
+                    # Drop the noisy keepalive pattern
+                    try:
+                        if raw_field == 'raw':
+                            hw_qs = hw_qs.exclude(raw__contains=',0,0,200,0,0')
+                        else:
+                            hw_qs = hw_qs.exclude(raw_line__contains=',0,0,200,0,0')
+                    except Exception:
+                        pass
+
+                    rows = list(hw_qs[:400])
+                    device_ids = sorted({getattr(r, 'device_id', None) for r in rows if getattr(r, 'device_id', None) is not None})
+                    device_map = {d.id: d for d in _Device.objects.filter(id__in=device_ids)} if device_ids else {}
+
+                    door_keys = set()
+                    card_values = set()
+                    pin_values = set()
+                    parsed_lines = []
+                    for r in rows:
+                        raw_line = (getattr(r, raw_field, '') or '').strip()
+                        parts = [p.strip() for p in raw_line.split(',')]
+                        ts_str = parts[0] if len(parts) > 0 else ''
+                        pin = parts[1] if len(parts) > 1 else ''
+                        card = parts[2] if len(parts) > 2 else ''
+                        door_no = parts[3] if len(parts) > 3 else ''
+                        code = parts[4] if len(parts) > 4 else ''
+                        verify_mode = parts[5] if len(parts) > 5 else ''
+                        dev_id = getattr(r, 'device_id', None)
+
+                        if str(code) == '200' and str(card).strip() in ('', '0', '000000', '00000000') and str(door_no).strip() in ('', '0'):
+                            continue
+                        if dev_id is not None and door_no:
+                            door_keys.add((dev_id, door_no))
+                        if card and card not in ('0', '000000', '00000000'):
+                            card_values.add(card)
+                        if pin and pin not in ('0',):
+                            pin_values.add(pin)
+                        parsed_lines.append((r, ts_str, pin, card, door_no, code, verify_mode))
+
+                    door_map = {}
+                    if door_keys:
+                        dids = sorted({k[0] for k in door_keys})
+                        names = sorted({k[1] for k in door_keys})
+                        for d in _Door.objects.filter(device_id__in=dids, name__in=names).select_related('device'):
+                            door_map[(d.device_id, str(getattr(d, 'name', '') or ''))] = d
+
+                    emp_by_card = {}
+                    emp_by_pin = {}
+                    dept_by_emp_id = {}
+                    emp_id_by_card = {}
+                    emp_id_by_pin = {}
+                    if card_values or pin_values:
+                        q_emp = Q()
+                        if card_values:
+                            q_emp |= Q(card_number__in=card_values) | Q(secondary_card_number__in=card_values)
+                        pin_ints = []
+                        for p in pin_values:
+                            try:
+                                pin_ints.append(int(str(p)))
+                            except Exception:
+                                pass
+                        if pin_ints:
+                            q_emp |= Q(legacy_userid__in=pin_ints)
+                        for e in _Employee.objects.filter(q_emp):
+                            full = (f"{getattr(e,'first_name','') or ''} {getattr(e,'last_name','') or ''}").strip()
+                            if getattr(e, 'card_number', None):
+                                emp_by_card[str(e.card_number)] = full
+                                emp_id_by_card[str(e.card_number)] = getattr(e, 'id', None)
+                            if getattr(e, 'secondary_card_number', None):
+                                emp_by_card[str(e.secondary_card_number)] = full
+                                emp_id_by_card[str(e.secondary_card_number)] = getattr(e, 'id', None)
+                            if getattr(e, 'legacy_userid', None) is not None:
+                                emp_by_pin[str(getattr(e, 'legacy_userid'))] = full
+                                emp_id_by_pin[str(getattr(e, 'legacy_userid'))] = getattr(e, 'id', None)
+                            try:
+                                dpt = getattr(e, 'dept', None)
+                                dept_name = (getattr(dpt, 'DeptName', '') or getattr(dpt, 'deptname', '') or '') if dpt else ''
+                            except Exception:
+                                dept_name = ''
+                            dept_by_emp_id[getattr(e, 'id', 0)] = dept_name
+
+                    for (_r, ts_str, pin, card, door_no, code, verify_mode) in parsed_lines:
+                        dev_id = getattr(_r, 'device_id', None)
+                        dev_obj = device_map.get(dev_id)
+                        dev_name = getattr(dev_obj, 'name', '') if dev_obj else ''
+                        area_name = getattr(dev_obj, 'area_name', '') if dev_obj else ''
+                        created_at = getattr(_r, created_field, None) or timezone.now()
+
+                        door_obj = door_map.get((dev_id, str(door_no)))
+                        door_name = getattr(door_obj, 'name', '') if door_obj else (door_no or '')
+
+                        verify_label = _describe_verify(str(verify_mode))
+                        base_desc = _describe_code(str(code)) or (f"Code {code}" if code else '')
+                        desc = base_desc
+                        if str(code) == '200':
+                            desc = 'Normal Fingerprint Open' if verify_label == 'Only Fingerprint' else 'Normal Punch Open'
+                        elif str(code) == '201':
+                            desc = 'Access Denied' if (emp_by_card.get(str(card)) or emp_by_pin.get(str(pin))) else 'Unregistered Card'
+
+                        employee_name = emp_by_card.get(str(card), '') or emp_by_pin.get(str(pin), '') or ''
+                        dept_name = ''
+                        try:
+                            emp_id_val = None
+                            if card:
+                                emp_id_val = emp_id_by_card.get(str(card))
+                            if emp_id_val is None and pin:
+                                emp_id_val = emp_id_by_pin.get(str(pin))
+                            if emp_id_val is not None:
+                                dept_name = dept_by_emp_id.get(int(emp_id_val) or 0, '')
+                        except Exception:
+                            dept_name = ''
+
+                        hw_rows.append({
+                            '_ts': timezone.localtime(created_at),
+                            'action_time': ts_str or timezone.localtime(created_at).strftime('%Y-%m-%d %H:%M:%S'),
+                            'area_name': area_name,
+                            'device_name': dev_name,
+                            'event_point': door_name or '-',
+                            'event_description': desc,
+                            'card_number': card,
+                            'employee_pin': pin,
+                            'employee_name': employee_name,
+                            'department_name': dept_name,
+                            'status_text': 'ACCEPTAT' if str(code) == '200' else ('RESPINS' if str(code) == '201' else ''),
+                            'verify_mode': verify_label,
+                            'operator': '',
+                            'remarks': '',
+                        })
+
+                combined = []
+                combined.extend(audit_rows)
+                combined.extend(hw_rows)
+                combined.sort(key=lambda x: x.get('_ts') or timezone.localtime(timezone.now()), reverse=True)
+                combined = _dedupe_remote_rows(combined, window_seconds=3)
+                page = _paginate_list(combined, request, per_page=50)
+                page_exists = True
+                system_rows = list(getattr(page, 'object_list', []) or [])
+            else:
+                page = _paginate(qs, request, per_page=50)
+                page_exists = True
+
+    if (request.GET.get('embed') == '1') and (tab == 'accesslog'):
+        return render(request, 'agent/reports_accesslog_embed.html', {
+            'tab': tab,
+            'page': page,
+            'page_exists': page_exists,
+            'missing_accesslog': missing_accesslog,
+            'access_rows': access_rows,
+            'query_no_page': _qs_without_page(request),
+        })
+
+    return render(request, 'agent/menu_reports.html', {
+        'tab': tab,
+        'page': page,
+        'page_exists': page_exists,
+        'missing_accesslog': missing_accesslog,
+        'access_rows': access_rows,
+        'system_rows': system_rows,
+        'access_filters': {
+            'card': (request.GET.get('card') or '').strip(),
+            'door': (request.GET.get('door') or '').strip(),
+            'person': (request.GET.get('person') or '').strip(),
+            'status': (request.GET.get('status') or '').strip().lower(),
+            'verify': (request.GET.get('verify') or '').strip(),
+        },
+        'query_no_page': _qs_without_page(request),
+        'current_username': (getattr(getattr(request, 'user', None), 'username', '') or ''),
+        'filters': {
+            'user': user_q,
+            'action': action_q or 'all',
+            'q': q,
+            'from_val': date_from,
+            'to_val': date_to,
+        },
+    })
 
 # ---------------- Legacy-style placeholder pages -----------------
 def access_doors(request: HttpRequest):
@@ -1048,42 +2292,75 @@ def doors_list(request: HttpRequest):
     if not request.user.is_authenticated:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
+    is_embed = (request.GET.get('embed') == '1')
+    if not is_embed:
+        from django.shortcuts import redirect
+        return redirect('/agent/menu/access/?tab=doors')
     qs = Door.objects.order_by('name')
     page = _paginate(qs, request)
-    return render(request,'agent/doors_crud_list.html',{'page': page})
+    return render(request, 'agent/access_doors_embed.html', {'page': page, 'can_edit': bool(getattr(request.user, 'is_staff', False))})
 
 def door_create(request: HttpRequest):
     if not request.user.is_authenticated or not request.user.is_staff:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
+    is_modal = (request.GET.get('modal') == '1') or (request.headers.get('x-requested-with') == 'XMLHttpRequest')
     if request.method == 'POST':
         form = DoorForm(request.POST)
         if form.is_valid():
             form.save()
-            return render(request,'agent/door_saved.html',{'obj': form.instance, 'created': True})
+            _audit_log(
+                request,
+                module='door',
+                action='create',
+                entity_id=form.instance.id,
+                entity_name=getattr(form.instance, 'name', '') or '',
+            )
+            tpl = 'agent/door_saved_inner.html' if is_modal else 'agent/door_saved.html'
+            return render(request, tpl, {'obj': form.instance, 'created': True})
     else:
         form = DoorForm()
-    return render(request,'agent/door_form.html',{'form': form})
+    tpl = 'agent/door_form_inner.html' if is_modal else 'agent/door_form.html'
+    return render(request, tpl, {'form': form})
 
 def door_edit(request: HttpRequest, pk: int):
     if not request.user.is_authenticated or not request.user.is_staff:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
+    is_modal = (request.GET.get('modal') == '1') or (request.headers.get('x-requested-with') == 'XMLHttpRequest')
     door = Door.objects.get(pk=pk)
     if request.method == 'POST':
         form = DoorForm(request.POST, instance=door)
         if form.is_valid():
             form.save()
-            return render(request,'agent/door_saved.html',{'obj': form.instance, 'created': False})
+            _audit_log(
+                request,
+                module='door',
+                action='update',
+                entity_id=form.instance.id,
+                entity_name=getattr(form.instance, 'name', '') or '',
+            )
+            tpl = 'agent/door_saved_inner.html' if is_modal else 'agent/door_saved.html'
+            return render(request, tpl, {'obj': form.instance, 'created': False})
     else:
         form = DoorForm(instance=door)
-    return render(request,'agent/door_form.html',{'form': form, 'obj': door})
+    tpl = 'agent/door_form_inner.html' if is_modal else 'agent/door_form.html'
+    return render(request, tpl, {'form': form, 'obj': door})
 
 def door_delete(request: HttpRequest, pk: int):
     if not request.user.is_authenticated or not request.user.is_staff or request.method != 'POST':
         return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
     try:
+        obj = Door.objects.filter(pk=pk).first()
         Door.objects.filter(pk=pk).delete()
+        if obj is not None:
+            _audit_log(
+                request,
+                module='door',
+                action='delete',
+                entity_id=int(pk),
+                entity_name=getattr(obj, 'name', '') or '',
+            )
         return JsonResponse({'ok': True})
     except Exception as e:
         return JsonResponse({'ok': False, 'error': str(e)}, status=400)
@@ -1092,83 +2369,165 @@ def segments_list(request: HttpRequest):
     if not request.user.is_authenticated:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
+    is_embed = (request.GET.get('embed') == '1')
+    if not is_embed:
+        from django.shortcuts import redirect
+        return redirect('/agent/menu/access/?tab=segments')
     qs = TimeSegment.objects.order_by('name')
     page = _paginate(qs, request)
-    return render(request,'agent/segments_crud_list.html',{'page': page})
+    return render(request, 'agent/access_segments_embed.html', {'page': page, 'can_edit': bool(getattr(request.user, 'is_staff', False))})
 
 def segment_create(request: HttpRequest):
     if not request.user.is_authenticated or not request.user.is_staff:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
+    is_modal = (request.GET.get('modal') == '1') or (request.headers.get('x-requested-with') == 'XMLHttpRequest')
     if request.method == 'POST':
         form = TimeSegmentFormWithDays(request.POST)
         if form.is_valid():
-            form.save(); return render(request,'agent/segment_saved.html',{'obj': form.instance, 'created': True})
+            form.save()
+            _audit_log(
+                request,
+                module='time-segment',
+                action='create',
+                entity_id=form.instance.id,
+                entity_name=getattr(form.instance, 'name', '') or '',
+            )
+            tpl = 'agent/segment_saved_inner.html' if is_modal else 'agent/segment_saved.html'
+            return render(request, tpl, {'obj': form.instance, 'created': True})
     else:
         form = TimeSegmentFormWithDays()
-    return render(request,'agent/segment_form.html',{'form': form})
+    tpl = 'agent/segment_form_inner.html' if is_modal else 'agent/segment_form.html'
+    return render(request, tpl, {'form': form})
 
 def segment_edit(request: HttpRequest, pk: int):
     if not request.user.is_authenticated or not request.user.is_staff:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
+    is_modal = (request.GET.get('modal') == '1') or (request.headers.get('x-requested-with') == 'XMLHttpRequest')
     seg = TimeSegment.objects.get(pk=pk)
     if request.method == 'POST':
         form = TimeSegmentFormWithDays(request.POST, instance=seg)
         if form.is_valid():
-            form.save(); return render(request,'agent/segment_saved.html',{'obj': form.instance, 'created': False})
+            form.save()
+            _audit_log(
+                request,
+                module='time-segment',
+                action='update',
+                entity_id=form.instance.id,
+                entity_name=getattr(form.instance, 'name', '') or '',
+            )
+            tpl = 'agent/segment_saved_inner.html' if is_modal else 'agent/segment_saved.html'
+            return render(request, tpl, {'obj': form.instance, 'created': False})
     else:
         form = TimeSegmentFormWithDays(instance=seg)
-    return render(request,'agent/segment_form.html',{'form': form, 'obj': seg})
+    tpl = 'agent/segment_form_inner.html' if is_modal else 'agent/segment_form.html'
+    return render(request, tpl, {'form': form, 'obj': seg})
 
 def segment_delete(request: HttpRequest, pk: int):
     if not request.user.is_authenticated or not request.user.is_staff or request.method != 'POST':
         return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
     try:
-        TimeSegment.objects.filter(pk=pk).delete(); return JsonResponse({'ok': True})
+        obj = TimeSegment.objects.filter(pk=pk).first()
+        TimeSegment.objects.filter(pk=pk).delete()
+        if obj is not None:
+            _audit_log(
+                request,
+                module='time-segment',
+                action='delete',
+                entity_id=int(pk),
+                entity_name=getattr(obj, 'name', '') or '',
+            )
+        return JsonResponse({'ok': True})
     except Exception as e: return JsonResponse({'ok': False,'error': str(e)}, status=400)
 
 def holidays_list(request: HttpRequest):
     if not request.user.is_authenticated:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
+    is_embed = (request.GET.get('embed') == '1')
+    if not is_embed:
+        from django.shortcuts import redirect
+        return redirect('/agent/menu/access/?tab=holidays')
     qs = Holiday.objects.order_by('date')
     page = _paginate(qs, request)
-    return render(request,'agent/holidays_crud_list.html',{'page': page})
+    return render(request, 'agent/access_holidays_embed.html', {'page': page, 'can_edit': bool(getattr(request.user, 'is_staff', False))})
 
 def holiday_create(request: HttpRequest):
     if not request.user.is_authenticated or not request.user.is_staff:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
+    is_modal = (request.GET.get('modal') == '1') or (request.headers.get('x-requested-with') == 'XMLHttpRequest')
     if request.method == 'POST':
         form = HolidayForm(request.POST)
-        if form.is_valid(): form.save(); return render(request,'agent/holiday_saved.html',{'obj': form.instance, 'created': True})
+        if form.is_valid():
+            form.save()
+            _audit_log(
+                request,
+                module='holiday',
+                action='create',
+                entity_id=form.instance.id,
+                entity_name=getattr(form.instance, 'name', '') or '',
+                details=f"date={getattr(form.instance, 'date', None)}",
+            )
+            tpl = 'agent/holiday_saved_inner.html' if is_modal else 'agent/holiday_saved.html'
+            return render(request, tpl, {'obj': form.instance, 'created': True})
     else: form = HolidayForm()
-    return render(request,'agent/holiday_form.html',{'form': form})
+    tpl = 'agent/holiday_form_inner.html' if is_modal else 'agent/holiday_form.html'
+    return render(request, tpl, {'form': form})
 
 def holiday_edit(request: HttpRequest, pk: int):
     if not request.user.is_authenticated or not request.user.is_staff:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
+    is_modal = (request.GET.get('modal') == '1') or (request.headers.get('x-requested-with') == 'XMLHttpRequest')
     hol = Holiday.objects.get(pk=pk)
     if request.method == 'POST':
         form = HolidayForm(request.POST, instance=hol)
-        if form.is_valid(): form.save(); return render(request,'agent/holiday_saved.html',{'obj': form.instance, 'created': False})
+        if form.is_valid():
+            form.save()
+            _audit_log(
+                request,
+                module='holiday',
+                action='update',
+                entity_id=form.instance.id,
+                entity_name=getattr(form.instance, 'name', '') or '',
+                details=f"date={getattr(form.instance, 'date', None)}",
+            )
+            tpl = 'agent/holiday_saved_inner.html' if is_modal else 'agent/holiday_saved.html'
+            return render(request, tpl, {'obj': form.instance, 'created': False})
     else: form = HolidayForm(instance=hol)
-    return render(request,'agent/holiday_form.html',{'form': form, 'obj': hol})
+    tpl = 'agent/holiday_form_inner.html' if is_modal else 'agent/holiday_form.html'
+    return render(request, tpl, {'form': form, 'obj': hol})
 
 def holiday_delete(request: HttpRequest, pk: int):
     if not request.user.is_authenticated or not request.user.is_staff or request.method != 'POST': return JsonResponse({'ok': False,'error':'unauthorized'}, status=403)
-    try: Holiday.objects.filter(pk=pk).delete(); return JsonResponse({'ok': True})
+    try:
+        obj = Holiday.objects.filter(pk=pk).first()
+        Holiday.objects.filter(pk=pk).delete()
+        if obj is not None:
+            _audit_log(
+                request,
+                module='holiday',
+                action='delete',
+                entity_id=int(pk),
+                entity_name=getattr(obj, 'name', '') or '',
+                details=f"date={getattr(obj, 'date', None)}",
+            )
+        return JsonResponse({'ok': True})
     except Exception as e: return JsonResponse({'ok': False,'error':str(e)}, status=400)
 
 def access_levels_list(request: HttpRequest):
     if not request.user.is_authenticated:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
+    is_embed = (request.GET.get('embed') == '1')
+    if not is_embed:
+        from django.shortcuts import redirect
+        return redirect('/agent/menu/access/?tab=levels')
     qs = AccessLevel.objects.order_by('name')
     page = _paginate(qs, request)
-    return render(request,'agent/access_levels_crud_list.html',{'page': page})
+    return render(request, 'agent/access_levels_embed.html', {'page': page, 'can_edit': bool(getattr(request.user, 'is_staff', False))})
 
 # ================= Additional Legacy CRUD Modules =================
 
@@ -1438,8 +2797,136 @@ def area_delete(request: HttpRequest, pk: int):
         return JsonResponse({'ok': False,'error':'unauthorized'}, status=403)
     if not LegacyArea:
         return JsonResponse({'ok': False,'error':'missing-model'}, status=400)
-    try: LegacyArea.objects.filter(pk=pk).delete(); return JsonResponse({'ok': True})
+    try:
+        try:
+            from .models import LegacyAreaMeta
+            LegacyAreaMeta.objects.filter(area_id=pk).delete()
+        except Exception:
+            pass
+        LegacyArea.objects.filter(pk=pk).delete()
+        return JsonResponse({'ok': True})
     except Exception as e: return JsonResponse({'ok': False,'error': str(e)}, status=400)
+
+
+def areas_json(request: HttpRequest):
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    if not LegacyArea:
+        return JsonResponse({'ok': False, 'error': 'missing-model'}, status=400)
+    try:
+        from .models import LegacyAreaMeta
+    except Exception:
+        LegacyAreaMeta = None  # type: ignore
+
+    areas = list(LegacyArea.objects.order_by('areaname'))
+    name_by_id = {int(a.id): (a.areaname or '') for a in areas}
+
+    meta_by_id = {}
+    if LegacyAreaMeta is not None:
+        try:
+            meta_rows = LegacyAreaMeta.objects.filter(legacy_area_id__in=list(name_by_id.keys()))
+            meta_by_id = {int(m.legacy_area_id): m for m in meta_rows}
+        except Exception:
+            meta_by_id = {}
+
+    items = []
+    for a in areas:
+        mid = int(a.id)
+        m = meta_by_id.get(mid)
+        parent_id = None
+        try:
+            parent_id = int(getattr(m, 'parent_legacy_area_id', None)) if m and getattr(m, 'parent_legacy_area_id', None) else None
+        except Exception:
+            parent_id = None
+        items.append({
+            'id': mid,
+            'name': a.areaname or '',
+            'code': (getattr(m, 'code', None) if m else None) or '',
+            'remarks': (getattr(m, 'remarks', None) if m else None) or '',
+            'parent_id': parent_id or '',
+            'parent_name': (name_by_id.get(parent_id) if parent_id else '') or '',
+        })
+
+    return JsonResponse({'ok': True, 'items': items})
+
+
+def area_save_json(request: HttpRequest):
+    if not request.user.is_authenticated or not request.user.is_staff or request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    if not LegacyArea:
+        return JsonResponse({'ok': False, 'error': 'missing-model'}, status=400)
+    import json
+    try:
+        payload = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        payload = request.POST.dict()
+    name = (payload.get('name') or '').strip()
+    code = (payload.get('code') or '').strip()
+    remarks = (payload.get('notes') or payload.get('remarks') or '').strip()
+    parent_id_raw = (payload.get('parent_id') or payload.get('parent') or '').strip()
+    parent_id = None
+    if parent_id_raw:
+        try:
+            parent_id = int(parent_id_raw)
+        except Exception:
+            parent_id = None
+    pk = payload.get('id')
+    if not name:
+        return JsonResponse({'ok': False, 'error': 'empty-name'}, status=400)
+    if not code:
+        return JsonResponse({'ok': False, 'error': 'empty-code'}, status=400)
+
+    try:
+        from .models import LegacyAreaMeta
+    except Exception:
+        LegacyAreaMeta = None  # type: ignore
+
+    try:
+        if pk:
+            obj = LegacyArea.objects.get(pk=int(pk))
+            obj.areaname = name
+            obj.save(update_fields=['areaname'])
+            created = False
+        else:
+            obj, created = LegacyArea.objects.get_or_create(areaname=name)
+
+        # Persist metadata (code/parent/remarks) in agent.LegacyAreaMeta
+        if LegacyAreaMeta is not None:
+            # prevent duplicate codes across different areas
+            try:
+                dup = LegacyAreaMeta.objects.filter(code=code).exclude(legacy_area_id=int(obj.id)).first()
+            except Exception:
+                dup = None
+            if dup is not None:
+                return JsonResponse({'ok': False, 'error': 'duplicate-code'}, status=409)
+            try:
+                LegacyAreaMeta.objects.update_or_create(
+                    legacy_area_id=int(obj.id),
+                    defaults={
+                        'code': code,
+                        'parent_legacy_area_id': parent_id,
+                        'remarks': remarks,
+                    },
+                )
+            except Exception:
+                # Best-effort: don't block saving the legacy area name
+                pass
+
+        try:
+            _audit_log(
+                request,
+                module='area',
+                action='create' if created else 'update',
+                entity_id=int(getattr(obj, 'id', 0) or 0),
+                entity_name=name,
+                details=f"code={code} parent_id={parent_id or ''}",
+            )
+        except Exception:
+            pass
+
+        return JsonResponse({'ok': True, 'id': obj.id, 'name': obj.areaname, 'code': code, 'created': created})
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=400)
 
 def issuecards_list(request: HttpRequest):
     if not request.user.is_authenticated:
@@ -1554,51 +3041,125 @@ def issuecard_reissue(request: HttpRequest, pk: int):
     except Exception as e:
         return JsonResponse({'ok': False,'error': str(e)}, status=400)
 
+
+def dst_list_json(request: HttpRequest):
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    items = []
+    for d in DSTime.objects.order_by('name'):
+        items.append({
+            'id': d.id,
+            'name': d.name,
+            'start': {
+                'month': d.start_month,
+                'week': d.start_week,
+                'weekday': d.start_weekday,
+                'hour': d.start_hour,
+                'minute': d.start_minute,
+            },
+            'end': {
+                'month': d.end_month,
+                'week': d.end_week,
+                'weekday': d.end_weekday,
+                'hour': d.end_hour,
+                'minute': d.end_minute,
+            },
+            'offset_minutes': d.offset_minutes,
+        })
+    return JsonResponse({'ok': True, 'items': items})
+
+
+def dst_save_json(request: HttpRequest):
+    if not request.user.is_authenticated or not request.user.is_staff or request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    import json
+    try:
+        payload = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        payload = request.POST.dict()
+    name = (payload.get('name') or '').strip()
+    if not name:
+        return JsonResponse({'ok': False, 'error': 'missing-name'}, status=400)
+    try:
+        pk = payload.get('id')
+        is_update = bool(pk)
+        obj = DSTime.objects.get(pk=int(pk)) if pk else DSTime()
+        obj.name = name
+        obj.start_month = int(payload.get('start_month', 1))
+        obj.start_week = payload.get('start_week') or 'last'
+        obj.start_weekday = int(payload.get('start_weekday', 0))
+        obj.start_hour = int(payload.get('start_hour', 3))
+        obj.start_minute = int(payload.get('start_minute', 0))
+        obj.end_month = int(payload.get('end_month', 10))
+        obj.end_week = payload.get('end_week') or 'last'
+        obj.end_weekday = int(payload.get('end_weekday', 0))
+        obj.end_hour = int(payload.get('end_hour', 3))
+        obj.end_minute = int(payload.get('end_minute', 0))
+        obj.offset_minutes = int(payload.get('offset_minutes', 60))
+        obj.save()
+        try:
+            _audit_log(
+                request,
+                module='dst',
+                action='update' if is_update else 'create',
+                entity_id=int(obj.id),
+                entity_name=obj.name or '',
+                details=f"offset_minutes={getattr(obj, 'offset_minutes', '')}",
+            )
+        except Exception:
+            pass
+        return JsonResponse({'ok': True, 'id': obj.id, 'name': obj.name})
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=400)
+
+
+def dst_delete_json(request: HttpRequest, pk: int):
+    if not request.user.is_authenticated or not request.user.is_staff or request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    try:
+        obj = DSTime.objects.filter(pk=pk).first()
+        DSTime.objects.filter(pk=pk).delete()
+        if obj is not None:
+            try:
+                _audit_log(
+                    request,
+                    module='dst',
+                    action='delete',
+                    entity_id=int(pk),
+                    entity_name=getattr(obj, 'name', '') or '',
+                )
+            except Exception:
+                pass
+        return JsonResponse({'ok': True})
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=400)
+
 # --- Modern JSON endpoints for IssueCards used by Personnel UI ---
 def issuecards_json_list(request: HttpRequest):
     if not request.user.is_authenticated:
         return JsonResponse({'items': []})
-    # Combine: primary/secondary from Employee model + additional from EmployeeCard
+    # Always return real EmployeeCard rows (numeric IDs) so UI never shows synthetic emp:* identifiers.
     items = []
-    from .models import Employee as AgentEmployee
-    emps = AgentEmployee.objects.all().only('id','legacy_userid','first_name','last_name','card_number','secondary_card_number')
-    for e in emps:
-        full_name = f"{getattr(e,'last_name','')} {getattr(e,'first_name','')}".strip()
-        if getattr(e,'card_number', None):
-            items.append({
-                'id': f"emp:{e.id}:primary",
-                'card_number': e.card_number,
-                'employee_name': full_name,
-                'userid': getattr(e,'legacy_userid', None),
-                'slot': 'primary',
-                'status': 'Active',
-                'issue_date': None,
-                'valid_until': None,
-            })
-        if getattr(e,'secondary_card_number', None):
-            items.append({
-                'id': f"emp:{e.id}:secondary",
-                'card_number': e.secondary_card_number,
-                'employee_name': full_name,
-                'userid': getattr(e,'legacy_userid', None),
-                'slot': 'secondary',
-                'status': 'Active',
-                'issue_date': None,
-                'valid_until': None,
-            })
-    # Additional cards
-    qs = EmployeeCard.objects.select_related('employee').order_by('id')
-    for x in qs[:1000]:
+    qs = EmployeeCard.objects.select_related('employee').order_by('-created_at')
+    for x in qs[:5000]:
         name = f"{getattr(x.employee,'last_name','')} {getattr(x.employee,'first_name','')}".strip() if getattr(x,'employee',None) else ''
+        issue_date = None
+        try:
+            issue_date = x.created_at.date().isoformat() if getattr(x, 'created_at', None) else None
+        except Exception:
+            issue_date = None
+        valid_until = getattr(x, 'valid_until', None)
+        if hasattr(valid_until, 'isoformat'):
+            valid_until = valid_until.isoformat()
         items.append({
             'id': x.id,
             'card_number': x.card_number,
             'employee_name': name,
             'userid': getattr(x.employee,'legacy_userid', None) if getattr(x,'employee',None) else None,
-            'slot': 'additional',
-            'status': 'Active',
-            'issue_date': getattr(x,'created_at', None).isoformat() if hasattr(x,'created_at') and x.created_at else None,
-            'valid_until': getattr(x,'valid_until', None),
+            'slot': getattr(x, 'slot', 'additional') or 'additional',
+            'status': getattr(x, 'status', 'Active') or 'Active',
+            'issue_date': issue_date,
+            'valid_until': valid_until,
         })
     return JsonResponse({'items': items})
 
@@ -1607,44 +3168,37 @@ def issuecards_json_search(request: HttpRequest):
     if not q:
         return JsonResponse([], safe=False)
     qs = EmployeeCard.objects.filter(card_number__icontains=q).order_by('id')[:50]
-    return JsonResponse([{'id':c.id,'card_number':c.card_number} for c in qs], safe=False)
+    return JsonResponse([{'id':c.id,'card_number':c.card_number,'slot': getattr(c,'slot','additional')} for c in qs], safe=False)
+
+
+def _parse_date_yyyy_mm_dd(value: str):
+    if not value:
+        return None
+    try:
+        from datetime import date
+        return date.fromisoformat(str(value).strip())
+    except Exception:
+        return None
 
 def issuecard_json_detail(request: HttpRequest, pk: str):
-    # Support synthetic IDs for employee primary/secondary slots: emp:<id>:primary|secondary
-    sid = str(pk)
-    if sid.startswith("emp:"):
-        try:
-            _, emp_id, slot = sid.split(":")
-            from .models import Employee as AgentEmployee
-            e = AgentEmployee.objects.get(pk=int(emp_id))
-            full_name = f"{getattr(e,'last_name','')} {getattr(e,'first_name','')}".strip()
-            num = getattr(e, 'card_number' if slot=='primary' else 'secondary_card_number')
-            return JsonResponse({
-                'id': sid,
-                'card_number': num,
-                'site_code': '',
-                'employee': e.id,
-                'employee_name': full_name,
-                'valid_until': None,
-                'slot': slot,
-            })
-        except Exception:
-            return JsonResponse({'ok': False, 'error': 'not-found'}, status=404)
-    else:
-        try:
-            c = EmployeeCard.objects.select_related('employee').get(pk=pk)
-            name = f"{getattr(c.employee,'last_name','')} {getattr(c.employee,'first_name','')}".strip() if getattr(c,'employee',None) else ''
-            return JsonResponse({
-                'id': c.id,
-                'card_number': c.card_number,
-                'site_code': getattr(c,'site_code',''),
-                'employee': getattr(c.employee,'id', None) if getattr(c,'employee',None) else None,
-                'employee_name': name,
-                'valid_until': getattr(c,'valid_until', None),
-                'slot': 'additional',
-            })
-        except EmployeeCard.DoesNotExist:
-            return JsonResponse({'ok': False, 'error': 'not-found'}, status=404)
+    try:
+        c = EmployeeCard.objects.select_related('employee').get(pk=int(pk))
+        name = f"{getattr(c.employee,'last_name','')} {getattr(c.employee,'first_name','')}".strip() if getattr(c,'employee',None) else ''
+        valid_until = getattr(c, 'valid_until', None)
+        if hasattr(valid_until, 'isoformat'):
+            valid_until = valid_until.isoformat()
+        return JsonResponse({
+            'id': c.id,
+            'card_number': c.card_number,
+            'site_code': getattr(c,'site_code',''),
+            'employee': getattr(c.employee,'id', None) if getattr(c,'employee',None) else None,
+            'employee_name': name,
+            'valid_until': valid_until,
+            'slot': getattr(c, 'slot', 'additional') or 'additional',
+            'status': getattr(c, 'status', 'Active') or 'Active',
+        })
+    except Exception:
+        return JsonResponse({'ok': False, 'error': 'not-found'}, status=404)
 
 def issuecard_json_create(request: HttpRequest):
     if request.method != 'POST' or not request.user.is_authenticated or not request.user.is_staff:
@@ -1658,28 +3212,68 @@ def issuecard_json_create(request: HttpRequest):
         num = payload.get('card_number','').strip()
         if not num:
             return JsonResponse({'ok': False,'error':'card_number required'}, status=400)
-        # Slot handling: primary/secondary update on Employee; additional creates EmployeeCard
-        slot = (payload.get('slot') or 'additional').lower()
-        if slot in ('primary','secondary'):
-            # check duplicate across all cards
-            if EmployeeCard.objects.filter(card_number__iexact=num).exists():
-                return JsonResponse({'ok': False,'error':'duplicate card_number'}, status=400)
-            from django.db.models import Q
-            if AgentEmployee.objects.filter(Q(card_number__iexact=num)|Q(secondary_card_number__iexact=num)).exclude(pk=emp_id).exists():
-                return JsonResponse({'ok': False,'error':'duplicate card_number'}, status=400)
+        slot = (payload.get('slot') or 'additional').lower().strip()
+        if slot not in ('primary', 'secondary', 'additional'):
+            slot = 'additional'
+
+        # Duplicate check across all cards (except the one we might overwrite for primary/secondary)
+        existing_slot_card = None
+        if slot in ('primary', 'secondary'):
+            try:
+                existing_slot_card = EmployeeCard.objects.filter(employee=emp, slot=slot).order_by('-created_at').first()
+            except Exception:
+                existing_slot_card = None
+
+        dup_qs = EmployeeCard.objects.filter(card_number__iexact=num)
+        if existing_slot_card is not None:
+            dup_qs = dup_qs.exclude(pk=existing_slot_card.pk)
+        if dup_qs.exists():
+            return JsonResponse({'ok': False,'error':'duplicate card_number'}, status=400)
+
+        valid_until = _parse_date_yyyy_mm_dd(payload.get('valid_until') or '')
+        status = (payload.get('status') or 'Active').strip() or 'Active'
+        site_code = (payload.get('site_code') or '').strip()
+
+        if existing_slot_card is not None:
+            # Overwrite primary/secondary card row instead of creating duplicates
+            existing_slot_card.card_number = num
+            existing_slot_card.site_code = site_code
+            existing_slot_card.status = status
+            existing_slot_card.valid_until = valid_until
+            existing_slot_card.save()
+            c = existing_slot_card
+            created_flag = False
+        else:
+            c = EmployeeCard.objects.create(
+                employee=emp,
+                card_number=num,
+                slot=slot,
+                status=status,
+                site_code=site_code,
+                valid_until=valid_until,
+            )
+            created_flag = True
+        entity_id = c.id
+
+        # Keep Employee primary/secondary fields in sync for backwards compatibility
+        try:
             if slot == 'primary':
                 emp.card_number = num
-            else:
+                emp.save(update_fields=['card_number'])
+            elif slot == 'secondary':
                 emp.secondary_card_number = num
-            emp.save()
-            entity_id = f"emp:{emp.id}:{slot}"
-        else:
-            if EmployeeCard.objects.filter(card_number__iexact=num).exists():
-                return JsonResponse({'ok': False,'error':'duplicate card_number'}, status=400)
-            c = EmployeeCard.objects.create(employee=emp, card_number=num, site_code=payload.get('site_code',''))
-            entity_id = c.id
+                emp.save(update_fields=['secondary_card_number'])
+        except Exception:
+            pass
         try:
-            AuditLog.objects.create(module='issuecard', action='create', entity_id=entity_id, entity_name=num, user=getattr(request.user,'username',None), details=f"slot={slot}")
+            AuditLog.objects.create(
+                module='issuecard',
+                action='create' if created_flag else 'update',
+                entity_id=entity_id,
+                entity_name=num,
+                user=getattr(request.user,'username',None),
+                details=f"slot={slot}; valid_until={valid_until.isoformat() if valid_until else '-'}",
+            )
         except Exception:
             pass
         return JsonResponse({'ok': True, 'id': entity_id})
@@ -1696,40 +3290,74 @@ def issuecard_json_update(request: HttpRequest, pk: str):
         num = payload.get('card_number','').strip()
         if not num:
             return JsonResponse({'ok': False,'error':'card_number required'}, status=400)
-        # If synthetic id (employee slot)
-        if sid.startswith('emp:'):
-            _, emp_id, slot = sid.split(':')
-            from .models import Employee as AgentEmployee
-            from django.db.models import Q
-            if EmployeeCard.objects.filter(card_number__iexact=num).exists():
-                return JsonResponse({'ok': False,'error':'duplicate card_number'}, status=400)
-            if AgentEmployee.objects.filter(Q(card_number__iexact=num)|Q(secondary_card_number__iexact=num)).exclude(pk=int(emp_id)).exists():
-                return JsonResponse({'ok': False,'error':'duplicate card_number'}, status=400)
-            e = AgentEmployee.objects.get(pk=int(emp_id))
-            if slot == 'primary':
-                e.card_number = num
-            else:
-                e.secondary_card_number = num
-            e.save()
-            entity_id = sid
-        else:
-            c = EmployeeCard.objects.get(pk=pk)
-            if EmployeeCard.objects.filter(card_number__iexact=num).exclude(pk=pk).exists():
-                return JsonResponse({'ok': False,'error':'duplicate card_number'}, status=400)
-            c.card_number = num
-            emp_id = payload.get('employee_id')
-            if emp_id:
-                try:
-                    from .models import Employee as AgentEmployee
-                    emp = AgentEmployee.objects.get(pk=int(emp_id))
-                    c.employee = emp
-                except Exception:
-                    return JsonResponse({'ok': False,'error':'employee not found'}, status=400)
-            c.site_code = payload.get('site_code','')
-            c.save()
-            entity_id = c.id
+        c = EmployeeCard.objects.select_related('employee').get(pk=int(pk))
+        if EmployeeCard.objects.filter(card_number__iexact=num).exclude(pk=c.pk).exists():
+            return JsonResponse({'ok': False,'error':'duplicate card_number'}, status=400)
+
+        old_employee = getattr(c, 'employee', None)
+        old_number = getattr(c, 'card_number', '')
+        old_site_code = getattr(c, 'site_code', '')
+        old_valid_until = getattr(c, 'valid_until', None)
+        old_status = getattr(c, 'status', 'Active')
+        slot = (getattr(c, 'slot', 'additional') or 'additional')
+
+        emp_id = payload.get('employee_id')
+        if emp_id:
+            try:
+                from .models import Employee as AgentEmployee
+                new_emp = AgentEmployee.objects.get(pk=int(emp_id))
+                c.employee = new_emp
+            except Exception:
+                return JsonResponse({'ok': False,'error':'employee not found'}, status=400)
+
+        c.card_number = num
+        c.site_code = (payload.get('site_code') or '').strip()
+        c.valid_until = _parse_date_yyyy_mm_dd(payload.get('valid_until') or '')
+        if 'status' in payload:
+            c.status = (payload.get('status') or 'Active').strip() or 'Active'
+        c.save()
+        entity_id = c.id
+
+        # Keep Employee primary/secondary fields in sync
         try:
-            AuditLog.objects.create(module='issuecard', action='update', entity_id=entity_id, entity_name=num, user=getattr(request.user,'username',None), details='')
+            from .models import Employee as AgentEmployee
+            new_employee = getattr(c, 'employee', None)
+            if slot == 'primary':
+                if old_employee and getattr(old_employee, 'card_number', None) == old_number:
+                    AgentEmployee.objects.filter(pk=old_employee.pk).update(card_number='')
+                if new_employee:
+                    AgentEmployee.objects.filter(pk=new_employee.pk).update(card_number=num)
+            elif slot == 'secondary':
+                if old_employee and getattr(old_employee, 'secondary_card_number', None) == old_number:
+                    AgentEmployee.objects.filter(pk=old_employee.pk).update(secondary_card_number=None)
+                if new_employee:
+                    AgentEmployee.objects.filter(pk=new_employee.pk).update(secondary_card_number=num)
+        except Exception:
+            pass
+        try:
+            def _fmt(v):
+                if not v:
+                    return '-'
+                if hasattr(v, 'isoformat'):
+                    return v.isoformat()
+                return str(v)
+            details = []
+            if old_number != num:
+                details.append(f"card_number: {_fmt(old_number)} → {_fmt(num)}")
+            if old_site_code != getattr(c, 'site_code', ''):
+                details.append(f"site_code: {_fmt(old_site_code)} → {_fmt(getattr(c, 'site_code', ''))}")
+            if _fmt(old_valid_until) != _fmt(getattr(c, 'valid_until', None)):
+                details.append(f"valid_until: {_fmt(old_valid_until)} → {_fmt(getattr(c, 'valid_until', None))}")
+            if old_status != getattr(c, 'status', 'Active'):
+                details.append(f"status: {_fmt(old_status)} → {_fmt(getattr(c, 'status', 'Active'))}")
+            AuditLog.objects.create(
+                module='issuecard',
+                action='update',
+                entity_id=entity_id,
+                entity_name=num,
+                user=getattr(request.user,'username',None),
+                details='; '.join(details) if details else '',
+            )
         except Exception:
             pass
         return JsonResponse({'ok': True})
@@ -1737,6 +3365,43 @@ def issuecard_json_update(request: HttpRequest, pk: str):
         return JsonResponse({'ok': False,'error':'not-found'}, status=404)
     except Exception as e:
         return JsonResponse({'ok': False,'error': str(e)}, status=400)
+
+
+def issuecard_json_delete(request: HttpRequest, pk: str):
+    if request.method != 'POST' or not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'unauth'}, status=403)
+    try:
+        c = EmployeeCard.objects.select_related('employee').get(pk=int(pk))
+        num = getattr(c, 'card_number', '')
+        slot = (getattr(c, 'slot', 'additional') or 'additional')
+        emp = getattr(c, 'employee', None)
+        entity_id = c.pk
+        c.delete()
+        # Keep Employee primary/secondary in sync
+        try:
+            from .models import Employee as AgentEmployee
+            if emp and slot == 'primary' and getattr(emp, 'card_number', None) == num:
+                AgentEmployee.objects.filter(pk=emp.pk).update(card_number='')
+            if emp and slot == 'secondary' and getattr(emp, 'secondary_card_number', None) == num:
+                AgentEmployee.objects.filter(pk=emp.pk).update(secondary_card_number=None)
+        except Exception:
+            pass
+        try:
+            AuditLog.objects.create(
+                module='issuecard',
+                action='delete',
+                entity_id=entity_id,
+                entity_name=num,
+                user=getattr(request.user,'username',None),
+                details=f"slot={slot}",
+            )
+        except Exception:
+            pass
+        return JsonResponse({'ok': True})
+    except EmployeeCard.DoesNotExist:
+        return JsonResponse({'ok': False, 'error': 'not-found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=400)
 
 from django.core.cache import cache
 
@@ -1880,6 +3545,13 @@ def access_evaluate_and_open(request: HttpRequest):
         door_id = payload.get('door_id')
         door_pk = payload.get('door_pk')
         open_all = str(payload.get('open_all') or request.GET.get('open_all') or '').lower() in ('1','true','yes','all')
+        # IMPORTANT: Remote open must be explicit to avoid generating misleading "Remote Opening" events
+        # when the controller itself already opened the door after a physical scan.
+        remote_open = bool(
+            payload.get('remote_open')
+            or payload.get('force_remote_open')
+            or str(request.GET.get('remote_open') or '').lower() in ('1', 'true', 'yes')
+        )
         if not card_number:
             return JsonResponse({'ok': False, 'error': 'card_number required'}, status=400)
 
@@ -2013,15 +3685,29 @@ def access_evaluate_and_open(request: HttpRequest):
                 EmployeeAccessCache.objects.update_or_create(employee=emp, door=door, defaults={'allowed': allowed, 'reason': (reasons[0] if reasons else 'ok')})
         except Exception:
             pass
-        # Attempt door open if allowed
-        if allowed and not open_all:
+        # Attempt door open ONLY when explicitly requested (e.g. Test button), and never return early.
+        door_open_ok = None
+        src_l = (source or '').strip().lower()
+        should_remote_open = (remote_open or src_l == 'test')
+        if allowed and should_remote_open and not open_all:
             try:
+                # Prevent door command AuditLog spam for evaluate-driven opens.
+                setattr(request, '_agent_suppress_door_audit', True)
                 if door_pk:
-                    return door_pk_open(request, int(door_pk))
-                if device_id and door_id:
-                    return door_open(request, int(device_id), str(door_id))
+                    resp = door_pk_open(request, int(door_pk))
+                elif device_id and door_id:
+                    resp = door_open(request, int(device_id), str(door_id))
+                else:
+                    resp = None
+                door_open_ok = bool(resp is None or getattr(resp, 'status_code', 200) < 400)
             except Exception:
+                door_open_ok = False
                 reasons.append('door_open_failed')
+            finally:
+                try:
+                    delattr(request, '_agent_suppress_door_audit')
+                except Exception:
+                    pass
         # Friendly Romanian status and employee name
         status_text = 'ACCEPTAT' if allowed else 'RESPINS'
         employee_name = None
@@ -2032,6 +3718,100 @@ def access_evaluate_and_open(request: HttpRequest):
                 employee_name = (fn+' '+ln).strip()
         except Exception:
             employee_name = None
+
+        # Write a durable access event so Reports -> AccessLog can show real data
+        try:
+            import json as _json
+            from .event_codes import describe_verify_mode as _describe_verify_mode
+            door_name = ''
+            device_name = ''
+            door_id_val = getattr(door, 'id', None)
+            try:
+                if door:
+                    door_name = getattr(door, 'name', '') or ''
+                    dev = getattr(door, 'device', None)
+                    if dev is not None:
+                        device_name = getattr(dev, 'name', None) or getattr(dev, 'device_name', None) or getattr(dev, 'alias', None) or ''
+            except Exception:
+                pass
+
+            # Derive legacy-like Event Description + Verify Mode
+            src_l = (source or '').strip().lower()
+            verify_mode_label = 'Only Card'
+            if any(k in src_l for k in ('finger', 'ampr', 'fp')):
+                verify_mode_label = 'Only Fingerprint'
+            elif any(k in src_l for k in ('pin', 'userid', 'id')):
+                verify_mode_label = 'Only Pin'
+            elif any(k in src_l for k in ('pass', 'parol', 'pwd')):
+                verify_mode_label = 'Only Password'
+            verify_mode_label = _describe_verify_mode(verify_mode_label)
+
+            legacy_desc = 'Access Granted' if allowed else 'Access Denied'
+            if allowed:
+                if any(k in src_l for k in ('finger', 'ampr', 'fp')):
+                    legacy_desc = 'Normal Fingerprint Open'
+                elif any(k in src_l for k in ('exit', 'button')):
+                    legacy_desc = 'Exit Button Open'
+                else:
+                    legacy_desc = 'Normal Punch Open'
+            else:
+                # Map common denial reasons into legacy strings
+                if reasons and reasons[0] == 'no_employee_for_card':
+                    legacy_desc = 'Unregistered Card'
+                elif reasons and reasons[0] in ('outside_employee_validity', 'employee_inactive'):
+                    legacy_desc = 'Card Expired'
+                elif reasons and reasons[0] == 'outside_time_segments':
+                    legacy_desc = 'Door Inactive Time Zone(Punch Card)'
+                elif reasons and reasons[0] in ('holiday_block', 'door_not_in_access_levels', 'no_access_levels'):
+                    legacy_desc = 'Access Denied'
+                elif reasons and reasons[0] in ('door_not_resolved', 'door_open_failed'):
+                    legacy_desc = 'Data Exception'
+
+            # Employee fields expected by legacy report
+            employee_pin = None
+            department_name = ''
+            try:
+                if emp is not None:
+                    employee_pin = getattr(emp, 'legacy_userid', None)
+                    d = getattr(emp, 'dept', None)
+                    if d:
+                        department_name = getattr(d, 'DeptName', '') or getattr(d, 'deptname', '') or ''
+            except Exception:
+                employee_pin = employee_pin
+                department_name = department_name
+
+            verify_mode_raw = (source or 'unknown').strip()
+            details = _json.dumps({
+                'card_number': matched_card,
+                'employee_id': getattr(emp, 'id', None),
+                'employee_pin': employee_pin,
+                'employee_name': employee_name,
+                'department_name': department_name,
+                'door_id': door_id_val,
+                'door_name': door_name,
+                'device_id': getattr(getattr(door, 'device', None), 'id', None) if door else None,
+                'device_name': device_name,
+                'allowed': bool(allowed),
+                'status_text': status_text,
+                'verify_mode': verify_mode_label,
+                'verify_mode_raw': verify_mode_raw,
+                'event_description': legacy_desc,
+                'source': source,
+                'open_all': bool(open_all),
+                'remote_open': bool(should_remote_open),
+                'remote_open_ok': door_open_ok,
+                'reasons': reasons,
+            }, ensure_ascii=False)
+            _audit_log(
+                request,
+                module='accesslog',
+                action=('granted' if allowed else 'denied'),
+                entity_id=(getattr(emp, 'id', None) or 0),
+                entity_name=(employee_name or matched_card or ''),
+                details=details,
+            )
+        except Exception:
+            pass
         return JsonResponse({
             'ok': allowed,
             'employee': getattr(emp,'id', None),
@@ -2219,23 +3999,77 @@ def access_logs_list(request: HttpRequest):
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
     form = AccessLogFilterForm(request.GET or None)
-    if not LegacyAccessLog:
-        return render(request,'agent/access_logs_list.html',{'form': form, 'page': None, 'missing': True})
-    qs = LegacyAccessLog.objects.order_by('-timestamp')
-    qs = form.filter_queryset(qs)
+    qs = None
+    using_legacy = bool(LegacyAccessLog)
+
+    if using_legacy:
+        qs = LegacyAccessLog.objects.order_by('-timestamp')
+        qs = form.filter_queryset(qs)
+    else:
+        # Fallback: render recent local logs from agent tables so the ACCES->Loguri tab
+        # still shows data even when legacy_models isn't available.
+        try:
+            ev = list(DeviceEventLog.objects.order_by('-created_at')[:400])
+        except Exception:
+            ev = []
+        try:
+            rt = list(DeviceRealtimeLog.objects.order_by('-created_at')[:400])
+        except Exception:
+            rt = []
+
+        rows = []
+        for it in ev:
+            rows.append({
+                'timestamp': getattr(it, 'created_at', None),
+                'userid': None,
+                'cardno': '',
+                'door': None,
+                'device': {'device_name': (getattr(it, 'sn', '') or f"device_id={getattr(it, 'device_id', '')}")},
+                'event_type': (getattr(it, 'code', '') or 'EVENT'),
+                'result': '',
+                'info': getattr(it, 'raw_line', '') or '',
+            })
+        for it in rt:
+            rows.append({
+                'timestamp': getattr(it, 'created_at', None),
+                'userid': None,
+                'cardno': '',
+                'door': None,
+                'device': {'device_name': (getattr(it, 'sn', '') or f"device_id={getattr(it, 'device_id', '')}")},
+                'event_type': 'RTLOG',
+                'result': '',
+                'info': getattr(it, 'raw', '') or '',
+            })
+        rows.sort(key=lambda r: (r.get('timestamp') is not None, r.get('timestamp')), reverse=True)
+        qs = rows
     # export handling
     export = request.GET.get('export')
     if export in ('csv','pdf'):
-        rows = list(qs.values('timestamp','userid__userid','cardno','door__name','device__device_name','event_type','result','info')[:2000])
+        if using_legacy:
+            # Some schemas store userid as FK (userid__userid), others as plain int.
+            try:
+                uid_is_rel = bool(getattr(LegacyAccessLog._meta.get_field('userid'), 'is_relation', False))
+            except Exception:
+                uid_is_rel = False
+            uid_field = 'userid__userid' if uid_is_rel else 'userid'
+            rows = list(qs.values('timestamp', uid_field, 'cardno', 'door__name', 'device__device_name', 'event_type', 'result', 'info')[:2000])
+        else:
+            rows = list(qs)[:2000]
         if export == 'csv':
             import csv, io
             buf = io.StringIO(); w = csv.writer(buf)
             w.writerow(['timestamp','userid','cardno','door','device','event_type','result','info'])
             for r in rows:
-                w.writerow([
-                    r['timestamp'], r['userid__userid'], r['cardno'], r['door__name'],
-                    r['device__device_name'], r['event_type'], r['result'], (r['info'] or '')[:120]
-                ])
+                if using_legacy:
+                    w.writerow([
+                        r['timestamp'], r.get(uid_field) if isinstance(r, dict) else '', r['cardno'], r['door__name'],
+                        r['device__device_name'], r['event_type'], r['result'], (r['info'] or '')[:120]
+                    ])
+                else:
+                    w.writerow([
+                        r.get('timestamp'), '', r.get('cardno',''), '',
+                        (r.get('device') or {}).get('device_name',''), r.get('event_type',''), r.get('result',''), (r.get('info') or '')[:120]
+                    ])
             from django.http import HttpResponse
             resp = HttpResponse(buf.getvalue(), content_type='text/csv')
             resp['Content-Disposition'] = 'attachment; filename=access_logs.csv'
@@ -2248,7 +4082,11 @@ def access_logs_list(request: HttpRequest):
                 pdf = io.BytesIO(); c = canvas.Canvas(pdf, pagesize=A4); y = 810; c.setFont('Helvetica',10)
                 c.drawString(30, 825, 'Access Logs Report')
                 for r in rows[:250]:
-                    line = f"{r['timestamp']} uid={r['userid__userid']} door={r['door__name']} ev={r['event_type']} res={r['result']}"
+                    if using_legacy:
+                        uid_val = r.get(uid_field) if isinstance(r, dict) else ''
+                        line = f"{r['timestamp']} uid={uid_val} door={r['door__name']} ev={r['event_type']} res={r['result']}"
+                    else:
+                        line = f"{r.get('timestamp')} dev={(r.get('device') or {}).get('device_name','')} ev={r.get('event_type','')}"
                     c.drawString(30, y, line[:115]); y -= 12
                     if y < 40: c.showPage(); y = 810; c.setFont('Helvetica',10)
                 c.save(); pdf.seek(0)
@@ -2260,20 +4098,39 @@ def access_logs_list(request: HttpRequest):
                 pass
     # JSON inline response for unified Logs tab
     if request.headers.get('Accept','').lower().startswith('application/json'):
-        items = list(qs.values('timestamp','userid__userid','cardno','door__name','device__device_name','event_type','result','info')[:200])
+        if using_legacy:
+            try:
+                uid_is_rel = bool(getattr(LegacyAccessLog._meta.get_field('userid'), 'is_relation', False))
+            except Exception:
+                uid_is_rel = False
+            uid_field = 'userid__userid' if uid_is_rel else 'userid'
+            items = list(qs.values('timestamp', uid_field, 'cardno', 'door__name', 'device__device_name', 'event_type', 'result', 'info')[:200])
+            out = []
+            for r in items:
+                out.append({
+                    'datetime': r['timestamp'],
+                    'employee': r.get(uid_field),
+                    'event': r['event_type'],
+                    'details': (r['info'] or '')[:120],
+                })
+            return JsonResponse({'items': out})
+
+        items = list(qs)[:200]
         out = []
         for r in items:
             out.append({
-                'datetime': r['timestamp'],
-                'employee': r['userid__userid'],
-                'event': r['event_type'],
-                'details': (r['info'] or '')[:120],
+                'datetime': r.get('timestamp'),
+                'employee': '',
+                'event': r.get('event_type') or '',
+                'details': (r.get('info') or '')[:120],
             })
         return JsonResponse({'items': out})
     per_page = int(request.GET.get('per_page') or 50)
     per_page = max(10, min(per_page, 200))
     page = _paginate(qs, request, per_page=per_page)
-    return render(request,'agent/access_logs_list.html',{'form': form, 'page': page})
+    if request.GET.get('embed') == '1':
+        return render(request, 'agent/access_logs_embed.html', {'page': page, 'missing': (not using_legacy), 'qs': _qs_without_page(request)})
+    return render(request,'agent/access_logs_list.html',{'form': form, 'page': page, 'missing': (not using_legacy)})
 
 def access_logs_view_module(request: HttpRequest):
     """JSON endpoint for module-based audit logs for Personnel menu.
@@ -2302,17 +4159,31 @@ def access_logs_view_module(request: HttpRequest):
     
     # Module filtering
     if module and module != 'all':
-        # Map frontend module names to database values
-        module_map = {
-            'employees': 'employee',
-            'employee': 'employee',
-            'departments': 'department',
-            'department': 'department',
-            'cards': 'issuecard',
-            'issuecard': 'issuecard',
-        }
-        db_module = module_map.get(module, module)
-        qs = qs.filter(module=db_module)
+        # Special: module scopes (aggregate multiple AuditLog.module values)
+        if module in ('personnel', 'personal'):
+            # ALL logs from PERSONAL module tabs
+            qs = qs.filter(module__in=['employee', 'department', 'issuecard'])
+        elif module in ('equipment', 'echipamente'):
+            # ECHIPAMENTE tabs: device + area + dst + commands
+            qs = qs.filter(module__in=['device', 'area', 'dst', 'command'])
+        elif module in ('access', 'acces'):
+            # CONTROL ACCES tabs: doors + access configuration entities
+            qs = qs.filter(module__in=['door', 'access-level', 'time-segment', 'holiday'])
+        elif module in ('reports', 'rapoarte'):
+            # Report-backed audit sources (best-effort)
+            qs = qs.filter(module__in=['accesslog'])
+        else:
+            # Map frontend module names to database values
+            module_map = {
+                'employees': 'employee',
+                'employee': 'employee',
+                'departments': 'department',
+                'department': 'department',
+                'cards': 'issuecard',
+                'issuecard': 'issuecard',
+            }
+            db_module = module_map.get(module, module)
+            qs = qs.filter(module=db_module)
     
     # Entity ID filtering (for specific employee/dept/card journal)
     if entity_id:
@@ -2360,7 +4231,16 @@ def access_logs_view_module(request: HttpRequest):
         module_map_display = {
             'employee': 'Angajat',
             'department': 'Departament',
-            'issuecard': 'Card'
+            'issuecard': 'Card',
+            'device': 'Dispozitiv',
+            'door': 'Ușă',
+            'access-level': 'Nivel Acces',
+            'time-segment': 'Interval Orar',
+            'holiday': 'Sărbătoare',
+            'area': 'Zonă Acces',
+            'dst': 'Ora de vară',
+            'command': 'Comenzi',
+            'accesslog': 'AccessLog',
         }
         module_display = module_map_display.get(r['module'], r['module'])
         
@@ -2487,28 +4367,48 @@ def access_level_create(request: HttpRequest):
     if not request.user.is_authenticated or not request.user.is_staff:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
+    is_modal = (request.GET.get('modal') == '1') or (request.headers.get('x-requested-with') == 'XMLHttpRequest')
     if request.method == 'POST':
         form = AccessLevelForm(request.POST)
         if form.is_valid():
             form.save()
             _broadcast_access_level_change('created', form.instance)
-            return render(request,'agent/access_level_saved.html',{'obj': form.instance, 'created': True})
+            _audit_log(
+                request,
+                module='access-level',
+                action='create',
+                entity_id=form.instance.id,
+                entity_name=getattr(form.instance, 'name', '') or '',
+            )
+            tpl = 'agent/access_level_saved_inner.html' if is_modal else 'agent/access_level_saved.html'
+            return render(request, tpl, {'obj': form.instance, 'created': True})
     else: form = AccessLevelForm()
-    return render(request,'agent/access_level_form.html',{'form': form})
+    tpl = 'agent/access_level_form_inner.html' if is_modal else 'agent/access_level_form.html'
+    return render(request, tpl, {'form': form})
 
 def access_level_edit(request: HttpRequest, pk: int):
     if not request.user.is_authenticated or not request.user.is_staff:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
+    is_modal = (request.GET.get('modal') == '1') or (request.headers.get('x-requested-with') == 'XMLHttpRequest')
     lvl = AccessLevel.objects.get(pk=pk)
     if request.method == 'POST':
         form = AccessLevelForm(request.POST, instance=lvl)
         if form.is_valid():
             form.save()
             _broadcast_access_level_change('updated', form.instance)
-            return render(request,'agent/access_level_saved.html',{'obj': form.instance, 'created': False})
+            _audit_log(
+                request,
+                module='access-level',
+                action='update',
+                entity_id=form.instance.id,
+                entity_name=getattr(form.instance, 'name', '') or '',
+            )
+            tpl = 'agent/access_level_saved_inner.html' if is_modal else 'agent/access_level_saved.html'
+            return render(request, tpl, {'obj': form.instance, 'created': False})
     else: form = AccessLevelForm(instance=lvl)
-    return render(request,'agent/access_level_form.html',{'form': form, 'obj': lvl})
+    tpl = 'agent/access_level_form_inner.html' if is_modal else 'agent/access_level_form.html'
+    return render(request, tpl, {'form': form, 'obj': lvl})
 
 def access_level_delete(request: HttpRequest, pk: int):
     if not request.user.is_authenticated or not request.user.is_staff or request.method != 'POST': return JsonResponse({'ok': False,'error':'unauthorized'}, status=403)
@@ -2516,6 +4416,13 @@ def access_level_delete(request: HttpRequest, pk: int):
         obj = AccessLevel.objects.get(pk=pk)
         obj.delete()
         _broadcast_access_level_change('deleted', obj, deleted=True)
+        _audit_log(
+            request,
+            module='access-level',
+            action='delete',
+            entity_id=int(pk),
+            entity_name=getattr(obj, 'name', '') or '',
+        )
         return JsonResponse({'ok': True})
     except Exception as e: return JsonResponse({'ok': False,'error':str(e)}, status=400)
 
@@ -2816,6 +4723,32 @@ def door_open(request: HttpRequest, device_id: int, door_id: str):
     except Door.DoesNotExist:
         pass
     _persist_and_broadcast_status(device_id, "OPEN")
+    try:
+        import json as _json
+        from .event_codes import describe_door_event_type as _door_desc
+        door_obj = Door.objects.filter(id=door_id).select_related('device').first()
+        dev = getattr(door_obj, 'device', None) if door_obj else None
+        details = _json.dumps({
+            'door_id': int(door_id) if str(door_id).isdigit() else door_id,
+            'door_name': getattr(door_obj, 'name', '') if door_obj else '',
+            'device_id': device_id,
+            'device_name': getattr(dev, 'name', '') if dev else '',
+            'area_name': getattr(dev, 'area_name', '') if dev else '',
+            'event_description': _door_desc('door.open'),
+            'status_text': 'OK',
+            'verify_mode': 'Others',
+        }, ensure_ascii=False)
+    except Exception:
+        details = ''
+    if not getattr(request, '_agent_suppress_door_audit', False):
+        _audit_log(
+            request,
+            module='door',
+            action='open',
+            entity_id=int(door_id) if str(door_id).isdigit() else 0,
+            entity_name=f"door_id={door_id} device_id={device_id}",
+            details=details,
+        )
     return JsonResponse({"ok": True})
 
 def door_close(request: HttpRequest, device_id: int, door_id: str):
@@ -2833,6 +4766,32 @@ def door_close(request: HttpRequest, device_id: int, door_id: str):
     except Door.DoesNotExist:
         pass
     _persist_and_broadcast_status(device_id, "CLOSED")
+    try:
+        import json as _json
+        from .event_codes import describe_door_event_type as _door_desc
+        door_obj = Door.objects.filter(id=door_id).select_related('device').first()
+        dev = getattr(door_obj, 'device', None) if door_obj else None
+        details = _json.dumps({
+            'door_id': int(door_id) if str(door_id).isdigit() else door_id,
+            'door_name': getattr(door_obj, 'name', '') if door_obj else '',
+            'device_id': device_id,
+            'device_name': getattr(dev, 'name', '') if dev else '',
+            'area_name': getattr(dev, 'area_name', '') if dev else '',
+            'event_description': _door_desc('door.close'),
+            'status_text': 'OK',
+            'verify_mode': 'Others',
+        }, ensure_ascii=False)
+    except Exception:
+        details = ''
+    if not getattr(request, '_agent_suppress_door_audit', False):
+        _audit_log(
+            request,
+            module='door',
+            action='close',
+            entity_id=int(door_id) if str(door_id).isdigit() else 0,
+            entity_name=f"door_id={door_id} device_id={device_id}",
+            details=details,
+        )
     return JsonResponse({"ok": True})
 
 def door_normal_open(request: HttpRequest, device_id: int, door_id: str):
@@ -2843,6 +4802,32 @@ def door_normal_open(request: HttpRequest, device_id: int, door_id: str):
         return JsonResponse({"ok": False, "error": "device_unavailable"}, status=409)
     _set_lock_state(door_id, None)
     _persist_and_broadcast_status(device_id, "NORMAL_OPEN")
+    try:
+        import json as _json
+        from .event_codes import describe_door_event_type as _door_desc
+        door_obj = Door.objects.filter(id=door_id).select_related('device').first()
+        dev = getattr(door_obj, 'device', None) if door_obj else None
+        details = _json.dumps({
+            'door_id': int(door_id) if str(door_id).isdigit() else door_id,
+            'door_name': getattr(door_obj, 'name', '') if door_obj else '',
+            'device_id': device_id,
+            'device_name': getattr(dev, 'name', '') if dev else '',
+            'area_name': getattr(dev, 'area_name', '') if dev else '',
+            'event_description': _door_desc('door.normal_open'),
+            'status_text': 'OK',
+            'verify_mode': 'Others',
+        }, ensure_ascii=False)
+    except Exception:
+        details = ''
+    if not getattr(request, '_agent_suppress_door_audit', False):
+        _audit_log(
+            request,
+            module='door',
+            action='normal-open',
+            entity_id=int(door_id) if str(door_id).isdigit() else 0,
+            entity_name=f"door_id={door_id} device_id={device_id}",
+            details=details,
+        )
     return JsonResponse({"ok": True})
 
 def door_lock(request: HttpRequest, device_id: int, door_id: str):
@@ -2859,6 +4844,32 @@ def door_lock(request: HttpRequest, device_id: int, door_id: str):
     except Door.DoesNotExist:
         _set_lock_state(door_id, 'LOCKED')
     _persist_and_broadcast_status(device_id, "LOCKED")
+    try:
+        import json as _json
+        from .event_codes import describe_door_event_type as _door_desc
+        door_obj = Door.objects.filter(id=door_id).select_related('device').first()
+        dev = getattr(door_obj, 'device', None) if door_obj else None
+        details = _json.dumps({
+            'door_id': int(door_id) if str(door_id).isdigit() else door_id,
+            'door_name': getattr(door_obj, 'name', '') if door_obj else '',
+            'device_id': device_id,
+            'device_name': getattr(dev, 'name', '') if dev else '',
+            'area_name': getattr(dev, 'area_name', '') if dev else '',
+            'event_description': _door_desc('door.lock'),
+            'status_text': 'OK',
+            'verify_mode': 'Others',
+        }, ensure_ascii=False)
+    except Exception:
+        details = ''
+    if not getattr(request, '_agent_suppress_door_audit', False):
+        _audit_log(
+            request,
+            module='door',
+            action='lock',
+            entity_id=int(door_id) if str(door_id).isdigit() else 0,
+            entity_name=f"door_id={door_id} device_id={device_id}",
+            details=details,
+        )
     return JsonResponse({"ok": True})
 
 def door_unlock(request: HttpRequest, device_id: int, door_id: str):
@@ -2874,6 +4885,32 @@ def door_unlock(request: HttpRequest, device_id: int, door_id: str):
     except Door.DoesNotExist:
         _set_lock_state(door_id, None)
     _persist_and_broadcast_status(device_id, "UNLOCKED")
+    try:
+        import json as _json
+        from .event_codes import describe_door_event_type as _door_desc
+        door_obj = Door.objects.filter(id=door_id).select_related('device').first()
+        dev = getattr(door_obj, 'device', None) if door_obj else None
+        details = _json.dumps({
+            'door_id': int(door_id) if str(door_id).isdigit() else door_id,
+            'door_name': getattr(door_obj, 'name', '') if door_obj else '',
+            'device_id': device_id,
+            'device_name': getattr(dev, 'name', '') if dev else '',
+            'area_name': getattr(dev, 'area_name', '') if dev else '',
+            'event_description': _door_desc('door.unlock'),
+            'status_text': 'OK',
+            'verify_mode': 'Others',
+        }, ensure_ascii=False)
+    except Exception:
+        details = ''
+    if not getattr(request, '_agent_suppress_door_audit', False):
+        _audit_log(
+            request,
+            module='door',
+            action='unlock',
+            entity_id=int(door_id) if str(door_id).isdigit() else 0,
+            entity_name=f"door_id={door_id} device_id={device_id}",
+            details=details,
+        )
     return JsonResponse({"ok": True})
 
 def door_cancel_alarm(request: HttpRequest, device_id: int, door_id: str):
@@ -2883,6 +4920,32 @@ def door_cancel_alarm(request: HttpRequest, device_id: int, door_id: str):
     if not ok:
         return JsonResponse({"ok": False, "error": "device_unavailable"}, status=409)
     _persist_and_broadcast_status(device_id, "ALARM_CLEARED")
+    try:
+        import json as _json
+        from .event_codes import describe_door_event_type as _door_desc
+        door_obj = Door.objects.filter(id=door_id).select_related('device').first()
+        dev = getattr(door_obj, 'device', None) if door_obj else None
+        details = _json.dumps({
+            'door_id': int(door_id) if str(door_id).isdigit() else door_id,
+            'door_name': getattr(door_obj, 'name', '') if door_obj else '',
+            'device_id': device_id,
+            'device_name': getattr(dev, 'name', '') if dev else '',
+            'area_name': getattr(dev, 'area_name', '') if dev else '',
+            'event_description': _door_desc('door.cancel_alarm'),
+            'status_text': 'OK',
+            'verify_mode': 'Others',
+        }, ensure_ascii=False)
+    except Exception:
+        details = ''
+    if not getattr(request, '_agent_suppress_door_audit', False):
+        _audit_log(
+            request,
+            module='door',
+            action='cancel-alarm',
+            entity_id=int(door_id) if str(door_id).isdigit() else 0,
+            entity_name=f"door_id={door_id} device_id={device_id}",
+            details=details,
+        )
     return JsonResponse({"ok": True})
 
 
@@ -2969,6 +5032,14 @@ def device_toggle(request: HttpRequest, device_id: int):
                 # Return the status for the specific device_id (if we have a row)
                 ds = DeviceStatus.objects.filter(device=dev).first()
                 ua = ds.updated_at.isoformat() if ds and ds.updated_at else None
+                _audit_log(
+                    request,
+                    module='device',
+                    action='toggle',
+                    entity_id=int(device_id),
+                    entity_name=getattr(dev, 'name', '') or '',
+                    details=f"online={bool(ds.online) if ds else bool(target)} updated_at={ua}",
+                )
                 return JsonResponse({'ok': True, 'online': bool(ds.online) if ds else bool(target), 'updated_at': ua})
 
         # Default: update single device status
@@ -2990,6 +5061,14 @@ def device_toggle(request: HttpRequest, device_id: int):
                 }))
         except Exception:
             pass
+        _audit_log(
+            request,
+            module='device',
+            action='toggle',
+            entity_id=int(device_id),
+            entity_name=getattr(dev, 'name', '') or '',
+            details=f"online={bool(ds.online)} updated_at={ua}",
+        )
         return JsonResponse({'ok': True, 'online': ds.online, 'updated_at': ua})
     except Exception as e:
         return JsonResponse({'ok': False, 'error': str(e)}, status=500)
@@ -3077,6 +5156,31 @@ def door_pk_open(request: HttpRequest, pk: int):
             door.is_open = True
             door.save(update_fields=['is_open','last_state_change'])
             _persist_and_broadcast_status(door.device.id, 'OPEN')
+        try:
+            import json as _json
+            from .event_codes import describe_door_event_type as _door_desc
+            dev = getattr(door, 'device', None)
+            details = _json.dumps({
+                'door_id': getattr(door, 'id', pk),
+                'door_name': getattr(door, 'name', '') or '',
+                'device_id': getattr(dev, 'id', None) or 0,
+                'device_name': getattr(dev, 'name', '') if dev else '',
+                'area_name': getattr(dev, 'area_name', '') if dev else '',
+                'event_description': _door_desc('door.open'),
+                'status_text': 'OK',
+                'verify_mode': 'Others',
+            }, ensure_ascii=False)
+        except Exception:
+            details = ''
+        if not getattr(request, '_agent_suppress_door_audit', False):
+            _audit_log(
+                request,
+                module='door',
+                action='open',
+                entity_id=int(getattr(door, 'id', 0) or 0),
+                entity_name=f"door_id={getattr(door, 'id', pk)} device_id={getattr(getattr(door, 'device', None), 'id', 0) or 0}",
+                details=details,
+            )
         return JsonResponse({'ok': True})
     except Exception as e:
         return JsonResponse({'ok': False,'error': str(e)}, status=400)
@@ -3093,6 +5197,31 @@ def door_pk_close(request: HttpRequest, pk: int):
             door.is_open = False
             door.save(update_fields=['is_open','last_state_change'])
             _persist_and_broadcast_status(door.device.id, 'CLOSED')
+        try:
+            import json as _json
+            from .event_codes import describe_door_event_type as _door_desc
+            dev = getattr(door, 'device', None)
+            details = _json.dumps({
+                'door_id': getattr(door, 'id', pk),
+                'door_name': getattr(door, 'name', '') or '',
+                'device_id': getattr(dev, 'id', None) or 0,
+                'device_name': getattr(dev, 'name', '') if dev else '',
+                'area_name': getattr(dev, 'area_name', '') if dev else '',
+                'event_description': _door_desc('door.close'),
+                'status_text': 'OK',
+                'verify_mode': 'Others',
+            }, ensure_ascii=False)
+        except Exception:
+            details = ''
+        if not getattr(request, '_agent_suppress_door_audit', False):
+            _audit_log(
+                request,
+                module='door',
+                action='close',
+                entity_id=int(getattr(door, 'id', 0) or 0),
+                entity_name=f"door_id={getattr(door, 'id', pk)} device_id={getattr(getattr(door, 'device', None), 'id', 0) or 0}",
+                details=details,
+            )
         return JsonResponse({'ok': True})
     except Exception as e:
         return JsonResponse({'ok': False,'error': str(e)}, status=400)
@@ -3323,6 +5452,948 @@ def command_recent(request: HttpRequest):
             'executed_at': l.executed_at and l.executed_at.isoformat(),
         })
     return JsonResponse({'ok': True,'items': items,'commands': items})
+
+
+def commands_full_list(request: HttpRequest):
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    limit = min(int(request.GET.get('limit', '200') or 200), 500)
+    logs = CommandLog.objects.select_related('device', 'door').order_by('-created_at')[:limit]
+    rows = []
+    for l in logs:
+        rows.append({
+            'id': l.id,
+            'device': getattr(l.device, 'name', None),
+            'serial': getattr(l.device, 'serial_number', ''),
+            'door': getattr(l.door, 'name', None),
+            'command': l.command,
+            'status': l.status,
+            'result': l.result,
+            'created_at': l.created_at.isoformat(),
+            'executed_at': l.executed_at and l.executed_at.isoformat(),
+        })
+    return JsonResponse({'ok': True, 'items': rows})
+
+
+def commands_export_csv(request: HttpRequest):
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    import csv, io
+    logs = CommandLog.objects.select_related('device', 'door').order_by('-created_at')[:2000]
+    buf = io.StringIO(); w = csv.writer(buf)
+    w.writerow(['id','device','serial','door','command','status','result','created_at','executed_at'])
+    for l in logs:
+        w.writerow([
+            l.id,
+            getattr(l.device, 'name', ''),
+            getattr(l.device, 'serial_number', ''),
+            getattr(l.door, 'name', ''),
+            l.command,
+            l.status,
+            l.result,
+            l.created_at.isoformat(),
+            l.executed_at.isoformat() if l.executed_at else '',
+        ])
+    resp = HttpResponse(buf.getvalue(), content_type='text/csv')
+    resp['Content-Disposition'] = 'attachment; filename=commands.csv'
+    return resp
+
+
+def commands_clear(request: HttpRequest):
+    if not request.user.is_authenticated or not request.user.is_staff or request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    deleted, _ = CommandLog.objects.all().delete()
+    try:
+        _audit_log(
+            request,
+            module='command',
+            action='delete',
+            entity_id=0,
+            entity_name='CommandLog',
+            details=f"deleted={deleted}",
+        )
+    except Exception:
+        pass
+    return JsonResponse({'ok': True, 'deleted': deleted})
+
+
+# ===================== CSV Export/Import (uniform, re-importable) =====================
+
+def _csv_http_response(filename: str, content: str) -> HttpResponse:
+    # UTF-8 with BOM for Excel compatibility
+    payload = ('\ufeff' + (content or ''))
+    resp = HttpResponse(payload, content_type='text/csv; charset=utf-8')
+    resp['Content-Disposition'] = f'attachment; filename={filename}'
+    return resp
+
+
+def _parse_bool(val, default=False) -> bool:
+    if val is None:
+        return bool(default)
+    s = str(val).strip().lower()
+    if s in ('1', 'true', 'yes', 'y', 'on', 'da'):
+        return True
+    if s in ('0', 'false', 'no', 'n', 'off', 'nu'):
+        return False
+    return bool(default)
+
+
+def _parse_int(val, default=None):
+    try:
+        if val is None or str(val).strip() == '':
+            return default
+        return int(str(val).strip())
+    except Exception:
+        return default
+
+
+def _parse_time(val):
+    from datetime import time
+    s = ('' if val is None else str(val)).strip()
+    if not s:
+        return None
+    # accept HH:MM or HH:MM:SS
+    try:
+        parts = s.split(':')
+        hh = int(parts[0]); mm = int(parts[1]) if len(parts) > 1 else 0
+        ss = int(parts[2]) if len(parts) > 2 else 0
+        return time(hour=hh, minute=mm, second=ss)
+    except Exception:
+        return None
+
+
+def _parse_date(val):
+    from datetime import date
+    s = ('' if val is None else str(val)).strip()
+    if not s:
+        return None
+    # accept YYYY-MM-DD
+    try:
+        y, m, d = s.split('-')
+        return date(int(y), int(m), int(d))
+    except Exception:
+        return None
+
+
+def _split_list(val: str):
+    s = (val or '').strip()
+    if not s:
+        return []
+    return [x.strip() for x in s.split('|') if x.strip()]
+
+
+def _read_csv_upload(request: HttpRequest):
+    """Return list[dict] rows from uploaded CSV file.
+
+    Accepts delimiter ';' (preferred) or ',' or '\t'.
+    """
+    if 'file' not in request.FILES:
+        return [], 'missing-file'
+    f = request.FILES['file']
+    try:
+        raw = f.read()
+        text = raw.decode('utf-8-sig', errors='ignore')
+    except Exception:
+        return [], 'decode-error'
+    import csv, io
+    sample = text[:4096]
+    delim = ';'
+    try:
+        sniffer = csv.Sniffer()
+        dialect = sniffer.sniff(sample, delimiters=';,\t,')
+        delim = getattr(dialect, 'delimiter', ';') or ';'
+    except Exception:
+        delim = ';'
+    reader = csv.DictReader(io.StringIO(text), delimiter=delim)
+    rows = []
+    for r in reader:
+        if not r:
+            continue
+        # normalize keys
+        rr = {}
+        for k, v in r.items():
+            kk = (k or '').strip().lower()
+            if not kk:
+                continue
+            rr[kk] = (v or '').strip() if isinstance(v, str) else v
+        # skip empty lines
+        if any((str(v).strip() for v in rr.values())):
+            rows.append(rr)
+    return rows, None
+
+
+def csv_export(request: HttpRequest, module: str):
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    mod = (module or '').lower().strip()
+
+    import csv, io
+    buf = io.StringIO(newline='')
+    w = csv.writer(buf, delimiter=';')
+
+    if mod in ('door', 'doors'):
+        w.writerow(['id', 'name', 'device_serial', 'device_name', 'location', 'normally_open', 'enabled'])
+        for d in Door.objects.select_related('device').order_by('name'):
+            w.writerow([
+                d.id,
+                d.name,
+                getattr(d.device, 'serial_number', '') if d.device_id else '',
+                getattr(d.device, 'name', '') if d.device_id else '',
+                d.location or '',
+                int(bool(d.normally_open)),
+                int(bool(d.enabled)),
+            ])
+        return _csv_http_response('doors.csv', buf.getvalue())
+
+    if mod in ('time-segment', 'time-segments', 'segment', 'segments'):
+        w.writerow(['id', 'name', 'start_time', 'end_time', 'days_mask'])
+        for s in TimeSegment.objects.order_by('name'):
+            w.writerow([s.id, s.name, s.start_time.isoformat(), s.end_time.isoformat(), int(s.days_mask)])
+        return _csv_http_response('time_segments.csv', buf.getvalue())
+
+    if mod in ('holiday', 'holidays'):
+        w.writerow(['id', 'date', 'name', 'description'])
+        for h in Holiday.objects.order_by('date'):
+            w.writerow([h.id, h.date.isoformat(), h.name, h.description or ''])
+        return _csv_http_response('holidays.csv', buf.getvalue())
+
+    if mod in ('access-level', 'access-levels', 'level', 'levels'):
+        w.writerow(['id', 'name', 'description', 'doors', 'time_segments'])
+        qs = AccessLevel.objects.prefetch_related('doors', 'time_segments').order_by('name')
+        for lvl in qs:
+            doors = '|'.join(lvl.doors.values_list('name', flat=True))
+            segs = '|'.join(lvl.time_segments.values_list('name', flat=True))
+            w.writerow([lvl.id, lvl.name, lvl.description or '', doors, segs])
+        return _csv_http_response('access_levels.csv', buf.getvalue())
+
+    if mod in ('device', 'devices'):
+        w.writerow([
+            'id', 'name', 'serial_number', 'device_type', 'comm_mode', 'ip_address', 'port',
+            'enabled', 'scanner_linked', 'scanner_type',
+            'rs485_port', 'rs485_baudrate', 'rs485_address',
+            'area_name', 'time_zone'
+        ])
+        for dev in Device.objects.order_by('name'):
+            w.writerow([
+                dev.id,
+                dev.name,
+                dev.serial_number or '',
+                dev.device_type or '',
+                dev.comm_mode or '',
+                dev.ip_address or '',
+                int(dev.port or 0),
+                int(bool(dev.enabled)),
+                int(bool(dev.scanner_linked)),
+                dev.scanner_type or '',
+                dev.rs485_port or '',
+                int(dev.rs485_baudrate or 0),
+                '' if dev.rs485_address is None else int(dev.rs485_address),
+                dev.area_name or '',
+                dev.time_zone or '',
+            ])
+        return _csv_http_response('devices.csv', buf.getvalue())
+
+    if mod in ('dst', 'dstime'):
+        w.writerow([
+            'id', 'name',
+            'start_month', 'start_week', 'start_weekday', 'start_hour', 'start_minute',
+            'end_month', 'end_week', 'end_weekday', 'end_hour', 'end_minute',
+            'offset_minutes'
+        ])
+        for d in DSTime.objects.order_by('name'):
+            w.writerow([
+                d.id, d.name,
+                d.start_month, d.start_week, d.start_weekday, d.start_hour, d.start_minute,
+                d.end_month, d.end_week, d.end_weekday, d.end_hour, d.end_minute,
+                d.offset_minutes,
+            ])
+        return _csv_http_response('dst.csv', buf.getvalue())
+
+    if mod in ('area', 'areas'):
+        if not LegacyArea:
+            return JsonResponse({'ok': False, 'error': 'missing-model'}, status=400)
+        try:
+            from .models import LegacyAreaMeta
+        except Exception:
+            LegacyAreaMeta = None  # type: ignore
+        areas = list(LegacyArea.objects.order_by('areaname'))
+        name_by_id = {int(a.id): (a.areaname or '') for a in areas}
+        meta_by_id = {}
+        if LegacyAreaMeta is not None:
+            try:
+                meta_rows = LegacyAreaMeta.objects.filter(legacy_area_id__in=list(name_by_id.keys()))
+                meta_by_id = {int(m.legacy_area_id): m for m in meta_rows}
+            except Exception:
+                meta_by_id = {}
+        # export uses parent_code to keep files stable across DBs
+        code_by_id = {}
+        for aid, m in meta_by_id.items():
+            try:
+                code_by_id[int(aid)] = (getattr(m, 'code', None) or '').strip()
+            except Exception:
+                code_by_id[int(aid)] = ''
+        w.writerow(['id', 'name', 'code', 'parent_code', 'remarks'])
+        for a in areas:
+            mid = int(a.id)
+            m = meta_by_id.get(mid)
+            code = (getattr(m, 'code', None) if m else None) or ''
+            remarks = (getattr(m, 'remarks', None) if m else None) or ''
+            parent_id = None
+            try:
+                parent_id = int(getattr(m, 'parent_legacy_area_id', None)) if m and getattr(m, 'parent_legacy_area_id', None) else None
+            except Exception:
+                parent_id = None
+            parent_code = code_by_id.get(parent_id or 0, '') if parent_id else ''
+            w.writerow([mid, a.areaname or '', code, parent_code, remarks])
+        return _csv_http_response('areas.csv', buf.getvalue())
+
+    if mod in ('command', 'commands'):
+        # Export the command log queue (importable to re-create pending commands if needed)
+        w.writerow(['id', 'command', 'device_serial', 'device_name', 'door_name'])
+        logs = CommandLog.objects.select_related('device', 'door').order_by('-created_at')[:2000]
+        for l in logs:
+            w.writerow([
+                l.id,
+                l.command or '',
+                getattr(l.device, 'serial_number', '') if l.device_id else '',
+                getattr(l.device, 'name', '') if l.device_id else '',
+                getattr(l.door, 'name', '') if l.door_id else '',
+            ])
+        return _csv_http_response('commands_queue.csv', buf.getvalue())
+
+    # ===== PERSONAL MODULES =====
+    if mod in ('department', 'departments', 'dept', 'depts'):
+        if not Dept:
+            return JsonResponse({'ok': False, 'error': 'missing-model:Dept'}, status=400)
+        w.writerow(['id', 'name', 'code'])
+        for d in Dept.objects.order_by('DeptName'):
+            w.writerow([int(d.id), getattr(d, 'DeptName', '') or '', getattr(d, 'code', '') or ''])
+        return _csv_http_response('departments.csv', buf.getvalue())
+
+    if mod in ('employee', 'employees'):
+        w.writerow([
+            'id', 'legacy_userid', 'first_name', 'last_name', 'card_number',
+            'dept_id', 'dept_name',
+            'mobile_phone', 'gender', 'active', 'acc_startdate', 'acc_enddate'
+        ])
+        dept_name_by_id = {}
+        if Dept:
+            try:
+                dept_name_by_id = {int(d.id): (getattr(d, 'DeptName', '') or '') for d in Dept.objects.all()}
+            except Exception:
+                dept_name_by_id = {}
+        for e in Employee.objects.order_by('last_name', 'first_name'):
+            dept_id = int(e.dept_id) if e.dept_id else ''
+            dept_name = dept_name_by_id.get(int(e.dept_id), '') if e.dept_id else ''
+            w.writerow([
+                int(e.id),
+                '' if e.legacy_userid is None else int(e.legacy_userid),
+                e.first_name or '',
+                e.last_name or '',
+                e.card_number or '',
+                dept_id,
+                dept_name,
+                e.mobile_phone or '',
+                e.gender or '',
+                int(bool(e.active)),
+                e.acc_startdate.isoformat() if e.acc_startdate else '',
+                e.acc_enddate.isoformat() if e.acc_enddate else '',
+            ])
+        return _csv_http_response('employees.csv', buf.getvalue())
+
+    if mod in ('issuecard', 'issuecards', 'card', 'cards', 'employee-card', 'employee-cards'):
+        w.writerow([
+            'id', 'employee_id', 'employee_legacy_userid', 'employee_name',
+            'card_number', 'slot', 'status', 'site_code', 'valid_until'
+        ])
+        qs = EmployeeCard.objects.select_related('employee').order_by('-created_at')
+        for c in qs:
+            emp = getattr(c, 'employee', None)
+            emp_name = ''
+            if emp is not None:
+                emp_name = f"{getattr(emp,'first_name','') or ''} {getattr(emp,'last_name','') or ''}".strip()
+            w.writerow([
+                int(c.id),
+                int(emp.id) if emp is not None else '',
+                '' if (emp is None or emp.legacy_userid is None) else int(emp.legacy_userid),
+                emp_name,
+                c.card_number or '',
+                c.slot or '',
+                c.status or '',
+                c.site_code or '',
+                c.valid_until.isoformat() if c.valid_until else '',
+            ])
+        return _csv_http_response('employee_cards.csv', buf.getvalue())
+
+    return JsonResponse({'ok': False, 'error': f'unknown-module:{mod}'}, status=400)
+
+
+def csv_import(request: HttpRequest, module: str):
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'method-not-allowed'}, status=405)
+    mod = (module or '').lower().strip()
+    rows, err = _read_csv_upload(request)
+    if err:
+        return JsonResponse({'ok': False, 'error': err}, status=400)
+
+    created = 0
+    updated = 0
+    failed = 0
+    errors = []
+
+    def _fail(i, msg):
+        nonlocal failed
+        failed += 1
+        if len(errors) < 50:
+            errors.append({'row': i, 'error': msg})
+
+    # ===== ACCESS MODULES =====
+    if mod in ('door', 'doors'):
+        for i, r in enumerate(rows, start=2):
+            try:
+                name = (r.get('name') or '').strip()
+                if not name:
+                    _fail(i, 'missing-name');
+                    continue
+                pk = _parse_int(r.get('id'))
+                obj = Door.objects.filter(pk=pk).first() if pk else Door.objects.filter(name=name).first()
+                is_new = obj is None
+                if obj is None:
+                    obj = Door(name=name)
+                obj.name = name
+                obj.location = (r.get('location') or '').strip()
+                obj.normally_open = _parse_bool(r.get('normally_open'), False)
+                obj.enabled = _parse_bool(r.get('enabled'), True)
+                # device resolve
+                dev = None
+                dev_serial = (r.get('device_serial') or '').strip()
+                dev_name = (r.get('device_name') or '').strip()
+                if dev_serial:
+                    dev = Device.objects.filter(serial_number=dev_serial).first()
+                if dev is None and dev_name:
+                    dev = Device.objects.filter(name=dev_name).first()
+                obj.device = dev
+                obj.save()
+                if is_new:
+                    created += 1
+                    _audit_log(request, module='door', action='create', entity_id=int(obj.id), entity_name=obj.name or '')
+                else:
+                    updated += 1
+                    _audit_log(request, module='door', action='update', entity_id=int(obj.id), entity_name=obj.name or '')
+            except Exception as ex:
+                _fail(i, str(ex))
+        return JsonResponse({'ok': True, 'module': mod, 'created': created, 'updated': updated, 'failed': failed, 'errors': errors})
+
+    if mod in ('time-segment', 'time-segments', 'segment', 'segments'):
+        for i, r in enumerate(rows, start=2):
+            try:
+                name = (r.get('name') or '').strip()
+                if not name:
+                    _fail(i, 'missing-name');
+                    continue
+                st = _parse_time(r.get('start_time'))
+                en = _parse_time(r.get('end_time'))
+                if not st or not en:
+                    _fail(i, 'missing-start-or-end-time');
+                    continue
+                dm = _parse_int(r.get('days_mask'), 127)
+                pk = _parse_int(r.get('id'))
+                obj = TimeSegment.objects.filter(pk=pk).first() if pk else TimeSegment.objects.filter(name=name).first()
+                is_new = obj is None
+                if obj is None:
+                    obj = TimeSegment(name=name)
+                obj.name = name
+                obj.start_time = st
+                obj.end_time = en
+                obj.days_mask = int(dm or 127)
+                obj.full_clean()
+                obj.save()
+                if is_new:
+                    created += 1
+                    _audit_log(request, module='time-segment', action='create', entity_id=int(obj.id), entity_name=obj.name or '')
+                else:
+                    updated += 1
+                    _audit_log(request, module='time-segment', action='update', entity_id=int(obj.id), entity_name=obj.name or '')
+            except Exception as ex:
+                _fail(i, str(ex))
+        return JsonResponse({'ok': True, 'module': mod, 'created': created, 'updated': updated, 'failed': failed, 'errors': errors})
+
+    if mod in ('holiday', 'holidays'):
+        for i, r in enumerate(rows, start=2):
+            try:
+                dt = _parse_date(r.get('date'))
+                if not dt:
+                    _fail(i, 'missing-date');
+                    continue
+                name = (r.get('name') or '').strip() or dt.isoformat()
+                desc = (r.get('description') or '').strip()
+                pk = _parse_int(r.get('id'))
+                obj = Holiday.objects.filter(pk=pk).first() if pk else Holiday.objects.filter(date=dt).first()
+                is_new = obj is None
+                if obj is None:
+                    obj = Holiday(date=dt)
+                obj.date = dt
+                obj.name = name
+                obj.description = desc
+                obj.save()
+                if is_new:
+                    created += 1
+                    _audit_log(request, module='holiday', action='create', entity_id=int(obj.id), entity_name=obj.name or '')
+                else:
+                    updated += 1
+                    _audit_log(request, module='holiday', action='update', entity_id=int(obj.id), entity_name=obj.name or '')
+            except Exception as ex:
+                _fail(i, str(ex))
+        return JsonResponse({'ok': True, 'module': mod, 'created': created, 'updated': updated, 'failed': failed, 'errors': errors})
+
+    if mod in ('access-level', 'access-levels', 'level', 'levels'):
+        for i, r in enumerate(rows, start=2):
+            try:
+                name = (r.get('name') or '').strip()
+                if not name:
+                    _fail(i, 'missing-name');
+                    continue
+                desc = (r.get('description') or '').strip()
+                pk = _parse_int(r.get('id'))
+                obj = AccessLevel.objects.filter(pk=pk).first() if pk else AccessLevel.objects.filter(name=name).first()
+                is_new = obj is None
+                if obj is None:
+                    obj = AccessLevel(name=name)
+                obj.name = name
+                obj.description = desc
+                obj.save()
+
+                door_names = _split_list(r.get('doors') or '')
+                seg_names = _split_list(r.get('time_segments') or '')
+                if door_names:
+                    doors = list(Door.objects.filter(name__in=door_names))
+                    obj.doors.set(doors)
+                if seg_names:
+                    segs = list(TimeSegment.objects.filter(name__in=seg_names))
+                    obj.time_segments.set(segs)
+
+                if is_new:
+                    created += 1
+                    _audit_log(request, module='access-level', action='create', entity_id=int(obj.id), entity_name=obj.name or '')
+                else:
+                    updated += 1
+                    _audit_log(request, module='access-level', action='update', entity_id=int(obj.id), entity_name=obj.name or '')
+            except Exception as ex:
+                _fail(i, str(ex))
+        return JsonResponse({'ok': True, 'module': mod, 'created': created, 'updated': updated, 'failed': failed, 'errors': errors})
+
+    # ===== PERSONAL MODULES =====
+    if mod in ('department', 'departments', 'dept', 'depts'):
+        if not Dept:
+            return JsonResponse({'ok': False, 'error': 'missing-model:Dept'}, status=400)
+        for i, r in enumerate(rows, start=2):
+            try:
+                name = (r.get('name') or r.get('deptname') or '').strip()
+                code = (r.get('code') or '').strip()
+                pk = _parse_int(r.get('id'))
+
+                obj = None
+                if pk:
+                    obj = Dept.objects.filter(pk=int(pk)).first()
+                if obj is None and code:
+                    obj = Dept.objects.filter(code=code).first()
+                if obj is None and name:
+                    obj = Dept.objects.filter(DeptName=name).first()
+
+                is_new = obj is None
+                if obj is None:
+                    if not name:
+                        _fail(i, 'missing-name')
+                        continue
+                    obj = Dept()
+                    if pk:
+                        try:
+                            setattr(obj, 'id', int(pk))
+                        except Exception:
+                            pass
+
+                if name:
+                    obj.DeptName = name
+                if code:
+                    try:
+                        obj.code = code
+                    except Exception:
+                        pass
+
+                obj.save()
+                if is_new:
+                    created += 1
+                    _audit_log(request, module='department', action='create', entity_id=int(obj.id), entity_name=getattr(obj, 'DeptName', '') or '')
+                else:
+                    updated += 1
+                    _audit_log(request, module='department', action='update', entity_id=int(obj.id), entity_name=getattr(obj, 'DeptName', '') or '')
+            except Exception as ex:
+                _fail(i, str(ex))
+        return JsonResponse({'ok': True, 'module': mod, 'created': created, 'updated': updated, 'failed': failed, 'errors': errors})
+
+    if mod in ('employee', 'employees'):
+        dept_by_name = {}
+        if Dept:
+            try:
+                dept_by_name = {str(getattr(d, 'DeptName', '') or '').strip().lower(): int(d.id) for d in Dept.objects.all()}
+            except Exception:
+                dept_by_name = {}
+
+        for i, r in enumerate(rows, start=2):
+            try:
+                pk = _parse_int(r.get('id'))
+                legacy_userid = _parse_int(r.get('legacy_userid') or r.get('userid'))
+                first_name = (r.get('first_name') or '').strip()
+                last_name = (r.get('last_name') or '').strip()
+                card_number = (r.get('card_number') or '').strip()
+
+                obj = None
+                if pk:
+                    obj = Employee.objects.filter(pk=int(pk)).first()
+                if obj is None and legacy_userid is not None:
+                    obj = Employee.objects.filter(legacy_userid=int(legacy_userid)).first()
+                if obj is None and card_number:
+                    obj = Employee.objects.filter(card_number=card_number).first()
+                is_new = obj is None
+
+                if obj is None:
+                    if not first_name or not last_name:
+                        _fail(i, 'missing-first-or-last-name')
+                        continue
+                    if not card_number:
+                        _fail(i, 'missing-card_number')
+                        continue
+                    obj = Employee(first_name=first_name, last_name=last_name, card_number=card_number)
+
+                # Avoid clobbering fields with blanks
+                if first_name:
+                    obj.first_name = first_name
+                if last_name:
+                    obj.last_name = last_name
+                if card_number:
+                    other = Employee.objects.filter(card_number=card_number).exclude(pk=obj.pk).first() if obj.pk else Employee.objects.filter(card_number=card_number).first()
+                    if other and (not obj.pk or other.pk != obj.pk):
+                        _fail(i, f'duplicate-card_number:{card_number}')
+                        continue
+                    obj.card_number = card_number
+
+                if legacy_userid is not None:
+                    other = Employee.objects.filter(legacy_userid=int(legacy_userid)).exclude(pk=obj.pk).first() if obj.pk else Employee.objects.filter(legacy_userid=int(legacy_userid)).first()
+                    if other and (not obj.pk or other.pk != obj.pk):
+                        _fail(i, f'duplicate-legacy_userid:{legacy_userid}')
+                        continue
+                    obj.legacy_userid = int(legacy_userid)
+
+                dept_id = _parse_int(r.get('dept_id'))
+                if dept_id is None:
+                    dept_name = (r.get('dept_name') or '').strip().lower()
+                    if dept_name and dept_by_name:
+                        dept_id = dept_by_name.get(dept_name)
+                if dept_id is not None:
+                    obj.dept_id = int(dept_id)
+
+                obj.mobile_phone = (r.get('mobile_phone') or obj.mobile_phone or '').strip()
+                obj.gender = (r.get('gender') or obj.gender or '').strip()
+                obj.active = _parse_bool(r.get('active'), obj.active if obj.pk else True)
+                obj.acc_startdate = _parse_date(r.get('acc_startdate')) or obj.acc_startdate
+                obj.acc_enddate = _parse_date(r.get('acc_enddate')) or obj.acc_enddate
+
+                obj.full_clean()
+                obj.save()
+
+                if is_new:
+                    created += 1
+                    _audit_log(request, module='employee', action='create', entity_id=int(obj.id), entity_name=f"{obj.first_name} {obj.last_name}".strip())
+                else:
+                    updated += 1
+                    _audit_log(request, module='employee', action='update', entity_id=int(obj.id), entity_name=f"{obj.first_name} {obj.last_name}".strip())
+            except Exception as ex:
+                _fail(i, str(ex))
+        return JsonResponse({'ok': True, 'module': mod, 'created': created, 'updated': updated, 'failed': failed, 'errors': errors})
+
+    if mod in ('issuecard', 'issuecards', 'card', 'cards', 'employee-card', 'employee-cards'):
+        for i, r in enumerate(rows, start=2):
+            try:
+                pk = _parse_int(r.get('id'))
+                card_number = (r.get('card_number') or '').strip()
+                if not card_number:
+                    _fail(i, 'missing-card_number')
+                    continue
+
+                emp = None
+                emp_id = _parse_int(r.get('employee_id'))
+                emp_legacy = _parse_int(r.get('employee_legacy_userid'))
+                if emp_id is not None:
+                    emp = Employee.objects.filter(pk=int(emp_id)).first()
+                if emp is None and emp_legacy is not None:
+                    emp = Employee.objects.filter(legacy_userid=int(emp_legacy)).first()
+                if emp is None:
+                    _fail(i, 'missing-or-invalid-employee')
+                    continue
+
+                obj = None
+                if pk:
+                    obj = EmployeeCard.objects.filter(pk=int(pk)).first()
+                if obj is None and card_number:
+                    obj = EmployeeCard.objects.filter(card_number=card_number).first()
+                is_new = obj is None
+                if obj is None:
+                    obj = EmployeeCard(employee=emp, card_number=card_number)
+
+                obj.employee = emp
+                # unique card_number enforced by model
+                obj.card_number = card_number
+                obj.slot = (r.get('slot') or obj.slot or 'additional').strip() or 'additional'
+                obj.status = (r.get('status') or obj.status or 'Active').strip() or 'Active'
+                obj.site_code = (r.get('site_code') or obj.site_code or '').strip()
+                obj.valid_until = _parse_date(r.get('valid_until')) or obj.valid_until
+                obj.full_clean()
+                obj.save()
+
+                if is_new:
+                    created += 1
+                    _audit_log(request, module='issuecard', action='create', entity_id=int(obj.id), entity_name=obj.card_number or '')
+                else:
+                    updated += 1
+                    _audit_log(request, module='issuecard', action='update', entity_id=int(obj.id), entity_name=obj.card_number or '')
+            except Exception as ex:
+                _fail(i, str(ex))
+        return JsonResponse({'ok': True, 'module': mod, 'created': created, 'updated': updated, 'failed': failed, 'errors': errors})
+
+    # ===== EQUIPMENT MODULES =====
+    if mod in ('device', 'devices'):
+        for i, r in enumerate(rows, start=2):
+            try:
+                name = (r.get('name') or '').strip()
+                serial = (r.get('serial_number') or '').strip()
+                pk = _parse_int(r.get('id'))
+                obj = None
+                if pk:
+                    obj = Device.objects.filter(pk=pk).first()
+                if obj is None and serial:
+                    obj = Device.objects.filter(serial_number=serial).first()
+                if obj is None and name:
+                    obj = Device.objects.filter(name=name).first()
+                is_new = obj is None
+                if obj is None:
+                    if not name:
+                        _fail(i, 'missing-name');
+                        continue
+                    obj = Device(name=name)
+                if name:
+                    obj.name = name
+                if serial:
+                    obj.serial_number = serial
+
+                obj.device_type = (r.get('device_type') or obj.device_type or 'access_panel').strip() or 'access_panel'
+                obj.comm_mode = (r.get('comm_mode') or obj.comm_mode or 'tcp').strip() or 'tcp'
+                obj.ip_address = (r.get('ip_address') or '').strip() or None
+                obj.port = _parse_int(r.get('port'), obj.port or 4370) or (obj.port or 4370)
+                obj.enabled = _parse_bool(r.get('enabled'), obj.enabled if obj.pk else True)
+                obj.scanner_linked = _parse_bool(r.get('scanner_linked'), obj.scanner_linked if obj.pk else False)
+                obj.scanner_type = (r.get('scanner_type') or obj.scanner_type or '').strip()
+                obj.rs485_port = (r.get('rs485_port') or obj.rs485_port or '').strip()
+                obj.rs485_baudrate = _parse_int(r.get('rs485_baudrate'), obj.rs485_baudrate or 9600) or (obj.rs485_baudrate or 9600)
+                obj.rs485_address = _parse_int(r.get('rs485_address'), obj.rs485_address)
+                obj.area_name = (r.get('area_name') or obj.area_name or '').strip()
+                obj.time_zone = (r.get('time_zone') or obj.time_zone or '').strip()
+                obj.save()
+
+                if is_new:
+                    created += 1
+                    _audit_log(request, module='device', action='create', entity_id=int(obj.id), entity_name=obj.name or '')
+                else:
+                    updated += 1
+                    _audit_log(request, module='device', action='update', entity_id=int(obj.id), entity_name=obj.name or '')
+            except Exception as ex:
+                _fail(i, str(ex))
+        return JsonResponse({'ok': True, 'module': mod, 'created': created, 'updated': updated, 'failed': failed, 'errors': errors})
+
+    if mod in ('dst', 'dstime'):
+        for i, r in enumerate(rows, start=2):
+            try:
+                name = (r.get('name') or '').strip()
+                if not name:
+                    _fail(i, 'missing-name');
+                    continue
+                pk = _parse_int(r.get('id'))
+                obj = DSTime.objects.filter(pk=pk).first() if pk else DSTime.objects.filter(name=name).first()
+                is_new = obj is None
+                if obj is None:
+                    obj = DSTime(name=name)
+                obj.name = name
+                obj.start_month = _parse_int(r.get('start_month'), 1) or 1
+                obj.start_week = (r.get('start_week') or 'last').strip() or 'last'
+                obj.start_weekday = _parse_int(r.get('start_weekday'), 0) or 0
+                obj.start_hour = _parse_int(r.get('start_hour'), 3) or 3
+                obj.start_minute = _parse_int(r.get('start_minute'), 0) or 0
+                obj.end_month = _parse_int(r.get('end_month'), 10) or 10
+                obj.end_week = (r.get('end_week') or 'last').strip() or 'last'
+                obj.end_weekday = _parse_int(r.get('end_weekday'), 0) or 0
+                obj.end_hour = _parse_int(r.get('end_hour'), 3) or 3
+                obj.end_minute = _parse_int(r.get('end_minute'), 0) or 0
+                obj.offset_minutes = _parse_int(r.get('offset_minutes'), 60) or 60
+                obj.save()
+                if is_new:
+                    created += 1
+                    _audit_log(request, module='dst', action='create', entity_id=int(obj.id), entity_name=obj.name or '')
+                else:
+                    updated += 1
+                    _audit_log(request, module='dst', action='update', entity_id=int(obj.id), entity_name=obj.name or '')
+            except Exception as ex:
+                _fail(i, str(ex))
+        return JsonResponse({'ok': True, 'module': mod, 'created': created, 'updated': updated, 'failed': failed, 'errors': errors})
+
+    if mod in ('area', 'areas'):
+        if not LegacyArea:
+            return JsonResponse({'ok': False, 'error': 'missing-model'}, status=400)
+        try:
+            from .models import LegacyAreaMeta
+        except Exception:
+            LegacyAreaMeta = None  # type: ignore
+        # First pass: build code -> legacy_area_id mapping
+        meta_code_map = {}
+        if LegacyAreaMeta is not None:
+            try:
+                for m in LegacyAreaMeta.objects.exclude(code__isnull=True).exclude(code=''):
+                    meta_code_map[(m.code or '').strip()] = int(m.legacy_area_id)
+            except Exception:
+                meta_code_map = {}
+
+        pending_parent_links = []  # (legacy_area_id, parent_code)
+
+        for i, r in enumerate(rows, start=2):
+            try:
+                name = (r.get('name') or '').strip()
+                code = (r.get('code') or '').strip()
+                if not name:
+                    _fail(i, 'missing-name');
+                    continue
+                if not code:
+                    _fail(i, 'missing-code');
+                    continue
+                parent_code = (r.get('parent_code') or '').strip()
+                remarks = (r.get('remarks') or '').strip()
+                pk = _parse_int(r.get('id'))
+
+                obj = None
+                if pk:
+                    obj = LegacyArea.objects.filter(pk=int(pk)).first()
+                if obj is None and code and (code in meta_code_map):
+                    obj = LegacyArea.objects.filter(pk=int(meta_code_map[code])).first()
+                if obj is None:
+                    # fallback by name
+                    obj = LegacyArea.objects.filter(areaname=name).first()
+                is_new = obj is None
+                if obj is None:
+                    obj, _ = LegacyArea.objects.get_or_create(areaname=name)
+                else:
+                    obj.areaname = name
+                    obj.save(update_fields=['areaname'])
+
+                # write meta
+                if LegacyAreaMeta is not None:
+                    try:
+                        LegacyAreaMeta.objects.update_or_create(
+                            legacy_area_id=int(obj.id),
+                            defaults={
+                                'code': code,
+                                'remarks': remarks,
+                                # parent set in second pass
+                            },
+                        )
+                    except Exception:
+                        pass
+                meta_code_map[code] = int(obj.id)
+                if parent_code:
+                    pending_parent_links.append((int(obj.id), parent_code))
+                if is_new:
+                    created += 1
+                    _audit_log(request, module='area', action='create', entity_id=int(getattr(obj, 'id', 0) or 0), entity_name=name, details=f"code={code}")
+                else:
+                    updated += 1
+                    _audit_log(request, module='area', action='update', entity_id=int(getattr(obj, 'id', 0) or 0), entity_name=name, details=f"code={code}")
+            except Exception as ex:
+                _fail(i, str(ex))
+
+        # Second pass: apply parent_code links
+        if LegacyAreaMeta is not None and pending_parent_links:
+            for (aid, pcode) in pending_parent_links:
+                try:
+                    pid = meta_code_map.get(pcode)
+                    if not pid:
+                        continue
+                    LegacyAreaMeta.objects.filter(legacy_area_id=int(aid)).update(parent_legacy_area_id=int(pid))
+                except Exception:
+                    continue
+
+        return JsonResponse({'ok': True, 'module': mod, 'created': created, 'updated': updated, 'failed': failed, 'errors': errors})
+
+    if mod in ('command', 'commands'):
+        for i, r in enumerate(rows, start=2):
+            try:
+                cmd = (r.get('command') or '').strip()
+                if not cmd:
+                    _fail(i, 'missing-command');
+                    continue
+                dev_serial = (r.get('device_serial') or '').strip()
+                dev_name = (r.get('device_name') or '').strip()
+                door_name = (r.get('door_name') or '').strip()
+                dev = None
+                if dev_serial:
+                    dev = Device.objects.filter(serial_number=dev_serial).first()
+                if dev is None and dev_name:
+                    dev = Device.objects.filter(name=dev_name).first()
+                door = Door.objects.filter(name=door_name).first() if door_name else None
+                log = CommandLog.objects.create(device=dev, door=door, command=cmd, status='PENDING')
+                _broadcast_command(log)
+                created += 1
+                _audit_log(
+                    request,
+                    module='command',
+                    action='create',
+                    entity_id=int(log.id),
+                    entity_name=(cmd or '')[:120],
+                    details=f"device_id={getattr(dev, 'id', '') or ''} door_id={getattr(door, 'id', '') or ''}",
+                )
+            except Exception as ex:
+                _fail(i, str(ex))
+        return JsonResponse({'ok': True, 'module': mod, 'created': created, 'updated': 0, 'failed': failed, 'errors': errors})
+
+    return JsonResponse({'ok': False, 'error': f'unknown-module:{mod}'}, status=400)
+
+
+def command_manual_create(request: HttpRequest):
+    if not request.user.is_authenticated or not request.user.is_staff or request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    import json
+    try:
+        payload = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        payload = request.POST.dict()
+    cmd = (payload.get('command') or '').strip()
+    if not cmd:
+        return JsonResponse({'ok': False, 'error': 'missing-command'}, status=400)
+    device_id = payload.get('device_id')
+    door_id = payload.get('door_id')
+    device = Device.objects.filter(pk=device_id).first() if device_id else None
+    door = Door.objects.filter(pk=door_id).first() if door_id else None
+    log = CommandLog.objects.create(device=device, door=door, command=cmd, status='PENDING')
+    _broadcast_command(log)
+    try:
+        _audit_log(
+            request,
+            module='command',
+            action='create',
+            entity_id=int(log.id),
+            entity_name=(cmd or '')[:120],
+            details=f"device_id={getattr(device, 'id', '') or ''} door_id={getattr(door, 'id', '') or ''}",
+        )
+    except Exception:
+        pass
+    return JsonResponse({'ok': True, 'id': log.id})
 
 def employee_create(request: HttpRequest):
     if not request.user.is_authenticated or not request.user.is_staff:

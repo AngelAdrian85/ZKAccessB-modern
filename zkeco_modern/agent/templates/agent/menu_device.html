@@ -1,105 +1,2455 @@
 {% extends 'agent/base_legacy.html' %}
-{% block title %}Devices{% endblock %}
+{% load static %}
+{% block title %}Echipamente – Modul Unificat{% endblock %}
+
 {% block content %}
 <style>
-body { background: #1a3a52; }
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; padding: 20px; }
-.panel { 
-  background: #1e4a6b; 
-  border: 1px solid #3d6a8b; 
-  padding: 16px; 
-  border-radius: 4px; 
-  color: #e8f0f8;
-}
-.panel h2 { 
-  font-size: 14px; 
-  color: #7db3d9; 
-  border-bottom: 2px solid #3da5d9; 
-  padding-bottom: 8px; 
-  margin: 0 0 12px 0;
-}
-.panel ul { 
-  list-style: none; 
-  padding: 0; 
-  margin: 0; 
-}
-.panel li { 
-  margin: 6px 0; 
-}
-.op { 
-  display: inline-block; 
-  padding: 8px 12px; 
-  background: #2d5a7b; 
-  color: #7db3d9; 
-  border: 1px solid #3d6a8b; 
-  border-radius: 3px; 
-  text-decoration: none; 
-  font-size: 12px; 
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.op:hover { 
-  background: #3d7a9b; 
-  border-color: #4d8aab; 
-  color: #9fd2f1;
-}
-.accent { background: #0f2433; border: 1px solid #2d5a7b; }
-.footer { 
-  padding: 16px; 
-  text-align: center; 
-  color: #7db3d9; 
-  font-size: 11px; 
-  border-top: 1px solid #3d6a8b;
-  margin-top: 12px;
-}
+  /* IMPORTANT:
+     Scope everything to .device-container to avoid changing the left sidebar.
+     Global selectors like body/h2/section were styling the sidebar headings too. */
+  .device-container {
+    /* Match dashboard/personnel palette */
+    --bg-primary: #0f2a47;
+    --bg-secondary: #1a3a52;
+    --bg-tertiary: #2a4a62;
+    --bg-panel: #1a3a52;
+    --color-primary: #1e90ff;
+    --color-primary-dark: #1573d6;
+    --color-accent: #2ebf96;
+    --text-light: #e8f1f8;
+    --text-muted: #a8c5d8;
+    --border-color: #3a5a72;
+
+    max-width: 98%;
+    margin: 6px auto;
+    background: #1e4a6b;
+    padding: 6px;
+    border-radius: 2px;
+    border: 2px solid #3da5d9;
+  }
+
+  .device-container,
+  .device-container * { box-sizing: border-box; }
+
+  .device-container > h2 {
+    color: #7db3d9;
+    border-bottom: 1px solid #3da5d9;
+    padding-bottom: 4px;
+    margin: 0 0 6px 0;
+    font-size: 13px;
+    font-weight: bold;
+  }
+
+  /* Tabs (match PERSONAL screenshot) */
+  .device-container .tabs {
+    display: flex;
+    gap: 2px;
+    margin-bottom: 6px;
+    border-bottom: 1px solid #3d6a8b;
+  }
+  .device-container .tab-btn {
+    padding: 4px 12px;
+    background: #163247;
+    border: 1px solid #3d6a8b;
+    border-bottom: none;
+    color: #9fd2f1;
+    cursor: pointer;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    border-radius: 2px 2px 0 0;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .device-container .tab-btn:hover {
+    color: #7db3d9;
+  }
+  .device-container .tab-btn.active {
+    background: #3da5d9;
+    color: #fff;
+    border-color: #3da5d9;
+  }
+
+  .device-container section { padding: 6px; background: transparent; }
+  .device-container .tab-content { display: none; }
+  .device-container .tab-content.active { display: block; }
+  .device-container .hidden { display: none !important; }
+
+  .device-container .action-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 6px;
+    background: #163247;
+    border: 1px solid #3d6a8b;
+    margin-bottom: 4px;
+    border-radius: 2px;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .device-container .action-bar.split { justify-content: space-between; align-items: center; }
+  .device-container .action-bar .left-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .device-container .action-bar .right-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+  .device-container .action-bar a, .device-container .action-bar button {
+    padding: 3px 8px;
+    background: #2d5a7b;
+    color: #fff;
+    border: 1px solid #3d6a8b;
+    border-radius: 2px;
+    font-size: 9px;
+    cursor: pointer;
+    font-weight: 600;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    transition: all 0.2s;
+  }
+  .device-container .action-bar a:hover, .device-container .action-bar button:hover { background: #3d6a8b; transform: translateY(-1px); }
+
+  /* Button variants (match PERSONAL) */
+  .device-container .action-bar .btn-primary { background: #3da5d9; border-color: #2c8ec0; }
+  .device-container .action-bar .btn-primary:hover { background: #2c8ec0; }
+  .device-container .action-bar .btn-secondary { background: #2d5a7b; border-color: #3d6a8b; }
+  .device-container .action-bar .btn-secondary:hover { background: #3d6a8b; }
+  .device-container .action-bar .btn-success { background: #2da44e; border-color: #238636; }
+  .device-container .action-bar .btn-success:hover { background: #238636; }
+  .device-container .action-bar .btn-danger { background: #d94a3d; border-color: #b03a2e; }
+  .device-container .action-bar .btn-danger:hover { background: #b03a2e; }
+
+  .device-container .iframe-wrapper { border: 1px solid var(--border-color); border-radius: 3px; overflow: hidden; background: var(--bg-panel); box-shadow: inset 0 1px 2px rgba(0,0,0,0.25); }
+  .device-container .iframe-wrapper iframe { width: 100%; border: none; height: clamp(620px, 78vh, 1200px); min-height: 620px; background: var(--bg-panel); }
+
+  .device-container .form-grid,
+  #modalDiscovery .form-grid, #modalAreaEdit .form-grid, #modalDstEdit .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 8px;
+    margin: 8px 0 12px 0;
+  }
+  .device-container .form-grid label,
+  #modalDiscovery .form-grid label, #modalAreaEdit .form-grid label, #modalDstEdit .form-grid label {
+    font-size: 11px;
+    color: var(--text-muted);
+    display: block;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.2px;
+  }
+  .device-container .form-grid input, .device-container .form-grid select,
+  #modalDiscovery .form-grid input, #modalDiscovery .form-grid select,
+  #modalAreaEdit .form-grid input, #modalAreaEdit .form-grid select,
+  #modalDstEdit .form-grid input, #modalDstEdit .form-grid select {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-primary);
+    color: var(--text-light);
+    border-radius: 3px;
+  }
+
+  .form-grid-tight { margin-top: 0 !important; }
+  #modalDstEdit .dst-inline { display:flex; gap:6px; }
+  #modalDstEdit .dst-small { width: 90px; }
+
+  .device-container .table-shell, #modalDiscovery .table-shell { border: 2px solid rgba(61,165,217,0.40); border-radius: 4px; overflow: hidden; background: rgba(12, 36, 60, 0.55); box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 10px rgba(0,0,0,0.28); }
+
+  .hint { color: var(--text-muted); font-size: 12px; }
+  .mt-tight { margin-top: -2px; }
+  .mt-10 { margin-top: 10px; }
+  .mt-6 { margin-top: 6px; }
+  .td-center-muted { text-align: center; color: var(--text-muted); }
+  .td-center-error { text-align: center; color: #ffbdbd; }
+  .required-star { color: #88c3ff; }
+  .input-compact { width: 160px; padding: 6px 8px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-light); border-radius: 3px; }
+  .col-w-120 { width: 120px; }
+  .col-w-140 { width: 140px; }
+  .col-w-150 { width: 150px; }
+  .col-w-210 { width: 210px; }
+  .ip-link { color: var(--color-primary); text-decoration: underline; }
+  .inline-msg { font-weight: 800; }
+  .inline-msg.loading { color: var(--text-muted); }
+  .inline-msg.error { color: #ff9999; }
+
+  /* Modal helper classes (used by multiple modals) */
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .modal-status { color: var(--text-muted); font-size: 12px; margin-left: 8px; }
+  .btn-group { display: flex; gap: 8px; align-items: center; }
+  .btn-group.right { align-items: center; }
+  /* Ultra-compact table grid like Personal */
+  .device-container .table-shell table, #modalDiscovery .table-shell table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+    font-size: 9px;
+    background: #163247;
+    color: var(--text-light);
+  }
+  .device-container .table-shell thead, #modalDiscovery .table-shell thead {
+    background: linear-gradient(to bottom, #3da5d9 0%, #2d7ba5 100%);
+    color: #fff;
+  }
+  .device-container .table-shell th, #modalDiscovery .table-shell th {
+    padding: 3px 4px;
+    text-align: left;
+    font-weight: 800;
+    border-right: 1px solid #2d7ba5;
+    border-bottom: 1px solid rgba(61, 106, 139, 0.95);
+    text-transform: uppercase;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .device-container .table-shell th:last-child, #modalDiscovery .table-shell th:last-child { border-right: none; }
+
+  .device-container .table-shell td, #modalDiscovery .table-shell td {
+    padding: 2px 4px;
+    border-right: 1px solid rgba(61, 106, 139, 0.80);
+    border-bottom: 1px solid rgba(61, 106, 139, 0.60);
+    color: var(--text-light);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: top;
+  }
+  .device-container .table-shell td:last-child, #modalDiscovery .table-shell td:last-child { border-right: none; }
+  .device-container .table-shell tbody tr, #modalDiscovery .table-shell tbody tr { border-bottom: 1px solid rgba(61, 106, 139, 0.80); transition: background 120ms ease; }
+  .device-container .table-shell tbody tr:hover, #modalDiscovery .table-shell tbody tr:hover { background: #1e4a6b; }
+  .device-container .table-shell tbody tr:nth-child(even), #modalDiscovery .table-shell tbody tr:nth-child(even) { background: #0f2433; }
+  .device-container .badge { padding: 2px 6px; border-radius: 10px; font-size: 10px; color: #fff; }
+  .device-container .badge-green { background: #2ebf96; }
+  .device-container .badge-orange { background: #ff9800; }
+  .device-container .progress, #modalDiscovery .progress { height: 8px; background: #214566; border-radius: 3px; overflow: hidden; }
+  .device-container .progress-bar, #modalDiscovery .progress-bar { height: 100%; width: 0%; background: var(--color-primary); transition: width 0.2s ease; }
+
+  /* Row actions (used in Zona/DST tables) */
+  .device-container .row-action {
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-tertiary);
+    color: var(--text-light);
+    font-weight: 900;
+    font-size: 10px;
+    cursor: pointer;
+    transition: transform 120ms ease, box-shadow 160ms ease, background 160ms ease, border-color 160ms ease;
+  }
+  .device-container .row-action:hover { transform: translateY(-1px); border-color: rgba(30,144,255,0.75); box-shadow: 0 12px 22px rgba(0,0,0,0.28); }
+  .device-container .row-action:active { transform: translateY(0); }
+  .device-container .row-action.delete {
+    border-color: rgba(255,255,255,0.18);
+    background: #ff6b6b;
+    color: #101820;
+  }
+  .device-container .row-action.delete:hover { border-color: rgba(255,107,107,0.85); box-shadow: 0 12px 22px rgba(255,107,107,0.16); }
+
+  /* Modals live outside .device-container, so they need the same local CSS vars */
+  #modalDiscovery, #modalDeviceCreate, #modalScannerCreate, #modalPrompt,
+  #modalAreaEdit, #modalDstEdit, #modalConfirm, #modalAreaResult,
+  #modalAuditLogs, #modalCsvImport {
+    --bg-primary: #0f2a47;
+    --bg-secondary: #1a3a52;
+    --bg-tertiary: #2a4a62;
+    --bg-panel: #1a3a52;
+    --color-primary: #1e90ff;
+    --color-primary-dark: #1573d6;
+    --color-accent: #2ebf96;
+    --text-light: #e8f1f8;
+    --text-muted: #a8c5d8;
+    --border-color: #3a5a72;
+  }
+  /* Animated modals (device + scanner + discovery + prompt/confirm/result) */
+  #modalDiscovery.modal-backdrop,
+  #modalDeviceCreate.modal-backdrop, #modalScannerCreate.modal-backdrop, #modalPrompt.modal-backdrop,
+  #modalAreaEdit.modal-backdrop, #modalDstEdit.modal-backdrop,
+  #modalConfirm.modal-backdrop, #modalAreaResult.modal-backdrop,
+  #modalAuditLogs.modal-backdrop, #modalCsvImport.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.72);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1001;
+    padding: 12px;
+    opacity: 0;
+    transition: opacity 160ms ease;
+  }
+  #modalDiscovery.modal-backdrop.is-open,
+  #modalDeviceCreate.modal-backdrop.is-open, #modalScannerCreate.modal-backdrop.is-open, #modalPrompt.modal-backdrop.is-open,
+  #modalAreaEdit.modal-backdrop.is-open, #modalDstEdit.modal-backdrop.is-open,
+  #modalConfirm.modal-backdrop.is-open, #modalAreaResult.modal-backdrop.is-open,
+  #modalAuditLogs.modal-backdrop.is-open, #modalCsvImport.modal-backdrop.is-open { opacity: 1; }
+
+  #modalDiscovery .modal,
+  #modalDeviceCreate .modal, #modalScannerCreate .modal, #modalPrompt .modal,
+  #modalAreaEdit .modal, #modalDstEdit .modal, #modalConfirm .modal, #modalAreaResult .modal,
+  #modalAuditLogs .modal, #modalCsvImport .modal {
+    background: #1e4a6b;
+    border: 2px solid #3da5d9;
+    border-radius: 2px;
+    width: min(980px, 96vw);
+    max-height: 92vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.55);
+    transform: translateY(10px) scale(0.985);
+    opacity: 0;
+    transition: transform 180ms ease, opacity 180ms ease, box-shadow 180ms ease;
+    overflow: hidden;
+  }
+  #modalDiscovery.modal-backdrop.is-open .modal,
+  #modalDeviceCreate.modal-backdrop.is-open .modal, #modalScannerCreate.modal-backdrop.is-open .modal, #modalPrompt.modal-backdrop.is-open .modal,
+  #modalAreaEdit.modal-backdrop.is-open .modal, #modalDstEdit.modal-backdrop.is-open .modal,
+  #modalConfirm.modal-backdrop.is-open .modal, #modalAreaResult.modal-backdrop.is-open .modal,
+  #modalAuditLogs.modal-backdrop.is-open .modal, #modalCsvImport.modal-backdrop.is-open .modal {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+    box-shadow: 0 22px 56px rgba(0,0,0,0.60);
+  }
+
+  /* Size tuning for compact utility modals */
+  #modalDiscovery .modal { width: min(900px, 96vw); }
+  #modalConfirm .modal, #modalAreaResult .modal, #modalPrompt .modal { width: min(560px, 92vw); }
+  /* Match the compact modal proportions used across the app */
+  #modalAreaEdit .modal { width: min(560px, 92vw); }
+  #modalDstEdit .modal { width: min(720px, 92vw); }
+  #modalCsvImport .modal { width: min(560px, 92vw); }
+
+  /* Center modal titles (keep only one title, centered) */
+  #modalAreaEdit .modal-header, #modalDstEdit .modal-header {
+    justify-content: space-between;
+  }
+  #modalAreaEdit .modal-header .modal-spacer, #modalDstEdit .modal-header .modal-spacer {
+    width: 30px;
+    height: 30px;
+    flex: 0 0 30px;
+  }
+  #modalAreaEdit .modal-header .modal-title, #modalDstEdit .modal-header .modal-title {
+    flex: 1;
+    text-align: center;
+    position: relative;
+    z-index: 2;
+  }
+
+  #modalDiscovery .modal-header,
+  #modalDeviceCreate .modal-header, #modalScannerCreate .modal-header,
+  #modalAreaEdit .modal-header, #modalDstEdit .modal-header,
+  #modalPrompt .modal-header, #modalConfirm .modal-header, #modalAreaResult .modal-header {
+    background: #163247;
+    border-bottom: 1px solid #3da5d9;
+    padding: 4px 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    color: #7db3d9;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    position: relative;
+  }
+  #modalDiscovery .modal-header::before,
+  #modalDeviceCreate .modal-header::before, #modalScannerCreate .modal-header::before,
+  #modalAreaEdit .modal-header::before, #modalDstEdit .modal-header::before,
+  #modalPrompt .modal-header::before, #modalConfirm .modal-header::before, #modalAreaResult .modal-header::before,
+  #modalDiscovery .modal-header::after,
+  #modalDeviceCreate .modal-header::after, #modalScannerCreate .modal-header::after,
+  #modalAreaEdit .modal-header::after, #modalDstEdit .modal-header::after,
+  #modalPrompt .modal-header::after, #modalConfirm .modal-header::after, #modalAreaResult .modal-header::after { display:none; content:none; }
+
+  /* Audit logs modal uses the same chrome */
+  #modalAuditLogs .modal-header{background:#163247;border-bottom:1px solid #3da5d9;padding:4px 6px;display:flex;align-items:center;justify-content:space-between;gap:8px;color:#7db3d9;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.3px;position:relative;}
+  #modalAuditLogs .modal-header::before,#modalAuditLogs .modal-header::after{display:none;content:none;}
+  #modalAuditLogs .modal-body{padding:6px;overflow:auto;color:#e8f0f8;}
+  #modalAuditLogs .modal-header button{width:22px;height:22px;border-radius:2px;background:#163247;border:1px solid #3d6a8b;color:#9fd2f1;font-size:14px;cursor:pointer;transition:transform 120ms ease, background 120ms ease, border-color 120ms ease;}
+  #modalAuditLogs .modal-header button:hover{transform:translateY(-1px);background:#3da5d9;border-color:#3da5d9;color:#fff;}
+
+  /* CSV import modal helpers */
+  #modalCsvImport .import-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+  #modalCsvImport input[type="file"]{color:#e8f0f8;max-width:520px;}
+  #modalCsvImport .import-status{margin-top:8px;color:var(--text-muted);font-size:12px;white-space:pre-wrap;}
+
+  #modalAreaEdit .modal-header.compact, #modalDstEdit .modal-header.compact { padding: 8px 10px; font-size: 12px; }
+  #modalAreaEdit .modal-header button, #modalDstEdit .modal-header button {
+    background: rgba(255,255,255,0.10);
+    border: 1px solid rgba(255,255,255,0.18);
+    color: #fff;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-weight: 900;
+    line-height: 1;
+  }
+  #modalAreaEdit .modal-header button:hover, #modalDstEdit .modal-header button:hover { background: rgba(255,255,255,0.16); }
+  /* Keep any .compact marker, but match legacy sizing */
+  #modalDiscovery .modal-header.compact,
+  #modalDeviceCreate .modal-header.compact, #modalScannerCreate .modal-header.compact {
+    padding: 4px 6px;
+    font-size: 10px;
+  }
+
+  /* Left-aligned titles like screenshot */
+  #modalDiscovery .modal-header .modal-spacer,
+  #modalDeviceCreate .modal-header .modal-spacer,
+  #modalScannerCreate .modal-header .modal-spacer,
+  #modalAreaEdit .modal-header .modal-spacer,
+  #modalDstEdit .modal-header .modal-spacer,
+  #modalPrompt .modal-header .modal-spacer { display:none; }
+  #modalDiscovery .modal-header .modal-title,
+  #modalDeviceCreate .modal-header .modal-title,
+  #modalScannerCreate .modal-header .modal-title,
+  #modalAreaEdit .modal-header .modal-title,
+  #modalDstEdit .modal-header .modal-title,
+  #modalPrompt .modal-header .modal-title,
+  #modalConfirm .modal-header .modal-title,
+  #modalAreaResult .modal-header .modal-title {
+    flex: 1;
+    text-align: left;
+    position: relative;
+    z-index: 2;
+  }
+  #modalDeviceCreate .modal-header .modal-title::before,
+  #modalScannerCreate .modal-header .modal-title::before { content: "+ "; color:#9fd2f1; }
+
+  #modalDiscovery .modal-header button,
+  #modalDeviceCreate .modal-header button, #modalScannerCreate .modal-header button,
+  #modalPrompt .modal-header button, #modalConfirm .modal-header button, #modalAreaResult .modal-header button {
+    width: 22px;
+    height: 22px;
+    border-radius: 2px;
+    background: #163247;
+    border: 1px solid #3d6a8b;
+    color: #9fd2f1;
+    font-size: 14px;
+    cursor: pointer;
+    transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
+  }
+  #modalDiscovery .modal-header button:hover,
+  #modalDeviceCreate .modal-header button:hover, #modalScannerCreate .modal-header button:hover,
+  #modalPrompt .modal-header button:hover, #modalConfirm .modal-header button:hover, #modalAreaResult .modal-header button:hover {
+    transform: translateY(-1px);
+    background: #3da5d9;
+    border-color: #3da5d9;
+    color:#fff;
+  }
+  #modalDiscovery .modal-header button:active,
+  #modalDeviceCreate .modal-header button:active, #modalScannerCreate .modal-header button:active,
+  #modalPrompt .modal-header button:active, #modalConfirm .modal-header button:active, #modalAreaResult .modal-header button:active {
+    transform: translateY(0);
+  }
+
+  #modalDeviceCreate .modal-body, #modalScannerCreate .modal-body { padding: 6px; overflow: auto; color: #e8f0f8; }
+  #modalDiscovery .modal-body { padding: 6px; overflow: auto; color: #e8f0f8; }
+  #modalDeviceCreate .section, #modalScannerCreate .section { border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; background: var(--bg-primary); margin-bottom: 10px; }
+  #modalDeviceCreate .section h4, #modalScannerCreate .section h4 { margin: 0 0 10px 0; font-size: 12px; letter-spacing: 0.3px; text-transform: uppercase; color: var(--color-primary); }
+  #modalDeviceCreate .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  #modalScannerCreate .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  #modalDeviceCreate .field, #modalScannerCreate .field { display: flex; flex-direction: column; gap: 4px; font-size: 11px; }
+  #modalDeviceCreate .field label, #modalScannerCreate .field label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.2px; }
+  #modalDeviceCreate .field input, #modalDeviceCreate .field select,
+  #modalScannerCreate .field input, #modalScannerCreate .field select { width: 100%; padding: 7px 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-light); }
+  #modalScannerCreate .field-check { padding-top: 14px; }
+  #modalScannerCreate .check-label { display:flex; align-items:center; gap:6px; color: var(--text-light); text-transform:none; letter-spacing:0; }
+  #modalScannerCreate .is-hidden { display: none; }
+  #modalScannerCreate .scanner-inline { display:flex; gap:8px; }
+  #modalScannerCreate .scanner-flex { flex: 1; }
+  #modalScannerCreate .scanner-small { width: 90px; }
+  #modalScannerCreate .scanner-results { min-height: 18px; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background: var(--bg-secondary); color: var(--text-light); font-size: 11px; }
+  #modalDeviceCreate .radio-row { display: flex; gap: 14px; align-items: center; margin-top: 4px; flex-wrap: wrap; }
+  #modalDeviceCreate .modal-footer, #modalScannerCreate .modal-footer, #modalDiscovery .modal-footer {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 6px;
+    border-top: 1px solid #3da5d9;
+    background: #163247;
+  }
+  #modalDeviceCreate .modal-footer button, #modalScannerCreate .modal-footer button, #modalDiscovery .modal-footer button {
+    flex: 1;
+    padding: 6px 10px;
+    border-radius: 2px;
+    border: 1px solid #3d6a8b;
+    background: #2d5a7b;
+    color: #fff;
+    cursor: pointer;
+    font-size: 9px;
+    font-weight: 600;
+  }
+  #modalDeviceCreate .modal-footer button.primary, #modalScannerCreate .modal-footer button.primary { background: #3da5d9; border-color: #2c8ec0; }
+  #modalScannerCreate .modal-footer.split { justify-content: space-between; }
+  #modalDeviceCreate .status, #modalScannerCreate .status { padding: 0 16px 14px 16px; min-height: 16px; font-size: 12px; font-weight: 700; }
+
+  /* Prompt/Confirm/Result modals */
+  #modalPrompt .modal-body, #modalConfirm .modal-body, #modalAreaResult .modal-body { padding: 12px 14px; color: var(--text-light); }
+  #modalPrompt .prompt-msg, #modalConfirm .prompt-msg, #modalAreaResult .prompt-msg { font-size: 12px; color: var(--text-muted); margin-bottom: 0; line-height: 1.35; }
+  #modalAreaResult .prompt-msg { color: var(--text-light); }
+  #modalAreaResult .prompt-msg.error { color: #ffbdbd; }
+  #modalPrompt .prompt-grid { display: grid; grid-template-columns: 1fr; gap: 8px; }
+  #modalPrompt .prompt-field label { font-size: 11px; color: var(--text-muted); display:block; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.2px; }
+  #modalPrompt .prompt-field input { width: 100%; padding: 7px 8px; border-radius: 4px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-light); }
+  #modalPrompt .modal-footer, #modalConfirm .modal-footer, #modalAreaResult .modal-footer { display:flex; justify-content:flex-end; gap:8px; padding:10px 14px; border-top: 1px solid var(--border-color); }
+
+  #modalPrompt .btn-primary, #modalAreaResult .btn-primary, #modalDiscovery .btn-primary {
+    background: var(--color-primary);
+    border-color: rgba(255,255,255,0.18);
+    color: #fff;
+  }
+  #modalPrompt .btn-secondary, #modalConfirm .btn-secondary { background: var(--bg-tertiary); }
+  #modalConfirm .btn-danger {
+    background: #ff6b6b;
+    border-color: rgba(255,255,255,0.18);
+    color: #101820;
+  }
+  #modalConfirm .modal-header { background: linear-gradient(90deg, rgba(15,42,71,0.96) 0%, rgba(255,107,107,0.95) 100%); }
+
+  @media (prefers-reduced-motion: reduce) {
+    #modalDeviceCreate.modal-backdrop, #modalScannerCreate.modal-backdrop, #modalPrompt.modal-backdrop,
+    #modalDeviceCreate .modal, #modalScannerCreate .modal, #modalPrompt .modal,
+    #modalDeviceCreate .modal-header button, #modalScannerCreate .modal-header button, #modalPrompt .modal-header button {
+      transition: none !important;
+    }
+  }
+
+  /* Center action overlay (success/fail) for this page */
+  .menu-action-overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:2000;background:rgba(0,0,0,0.45);}
+  .menu-action-overlay .panel{width:min(520px,92vw);padding:18px 16px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-secondary);box-shadow:0 20px 40px rgba(0,0,0,0.6);text-align:center;transform:scale(.94);opacity:0;animation:overlayIn 180ms ease-out forwards;}
+  .menu-action-overlay.success .panel{border-color:#2da44e;}
+  .menu-action-overlay.error .panel{border-color:#ff6b6b;}
+  .menu-action-overlay .title{font-weight:800;font-size:12px;margin-bottom:6px;color:var(--text-light);}
+  .menu-action-overlay.success .title{color:#9fd2f1;}
+  .menu-action-overlay.error .title{color:#ff9999;}
+  .menu-action-overlay .msg{font-size:11px;color:var(--text-light);line-height:1.35;}
+  .menu-action-overlay .bar{height:6px;border-radius:6px;background:var(--bg-primary);border:1px solid var(--border-color);margin-top:12px;overflow:hidden;}
+  .menu-action-overlay .bar>div{height:100%;width:0%;background:var(--color-primary);animation:barRun 900ms linear forwards;}
+  .menu-action-overlay.loading .panel{border-color: rgba(61,165,217,0.75);}
+  .menu-action-overlay.loading .title{color:#9fd2f1;}
+  .menu-action-overlay.loading .bar>div{width:35%;animation:barIndeterminate 900ms ease-in-out infinite;}
+  .menu-action-overlay.success .bar>div{background:#2da44e;}
+  .menu-action-overlay.error .bar>div{background:#ff6b6b;}
+  @keyframes overlayIn{to{transform:scale(1);opacity:1;}}
+  @keyframes barRun{to{width:100%;}}
+  @keyframes barIndeterminate{0%{transform:translateX(-120%);}100%{transform:translateX(320%);}}
+
+  /* Area result modal (lives outside .device-container; define vars locally) */
+  #modalAreaResult {
+    --bg-primary: #0f2a47;
+    --bg-secondary: #1a3a52;
+    --bg-tertiary: #2a4a62;
+    --bg-panel: #1a3a52;
+    --color-primary: #1e90ff;
+    --color-primary-dark: #1573d6;
+    --color-accent: #2ebf96;
+    --text-light: #e8f1f8;
+    --text-muted: #a8c5d8;
+    --border-color: #3a5a72;
+  }
 </style>
 
-<div class='grid'>
-  <!-- SECTION 1: Device Operations -->
-  <section class='panel'>
-    <h2>📟 Device Operations</h2>
-    <ul>
-      <li><a class='op' title='Adaugă un dispozitiv nou' href='{% url "crud-device-create" %}'>➕ Add Device</a></li>
-      <li><a class='op' title='Scanează rețeaua pentru dispozitive compatibile' href='{% url "device-discover" %}'>🔎 Discover Network</a></li>
-      <li><a class='op' title='Afișează lista tuturor device-urilor' href='{% url "crud-devices-list" %}'>📋 Device List</a></li>
-      <li><a class='op' title='Monitorizare evenimente în timp real' href='{% url "agent-monitor" %}' target='_blank'>📡 Monitor Realtime</a></li>
-      <li><a class='op' title='Jurnal acces pentru analiză rapidă' href='{% url "crud-access-logs-list" %}'>📊 Access Logs</a></li>
-    </ul>
+<div class="device-container">
+  <h2>ECHIPAMENTE – Modul Unificat</h2>
+
+  <div class="tabs" id="deviceTabs">
+    <button class="tab-btn active" data-tab="area">Zona Acces</button>
+    <button class="tab-btn" data-tab="devices">Dispozitive</button>
+    <button class="tab-btn" data-tab="search">Căutare centrale</button>
+    <button class="tab-btn" data-tab="dst">Ora de vară</button>
+    <button class="tab-btn" data-tab="commands">Comenzi către centrale</button>
+    <button class="tab-btn" data-tab="monitor">Monitorizare dispozitive</button>
+    <button class="tab-btn" data-tab="live">Monitorizare live</button>
+  </div>
+
+  <section id="tab-area" class="tab-content active">
+    <div class="action-bar split">
+      <div class="left-actions">
+        <span class="hint">Zona Acces (Area settings) – listă + editare/ștergere prin modale</span>
+      </div>
+      <div class="right-actions">
+        <button type="button" id="btnAreaNew" class="btn-primary" title="Adaugă zonă">+ Zonă Nouă</button>
+        <button type="button" class="btn-secondary" data-equip-action="reload" data-equip-tab="area" title="Reîncarcă lista de zone">🔄 Reîncarcă</button>
+        <button type="button" class="btn-secondary" data-equip-action="export" data-equip-tab="area" title="Exportă CSV (format importabil)">📥 Export</button>
+        <button type="button" class="btn-secondary" data-equip-action="import" data-equip-module="area" data-equip-title="Zonă Acces" title="Importă zone din CSV">📤 Import</button>
+        <button type="button" class="btn-secondary" data-equip-action="logs" data-equip-module="area" data-equip-title="Zonă Acces" title="Deschide logurile pentru zone">📋 Loguri</button>
+      </div>
+    </div>
+    <div class="action-bar mt-tight">
+      <span id="areaFlash" class="hint"></span>
+    </div>
+
+    <div class="table-shell mt-10">
+      <table>
+        <thead>
+          <tr>
+            <th class="col-w-140">Cod</th>
+            <th>Nume zonă</th>
+            <th>Zonă părinte</th>
+            <th>Observații</th>
+            <th class="col-w-150">Acțiuni</th>
+          </tr>
+        </thead>
+        <tbody id="areasTableBody">
+          <tr><td colspan="5" class="td-center-muted">Se încarcă zonele...</td></tr>
+        </tbody>
+      </table>
+    </div>
   </section>
 
-  <!-- SECTION 2: Device Management & Sync -->
-  <section class='panel accent'>
-    <h2>⚙️ Management & Sync</h2>
-    <ul>
-      <li><a class='op' title='Sincronizează ora pe dispozitive' href='{% url "agent-control-center" %}'>🕐 Sync Time</a></li>
-      <li><a class='op' title='Actualizează statusul dispozitivelor' href='{% url "agent-status-summary" %}'>🔄 Refresh Status</a></li>
-      <li><a class='op' title='Trimite modificările de personal către dispozitive' href='{% url "agent-control-center" %}'>📤 Push Personnel</a></li>
-      <li><a class='op' title='Backup și restore date dispozitiv' href='{% url "agent-control-center" %}'>💾 Backup/Restore</a></li>
-    </ul>
+  <section id="tab-devices" class="tab-content hidden">
+    <div class="action-bar split">
+      <div class="left-actions">
+        <button type="button" id="btnDiscovery" class="btn-secondary">🔎 Căutare centrale</button>
+        <button type="button" id="btnQuickAdd" class="btn-primary">⚡ Adaugă centrală rapid</button>
+        <a href="{% url 'agent-control-center' %}" class="btn-success">🕐 Sincronizează timp</a>
+        <a href="{% url 'agent-status-summary' %}" class="btn-secondary">🔄 Refresh status</a>
+      </div>
+      <div class="right-actions">
+        <button type="button" id="btnDeviceNew" class="btn-primary" title="Adaugă dispozitiv nou">+ Dispozitiv Nou</button>
+        <button type="button" id="btnDeviceScanner" class="btn-primary" title="Adaugă dispozitiv pentru scanere">+ Dispozitiv Scanner</button>
+        <button type="button" class="btn-secondary" data-equip-action="reload" data-equip-tab="devices" title="Reîncarcă lista de dispozitive">🔄 Reîncarcă</button>
+        <button type="button" class="btn-secondary" data-equip-action="export" data-equip-tab="devices" title="Exportă CSV (format importabil)">📥 Export</button>
+        <button type="button" class="btn-secondary" data-equip-action="import" data-equip-module="device" data-equip-title="Dispozitive" title="Importă dispozitive din CSV">📤 Import</button>
+        <button type="button" class="btn-secondary" data-equip-action="logs" data-equip-module="device" data-equip-title="Dispozitive" title="Deschide logurile pentru dispozitive">📋 Loguri</button>
+      </div>
+    </div>
+    <div class="table-shell">
+      {% url 'agent-menu-device' as device_menu_url %}
+      {% include 'agent/devices_crud_embed.html' with page=devices_page active_filter=devices_filter embed_base_url=device_menu_url embed_tab='devices' %}
+    </div>
   </section>
 
-  <!-- SECTION 3: Access Control & Configuration -->
-  <section class='panel'>
-    <h2>🔐 Access Control Configuration</h2>
-    <ul>
-      <li><a class='op' title='Gestionează ușile de acces' href='{% url "crud-doors-list" %}'>🚪 Doors</a></li>
-      <li><a class='op' title='Gestionează nivelurile de acces' href='{% url "crud-access-levels-list" %}'>🔑 Access Levels</a></li>
-      <li><a class='op' title='Gestionează segmentele de timp' href='{% url "crud-segments-list" %}'>⏰ Time Segments</a></li>
-      <li><a class='op' title='Gestionează zile de holiday' href='{% url "crud-holidays-list" %}'>🎄 Holidays</a></li>
-    </ul>
+  <section id="tab-search" class="tab-content hidden">
+    <div class="action-bar">
+      <label class="hint">Subrețea</label>
+      <input id="subnetInput" type="text" value="" placeholder="ex: 192.168.1" class="input-compact" />
+      <button type="button" id="btnStartScan" class="btn-primary">Începe scanare</button>
+      <span class="hint">Implicit: subrețeaua serverului</span>
+    </div>
+    <div class="progress"><div class="progress-bar" id="scanProgress"></div></div>
+    <div class="table-shell mt-10">
+      <table id="scanResultsTbl">
+        <thead>
+          <tr><th>IP</th><th>Metodă</th><th>Acțiuni</th></tr>
+        </thead>
+        <tbody><tr><td colspan="3" class="td-center-muted">Așteaptă rezultatele...</td></tr></tbody>
+      </table>
+    </div>
   </section>
 
-  <!-- SECTION 4: Personnel Management -->
-  <section class='panel accent'>
-    <h2>👥 Personnel Management</h2>
-    <ul>
-      <li><a class='op' title='Gestionează angajații și cartelele' href='{% url "crud-employees-list" %}'>👤 Employees</a></li>
-      <li><a class='op' title='Gestionează departamentele' href='{% url "crud-depts-list" %}'>🏢 Departments</a></li>
-      <li><a class='op' title='Gestionează zonele de acces' href='{% url "crud-areas-list" %}'>📍 Areas</a></li>
-      <li><a class='op' title='Gestionează emiterea cartelelor' href='{% url "crud-issuecards-list" %}'>🎫 Issue Cards</a></li>
-    </ul>
+  <section id="tab-dst" class="tab-content hidden">
+    <div class="action-bar split">
+      <div class="left-actions">
+        <span class="hint">Ora de vară (DST) – listă + editare/ștergere prin modale</span>
+      </div>
+      <div class="right-actions">
+        <button type="button" id="btnDstNew" class="btn-primary" title="Adaugă regulă DST">+ Regulă DST</button>
+        <button type="button" class="btn-secondary" data-equip-action="reload" data-equip-tab="dst" title="Reîncarcă regulile DST">🔄 Reîncarcă</button>
+        <button type="button" class="btn-secondary" data-equip-action="export" data-equip-tab="dst" title="Exportă CSV (format importabil)">📥 Export</button>
+        <button type="button" class="btn-secondary" data-equip-action="import" data-equip-module="dst" data-equip-title="Ora de vară" title="Importă reguli DST din CSV">📤 Import</button>
+        <button type="button" class="btn-secondary" data-equip-action="logs" data-equip-module="dst" data-equip-title="Ora de vară" title="Deschide logurile pentru DST">📋 Loguri</button>
+      </div>
+    </div>
+    <div class="action-bar mt-tight">
+      <span id="dstFlash" class="hint"></span>
+    </div>
+
+    <div class="table-shell mt-10">
+      <table>
+        <thead>
+          <tr>
+            <th class="col-w-210">Nume</th>
+            <th>Start</th>
+            <th>End</th>
+            <th class="col-w-120">Offset</th>
+            <th class="col-w-150">Acțiuni</th>
+          </tr>
+        </thead>
+        <tbody id="dstTableBody">
+          <tr><td colspan="5" class="td-center-muted">Se încarcă regulile DST...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="tab-commands" class="tab-content hidden">
+    <div class="action-bar split">
+      <div class="left-actions">
+        <button type="button" id="btnCmdClear" class="btn-danger">Curăță comenzi</button>
+        <button type="button" id="btnCmdCreate" class="btn-primary">Creare comandă manuală</button>
+      </div>
+      <div class="right-actions">
+        <button type="button" class="btn-secondary" data-equip-action="reload" data-equip-tab="commands" title="Reîncarcă lista de comenzi">🔄 Reîncarcă</button>
+        <button type="button" class="btn-secondary" data-equip-action="export" data-equip-tab="commands" title="Exportă CSV (format importabil)">📥 Export</button>
+        <button type="button" class="btn-secondary" data-equip-action="import" data-equip-module="command" data-equip-title="Comenzi" title="Importă comenzi din CSV">📤 Import</button>
+        <button type="button" class="btn-secondary" data-equip-action="logs" data-equip-module="command" data-equip-title="Comenzi" title="Deschide logurile pentru comenzi">📋 Loguri</button>
+      </div>
+    </div>
+    <div class="table-shell">
+      <table>
+        <thead><tr><th>#</th><th>Dispozitiv</th><th>Serie</th><th>Ușă</th><th>Conținut</th><th>Status</th><th>Creat</th></tr></thead>
+        <tbody id="cmdTableBody"><tr><td colspan="7" class="td-center-muted">Se încarcă comenzi...</td></tr></tbody>
+      </table>
+    </div>
+    <div id="cmdFlash" class="hint mt-6"></div>
+  </section>
+
+  <section id="tab-monitor" class="tab-content hidden">
+    <div class="action-bar split">
+      <div class="left-actions">
+        <span class="hint">Monitorizare dispozitive – date live</span>
+      </div>
+      <div class="right-actions">
+        <button type="button" class="btn-secondary" data-equip-action="reload" data-equip-tab="monitor" title="Reîncarcă monitorizarea">🔄 Reîncarcă</button>
+        <button type="button" class="btn-secondary" data-equip-action="export" data-equip-tab="monitor" title="Exportă CSV (format importabil)">📥 Export</button>
+        <button type="button" class="btn-secondary" data-equip-action="import" data-equip-module="device" data-equip-title="Monitorizare dispozitive" title="Importă dispozitive din CSV">📤 Import</button>
+        <button type="button" class="btn-secondary" data-equip-action="logs" data-equip-module="device" data-equip-title="Monitorizare dispozitive" title="Deschide logurile pentru dispozitive">📋 Loguri</button>
+      </div>
+    </div>
+    <div class="monitor-embed">
+      {% include 'agent/status_summary_embed.html' with rows=status_rows summary=status_summary %}
+    </div>
+  </section>
+
+  <section id="tab-live" class="tab-content hidden">
+    <div class="action-bar">
+      <span class="hint">Monitorizare live (Realtime Monitor)</span>
+    </div>
+    <div class="iframe-wrapper">
+      <iframe src="/agent/monitor/?embedded=1" title="Monitorizare live"></iframe>
+    </div>
   </section>
 </div>
 
-<footer class='footer'>🔧 Device Module - Complete Control Panel (v2025.1)</footer>
+<!-- Modal căutare centrale -->
+<div class="modal-backdrop" id="modalDiscovery">
+  <div class="modal">
+    <div class="modal-header compact">
+      <span class="modal-spacer" aria-hidden="true"></span>
+      <span class="modal-title">Căutare centrale (scanare rețea)</span>
+      <button type="button" id="modalClose" aria-label="Închide" title="Închide">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div>
+          <label>Subrețea (ex: 192.168.1)</label>
+          <input id="modalSubnet" type="text" placeholder="192.168.1" />
+        </div>
+        <div>
+          <label>Porturi comune</label>
+          <input disabled value="4370, 8080, 80" />
+        </div>
+      </div>
+      <div class="progress"><div class="progress-bar" id="modalProgress"></div></div>
+      <div class="table-shell mt-10">
+        <table id="modalResults">
+          <thead><tr><th>IP</th><th>Metodă</th><th>Opțiuni</th></tr></thead>
+          <tbody><tr><td colspan="3" class="td-center-muted">Începe scanarea pentru a vedea rezultate.</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" id="modalStart" class="btn-primary">Pornește scanarea</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Dispozitiv Nou (fara navigare) -->
+<div class="modal-backdrop" id="modalDeviceCreate">
+  <div class="modal">
+    <div class="modal-header compact">
+      <span class="modal-spacer" aria-hidden="true"></span>
+      <span id="deviceCreateTitle" class="modal-title">Dispozitiv</span>
+      <button type="button" id="deviceCreateClose" aria-label="Închide">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="deviceCreateContent"></div>
+    </div>
+    <div class="status" id="deviceCreateStatus"></div>
+  </div>
+</div>
+
+<!-- Modal: Prompt/Form (replaces browser prompt()) -->
+<div class="modal-backdrop" id="modalPrompt">
+  <div class="modal">
+    <div class="modal-header compact">
+      <span class="modal-spacer" aria-hidden="true"></span>
+      <span id="promptTitle" class="modal-title">Introdu date</span>
+      <button type="button" id="promptClose" aria-label="Închide">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="promptMessage" class="prompt-msg"></div>
+      <div id="promptFields" class="prompt-grid"></div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" id="promptCancel" class="btn-secondary">Renunță</button>
+      <button type="button" id="promptOk" class="btn-primary">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Rezultat salvare zonă -->
+<div class="modal-backdrop" id="modalAreaResult">
+  <div class="modal">
+    <div class="modal-header compact">
+      <span class="modal-spacer" aria-hidden="true"></span>
+      <span id="areaResultTitle" class="modal-title">Rezultat</span>
+      <button type="button" id="areaResultClose" aria-label="Închide">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="areaResultMessage" class="prompt-msg"></div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" id="areaResultOk" class="btn-primary">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Confirmare acțiune (delete etc.) -->
+<div class="modal-backdrop" id="modalConfirm">
+  <div class="modal">
+    <div class="modal-header compact">
+      <span class="modal-spacer" aria-hidden="true"></span>
+      <span id="confirmTitle" class="modal-title">Confirmare</span>
+      <button type="button" id="confirmClose" aria-label="Închide">✕</button>
+    </div>
+    <div class="modal-body">
+      <div id="confirmMessage" class="prompt-msg"></div>
+    </div>
+    <div class="modal-footer">
+      <button type="button" id="confirmCancel" class="btn-secondary">Renunță</button>
+      <button type="button" id="confirmOk" class="btn-danger">Confirmă</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Add/Edit Zona Acces -->
+<div class="modal-backdrop" id="modalAreaEdit">
+  <div class="modal">
+    <div class="modal-header compact">
+      <span class="modal-spacer" aria-hidden="true"></span>
+      <span id="areaModalTitle" class="modal-title">Zonă</span>
+      <button type="button" id="areaModalClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="areaModalForm">
+        <input type="hidden" id="areaModalId" value="" />
+        <div class="form-grid form-grid-tight">
+          <div>
+            <label>Cod zonă <span class="required-star">*</span></label>
+            <input id="areaModalCode" type="text" placeholder="ex: 1" />
+          </div>
+          <div>
+            <label>Nume zonă <span class="required-star">*</span></label>
+            <input id="areaModalName" type="text" placeholder="ex: Administrativ" />
+          </div>
+          <div>
+            <label>Zonă părinte</label>
+            <select id="areaModalParent"><option value="">(Niciuna)</option></select>
+          </div>
+          <div>
+            <label>Observații</label>
+            <input id="areaModalNotes" type="text" placeholder="Comentarii" />
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="areaModalCancel" class="btn-secondary">Renunță</button>
+          <button type="submit" id="areaModalSave" class="btn-primary">Salvează</button>
+          <span id="areaModalStatus" class="modal-status"></span>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Add/Edit DST -->
+<div class="modal-backdrop" id="modalDstEdit">
+  <div class="modal">
+    <div class="modal-header compact">
+      <span class="modal-spacer" aria-hidden="true"></span>
+      <span id="dstModalTitle" class="modal-title">DST</span>
+      <button type="button" id="dstModalClose">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="dstModalForm">
+        <input type="hidden" id="dstModalId" value="" />
+        <div class="form-grid form-grid-tight">
+          <div>
+            <label>Nume DST <span class="required-star">*</span></label>
+            <input id="dstModalName" type="text" placeholder="ex: Romania" />
+          </div>
+          <div>
+            <label>Offset (minute)</label>
+            <input id="dstModalOffset" type="number" min="0" max="180" value="60" />
+          </div>
+          <div>
+            <label>Start – Lună / Săpt. / Zi</label>
+            <div class="dst-inline">
+              <select id="dstModalStartMonth"></select>
+              <select id="dstModalStartWeek"></select>
+              <select id="dstModalStartWeekday"></select>
+            </div>
+          </div>
+          <div>
+            <label>Start – Ora / Minut</label>
+            <div class="dst-inline">
+              <input id="dstModalStartHour" type="number" min="0" max="23" placeholder="03" class="dst-small" />
+              <input id="dstModalStartMinute" type="number" min="0" max="59" placeholder="00" class="dst-small" />
+            </div>
+          </div>
+          <div>
+            <label>End – Lună / Săpt. / Zi</label>
+            <div class="dst-inline">
+              <select id="dstModalEndMonth"></select>
+              <select id="dstModalEndWeek"></select>
+              <select id="dstModalEndWeekday"></select>
+            </div>
+          </div>
+          <div>
+            <label>End – Ora / Minut</label>
+            <div class="dst-inline">
+              <input id="dstModalEndHour" type="number" min="0" max="23" placeholder="03" class="dst-small" />
+              <input id="dstModalEndMinute" type="number" min="0" max="59" placeholder="00" class="dst-small" />
+            </div>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="dstModalCancel" class="btn-secondary">Renunță</button>
+          <button type="submit" id="dstModalSave" class="btn-primary">Salvează</button>
+          <span id="dstModalStatus" class="modal-status"></span>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- Modal: Dispozitiv Scanner (fara navigare) -->
+<div class="modal-backdrop" id="modalScannerCreate">
+  <div class="modal">
+    <div class="modal-header compact">
+      <span class="modal-spacer" aria-hidden="true"></span>
+      <span class="modal-title">Dispozitiv Scanner</span>
+      <button type="button" id="scannerCreateClose" aria-label="Închide">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="scannerCreateForm">
+        <div class="section">
+          <h4>Informații</h4>
+          <div class="grid-2">
+            <div class="field">
+              <label><span class="required-star">*</span> Nume dispozitiv</label>
+              <input name="name" required />
+            </div>
+            <div class="field">
+              <label>Număr serie (SN)</label>
+              <input name="serial_number" />
+            </div>
+            <div class="field">
+              <label><span class="required-star">*</span> Tip scanner</label>
+              <select name="scanner_type" required id="scannerType">
+                <option value="acp">ACP TCP</option>
+                <option value="elatec">Elatec Serial</option>
+              </select>
+            </div>
+            <div class="field field-check">
+              <label class="check-label">
+                <input type="checkbox" name="enabled" checked /> Activ
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h4>Conectare</h4>
+          <div id="scannerTcp" class="grid-2">
+            <div class="field">
+              <label>Adresă IP</label>
+              <input name="ip_address" placeholder="192.168.1.150" />
+            </div>
+            <div class="field">
+              <label>Port</label>
+              <input name="port" type="number" value="4370" />
+            </div>
+          </div>
+          <div id="scannerRs485" class="grid-2 is-hidden">
+            <div class="field">
+              <label>Port serial</label>
+              <input name="rs485_port" placeholder="COM3" />
+            </div>
+            <div class="field">
+              <label>Baud rate</label>
+              <input name="rs485_baudrate" type="number" value="9600" />
+            </div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h4>Descoperire & Testare</h4>
+          <div class="grid-2">
+            <div class="field">
+              <label>Prefix Rețea (ex: 100.51.101)</label>
+              <input type="text" id="scanner_discovery_prefix" placeholder="100.51.101" />
+            </div>
+            <div class="field">
+              <label>Test IP (Ping)</label>
+              <input type="text" id="scanner_ping_ip" placeholder="100.51.101.95" />
+            </div>
+            <div class="field">
+              <label>Test Port TCP</label>
+              <div class="scanner-inline">
+                <input type="text" id="scanner_port_ip" placeholder="100.51.101.95" class="scanner-flex" />
+                <input type="number" id="scanner_port_num" value="4370" class="scanner-small" />
+              </div>
+            </div>
+            <div class="field">
+              <label>Rezultate</label>
+              <div id="scannerDiscoveryResults" class="scanner-results"></div>
+            </div>
+          </div>
+        </div>
+
+        <input type="hidden" name="device_type" value="biometric_reader" />
+        <input type="hidden" name="comm_mode" value="tcp" id="scannerCommMode" />
+        <input type="hidden" name="scanner_linked" value="on" />
+
+        <div class="modal-footer split">
+          <div class="btn-group left">
+            <button type="button" id="scannerBtnDiscover">Scanează Rețeaua</button>
+            <button type="button" id="scannerBtnPing">Ping</button>
+            <button type="button" id="scannerBtnPort">Test Port</button>
+          </div>
+          <div class="btn-group right">
+            <button type="button" id="scannerCreateCancel">Anulează</button>
+            <button type="submit" class="primary">Salvează</button>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="status" id="scannerCreateStatus"></div>
+  </div>
+</div>
+
+<div id="menuActionOverlay" class="menu-action-overlay" aria-hidden="true">
+  <div class="panel">
+    <div class="title" id="menuActionTitle">Rezultat</div>
+    <div class="msg" id="menuActionMsg"></div>
+    <div class="bar"><div></div></div>
+  </div>
+</div>
+
+<!-- Modal: Audit Logs (ECHIPAMENTE) -->
+<div class="modal-backdrop" id="modalAuditLogs" aria-hidden="true">
+  <div class="modal">
+    <div class="modal-header compact">
+      <span class="modal-spacer" aria-hidden="true"></span>
+      <span class="modal-title" id="auditLogsTitle">LOGURI</span>
+      <button type="button" id="auditLogsClose" aria-label="Închide" title="Închide">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="hint" id="auditLogsHint">Se încarcă...</div>
+      <div class="table-shell mt-10">
+        <table>
+          <thead>
+            <tr>
+              <th class="col-w-150">Data</th>
+              <th class="col-w-140">Modul</th>
+              <th>Entitate</th>
+              <th class="col-w-140">Utilizator</th>
+              <th class="col-w-120">Acțiune</th>
+              <th>Detalii</th>
+            </tr>
+          </thead>
+          <tbody id="auditLogsBody">
+            <tr><td colspan="6" class="td-center-muted">Se încarcă...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: CSV Import (ECHIPAMENTE) -->
+<div class="modal-backdrop" id="modalCsvImport" aria-hidden="true">
+  <div class="modal">
+    <div class="modal-header compact">
+      <span class="modal-spacer" aria-hidden="true"></span>
+      <span class="modal-title" id="csvImportTitle">IMPORT</span>
+      <button type="button" id="csvImportClose" aria-label="Închide" title="Închide">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="hint">Format CSV uniform (separator <b>;</b>). Folosește <b>Export</b> ca șablon.</div>
+      <details class="hint" id="csvImportHelp" style="margin-top:8px;">
+        <summary style="cursor:pointer;">Ajutor format CSV (coloane)</summary>
+        <div style="margin-top:6px;">
+          <div class="hint">Header așteptat:</div>
+          <pre id="csvImportSchema" style="white-space:pre-wrap; margin:6px 0 0; padding:10px; border:1px solid rgba(255,255,255,0.08); border-radius:10px; background: rgba(0,0,0,0.18);"></pre>
+        </div>
+      </details>
+      <div class="import-row" style="margin-top:10px;">
+        <input type="file" id="csvImportFile" accept=".csv,text/csv" />
+        <button type="button" class="btn-secondary" id="csvImportRun" title="Importă din fișierul CSV selectat">📤 Importă</button>
+      </div>
+      <div class="import-status" id="csvImportStatus">Alege un fișier CSV.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const tabs = document.querySelectorAll('#deviceTabs .tab-btn');
+  const sections = {
+    area: document.getElementById('tab-area'),
+    devices: document.getElementById('tab-devices'),
+    search: document.getElementById('tab-search'),
+    dst: document.getElementById('tab-dst'),
+    commands: document.getElementById('tab-commands'),
+    monitor: document.getElementById('tab-monitor'),
+    live: document.getElementById('tab-live'),
+  };
+
+  const areaFlash = document.getElementById('areaFlash');
+  const areasTableBody = document.getElementById('areasTableBody');
+  const btnAreaNew = document.getElementById('btnAreaNew');
+  const deviceCreateArea = document.getElementById('deviceCreateArea');
+  const areaResultModal = document.getElementById('modalAreaResult');
+  const areaResultTitle = document.getElementById('areaResultTitle');
+  const areaResultMessage = document.getElementById('areaResultMessage');
+  const areaResultClose = document.getElementById('areaResultClose');
+  const areaResultOk = document.getElementById('areaResultOk');
+  const dstFlash = document.getElementById('dstFlash');
+  const btnDstNew = document.getElementById('btnDstNew');
+  const dstTableBody = document.getElementById('dstTableBody');
+  const cmdFlash = document.getElementById('cmdFlash');
+  // Area modal
+  const areaModal = document.getElementById('modalAreaEdit');
+  const areaModalTitle = document.getElementById('areaModalTitle');
+  const areaModalClose = document.getElementById('areaModalClose');
+  const areaModalCancel = document.getElementById('areaModalCancel');
+  const areaModalForm = document.getElementById('areaModalForm');
+  const areaModalId = document.getElementById('areaModalId');
+  const areaModalCode = document.getElementById('areaModalCode');
+  const areaModalName = document.getElementById('areaModalName');
+  const areaModalParent = document.getElementById('areaModalParent');
+  const areaModalNotes = document.getElementById('areaModalNotes');
+  const areaModalStatus = document.getElementById('areaModalStatus');
+
+  // DST modal
+  const dstModal = document.getElementById('modalDstEdit');
+  const dstModalTitle = document.getElementById('dstModalTitle');
+  const dstModalClose = document.getElementById('dstModalClose');
+  const dstModalCancel = document.getElementById('dstModalCancel');
+  const dstModalForm = document.getElementById('dstModalForm');
+  const dstModalId = document.getElementById('dstModalId');
+  const dstModalName = document.getElementById('dstModalName');
+  const dstModalOffset = document.getElementById('dstModalOffset');
+  const dstModalStartMonth = document.getElementById('dstModalStartMonth');
+  const dstModalStartWeek = document.getElementById('dstModalStartWeek');
+  const dstModalStartWeekday = document.getElementById('dstModalStartWeekday');
+  const dstModalStartHour = document.getElementById('dstModalStartHour');
+  const dstModalStartMinute = document.getElementById('dstModalStartMinute');
+  const dstModalEndMonth = document.getElementById('dstModalEndMonth');
+  const dstModalEndWeek = document.getElementById('dstModalEndWeek');
+  const dstModalEndWeekday = document.getElementById('dstModalEndWeekday');
+  const dstModalEndHour = document.getElementById('dstModalEndHour');
+  const dstModalEndMinute = document.getElementById('dstModalEndMinute');
+  const dstModalStatus = document.getElementById('dstModalStatus');
+
+  // Confirm modal
+  const confirmModal = document.getElementById('modalConfirm');
+  const confirmTitle = document.getElementById('confirmTitle');
+  const confirmMessage = document.getElementById('confirmMessage');
+  const confirmClose = document.getElementById('confirmClose');
+  const confirmCancel = document.getElementById('confirmCancel');
+  const confirmOk = document.getElementById('confirmOk');
+  let _confirmAction = null;
+
+  let _cachedAreas = [];
+  let _cachedDst = [];
+
+  const auditLogsModal = document.getElementById('modalAuditLogs');
+  const auditLogsTitle = document.getElementById('auditLogsTitle');
+  const auditLogsClose = document.getElementById('auditLogsClose');
+  const auditLogsHint = document.getElementById('auditLogsHint');
+  const auditLogsBody = document.getElementById('auditLogsBody');
+
+  const csvImportModal = document.getElementById('modalCsvImport');
+  const csvImportTitle = document.getElementById('csvImportTitle');
+  const csvImportClose = document.getElementById('csvImportClose');
+  const csvImportFile = document.getElementById('csvImportFile');
+  const csvImportRun = document.getElementById('csvImportRun');
+  const csvImportStatus = document.getElementById('csvImportStatus');
+  const csvImportSchema = document.getElementById('csvImportSchema');
+  let _csvImportModule = null;
+  let _csvImportTitle = null;
+
+  const CSV_SCHEMAS = {
+    area: 'id;name;code;parent_code;remarks',
+    device: 'id;name;serial_number;device_type;comm_mode;ip_address;port;enabled;scanner_linked;scanner_type;rs485_port;rs485_baudrate;rs485_address;area_name;time_zone',
+    dst: 'id;name;start_month;start_week;start_weekday;start_hour;start_minute;end_month;end_week;end_weekday;end_hour;end_minute;offset_minutes',
+    command: 'id;command;device_serial;device_name;door_name',
+  };
+
+  function updateCsvImportSchema(){
+    if(!csvImportSchema) return;
+    const key = String(_csvImportModule || '').toLowerCase().trim();
+    csvImportSchema.textContent = CSV_SCHEMAS[key] || '';
+  }
+
+  function getCSRF(){
+    const name = 'csrftoken=';
+    const parts = document.cookie.split(';');
+    for(const p of parts){
+      const c = p.trim();
+      if(c.startsWith(name)) return c.substring(name.length);
+    }
+    return '';
+  }
+
+  function flash(el, msg, isErr=false){
+    if(!el) return;
+    el.style.color = isErr ? '#ffbdbd' : 'var(--text-muted)';
+    el.textContent = msg || '';
+  }
+
+  function openAreaResultModal(title, message, isErr=false){
+    if(!areaResultModal) return;
+    if(areaResultTitle) areaResultTitle.textContent = title || 'Rezultat';
+    if(areaResultMessage){
+      areaResultMessage.classList.toggle('error', !!isErr);
+      areaResultMessage.textContent = message || '';
+    }
+    _openModal(areaResultModal);
+  }
+
+  function closeAreaResultModal(){
+    if(!areaResultModal) return;
+    _closeModal(areaResultModal);
+  }
+  areaResultClose?.addEventListener('click', closeAreaResultModal);
+  areaResultOk?.addEventListener('click', closeAreaResultModal);
+  areaResultModal?.addEventListener('click', (e) => {
+    if(e && e.target === areaResultModal) closeAreaResultModal();
+  });
+
+  tabs.forEach(btn => {
+    btn.addEventListener('click', () => {
+      tabs.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const tab = btn.dataset.tab;
+      Object.keys(sections).forEach(k => {
+        sections[k].classList.toggle('hidden', k !== tab);
+        sections[k].classList.toggle('active', k === tab);
+      });
+    });
+  });
+
+  // Deep-link initial tab from ?tab=... or #hash
+  const params = new URLSearchParams(window.location.search);
+  const hashTab = (window.location.hash || '').replace('#','');
+  const initialTab = params.get('tab') || hashTab;
+  if(initialTab && sections[initialTab]){
+    tabs.forEach(b => {
+      const isMatch = b.dataset.tab === initialTab;
+      b.classList.toggle('active', isMatch);
+      sections[b.dataset.tab].classList.toggle('hidden', !isMatch);
+      sections[b.dataset.tab].classList.toggle('active', isMatch);
+    });
+  }
+
+  // Discovery modal triggers
+  const modal = document.getElementById('modalDiscovery');
+  const modalStart = document.getElementById('modalStart');
+  const modalClose = document.getElementById('modalClose');
+  const modalSubnet = document.getElementById('modalSubnet');
+  const modalProgress = document.getElementById('modalProgress');
+  const modalResults = document.querySelector('#modalResults tbody');
+  const btnDiscovery = document.getElementById('btnDiscovery');
+  const btnQuickAdd = document.getElementById('btnQuickAdd');
+  const subnetInput = document.getElementById('subnetInput');
+  const scanProgress = document.getElementById('scanProgress');
+  const scanResultsTbl = document.querySelector('#scanResultsTbl tbody');
+
+  // ===== Unified prompt modal (replaces browser prompt()) =====
+  const promptModal = document.getElementById('modalPrompt');
+  const promptTitle = document.getElementById('promptTitle');
+  const promptMsg = document.getElementById('promptMessage');
+  const promptFields = document.getElementById('promptFields');
+  const promptClose = document.getElementById('promptClose');
+  const promptCancel = document.getElementById('promptCancel');
+  const promptOk = document.getElementById('promptOk');
+  let _promptResolve = null;
+  let _promptValues = null;
+
+  function closePrompt(result){
+    if(!promptModal) return;
+    _closeModal(promptModal);
+    window.setTimeout(()=>{
+      if(promptFields) promptFields.innerHTML = '';
+      if(promptMsg) promptMsg.textContent = '';
+      _promptValues = null;
+      if(typeof _promptResolve === 'function') _promptResolve(result);
+      _promptResolve = null;
+    }, 180);
+  }
+
+  function openPromptDialog(opts){
+    if(!promptModal || !promptFields) return Promise.resolve(null);
+    const title = (opts && opts.title) ? String(opts.title) : 'Introdu date';
+    const message = (opts && opts.message) ? String(opts.message) : '';
+    const okText = (opts && opts.okText) ? String(opts.okText) : 'OK';
+    const cancelText = (opts && opts.cancelText) ? String(opts.cancelText) : 'Renunță';
+    const fields = Array.isArray(opts && opts.fields) ? opts.fields : [];
+
+    if(promptTitle) promptTitle.textContent = title;
+    if(promptMsg) promptMsg.textContent = message;
+    if(promptOk) promptOk.textContent = okText;
+    if(promptCancel) promptCancel.textContent = cancelText;
+
+    _promptValues = {};
+    promptFields.innerHTML = fields.map((f, idx)=>{
+      const name = String(f.name || ('field' + idx));
+      const label = String(f.label || name);
+      const type = String(f.type || 'text');
+      const placeholder = (f.placeholder != null) ? String(f.placeholder) : '';
+      const value = (f.value != null) ? String(f.value) : '';
+      const required = !!f.required;
+      return `<div class="prompt-field">
+        <label for="prompt_${name}">${label}${required ? ' <span class="required-star">*</span>' : ''}</label>
+        <input id="prompt_${name}" data-name="${name}" type="${type}" ${required ? 'required' : ''} value="${value.replace(/\"/g,'&quot;')}" placeholder="${placeholder.replace(/\"/g,'&quot;')}" />
+      </div>`;
+    }).join('');
+
+    // wire value collection + submit on Enter
+    promptFields.querySelectorAll('input[data-name]').forEach(inp => {
+      const k = inp.getAttribute('data-name');
+      _promptValues[k] = inp.value;
+      inp.addEventListener('input', ()=>{ _promptValues[k] = inp.value; });
+      inp.addEventListener('keydown', (e)=>{
+        if(e.key === 'Enter'){
+          e.preventDefault();
+          promptOk?.click();
+        }
+      });
+    });
+
+    _openModal(promptModal);
+
+    // focus first
+    const first = promptFields.querySelector('input');
+    if(first) { try { first.focus(); first.select && first.select(); } catch(e) {} }
+
+    return new Promise(resolve => { _promptResolve = resolve; });
+  }
+
+  promptClose?.addEventListener('click', ()=> closePrompt(null));
+  promptCancel?.addEventListener('click', ()=> closePrompt(null));
+  promptOk?.addEventListener('click', ()=>{
+    if(!promptFields) { closePrompt(null); return; }
+    // enforce required
+    const req = Array.from(promptFields.querySelectorAll('input[required]'));
+    for(const r of req){
+      if(!String(r.value || '').trim()) { try { r.focus(); } catch(e) {} return; }
+    }
+    closePrompt(_promptValues || {});
+  });
+  promptModal?.addEventListener('click', (e)=>{ if(e.target === promptModal) closePrompt(null); });
+
+  function openModal(){
+    _openModal(modal);
+    modalProgress.style.width = '0%';
+    modalResults.innerHTML = '<tr><td colspan="3" class="td-center-muted">Pregătit pentru scanare...</td></tr>';
+  }
+  function closeModal(){ _closeModal(modal); }
+  btnDiscovery?.addEventListener('click', openModal);
+  modalClose?.addEventListener('click', closeModal);
+  modal?.addEventListener('click', (e)=>{ if(e && e.target === modal) closeModal(); });
+
+  async function runScan(targetSubnet, setProgress, setTable){
+    try {
+      setProgress(5);
+      const resp = await fetch(`/agent/devices/discover/?base=${encodeURIComponent(targetSubnet)}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
+      setProgress(40);
+      const data = await resp.json();
+      setProgress(80);
+      if(!data.ok){
+        setTable(`<tr><td colspan="3" class="td-center-error">Eroare: ${data.error || 'scan failed'}</td></tr>`);
+        setProgress(100);
+        return;
+      }
+      if(!data.responsive || data.responsive.length === 0){
+        setTable('<tr><td colspan="3" class="td-center-muted">Nicio centrală găsită. Verifică firewall/ICMP.</td></tr>');
+        setProgress(100);
+        return;
+      }
+      const rows = data.responsive.map(ip => {
+        return `<tr>
+          <td>${ip}</td>
+          <td>${data.method || 'n/a'}</td>
+          <td>
+            <button type="button" data-ip="${ip}" class="btn-add">Adaugă</button>
+            <button type="button" data-ip="${ip}" class="btn-ip">Schimbă IP</button>
+          </td>
+        </tr>`;
+      }).join('');
+      setTable(rows);
+      setProgress(100);
+    } catch (err){
+      setTable(`<tr><td colspan="3" class="td-center-error">Eroare: ${err}</td></tr>`);
+      setProgress(100);
+    }
+  }
+
+  async function quickAdd(ip){
+    const vals = await openPromptDialog({
+      title: 'Adaugă centrală',
+      message: `Date pentru ${ip}`,
+      okText: 'Salvează',
+      cancelText: 'Renunță',
+      fields: [
+        {name:'name', label:'Nume', placeholder:`Centrală ${ip}`, value:`Centrală ${ip}`, required:true},
+        {name:'serial', label:'Serie (opțional)', placeholder:'', value:''},
+        {name:'port', label:'Port', type:'number', placeholder:'4370', value:'4370'}
+      ]
+    });
+    if(!vals) return false;
+    const name = String(vals.name || `Centrală ${ip}`) || `Centrală ${ip}`;
+    const serial = String(vals.serial || '');
+    const port = parseInt(String(vals.port || '4370') || '4370', 10) || 4370;
+    const resp = await fetch('{% url "device-discover-apply" %}', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken': getCSRF()},
+      body: JSON.stringify({action:'add', ip, name, serial_number: serial, port})
+    });
+    const data = await resp.json();
+    const ok = data && data.ok;
+    flash(areaFlash, ok ? `Centrală salvată (${data.id})` : (data.error || 'Eroare la salvare'), !ok);
+    return ok;
+  }
+
+  async function changeIp(ip){
+    const vals = await openPromptDialog({
+      title: 'Schimbă IP',
+      message: `Schimbare IP pentru ${ip}`,
+      okText: 'Aplică',
+      cancelText: 'Renunță',
+      fields: [
+        {name:'target', label:'IP nou', placeholder: ip, value: ip, required:true},
+        {name:'device_id', label:'ID device existent (opțional)', placeholder:'', value:''},
+        {name:'serial', label:'Serie existentă (opțional)', placeholder:'', value:''}
+      ]
+    });
+    if(!vals) return;
+    const target = String(vals.target || '').trim();
+    if(!target) return;
+    const deviceId = String(vals.device_id || '').trim();
+    const serial = String(vals.serial || '').trim();
+    const resp = await fetch('{% url "device-discover-apply" %}', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','X-CSRFToken': getCSRF()},
+      body: JSON.stringify({action:'change_ip', ip, target_ip: target, device_id: deviceId, serial_number: serial})
+    });
+    const data = await resp.json();
+    const ok = data && data.ok;
+    flash(areaFlash, ok ? `IP actualizat la ${target}` : (data.error || 'Eroare schimbare IP'), !ok);
+  }
+
+  function bindInlineActions(container){
+    container.querySelectorAll('.btn-add').forEach(btn => {
+      btn.addEventListener('click', async () => { const ip = btn.dataset.ip; await quickAdd(ip); });
+    });
+    container.querySelectorAll('.btn-ip').forEach(btn => {
+      btn.addEventListener('click', async () => { const ip = btn.dataset.ip; await changeIp(ip); });
+    });
+  }
+
+  modalStart?.addEventListener('click', () => {
+    const subnet = modalSubnet.value.trim() || subnetInput?.value.trim() || '';
+    if(!subnet){ modalSubnet.focus(); return; }
+    modalResults.innerHTML = '<tr><td colspan="3" class="td-center-muted">Scanare în curs...</td></tr>';
+    runScan(subnet, (val)=>{ modalProgress.style.width = `${val}%`; }, (html)=>{ modalResults.innerHTML = html; bindInlineActions(modalResults); });
+  });
+
+  document.getElementById('btnStartScan')?.addEventListener('click', () => {
+    const subnet = subnetInput.value.trim();
+    if(!subnet){ subnetInput.value = ''; subnetInput.placeholder = 'ex: 192.168.1'; subnetInput.focus(); return; }
+    scanResultsTbl.innerHTML = '<tr><td colspan="3" class="td-center-muted">Scanare în curs...</td></tr>';
+    runScan(subnet, (val)=>{ scanProgress.style.width = `${val}%`; }, (html)=>{ scanResultsTbl.innerHTML = html; bindInlineActions(scanResultsTbl); });
+  });
+
+  btnQuickAdd?.addEventListener('click', () => {
+    (async ()=>{
+      const vals = await openPromptDialog({
+        title: 'Centrală nouă',
+        message: 'Introdu IP-ul centralei:',
+        okText: 'Continuă',
+        cancelText: 'Renunță',
+        fields: [{name:'ip', label:'IP', placeholder:(subnetInput.value || '192.168.1.201'), value:(subnetInput.value || '192.168.1.201'), required:true}]
+      });
+      if(!vals) return;
+      const ip = String(vals.ip || '').trim();
+      if(ip) await quickAdd(ip);
+    })();
+  });
+
+  // ===== Device create/edit modal (loads the full fragment-based form) =====
+  const deviceCreateModal = document.getElementById('modalDeviceCreate');
+  const scannerCreateModal = document.getElementById('modalScannerCreate');
+  const btnDeviceNew = document.getElementById('btnDeviceNew');
+  const btnDeviceScanner = document.getElementById('btnDeviceScanner');
+
+  function showMenuActionOverlay(message, ok){
+    const el = document.getElementById('menuActionOverlay');
+    if(!el) return;
+    const t = document.getElementById('menuActionTitle');
+    const m = document.getElementById('menuActionMsg');
+    if(t) t.textContent = ok ? 'Succes' : 'Eroare';
+    if(m) m.textContent = message || '';
+    el.classList.remove('success','error','loading');
+    el.classList.add(ok ? 'success' : 'error');
+    el.style.display = 'flex';
+    setTimeout(()=>{ el.style.display = 'none'; }, 1100);
+  }
+
+  function showMenuActionLoading(title, message){
+    const el = document.getElementById('menuActionOverlay');
+    if(!el) return;
+    const t = document.getElementById('menuActionTitle');
+    const m = document.getElementById('menuActionMsg');
+    if(t) t.textContent = title || 'Se procesează';
+    if(m) m.textContent = message || '';
+    // restart bar animation
+    try {
+      const bar = el.querySelector('.bar');
+      if(bar) bar.innerHTML = '<div></div>';
+    } catch(e) {}
+    el.classList.remove('success','error','loading');
+    el.classList.add('loading');
+    el.style.display = 'flex';
+  }
+
+  function hideMenuActionOverlay(){
+    const el = document.getElementById('menuActionOverlay');
+    if(!el) return;
+    el.style.display = 'none';
+    el.classList.remove('success','error','loading');
+  }
+
+  function _executeInlineScripts(container){
+    const scripts = Array.from(container.querySelectorAll('script'));
+    for(const oldScript of scripts){
+      const newScript = document.createElement('script');
+      if(oldScript.src){ newScript.src = oldScript.src; newScript.async = false; }
+      newScript.text = oldScript.textContent || '';
+      document.head.appendChild(newScript);
+      oldScript.remove();
+    }
+  }
+
+  window.replaceDeviceModalContent = function(html){
+    const content = document.getElementById('deviceCreateContent');
+    if(!content) return;
+    content.innerHTML = html;
+    _executeInlineScripts(content);
+    try { content.scrollTop = 0; } catch(e) {}
+  };
+
+  function closeDeviceModal(){
+    if(!deviceCreateModal) return;
+    _closeModal(deviceCreateModal);
+    window.setTimeout(()=>{
+      const content = document.getElementById('deviceCreateContent');
+      if(content) content.innerHTML = '';
+      const status = document.getElementById('deviceCreateStatus');
+      if(status) status.textContent = '';
+    }, 180);
+  }
+  window.closeDeviceModal = closeDeviceModal;
+
+  // Guard: never allow the modal form to navigate to the full page (even if inline scripts fail to bind).
+  (function ensureDeviceModalAjaxGuard(){
+    if(!deviceCreateModal) return;
+    if(deviceCreateModal.dataset.ajaxGuard === '1') return;
+    deviceCreateModal.dataset.ajaxGuard = '1';
+
+    deviceCreateModal.addEventListener('submit', async (e) => {
+      const formEl = e.target;
+      if(!(formEl instanceof HTMLFormElement)) return;
+      if(formEl.getAttribute('data-ajax') !== '1') return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+
+      const statusEl = document.getElementById('deviceCreateStatus');
+      if(statusEl) statusEl.textContent = '⏳ Se salvează...';
+
+      try{
+        const fd = new FormData(formEl);
+        const resp = await fetch(formEl.getAttribute('action') || '/agent/crud/devices/new/', {
+          method: 'POST',
+          headers: { 'X-CSRFToken': getCSRF() || '', 'X-Requested-With': 'XMLHttpRequest' },
+          body: fd,
+        });
+        const data = await resp.json();
+        if(data && data.ok){
+          if(statusEl) statusEl.textContent = '✓ Salvat!';
+          if(typeof showMenuActionOverlay === 'function'){
+            showMenuActionOverlay(data.message || 'Dispozitiv salvat cu succes!', true);
+          }
+          setTimeout(() => {
+            if(data.redirect_url){ window.location.href = data.redirect_url; }
+            else { window.location.reload(); }
+          }, 900);
+          return;
+        }
+
+        const msg = (data && (data.error || data.message)) || 'Eroare salvare';
+        if(statusEl) statusEl.textContent = '✗ ' + msg;
+        if(typeof showMenuActionOverlay === 'function') showMenuActionOverlay(msg, false);
+        if(data && data.html && typeof window.replaceDeviceModalContent === 'function'){
+          window.replaceDeviceModalContent(data.html);
+        }
+      }catch(err){
+        const msg = err && err.message ? err.message : String(err);
+        if(statusEl) statusEl.textContent = '✗ ' + msg;
+        if(typeof showMenuActionOverlay === 'function') showMenuActionOverlay(msg, false);
+      }
+    }, true);
+  })();
+
+  async function openDeviceModal(url, title){
+    if(!deviceCreateModal) return;
+    const header = document.getElementById('deviceCreateTitle');
+    const content = document.getElementById('deviceCreateContent');
+    if(header) header.textContent = title || 'Dispozitiv';
+    _openModal(deviceCreateModal);
+    if(content) content.innerHTML = '<div class="inline-msg loading">⏳ Se încarcă...</div>';
+    try{
+      const resp = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+      const html = await resp.text();
+      window.replaceDeviceModalContent(html);
+    }catch(e){
+      if(content) content.innerHTML = '<div class="inline-msg error">⚠ Eroare la încărcare: ' + (e && e.message ? e.message : e) + '</div>';
+    }
+  }
+  window.openDeviceModal = openDeviceModal;
+
+  function openDeviceCreate(){
+    const url = '{% url "crud-device-create" %}?next={{ request.get_full_path|urlencode }}';
+    openDeviceModal(url, '✚ Dispozitiv Nou');
+  }
+  function closeDeviceCreate(){ closeDeviceModal(); }
+
+  function openScannerCreate(){
+    if(!scannerCreateModal) return;
+    _openModal(scannerCreateModal);
+  }
+  function closeScannerCreate(){
+    if(!scannerCreateModal) return;
+    _closeModal(scannerCreateModal);
+    window.setTimeout(()=>{
+      const form = document.getElementById('scannerCreateForm');
+      form?.reset();
+      const status = document.getElementById('scannerCreateStatus');
+      if(status) status.textContent = '';
+      // ensure default comm view
+      const tcp = document.getElementById('scannerTcp');
+      const rs = document.getElementById('scannerRs485');
+      if(tcp) tcp.classList.remove('is-hidden');
+      if(rs) rs.classList.add('is-hidden');
+      const cm = document.getElementById('scannerCommMode');
+      if(cm) cm.value = 'tcp';
+    }, 180);
+  }
+
+  btnDeviceNew?.addEventListener('click', openDeviceCreate);
+  btnDeviceScanner?.addEventListener('click', openScannerCreate);
+  document.getElementById('deviceCreateClose')?.addEventListener('click', closeDeviceCreate);
+  document.getElementById('scannerCreateClose')?.addEventListener('click', closeScannerCreate);
+  document.getElementById('scannerCreateCancel')?.addEventListener('click', closeScannerCreate);
+
+  // Click outside to close
+  deviceCreateModal?.addEventListener('click', (e) => {
+    if(e && e.target === deviceCreateModal) closeDeviceCreate();
+  });
+  scannerCreateModal?.addEventListener('click', (e) => {
+    if(e && e.target === scannerCreateModal) closeScannerCreate();
+  });
+
+  // Escape to close
+  document.addEventListener('keydown', (e) => {
+    if(e.key !== 'Escape') return;
+    if(deviceCreateModal && deviceCreateModal.classList.contains('is-open')) closeDeviceCreate();
+    if(scannerCreateModal && scannerCreateModal.classList.contains('is-open')) closeScannerCreate();
+    if(promptModal && promptModal.classList.contains('is-open')) closePrompt(null);
+    if(modal && modal.classList.contains('is-open')) closeModal();
+    if(auditLogsModal && auditLogsModal.classList.contains('is-open')) closeAuditLogs();
+    if(csvImportModal && csvImportModal.classList.contains('is-open')) closeCsvImport();
+  });
+
+  // Toggle scanner comm blocks
+  const scannerType = document.getElementById('scannerType');
+  scannerType?.addEventListener('change', () => {
+    const v = scannerType.value;
+    const tcp = document.getElementById('scannerTcp');
+    const rs = document.getElementById('scannerRs485');
+    const cm = document.getElementById('scannerCommMode');
+    if(v === 'acp'){
+      if(tcp) tcp.classList.remove('is-hidden');
+      if(rs) rs.classList.add('is-hidden');
+      if(cm) cm.value = 'tcp';
+    } else {
+      if(tcp) tcp.classList.add('is-hidden');
+      if(rs) rs.classList.remove('is-hidden');
+      if(cm) cm.value = 'rs485';
+    }
+  });
+
+  // NOTE: create/edit submit is handled inside the fragment itself (AJAX + inline validation)
+
+  document.getElementById('scannerCreateForm')?.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const formEl = document.getElementById('scannerCreateForm');
+    const statusEl = document.getElementById('scannerCreateStatus');
+    if(formEl && statusEl){
+      // Ensure scanner_linked is always on
+      const fd = new FormData(formEl);
+      fd.set('scanner_linked', 'on');
+      statusEl.textContent = '⏳ Se salvează...';
+      fetch('/agent/crud/devices/new/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCSRF(), 'X-Requested-With': 'XMLHttpRequest' },
+        body: fd,
+      }).then(r => r.json()).then(data => {
+        if(data && data.ok){
+          statusEl.textContent = '✓ Salvat!';
+          showMenuActionOverlay('Dispozitiv adăugat cu succes!', true);
+          setTimeout(() => { location.reload(); }, 900);
+        } else {
+          const msg = 'Eroare: ' + ((data && (data.error || data.message)) || 'Necunoscut');
+          statusEl.textContent = '✗ ' + msg;
+          showMenuActionOverlay(msg, false);
+        }
+      }).catch(err => {
+        const msg = 'Eroare: ' + (err && err.message ? err.message : String(err));
+        statusEl.textContent = '✗ ' + msg;
+        showMenuActionOverlay(msg, false);
+      });
+    }
+  });
+
+  // ===== Scanner modal: Discover / Ping / Port Test =====
+  async function scannerDiscover(){
+    const base = (document.getElementById('scanner_discovery_prefix')?.value || '').trim();
+    const out = document.getElementById('scannerDiscoveryResults');
+    if(!base){ if(out) out.textContent = 'Completează Prefix Rețea (base).'; return; }
+    if(out) out.textContent = '⏳ Scanare rețea...';
+    try{
+      const resp = await fetch(`/agent/devices/discover/?base=${encodeURIComponent(base)}`);
+      const data = await resp.json();
+      if(data && data.ok){
+        const ips = (data.responsive || []).slice(0, 50);
+        if(ips.length === 0){
+          if(out) out.textContent = `Niciun IP găsit (metoda: ${data.method || 'n/a'}).`;
+        } else {
+          if(out) out.innerHTML = `Găsite ${data.count || ips.length} IP-uri (${data.method || 'n/a'}):<br>` + ips.map(ip=>`<a href="#" data-ip="${ip}" class="ip-link">${ip}</a>`).join(', ');
+          out?.querySelectorAll('a[data-ip]')?.forEach(a => {
+            a.addEventListener('click', (ev)=>{
+              ev.preventDefault();
+              const ip = a.getAttribute('data-ip');
+              const ipField = document.querySelector('#scannerCreateForm input[name="ip_address"]');
+              const pingField = document.getElementById('scanner_ping_ip');
+              const portIp = document.getElementById('scanner_port_ip');
+              if(ipField) ipField.value = ip || '';
+              if(pingField) pingField.value = ip || '';
+              if(portIp) portIp.value = ip || '';
+            });
+          });
+        }
+      } else {
+        if(out) out.textContent = 'Eroare scanare: ' + ((data && data.error) || 'Necunoscut');
+      }
+    }catch(e){
+      if(out) out.textContent = 'Eroare scanare: ' + (e && e.message ? e.message : e);
+    }
+  }
+
+  async function scannerPing(){
+    const ip = (document.getElementById('scanner_ping_ip')?.value || '').trim();
+    const out = document.getElementById('scannerDiscoveryResults');
+    if(!ip){ if(out) out.textContent = 'Completează IP pentru Ping.'; return; }
+    if(out) out.textContent = '⏳ Ping...';
+    try{
+      const resp = await fetch(`/agent/devices/ping/?ip=${encodeURIComponent(ip)}`);
+      const data = await resp.json();
+      if(data && data.ok){
+        if(out) out.textContent = data.alive ? `✓ Ping OK: ${ip}` : `✗ Ping FAIL: ${ip}`;
+      } else {
+        if(out) out.textContent = 'Eroare ping: ' + ((data && data.error) || 'Necunoscut');
+      }
+    }catch(e){
+      if(out) out.textContent = 'Eroare ping: ' + (e && e.message ? e.message : e);
+    }
+  }
+
+  async function scannerPortTest(){
+    const ip = (document.getElementById('scanner_port_ip')?.value || '').trim();
+    const port = (document.getElementById('scanner_port_num')?.value || '4370').toString().trim();
+    const out = document.getElementById('scannerDiscoveryResults');
+    if(!ip){ if(out) out.textContent = 'Completează IP pentru Test Port.'; return; }
+    if(out) out.textContent = '⏳ Test port...';
+    try{
+      const resp = await fetch(`/agent/devices/port-test/?ip=${encodeURIComponent(ip)}&port=${encodeURIComponent(port)}`);
+      const data = await resp.json();
+      if(data && data.ok){
+        if(out) out.textContent = data.open ? `✓ Port ${data.port} OPEN: ${data.ip}` : `✗ Port ${data.port} CLOSED/FILTERED: ${data.ip}`;
+      } else {
+        if(out) out.textContent = 'Eroare port-test: ' + ((data && data.error) || 'Necunoscut');
+      }
+    }catch(e){
+      if(out) out.textContent = 'Eroare port-test: ' + (e && e.message ? e.message : e);
+    }
+  }
+
+  document.getElementById('scannerBtnDiscover')?.addEventListener('click', scannerDiscover);
+  document.getElementById('scannerBtnPing')?.addEventListener('click', scannerPing);
+  document.getElementById('scannerBtnPort')?.addEventListener('click', scannerPortTest);
+
+  function _monthLabel(m){
+    const mm = parseInt(m, 10);
+    const map = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+    return map[(mm-1+12)%12] || String(m);
+  }
+
+  function _weekdayLabel(d){
+    const dd = parseInt(d, 10);
+    const map = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    return map[dd] || String(d);
+  }
+
+  function _weekLabel(w){
+    const map = {first:'First', second:'Second', third:'Third', fourth:'Fourth', fifth:'Fifth', last:'Last'};
+    return map[w] || String(w || '');
+  }
+
+  function _renderSelectOptions(){
+    // DST month options
+    const months = Array.from({length:12}, (_,i)=>i+1)
+      .map(v => `<option value="${v}">${_monthLabel(v)}</option>`).join('');
+    if(dstModalStartMonth && dstModalStartMonth.innerHTML.trim() === '') dstModalStartMonth.innerHTML = months;
+    if(dstModalEndMonth && dstModalEndMonth.innerHTML.trim() === '') dstModalEndMonth.innerHTML = months;
+
+    const weeks = ['first','second','third','fourth','fifth','last']
+      .map(v => `<option value="${v}">${_weekLabel(v)}</option>`).join('');
+    if(dstModalStartWeek && dstModalStartWeek.innerHTML.trim() === '') dstModalStartWeek.innerHTML = weeks;
+    if(dstModalEndWeek && dstModalEndWeek.innerHTML.trim() === '') dstModalEndWeek.innerHTML = weeks;
+
+    const weekdays = [
+      {v:0, t:'Monday'}, {v:1,t:'Tuesday'}, {v:2,t:'Wednesday'}, {v:3,t:'Thursday'},
+      {v:4,t:'Friday'}, {v:5,t:'Saturday'}, {v:6,t:'Sunday'},
+    ].map(x => `<option value="${x.v}">${x.t}</option>`).join('');
+    if(dstModalStartWeekday && dstModalStartWeekday.innerHTML.trim() === '') dstModalStartWeekday.innerHTML = weekdays;
+    if(dstModalEndWeekday && dstModalEndWeekday.innerHTML.trim() === '') dstModalEndWeekday.innerHTML = weekdays;
+  }
+
+  function _openModal(el){
+    if(!el) return;
+    el.style.display = 'flex';
+    requestAnimationFrame(()=> el.classList.add('is-open'));
+  }
+  function _closeModal(el){
+    if(!el) return;
+    el.classList.remove('is-open');
+    window.setTimeout(()=>{ el.style.display = 'none'; }, 180);
+  }
+
+  function _activeTab(){
+    const b = document.querySelector('#deviceTabs .tab-btn.active');
+    return (b && b.dataset && b.dataset.tab) ? b.dataset.tab : 'area';
+  }
+
+  function _reloadWholePageKeepingTab(tab){
+    try{
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', tab);
+      window.location.href = url.toString();
+    }catch(_e){
+      window.location.reload();
+    }
+  }
+
+  function _downloadCSV(filename, csvText){
+    const blob = new Blob([csvText], {type:'text/csv;charset=utf-8;'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    window.setTimeout(()=>{
+      try{ URL.revokeObjectURL(a.href); }catch(_e){}
+      a.remove();
+    }, 250);
+  }
+
+  function _tableToCSV(table){
+    if(!table) return '';
+    const rows = Array.from(table.querySelectorAll('tr'));
+    const out = [];
+    for(const r of rows){
+      const cells = Array.from(r.querySelectorAll('th,td')).map(td => {
+        const txt = (td.textContent || '').replace(/\r?\n/g,' ').trim();
+        const escaped = '"' + txt.replace(/"/g,'""') + '"';
+        return escaped;
+      });
+      if(cells.length) out.push(cells.join(','));
+    }
+    return out.join('\n');
+  }
+
+  function exportTabTable(tab){
+    // server-side uniform CSV (importable)
+    const map = { area: 'area', devices: 'device', dst: 'dst', commands: 'command', monitor: 'device' };
+    const mod = map[tab] || 'device';
+
+    if(window.zkActionModal && typeof window.zkActionModal.openCsvExport === 'function'){
+      const ttl = String(tab || '').toUpperCase() || 'ECHIPAMENTE';
+      window.zkActionModal.openCsvExport(mod, `EXPORT – ${ttl}`, 'Export CSV (separator ;)');
+      return;
+    }
+
+    try {
+      showMenuActionLoading('Export în curs', 'Se pregătește fișierul CSV...');
+      setTimeout(()=>{
+        showMenuActionOverlay('Export pornit. Dacă nu începe descărcarea, verifică permisiunea de download în browser.', true);
+      }, 650);
+    } catch(e) {}
+    window.location = `/agent/api/csv/${encodeURIComponent(String(mod))}/export/`;
+  }
+
+  function openCsvImport(module, title){
+    _csvImportModule = module || 'equipment';
+    _csvImportTitle = title || 'Import';
+
+    if(window.zkActionModal && typeof window.zkActionModal.openCsvImport === 'function'){
+      const tab = _activeTab();
+      window.zkActionModal.openCsvImport(
+        _csvImportModule,
+        `IMPORT – ${_csvImportTitle}`,
+        'Import CSV (separator ;)',
+        async ()=>{
+          try{
+            if(tab === 'area') { refreshAreas(); return; }
+            if(tab === 'dst') { refreshDST(); return; }
+            if(tab === 'commands') { loadCommands(); return; }
+            _reloadWholePageKeepingTab(tab);
+          }catch(_e){}
+        }
+      );
+      return;
+    }
+
+    if(csvImportTitle) csvImportTitle.textContent = `IMPORT – ${String(_csvImportTitle || '').toUpperCase()}`;
+    if(csvImportStatus) csvImportStatus.textContent = 'Alege un fișier CSV.';
+    if(csvImportFile) csvImportFile.value = '';
+    updateCsvImportSchema();
+    _openModal(csvImportModal);
+  }
+  function closeCsvImport(){
+    _closeModal(csvImportModal);
+  }
+  csvImportClose?.addEventListener('click', closeCsvImport);
+  csvImportModal?.addEventListener('click', (e)=>{ if(e && e.target === csvImportModal) closeCsvImport(); });
+
+  async function runCsvImport(){
+    if(!csvImportFile || !csvImportFile.files || csvImportFile.files.length === 0){
+      if(csvImportStatus) csvImportStatus.textContent = 'Selectează fișierul CSV.';
+      return;
+    }
+    const f = csvImportFile.files[0];
+    if(csvImportStatus) csvImportStatus.textContent = '⏳ Import în curs...';
+    try { showMenuActionLoading('Import în curs', 'Se încarcă fișierul și se validează rândurile...'); } catch(e) {}
+    try{
+      const fd = new FormData();
+      fd.append('file', f);
+      const url = `/agent/api/csv/${encodeURIComponent(String(_csvImportModule || 'equipment'))}/import/`;
+      const resp = await fetch(url, {
+        method:'POST',
+        headers:{
+          'X-Requested-With':'XMLHttpRequest',
+          'X-CSRFToken': (getCSRF() || '')
+        },
+        body: fd
+      });
+
+      const ctype = String(resp.headers.get('content-type') || '').toLowerCase();
+      let data = null;
+      if(ctype.includes('application/json')){
+        data = await resp.json();
+      } else {
+        const text = await resp.text();
+        throw new Error('Răspuns invalid de la server (nu este JSON). Probabil CSRF/autentificare/eroare server. ' + String(text || '').slice(0, 160));
+      }
+
+      if(!data || !data.ok){
+        const errMsg = (data && (data.error || data.message)) ? String(data.error || data.message) : String(resp.status);
+        if(csvImportStatus) csvImportStatus.textContent = '✗ Import eșuat: ' + errMsg;
+        try { showMenuActionOverlay('Import eșuat: ' + errMsg, false); } catch(e) {}
+        return;
+      }
+      const errs = (data.errors && Array.isArray(data.errors)) ? data.errors : [];
+      const head = `✓ Import OK\ncreated=${data.created||0} updated=${data.updated||0} failed=${data.failed||0}`;
+      const tail = errs.length ? ('\n\nErori (primele):\n' + errs.slice(0, 15).map(e=>`row ${e.row}: ${e.error}`).join('\n')) : '';
+      if(csvImportStatus) csvImportStatus.textContent = head + tail;
+
+      try { showMenuActionOverlay(`Import finalizat: create=${data.created||0}, update=${data.updated||0}, eșuate=${data.failed||0}`, true); } catch(e) {}
+
+      const tab = _activeTab();
+      if(tab === 'area') { refreshAreas(); return; }
+      if(tab === 'dst') { refreshDST(); return; }
+      if(tab === 'commands') { loadCommands(); return; }
+      _reloadWholePageKeepingTab(tab);
+    }catch(err){
+      const msg = (err && err.message) ? err.message : String(err);
+      if(csvImportStatus) csvImportStatus.textContent = '✗ Eroare: ' + msg;
+      try { showMenuActionOverlay('Import eșuat: ' + msg, false); } catch(e) {}
+    }
+  }
+  csvImportRun?.addEventListener('click', runCsvImport);
+
+  async function openAuditLogs(module, title){
+    if(!auditLogsModal || !auditLogsBody) return;
+    if(auditLogsTitle) auditLogsTitle.textContent = `LOGURI – ${(title || '').toUpperCase()}`;
+    if(auditLogsHint) auditLogsHint.textContent = 'Se încarcă...';
+    auditLogsBody.innerHTML = '<tr><td colspan="6" class="td-center-muted">Se încarcă...</td></tr>';
+    _openModal(auditLogsModal);
+    try{
+      const url = `/agent/logs/view/?module=${encodeURIComponent(String(module || 'equipment'))}`;
+      const resp = await fetch(url, {headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}});
+      const data = await resp.json();
+      const items = (data && Array.isArray(data.items)) ? data.items : [];
+      if(auditLogsHint) auditLogsHint.textContent = `Înregistrări: ${items.length}`;
+      if(items.length === 0){
+        auditLogsBody.innerHTML = '<tr><td colspan="6" class="td-center-muted">Nu există loguri.</td></tr>';
+        return;
+      }
+      auditLogsBody.innerHTML = items.map(it => {
+        const dt = (it.datetime || '').replace('T',' ').slice(0,19);
+        const mod = it.module || '';
+        const ent = it.entity || '';
+        const usr = it.employee || '';
+        const ev = it.event || '';
+        const det = it.details || '';
+        return `<tr>
+          <td>${String(dt).replace(/\</g,'&lt;')}</td>
+          <td>${String(mod).replace(/\</g,'&lt;')}</td>
+          <td>${String(ent).replace(/\</g,'&lt;')}</td>
+          <td>${String(usr).replace(/\</g,'&lt;')}</td>
+          <td>${String(ev).replace(/\</g,'&lt;')}</td>
+          <td>${String(det).replace(/\</g,'&lt;')}</td>
+        </tr>`;
+      }).join('');
+    }catch(err){
+      if(auditLogsHint) auditLogsHint.textContent = 'Eroare încărcare loguri.';
+      auditLogsBody.innerHTML = `<tr><td colspan="6" class="td-center-error">${String(err).replace(/\</g,'&lt;')}</td></tr>`;
+    }
+  }
+
+  function closeAuditLogs(){
+    if(!auditLogsModal) return;
+    _closeModal(auditLogsModal);
+  }
+  auditLogsClose?.addEventListener('click', closeAuditLogs);
+  auditLogsModal?.addEventListener('click', (e)=>{ if(e && e.target === auditLogsModal) closeAuditLogs(); });
+
+  document.addEventListener('click', (e)=>{
+    const btn = e.target && e.target.closest ? e.target.closest('[data-equip-action]') : null;
+    if(!btn) return;
+    const action = btn.getAttribute('data-equip-action');
+    const tab = btn.getAttribute('data-equip-tab') || _activeTab();
+    if(action === 'reload'){
+      if(tab === 'area') { refreshAreas(); return; }
+      if(tab === 'dst') { refreshDST(); return; }
+      if(tab === 'commands') { loadCommands(); return; }
+      _reloadWholePageKeepingTab(tab);
+      return;
+    }
+    if(action === 'export'){
+      exportTabTable(tab);
+      return;
+    }
+    if(action === 'logs'){
+      const mod = btn.getAttribute('data-equip-module') || 'equipment';
+      const title = btn.getAttribute('data-equip-title') || tab;
+      openAuditLogs(mod, title);
+      return;
+    }
+    if(action === 'import'){
+      const mod = btn.getAttribute('data-equip-module') || 'equipment';
+      const title = btn.getAttribute('data-equip-title') || tab;
+      openCsvImport(mod, title);
+      return;
+    }
+  });
+
+  function openConfirm(title, message, action){
+    if(window.zkConfirmDialog){
+      const t = title || 'Confirmare';
+      const m = message || '';
+      zkConfirmDialog({title: t, message: m, okText: 'Confirmă', cancelText: 'Renunță', variant: 'danger'})
+        .then(ok=>{ if(ok && typeof action === 'function') { try{ action(); }catch(_e){} } });
+      return;
+    }
+    _confirmAction = typeof action === 'function' ? action : null;
+    if(confirmTitle) confirmTitle.textContent = title || 'Confirmare';
+    if(confirmMessage) confirmMessage.textContent = message || '';
+    _openModal(confirmModal);
+  }
+  function closeConfirm(){
+    _confirmAction = null;
+    _closeModal(confirmModal);
+  }
+  confirmClose?.addEventListener('click', closeConfirm);
+  confirmCancel?.addEventListener('click', closeConfirm);
+  confirmModal?.addEventListener('click', (e)=>{ if(e && e.target === confirmModal) closeConfirm(); });
+  confirmOk?.addEventListener('click', async ()=>{
+    const fn = _confirmAction;
+    closeConfirm();
+    try{ if(fn) await fn(); }catch(_e){}
+  });
+
+  function openAreaModal(item){
+    if(areaModalStatus) areaModalStatus.textContent = '';
+    if(areaModalTitle) areaModalTitle.textContent = item ? '✎ Editează zonă' : '✚ Zonă nouă';
+    if(areaModalId) areaModalId.value = item ? String(item.id || '') : '';
+    if(areaModalCode) areaModalCode.value = item ? (item.code || '') : '';
+    if(areaModalName) areaModalName.value = item ? (item.name || '') : '';
+    if(areaModalNotes) areaModalNotes.value = item ? (item.remarks || '') : '';
+
+    if(areaModalParent){
+      const opts = ['<option value="">(Niciuna)</option>']
+        .concat(_cachedAreas.map(a => {
+          const label = ((a.code ? (a.code + ' - ') : '') + (a.name || '')).trim();
+          return `<option value="${a.id}">${String(label).replace(/\"/g,'&quot;')}</option>`;
+        }));
+      areaModalParent.innerHTML = opts.join('');
+      const parentId = item ? (item.parent_id || '') : '';
+      areaModalParent.value = parentId ? String(parentId) : '';
+    }
+
+    _openModal(areaModal);
+    setTimeout(()=>{ areaModalCode?.focus(); }, 50);
+  }
+  function closeAreaModal(){ _closeModal(areaModal); }
+  areaModalClose?.addEventListener('click', closeAreaModal);
+  areaModalCancel?.addEventListener('click', closeAreaModal);
+  areaModal?.addEventListener('click', (e)=>{ if(e && e.target === areaModal) closeAreaModal(); });
+
+  async function saveAreaFromModal(){
+    const code = (areaModalCode?.value || '').trim();
+    const name = (areaModalName?.value || '').trim();
+    const notes = (areaModalNotes?.value || '').trim();
+    const parentId = (areaModalParent?.value || '').trim();
+    const id = (areaModalId?.value || '').trim();
+    if(!code){ if(areaModalStatus) areaModalStatus.textContent = 'Completează codul zonei.'; areaModalCode?.focus(); return; }
+    if(!name){ if(areaModalStatus) areaModalStatus.textContent = 'Completează numele zonei.'; areaModalName?.focus(); return; }
+    if(areaModalStatus) areaModalStatus.textContent = '⏳ Se salvează...';
+    const payload = { id: id || undefined, name, code, notes, parent_id: parentId };
+    const resp = await fetch('{% url "api-area-save" %}', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken': getCSRF()},
+      body: JSON.stringify(payload)
+    });
+    const data = await resp.json();
+    if(data && data.ok){
+      closeAreaModal();
+      openAreaResultModal('Succes', id ? 'Zonă actualizată cu succes.' : 'Zonă adăugată cu succes.', false);
+      refreshAreas();
+    } else {
+      const err = (data && data.error) ? String(data.error) : 'Eroare la salvare';
+      const msg = err === 'duplicate-code' ? 'Codul zonei există deja. Alege alt cod.' : (err === 'empty-code' ? 'Codul zonei este obligatoriu.' : (err === 'empty-name' ? 'Numele este obligatoriu.' : err));
+      if(areaModalStatus) areaModalStatus.textContent = '✗ ' + msg;
+    }
+  }
+  areaModalForm?.addEventListener('submit', (e)=>{ e.preventDefault(); saveAreaFromModal(); });
+  btnAreaNew?.addEventListener('click', ()=> openAreaModal(null));
+
+  async function deleteArea(id){
+    const resp = await fetch(`/agent/crud/areas/${encodeURIComponent(String(id))}/delete/`, {
+      method:'POST',
+      headers:{'X-CSRFToken': getCSRF()}
+    });
+    const data = await resp.json();
+    if(data && data.ok){
+      openAreaResultModal('Succes', 'Zonă ștearsă.', false);
+      refreshAreas();
+    } else {
+      openAreaResultModal('Eroare', (data && data.error) ? String(data.error) : 'Eroare ștergere zonă', true);
+    }
+  }
+
+  async function refreshAreas(){
+    try{
+      const resp = await fetch('{% url "api-areas" %}');
+      const data = await resp.json();
+      if(data.ok && Array.isArray(data.items)){
+        _cachedAreas = data.items;
+
+        // Device zone dropdown
+        if(deviceCreateArea){
+          const current = (deviceCreateArea.value || '').trim();
+          const opts = ['<option value="">— Selectează zonă —</option>']
+            .concat(data.items.map(a => {
+              const name = (a.name || '').trim();
+              const label = ((a.code ? (a.code + ' - ') : '') + name).trim();
+              const safe = String(name).replace(/\"/g,'&quot;');
+              return `<option value="${safe}">${String(label).replace(/\"/g,'&quot;')}</option>`;
+            }));
+          deviceCreateArea.innerHTML = opts.join('');
+          if(current){
+            deviceCreateArea.value = current;
+          }
+        }
+
+        // Areas table
+        if(areasTableBody){
+          if(data.items.length === 0){
+            areasTableBody.innerHTML = '<tr><td colspan="5" class="td-center-muted">Nu există zone.</td></tr>';
+          } else {
+            areasTableBody.innerHTML = data.items.map(a => {
+              const code = a.code || '';
+              const name = a.name || '';
+              const parent = a.parent_name || '';
+              const remarks = a.remarks || '';
+              return `<tr>
+                <td>${String(code).replace(/\</g,'&lt;')}</td>
+                <td>${String(name).replace(/\</g,'&lt;')}</td>
+                <td>${String(parent).replace(/\</g,'&lt;')}</td>
+                <td>${String(remarks).replace(/\</g,'&lt;')}</td>
+                <td>
+                  <button type="button" class="row-action" data-action="edit-area" data-id="${a.id}" title="Editează zona">Edit</button>
+                  <button type="button" class="row-action delete" data-action="del-area" data-id="${a.id}" title="Șterge zona">Șterge</button>
+                </td>
+              </tr>`;
+            }).join('');
+          }
+        }
+      }
+    }catch(err){
+      // Keep a lightweight fallback indicator
+      flash(areaFlash, `Eroare încărcare zone: ${err}`, true);
+      if(areasTableBody){
+        areasTableBody.innerHTML = `<tr><td colspan="5" class="td-center-error">Eroare încărcare zone</td></tr>`;
+      }
+    }
+  }
+
+  function openDstModal(item){
+    _renderSelectOptions();
+    if(dstModalStatus) dstModalStatus.textContent = '';
+    if(dstModalTitle) dstModalTitle.textContent = item ? '✎ Editează DST' : '✚ Regulă DST';
+    if(dstModalId) dstModalId.value = item ? String(item.id || '') : '';
+    if(dstModalName) dstModalName.value = item ? (item.name || '') : '';
+    if(dstModalOffset) dstModalOffset.value = String((item && item.offset_minutes != null) ? item.offset_minutes : 60);
+
+    const s = item ? item.start : null;
+    const e = item ? item.end : null;
+    if(dstModalStartMonth) dstModalStartMonth.value = String((s && s.month) ? s.month : 3);
+    if(dstModalStartWeek) dstModalStartWeek.value = String((s && s.week) ? s.week : 'last');
+    if(dstModalStartWeekday) dstModalStartWeekday.value = String((s && s.weekday) != null ? s.weekday : 6);
+    if(dstModalStartHour) dstModalStartHour.value = String((s && s.hour) != null ? s.hour : 3);
+    if(dstModalStartMinute) dstModalStartMinute.value = String((s && s.minute) != null ? s.minute : 0);
+
+    if(dstModalEndMonth) dstModalEndMonth.value = String((e && e.month) ? e.month : 10);
+    if(dstModalEndWeek) dstModalEndWeek.value = String((e && e.week) ? e.week : 'last');
+    if(dstModalEndWeekday) dstModalEndWeekday.value = String((e && e.weekday) != null ? e.weekday : 6);
+    if(dstModalEndHour) dstModalEndHour.value = String((e && e.hour) != null ? e.hour : 3);
+    if(dstModalEndMinute) dstModalEndMinute.value = String((e && e.minute) != null ? e.minute : 0);
+
+    _openModal(dstModal);
+    setTimeout(()=>{ dstModalName?.focus(); }, 50);
+  }
+  function closeDstModal(){ _closeModal(dstModal); }
+  dstModalClose?.addEventListener('click', closeDstModal);
+  dstModalCancel?.addEventListener('click', closeDstModal);
+  dstModal?.addEventListener('click', (e)=>{ if(e && e.target === dstModal) closeDstModal(); });
+  btnDstNew?.addEventListener('click', ()=> openDstModal(null));
+
+  async function saveDstFromModal(){
+    const id = (dstModalId?.value || '').trim();
+    const name = (dstModalName?.value || '').trim();
+    if(!name){ if(dstModalStatus) dstModalStatus.textContent = 'Completează numele DST.'; dstModalName?.focus(); return; }
+    const payload = {
+      id: id || undefined,
+      name,
+      start_month: dstModalStartMonth?.value,
+      start_week: dstModalStartWeek?.value,
+      start_weekday: dstModalStartWeekday?.value,
+      start_hour: dstModalStartHour?.value,
+      start_minute: dstModalStartMinute?.value,
+      end_month: dstModalEndMonth?.value,
+      end_week: dstModalEndWeek?.value,
+      end_weekday: dstModalEndWeekday?.value,
+      end_hour: dstModalEndHour?.value,
+      end_minute: dstModalEndMinute?.value,
+      offset_minutes: dstModalOffset?.value || 60,
+    };
+    if(dstModalStatus) dstModalStatus.textContent = '⏳ Se salvează...';
+    const resp = await fetch('{% url "api-dst-save" %}', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-CSRFToken': getCSRF()},
+      body: JSON.stringify(payload)
+    });
+    const data = await resp.json();
+    if(data && data.ok){
+      closeDstModal();
+      flash(dstFlash, id ? 'DST actualizat.' : 'DST creat.', false);
+      refreshDST();
+    } else {
+      if(dstModalStatus) dstModalStatus.textContent = '✗ ' + ((data && data.error) ? String(data.error) : 'Eroare DST');
+    }
+  }
+  dstModalForm?.addEventListener('submit', (e)=>{ e.preventDefault(); saveDstFromModal(); });
+
+  async function deleteDst(id){
+    const resp = await fetch(`/agent/api/dst/${encodeURIComponent(String(id))}/delete/`, {
+      method:'POST',
+      headers:{'X-CSRFToken': getCSRF()}
+    });
+    const data = await resp.json();
+    flash(dstFlash, data && data.ok ? 'DST șters.' : ((data && data.error) ? String(data.error) : 'Eroare DST'), !(data && data.ok));
+    if(data && data.ok) refreshDST();
+  }
+
+  async function refreshDST(){
+    try{
+      const resp = await fetch('{% url "api-dst-list" %}');
+      const data = await resp.json();
+      if(data && data.ok && Array.isArray(data.items)){
+        _cachedDst = data.items;
+        if(dstTableBody){
+          if(data.items.length === 0){
+            dstTableBody.innerHTML = '<tr><td colspan="5" class="td-center-muted">Nu există reguli DST.</td></tr>';
+          } else {
+            dstTableBody.innerHTML = data.items.map(d => {
+              const s = d.start || {};
+              const e = d.end || {};
+              const startTxt = `${_monthLabel(s.month)} ${_weekLabel(s.week)} ${_weekdayLabel(s.weekday)} ${String(s.hour).padStart(2,'0')}:${String(s.minute).padStart(2,'0')}`;
+              const endTxt = `${_monthLabel(e.month)} ${_weekLabel(e.week)} ${_weekdayLabel(e.weekday)} ${String(e.hour).padStart(2,'0')}:${String(e.minute).padStart(2,'0')}`;
+              const off = (d.offset_minutes != null) ? `${d.offset_minutes} min` : '60 min';
+              return `<tr>
+                <td>${String(d.name || '').replace(/\</g,'&lt;')}</td>
+                <td>${startTxt}</td>
+                <td>${endTxt}</td>
+                <td>${off}</td>
+                <td>
+                  <button type="button" class="row-action" data-action="edit-dst" data-id="${d.id}" title="Editează regula DST">Edit</button>
+                  <button type="button" class="row-action delete" data-action="del-dst" data-id="${d.id}" title="Șterge regula DST">Șterge</button>
+                </td>
+              </tr>`;
+            }).join('');
+          }
+        }
+      }
+    }catch(err){
+      flash(dstFlash, `Eroare DST: ${err}`, true);
+      if(dstTableBody){
+        dstTableBody.innerHTML = '<tr><td colspan="5" class="td-center-error">Eroare încărcare DST</td></tr>';
+      }
+    }
+  }
+
+  async function loadCommands(){
+    try{
+      const resp = await fetch('{% url "commands-full" %}?limit=200');
+      const data = await resp.json();
+      if(!data.ok) throw new Error(data.error || 'load fail');
+      const tbody = document.getElementById('cmdTableBody');
+      tbody.innerHTML = data.items.map((c, idx) => `<tr>
+        <td>${idx+1}</td>
+        <td>${c.device || '-'}</td>
+        <td>${c.serial || ''}</td>
+        <td>${c.door || ''}</td>
+        <td>${c.command}</td>
+        <td><span class="badge ${c.status==='OK'?'badge-green':'badge-orange'}">${c.status}</span></td>
+        <td>${(c.created_at||'').replace('T',' ').slice(0,16)}</td>
+      </tr>`).join('');
+      flash(cmdFlash, `Comenzi: ${data.items.length}`);
+    }catch(err){ flash(cmdFlash, `Eroare comenzi: ${err}`, true); }
+  }
+
+  document.getElementById('btnCmdClear')?.addEventListener('click', async () => {
+    const resp = await fetch('{% url "commands-clear" %}', {method:'POST', headers:{'X-CSRFToken': getCSRF()}});
+    const data = await resp.json();
+    flash(cmdFlash, data.ok ? `Comenzi șterse: ${data.deleted}` : (data.error||'Eroare clear'), !data.ok);
+    loadCommands();
+  });
+  document.getElementById('btnCmdCreate')?.addEventListener('click', async () => {
+    const vals = await openPromptDialog({
+      title: 'Creare comandă manuală',
+      message: 'Completează comanda și (opțional) ID-ul dispozitivului.',
+      okText: 'Creează',
+      cancelText: 'Renunță',
+      fields: [
+        {name:'command', label:'Comandă', placeholder:'ex: DOOR_OPEN:1', value:'', required:true},
+        {name:'device_id', label:'ID device (opțional)', placeholder:'', value:''}
+      ]
+    });
+    if(!vals) return;
+    const cmd = String(vals.command || '').trim();
+    if(!cmd) return;
+    const deviceId = String(vals.device_id || '').trim();
+    const resp = await fetch('{% url "command-manual-create" %}', {method:'POST', headers:{'Content-Type':'application/json','X-CSRFToken': getCSRF()}, body: JSON.stringify({command: cmd, device_id: deviceId})});
+    const data = await resp.json();
+    flash(cmdFlash, data.ok ? `Comandă creată (#${data.id})` : (data.error||'Eroare'), !data.ok);
+    loadCommands();
+  });
+
+  // Initial data loads
+  refreshAreas();
+  refreshDST();
+  loadCommands();
+
+  // Row action delegation for Area/DST tables
+  areasTableBody?.addEventListener('click', (e)=>{
+    const btn = e.target && e.target.closest ? e.target.closest('button[data-action]') : null;
+    if(!btn) return;
+    const id = btn.getAttribute('data-id');
+    const action = btn.getAttribute('data-action');
+    if(!id) return;
+    const item = _cachedAreas.find(x => String(x.id) === String(id));
+    if(action === 'edit-area'){
+      openAreaModal(item || null);
+    } else if(action === 'del-area'){
+      const label = item ? ((item.code ? item.code + ' - ' : '') + (item.name || '')) : ('#' + id);
+      openConfirm('Ștergere zonă', `Sigur ștergi zona: ${label}?`, async ()=>{ await deleteArea(id); });
+    }
+  });
+
+  dstTableBody?.addEventListener('click', (e)=>{
+    const btn = e.target && e.target.closest ? e.target.closest('button[data-action]') : null;
+    if(!btn) return;
+    const id = btn.getAttribute('data-id');
+    const action = btn.getAttribute('data-action');
+    if(!id) return;
+    const item = _cachedDst.find(x => String(x.id) === String(id));
+    if(action === 'edit-dst'){
+      openDstModal(item || null);
+    } else if(action === 'del-dst'){
+      const label = item ? (item.name || ('#' + id)) : ('#' + id);
+      openConfirm('Ștergere DST', `Sigur ștergi regula DST: ${label}?`, async ()=>{ await deleteDst(id); });
+    }
+  });
+
+  // Escape to close topmost modal
+  document.addEventListener('keydown', (e) => {
+    if(e.key !== 'Escape') return;
+    if(confirmModal && confirmModal.classList.contains('is-open')) closeConfirm();
+    if(areaResultModal && areaResultModal.classList.contains('is-open')) closeAreaResultModal();
+    if(areaModal && areaModal.classList.contains('is-open')) closeAreaModal();
+    if(dstModal && dstModal.classList.contains('is-open')) closeDstModal();
+  });
+})();
+</script>
 {% endblock %}

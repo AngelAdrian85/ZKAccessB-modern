@@ -119,6 +119,67 @@ class Device(models.Model):
         return 'Dispozitiv'
 
 
+class DSTime(models.Model):
+    """Daylight Saving Time rules migrated from legacy DSTime model."""
+
+    WEEK_CHOICES = [
+        ('first', 'First'),
+        ('second', 'Second'),
+        ('third', 'Third'),
+        ('fourth', 'Fourth'),
+        ('last', 'Last'),
+    ]
+
+    name = models.CharField(max_length=64, unique=True)
+    start_month = models.PositiveSmallIntegerField()  # 1-12
+    start_week = models.CharField(max_length=8, choices=WEEK_CHOICES, default='last')
+    start_weekday = models.PositiveSmallIntegerField(default=0)  # 0=Monday
+    start_hour = models.PositiveSmallIntegerField(default=3)
+    start_minute = models.PositiveSmallIntegerField(default=0)
+
+    end_month = models.PositiveSmallIntegerField()
+    end_week = models.CharField(max_length=8, choices=WEEK_CHOICES, default='last')
+    end_weekday = models.PositiveSmallIntegerField(default=0)
+    end_hour = models.PositiveSmallIntegerField(default=3)
+    end_minute = models.PositiveSmallIntegerField(default=0)
+
+    offset_minutes = models.IntegerField(default=60)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["name"]),
+            models.Index(fields=["start_month", "end_month"]),
+        ]
+
+    def __str__(self):  # pragma: no cover
+        return f"DST {self.name}"[:80]
+
+
+class LegacyAreaMeta(models.Model):
+    """Extra metadata for legacy `legacy_models.Area` rows.
+
+    We keep this in `agent` so we can extend area data (code/parent/remarks)
+    without modifying the legacy shim schema.
+    """
+
+    legacy_area_id = models.IntegerField(unique=True, db_index=True)
+    code = models.CharField(max_length=50, blank=True, null=True)
+    parent_legacy_area_id = models.IntegerField(blank=True, null=True)
+    remarks = models.CharField(max_length=255, blank=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["legacy_area_id"]),
+            models.Index(fields=["code"]),
+        ]
+
+    def __str__(self):  # pragma: no cover
+        return f"LegacyAreaMeta area_id={self.legacy_area_id} code={self.code or ''}"[:80]
+
+
 class DeviceStatus(models.Model):
     device = models.ForeignKey(Device, on_delete=models.CASCADE)
     online = models.BooleanField(default=True)
@@ -306,12 +367,28 @@ class EmployeeCard(models.Model):
         Employee, related_name="cards", on_delete=models.CASCADE
     )
     card_number = models.CharField(max_length=32, unique=True)
+    slot = models.CharField(
+        max_length=16,
+        default='additional',
+        db_index=True,
+        help_text="Slot card: primary/secondary/additional",
+    )
+    status = models.CharField(
+        max_length=20,
+        default='Active',
+        db_index=True,
+        help_text="Stare card: Active/Inactive/Suspended",
+    )
+    site_code = models.CharField(max_length=32, blank=True, default='', help_text="Site code / prefix")
+    valid_until = models.DateField(null=True, blank=True, help_text="Data expirare")
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         indexes = [
             models.Index(fields=["card_number"]),
             models.Index(fields=["employee"]),
+            models.Index(fields=["slot"]),
+            models.Index(fields=["status"]),
         ]
 
     def __str__(self):  # pragma: no cover

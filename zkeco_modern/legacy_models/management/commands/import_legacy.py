@@ -8,9 +8,9 @@ import datetime
 
 from django.core.management.base import BaseCommand, CommandError
 
-from zkeco_modern.etl.employee import import_employees_from_csv
-from zkeco_modern.etl.issuecard import import_issuecards_from_csv
-from zkeco_modern.etl.device import import_devices_from_csv
+from etl.employee import import_employees_from_csv
+from etl.issuecard import import_issuecards_from_csv
+from etl.device import import_devices_from_csv
 
 try:
     import yaml

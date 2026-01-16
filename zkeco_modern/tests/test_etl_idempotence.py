@@ -9,7 +9,7 @@ class ETLIdempotence(TestCase):
         emp_csv = os.path.join(base, 'employee_sample.csv')
         emp_alt = os.path.join(base, 'employee_alt.csv')
 
-        from zkeco_modern.etl.employee import import_employees_from_csv
+        from etl.employee import import_employees_from_csv
         from legacy_models.models import Employee
         # initial import
         r1 = import_employees_from_csv(emp_csv, commit=True, update=False)
@@ -34,7 +34,7 @@ class ETLIdempotence(TestCase):
         dev_csv = os.path.join(base, 'device_sample.csv')
         dev_alt = os.path.join(base, 'device_alt.csv')
 
-        from zkeco_modern.etl.device import import_devices_from_csv
+        from etl.device import import_devices_from_csv
         from legacy_models.models import Device
         r1 = import_devices_from_csv(dev_csv, commit=True, update=False)
         created_count = r1['created'] if isinstance(r1, dict) else r1

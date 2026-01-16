@@ -1,19 +1,21 @@
 <!DOCTYPE html>
 <html><head><title>Devices</title><meta charset="utf-8" />
 <style>
-body{font-family:Arial;background:#f5f9fc;margin:0;}
-header{background:#1e6bb8;color:#fff;padding:10px 16px;font-size:18px;}
+body{font-family:Arial;background:#0f2a47;margin:0;color:#e8f0f8;}
+header{background:linear-gradient(90deg,#1a3a52 0%,#3da5d9 100%);color:#fff;padding:10px 16px;font-size:16px;}
 .table-wrap{padding:14px;}
-table{border-collapse:collapse;width:100%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.08);}
-th,td{border:1px solid #d0d7de;padding:6px 8px;font-size:13px;text-align:left;}
-th{background:#f0f3f6;}
-tr:nth-child(even){background:#fafbfc;}
-.actions a{margin-right:6px;font-size:12px;color:#0969da;text-decoration:none;}
-.actions a.delete{color:#cf222e;}
+table{border-collapse:collapse;width:100%;background:#163247;box-shadow:0 2px 12px rgba(0,0,0,.28);font-size:11px;}
+thead{background:linear-gradient(to bottom,#3da5d9 0%,#2d7ba5 100%);color:#fff;}
+th,td{border:1px solid rgba(61,106,139,0.8);padding:3px 4px;text-align:left;}
+th{border-right:1px solid #2d7ba5;text-transform:uppercase;letter-spacing:.2px;white-space:nowrap;font-size:9px;}
+tr:nth-child(even){background:#0f2433;}
+tr:hover{background:#1e4a6b;}
+.actions a{margin-right:6px;font-size:11px;color:#7db3d9;text-decoration:none;}
+.actions a.delete{color:#ff8c99;}
 .search-bar{margin-bottom:10px;display:flex;gap:8px;}
-.search-bar input{flex:1;padding:6px;border:1px solid #d0d7de;border-radius:4px;}
-.btn{padding:6px 12px;border:1px solid #1e6bb8;background:#1e6bb8;color:#fff;border-radius:4px;cursor:pointer;font-size:12px;}
-.badge{display:inline-block;padding:2px 6px;border-radius:10px;background:#2da44e;color:#fff;font-size:11px;}
+.search-bar input{flex:1;padding:6px;border:1px solid rgba(61,165,217,0.35);border-radius:6px;background:rgba(10,26,39,0.65);color:#e8f0f8;}
+.btn{padding:6px 12px;border:1px solid rgba(61,165,217,0.55);background:#3da5d9;color:#062226;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;}
+.badge{display:inline-block;padding:1px 6px;border-radius:10px;background:#2da44e;color:#062226;font-size:10px;font-weight:800;}
 </style></head>
 <body>
 <header>Device Management (Prototype)</header>
@@ -63,15 +65,32 @@ function openDeviceModal(){
   if(!host){
     host = document.createElement('div'); host.id='deviceQuickModalHost';
     host.style.position='fixed'; host.style.inset='0'; host.style.background='rgba(0,0,0,0.6)'; host.style.zIndex='1000'; host.style.display='none';
-    const panel = document.createElement('div'); panel.style.margin='40px auto'; panel.style.maxWidth='960px'; panel.style.background='#2d5a7b'; panel.style.border='1px solid #3d6a8b'; panel.style.borderRadius='6px'; panel.style.padding='10px';
-    panel.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;color:#fff;margin-bottom:8px;"><strong>Adaugă Dispozitiv Scanner</strong><button onclick="closeDeviceModal()" style="background:#d97e4a;color:#fff;border:none;border-radius:12px;width:24px;height:24px;cursor:pointer;">×</button></div><div id="deviceQuickModalBody" style="background:#fff;border-radius:4px;overflow:auto;max-height:70vh;"></div>`;
+    const panel = document.createElement('div'); panel.style.margin='40px auto'; panel.style.maxWidth='960px'; panel.style.background='linear-gradient(135deg,#1e4a6b 0%, #2d5a7b 50%, #1e4a6b 100%)'; panel.style.border='1px solid rgba(125,179,217,0.55)'; panel.style.borderRadius='10px'; panel.style.padding='10px';
+    panel.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;color:#fff;margin-bottom:8px;"><strong>Adaugă Dispozitiv Scanner</strong><button onclick="closeDeviceModal()" style="background:rgba(15,42,71,0.55);color:#fff;border:1px solid rgba(255,255,255,0.22);border-radius:9px;width:30px;height:30px;cursor:pointer;">×</button></div><div id="deviceQuickModalBody" style="background:transparent;border-radius:8px;overflow:auto;max-height:70vh;"></div>`;
     host.appendChild(panel); document.body.appendChild(host);
   }
   host.style.display='block';
-  // Inject the compact device form fragment directly
-  document.getElementById('deviceQuickModalBody').innerHTML = `
-    {% include 'agent/device_form_fragment.html' %}
-  `;
+  const body = document.getElementById('deviceQuickModalBody');
+  if(body) body.innerHTML = '<div style="padding:8px;color:#7db3d9;font-weight:700;">⏳ Se încarcă...</div>';
+  // Load the 1:1 device form modal from the real create endpoint
+  fetch('/agent/crud/devices/new/?next=' + encodeURIComponent(window.location.pathname + window.location.search), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+    .then(r => r.text())
+    .then(html => {
+      if(!body) return;
+      body.innerHTML = html;
+      // execute inline scripts
+      const scripts = Array.from(body.querySelectorAll('script'));
+      for(const oldScript of scripts){
+        const newScript = document.createElement('script');
+        if(oldScript.src){ newScript.src = oldScript.src; newScript.async = false; }
+        newScript.text = oldScript.textContent || '';
+        document.head.appendChild(newScript);
+        oldScript.remove();
+      }
+    })
+    .catch(e => {
+      if(body) body.innerHTML = '<div style="padding:8px;color:#ff9999;font-weight:700;">⚠ Eroare la încărcare: ' + (e && e.message ? e.message : e) + '</div>';
+    });
 }
 function closeDeviceModal(){
   const host = document.getElementById('deviceQuickModalHost');

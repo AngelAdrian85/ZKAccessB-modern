@@ -195,10 +195,80 @@
   border-radius: 2px;
   min-height: 16px;
 }
+
+/* Center action overlay (success/fail) */
+.device-action-overlay {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  background: rgba(0,0,0,0.45);
+}
+.device-action-overlay .panel {
+  width: min(520px, 92vw);
+  padding: 18px 16px;
+  border-radius: 8px;
+  border: 1px solid #3d6a8b;
+  background: #163247;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+  text-align: center;
+  transform: scale(0.94);
+  opacity: 0;
+  animation: overlayIn 180ms ease-out forwards;
+}
+.device-action-overlay.success .panel { border-color: #2da44e; }
+.device-action-overlay.error .panel { border-color: #ff6b6b; }
+.device-action-overlay .title {
+  font-weight: 800;
+  font-size: 12px;
+  margin-bottom: 6px;
+  color: #e8f0f8;
+}
+.device-action-overlay.success .title { color: #9fd2f1; }
+.device-action-overlay.error .title { color: #ff9999; }
+.device-action-overlay .msg {
+  font-size: 11px;
+  color: #e8f0f8;
+  line-height: 1.35;
+}
+.device-action-overlay .bar {
+  height: 6px;
+  border-radius: 6px;
+  background: #0f2433;
+  border: 1px solid #3d6a8b;
+  margin-top: 12px;
+  overflow: hidden;
+}
+.device-action-overlay .bar > div {
+  height: 100%;
+  width: 0%;
+  background: #3da5d9;
+  animation: barRun 900ms linear forwards;
+}
+.device-action-overlay.success .bar > div { background: #2da44e; }
+.device-action-overlay.error .bar > div { background: #ff6b6b; }
+
+@keyframes overlayIn {
+  to { transform: scale(1); opacity: 1; }
+}
+@keyframes barRun {
+  to { width: 100%; }
+}
 </style>
 
-<form class="device-form-modal" id="deviceQuickForm" method="post" action="/agent/crud/devices/new/" onsubmit="return validateQuickDeviceSubmit(event)">
+<div id="deviceActionOverlay" class="device-action-overlay" aria-hidden="true">
+  <div class="panel">
+    <div class="title" id="deviceActionTitle">Rezultat</div>
+    <div class="msg" id="deviceActionMsg"></div>
+    <div class="bar"><div></div></div>
+  </div>
+</div>
+
+<form class="device-form-modal" id="deviceQuickForm" method="post" action="{% if action_url %}{{ action_url }}{% else %}/agent/crud/devices/new/{% endif %}" onsubmit="return validateQuickDeviceSubmit(event)">
   {% csrf_token %}
+  {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}" />{% endif %}
 
   <!-- SECTION 1: BASIC INFORMATION -->
   <div class="form-section">
@@ -317,6 +387,27 @@
         <div class="helptext">📌 Primii 3 octeti. Ex: pentru 110.51.101.95 introdu 110.51.101</div>
       </div>
     </div>
+
+    <div class="form-row" style="grid-template-columns: 1fr auto; align-items: end;">
+      <div class="form-group">
+        <label for="pingIp">Test IP (ping)</label>
+        <input type="text" id="pingIp" placeholder="100.51.101.95" />
+      </div>
+      <button type="button" class="btn-scan" onclick="pingDevice()">📡 Ping</button>
+    </div>
+
+    <div class="form-row" style="grid-template-columns: 2fr 1fr auto; align-items: end;">
+      <div class="form-group">
+        <label for="portTestIp">Test Port TCP</label>
+        <input type="text" id="portTestIp" placeholder="100.51.101.95" />
+      </div>
+      <div class="form-group">
+        <label for="portTestPort">Port</label>
+        <input type="number" id="portTestPort" value="4370" placeholder="4370" min="1" max="65535" />
+      </div>
+      <button type="button" class="btn-scan" onclick="testPort()">🔌 Test Port</button>
+    </div>
+
     <div id="netResults" style="margin-top: 8px; padding: 8px; background: #163247; border-radius: 2px; display: none; max-height: 100px; overflow-y: auto; font-size: 9px; color: #9fd2f1;"></div>
   </div>
 
@@ -334,6 +425,20 @@ function toggleCommMode() {
   const mode = document.querySelector('input[name="comm_mode"]:checked').value;
   document.getElementById('tcp-group').style.display = (mode === 'tcp') ? 'block' : 'none';
   document.getElementById('rs485-group').style.display = (mode === 'rs485') ? 'block' : 'none';
+}
+
+function showDeviceActionOverlay(message, ok=true, title) {
+  const el = document.getElementById('deviceActionOverlay');
+  if (!el) return;
+  const t = document.getElementById('deviceActionTitle');
+  const m = document.getElementById('deviceActionMsg');
+  if (t) t.textContent = title || (ok ? 'Succes' : 'Eroare');
+  if (m) m.textContent = message || '';
+  el.classList.remove('success', 'error');
+  el.classList.add(ok ? 'success' : 'error');
+  el.style.display = 'flex';
+  // auto-hide after progress bar
+  window.setTimeout(() => { el.style.display = 'none'; }, 1100);
 }
 
 async function discoverDevices() {
@@ -366,6 +471,71 @@ async function discoverDevices() {
     }
   } catch (e) {
     resultsDiv.textContent = '❌ Eroare: ' + e.message;
+    resultsDiv.style.color = '#ff9999';
+  }
+}
+
+async function pingDevice() {
+  const ip = (document.getElementById('pingIp')?.value || '').trim();
+  if (!ip) { alert('Introdu o adresă IP'); return; }
+
+  const resultsDiv = document.getElementById('netResults');
+  resultsDiv.style.display = 'block';
+  resultsDiv.textContent = '⏳ Testare conectivitate...';
+  resultsDiv.style.color = '#7db3d9';
+
+  try {
+    const resp = await fetch(`/agent/devices/ping/?ip=${encodeURIComponent(ip)}`);
+    const data = await resp.json();
+    if (data.ok) {
+      if (data.alive) {
+        resultsDiv.innerHTML = `<strong style="color: #2da44e;">🟢 ${ip} ONLINE ✓</strong><br>
+          <div class="ip-item" onclick="selectIP('${ip}')">➕ Selectează IP</div>`;
+        resultsDiv.style.color = '#2da44e';
+      } else {
+        resultsDiv.textContent = `🔴 ${ip} NU RĂSPUNDE la ping`;
+        resultsDiv.style.color = '#ff9999';
+      }
+    } else {
+      resultsDiv.textContent = '❌ Eroare ping: ' + (data.error || 'unknown');
+      resultsDiv.style.color = '#ff9999';
+    }
+  } catch (e) {
+    resultsDiv.textContent = '❌ Eroare: ' + e.message;
+    resultsDiv.style.color = '#ff9999';
+  }
+}
+
+async function testPort() {
+  const ip = (document.getElementById('portTestIp')?.value || '').trim();
+  const port = (document.getElementById('portTestPort')?.value || '').trim() || '4370';
+  if (!ip) { alert('Introdu adresa IP pentru testare port'); return; }
+
+  const resultsDiv = document.getElementById('netResults');
+  resultsDiv.style.display = 'block';
+  resultsDiv.textContent = `⏳ Testare port ${port} pe ${ip}...`;
+  resultsDiv.style.color = '#7db3d9';
+
+  try {
+    const resp = await fetch(`/agent/devices/port-test/?ip=${encodeURIComponent(ip)}&port=${encodeURIComponent(port)}`);
+    const data = await resp.json();
+    if (data.ok) {
+      if (data.open) {
+        resultsDiv.innerHTML = `<strong style="color: #2da44e;">✓ Port ${data.port} DESCHIS pe ${data.ip}</strong><br>
+          <small style="color: #9fd2f1;">Dispozitivul ascultă pe acest port și poate primi comenzi!</small><br>
+          <div class="ip-item" onclick="selectIP('${ip}', ${parseInt(port,10) || 4370})">➕ Folosește ${ip}:${port}</div>`;
+        resultsDiv.style.color = '#2da44e';
+      } else {
+        resultsDiv.innerHTML = `<strong style="color: #ff9999;">✗ Port ${data.port} ÎNCHIS/FILTRAT pe ${data.ip}</strong><br>
+          <small style="color: #7db3d9;">Încearcă și porturile 8080 / 80 / 4370 sau verifică firewall.</small>`;
+        resultsDiv.style.color = '#ff9999';
+      }
+    } else {
+      resultsDiv.textContent = '❌ Eroare: ' + (data.error || 'Unknown error');
+      resultsDiv.style.color = '#ff9999';
+    }
+  } catch (e) {
+    resultsDiv.textContent = '❌ Eroare request: ' + e.message;
     resultsDiv.style.color = '#ff9999';
   }
 }
@@ -424,7 +594,9 @@ window.validateQuickDeviceSubmit = function(event) {
 window.submitDeviceForm = function(form) {
   const formData = new FormData(form);
   const status = document.getElementById('deviceQuickStatus');
-  
+
+  status.innerHTML = '<span style="color:#7db3d9;">⏳ Se salvează...</span>';
+
   fetch(form.action || '/agent/crud/devices/new/', {
     method: 'POST',
     body: formData,
@@ -433,17 +605,30 @@ window.submitDeviceForm = function(form) {
   .then(response => response.json())
   .then(data => {
     if(data.ok) {
-      status.innerHTML = '<span style="color:#2da44e;">✓ Dispozitiv creat cu succes!</span>';
+      const msg = data.message || (data.created ? '✓ Dispozitiv creat cu succes!' : '✓ Dispozitiv actualizat cu succes!');
+      status.innerHTML = `<span style="color:#2da44e;">${msg}</span>`;
+      showDeviceActionOverlay(msg, true, 'Succes');
       setTimeout(() => {
         closeDeviceModal();
-        location.reload();
+        if (data.redirect_url) {
+          window.location.href = data.redirect_url;
+        } else {
+          location.reload();
+        }
       }, 1500);
     } else {
-      status.innerHTML = '<span style="color:#ff9999;">⚠ Erori: ' + JSON.stringify(data.errors) + '</span>';
+      if (data.html && typeof window.replaceDeviceModalContent === 'function') {
+        window.replaceDeviceModalContent(data.html);
+        return;
+      }
+      const err = data.error || 'Form invalid';
+      status.innerHTML = '<span style="color:#ff9999;">⚠ ' + err + '</span>';
+      showDeviceActionOverlay(err, false, 'Eroare');
     }
   })
   .catch(err => {
     status.innerHTML = '<span style="color:#ff9999;">⚠ Eroare: ' + err.message + '</span>';
+    showDeviceActionOverlay(err.message || 'Eroare', false, 'Eroare');
   });
 };
 

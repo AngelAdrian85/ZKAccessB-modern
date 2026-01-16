@@ -1,0 +1,840 @@
+{# Shared device form UI used by full-page and modal. Visual layout matches device_form.html (page) 1:1. #}
+<style>
+/* DARK BLUE THEME - Ultra Compact Vertical Layout (scoped to .device-form-scope for modal safety) */
+.device-form-scope * { box-sizing: border-box; }
+.device-form-scope { background: #1a3a52; color: #e8f0f8; font-family: Tahoma, Arial, sans-serif; font-size: 11px; }
+.device-form-scope .device-form-container { 
+  max-width: 900px; 
+  margin: 8px auto; 
+  background: #1e4a6b;
+  padding: 8px;
+  border-radius: 2px;
+  border: 2px solid #3da5d9;
+}
+
+{% if is_modal %}
+/* In modal mode: rely on the outer modal shell (single window), remove inner frame/title */
+.device-form-scope { background: transparent; }
+.device-form-scope .device-form-container {
+  max-width: none;
+  margin: 0;
+  background: transparent;
+  padding: 0;
+  border: none;
+}
+.device-form-scope .device-form-container h2 { display: none; }
+{% endif %}
+.device-form-scope .device-form-container h2 {
+  position: relative;
+  color: #ffffff;
+  background: linear-gradient(90deg, rgba(15,42,71,0.92) 0%, rgba(30,144,255,0.88) 100%);
+  border: 1px solid rgba(61,106,139,0.9);
+  padding: 8px 10px;
+  margin: 0 0 8px 0;
+  font-size: 14px;
+  text-align: center;
+  border-radius: 6px;
+  box-shadow: 0 10px 22px rgba(0,0,0,0.35);
+  letter-spacing: 0.2px;
+  animation: deviceTitleIn 220ms ease-out both;
+}
+
+.device-form-scope .device-form-container h2::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  height: 2px;
+  border-radius: 6px 6px 0 0;
+  background: linear-gradient(90deg, rgba(46,191,150,0.0) 0%, rgba(46,191,150,0.55) 35%, rgba(255,255,255,0.22) 65%, rgba(30,144,255,0.0) 100%);
+}
+
+.device-form-scope .device-form-container h2::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 6px;
+  pointer-events: none;
+  background:
+    radial-gradient(700px 120px at 20% 0%, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.00) 60%),
+    radial-gradient(700px 120px at 85% 0%, rgba(46,191,150,0.10) 0%, rgba(46,191,150,0.00) 55%);
+  mix-blend-mode: screen;
+  opacity: 0.9;
+}
+
+@keyframes deviceTitleIn {
+  from { transform: translateY(-6px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .device-form-scope .device-form-container h2 { animation: none !important; }
+}
+.device-form-scope .form-section { 
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #3d6a8b;
+  padding: 6px 0; 
+  margin: 0; 
+  border-radius: 0;
+}
+.device-form-scope .form-section:first-of-type { border-top: 1px solid #3d6a8b; padding-top: 6px; }
+.device-form-scope .form-section:last-of-type { border-bottom: none; }
+.device-form-scope .form-section h3 { 
+  font-size: 10px; 
+  font-weight: bold; 
+  border: none;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  padding: 4px 0; 
+  margin: 0 0 4px 0; 
+  color: #7db3d9;
+}
+.device-form-scope .form-row { 
+  display: grid; 
+  grid-template-columns: 1fr 1fr 1fr; 
+  gap: 6px; 
+  margin-bottom: 4px; 
+}
+.device-form-scope .form-row.double { grid-template-columns: 1fr 1fr; }
+.device-form-scope .form-row.full { grid-template-columns: 1fr; }
+.device-form-scope .form-group { 
+  display: flex; 
+  flex-direction: column; 
+}
+.device-form-scope .form-group label { 
+  font-weight: 600; 
+  font-size: 9px; 
+  margin-bottom: 1px; 
+  color: #9fd2f1;
+  text-transform: uppercase;
+  letter-spacing: 0.2px;
+}
+.device-form-scope .form-group .helptext { 
+  font-size: 8px; 
+  color: #7db3d9; 
+  margin-top: 1px; 
+  font-style: italic;
+  line-height: 1.2;
+}
+.device-form-scope input[type="text"], 
+.device-form-scope input[type="number"], 
+.device-form-scope input[type="password"], 
+.device-form-scope select { 
+  padding: 3px 5px; 
+  border: 1px solid #3d6a8b; 
+  border-radius: 1px; 
+  font-size: 10px; 
+  background: #163247;
+  color: #e8f0f8;
+  font-family: Tahoma, Arial, sans-serif;
+  margin: 0;
+}
+.device-form-scope input[type="text"]::placeholder,
+.device-form-scope input[type="number"]::placeholder { 
+  color: #5a7a90;
+  font-size: 9px;
+}
+.device-form-scope input[type="text"]:focus, 
+.device-form-scope input[type="number"]:focus, 
+.device-form-scope input[type="password"]:focus, 
+.device-form-scope select:focus { 
+  outline: none; 
+  border-color: #3da5d9; 
+  box-shadow: 0 0 2px #3da5d9;
+}
+.device-form-scope input[readonly] { 
+  background: #0f2433; 
+  color: #5a7a90;
+  border-color: #2d5a7b;
+}
+.device-form-scope .radio-options { 
+  display: flex; 
+  gap: 12px; 
+  margin: 2px 0;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.device-form-scope .radio-options label { 
+  display: flex; 
+  align-items: center; 
+  gap: 4px; 
+  font-weight: normal; 
+  margin: 0; 
+  color: #e8f0f8;
+  cursor: pointer;
+  font-size: 10px;
+}
+.device-form-scope .radio-options input[type="radio"] { 
+  margin: 0;
+  cursor: pointer;
+  width: 14px;
+  height: 14px;
+}
+.device-form-scope .checkbox-options { 
+  display: flex; 
+  flex-direction: column; 
+  gap: 2px; 
+}
+.device-form-scope .checkbox-options label { 
+  display: flex; 
+  align-items: center; 
+  gap: 4px; 
+  font-weight: normal; 
+  margin: 0; 
+  color: #e8f0f8;
+  cursor: pointer;
+  font-size: 10px;
+}
+.device-form-scope .checkbox-options input[type="checkbox"] { 
+  margin: 0;
+  cursor: pointer;
+  width: 14px;
+  height: 14px;
+}
+.device-form-scope .discovery-section { 
+  background: #163247; 
+  border: 1px solid #3d6a8b; 
+  padding: 6px; 
+  margin: 6px 0; 
+  border-radius: 2px; 
+}
+.device-form-scope .discovery-section strong { 
+  color: #7db3d9;
+  display: block;
+  margin-bottom: 4px;
+  font-size: 10px;
+}
+.device-form-scope .discovery-row { 
+  display: grid; 
+  grid-template-columns: 1fr auto auto; 
+  gap: 4px; 
+  margin: 4px 0; 
+  align-items: flex-end; 
+}
+.device-form-scope .discovery-row label {
+  color: #9fd2f1;
+  font-size: 8px;
+  margin: 0;
+}
+.device-form-scope .discovery-row input { 
+  padding: 3px 4px; 
+  border: 1px solid #3d6a8b; 
+  border-radius: 1px; 
+  font-size: 9px; 
+  background: #0f2433;
+  color: #e8f0f8;
+  margin: 0;
+}
+.device-form-scope .btn-scan { 
+  background: #2da44e; 
+  color: white; 
+  border: 1px solid #1f7d35;
+  padding: 3px 8px; 
+  border-radius: 1px; 
+  cursor: pointer; 
+  font-weight: bold; 
+  font-size: 9px; 
+  transition: all 0.2s;
+  margin: 0;
+}
+.device-form-scope .btn-scan:hover { 
+  background: #1f7d35;
+  border-color: #155e27;
+}
+.device-form-scope .results-box { 
+  margin-top: 4px; 
+  padding: 4px; 
+  background: #0f2433; 
+  border: 1px solid #3d6a8b; 
+  border-radius: 1px; 
+  max-height: 100px; 
+  overflow-y: auto; 
+  font-size: 9px; 
+  color: #7db3d9;
+}
+.device-form-scope .ip-item { 
+  display: inline-block; 
+  margin: 2px; 
+  padding: 2px 6px; 
+  background: #2d5a7b; 
+  border: 1px solid #3da5d9; 
+  border-radius: 1px; 
+  cursor: pointer; 
+  color: #7db3d9;
+  transition: all 0.2s;
+  font-size: 9px;
+}
+.device-form-scope .ip-item:hover { 
+  background: #3d7a9b;
+  border-color: #5ab5ff;
+  color: #9fd2f1;
+}
+.device-form-scope .form-errors { 
+  background: #2d4d5f; 
+  border-left: 2px solid #ff6b6b; 
+  color: #ff9999; 
+  padding: 4px 6px; 
+  margin: 4px 0; 
+  border-radius: 1px; 
+  font-size: 9px;
+}
+.device-form-scope .form-errors ul { 
+  margin: 1px 0; 
+  padding-left: 16px; 
+}
+.device-form-scope .form-errors li { 
+  margin: 1px 0; 
+  font-size: 9px;
+  line-height: 1.3;
+}
+.device-form-scope .button-group { 
+  display: flex; 
+  gap: 6px; 
+  margin-top: 8px;
+  padding: 6px 0 0 0;
+  border-top: 1px solid #3d6a8b;
+}
+.device-form-scope .btn-save { 
+  background: #3da5d9; 
+  color: white; 
+  border: 1px solid #2c8ec0;
+  padding: 5px 12px; 
+  border-radius: 1px; 
+  cursor: pointer; 
+  font-weight: bold; 
+  font-size: 10px;
+  transition: all 0.2s;
+  flex: 1;
+}
+.device-form-scope .btn-save:hover { 
+  background: #2c8ec0;
+  border-color: #1a5a8f;
+}
+.device-form-scope .btn-cancel { 
+  background: #2d5a7b; 
+  color: #e8f0f8; 
+  border: 1px solid #3d6a8b;
+  padding: 5px 12px; 
+  border-radius: 1px; 
+  cursor: pointer; 
+  font-weight: bold; 
+  font-size: 10px; 
+  text-decoration: none; 
+  display: inline-block;
+  transition: all 0.2s;
+  flex: 1;
+  text-align: center;
+}
+.device-form-scope .btn-cancel:hover { 
+  background: #3d7a9b;
+  border-color: #4d8aab;
+}
+.device-form-scope .required::after { 
+  content: " *"; 
+  color: #ff6b6b; 
+  font-weight: bold; 
+}
+
+/* Center action overlay (success/fail) - same palette */
+.device-action-overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; z-index: 9999; background: rgba(0,0,0,0.45); }
+.device-action-overlay .panel { width: min(520px, 92vw); padding: 18px 16px; border-radius: 8px; border: 1px solid #3d6a8b; background: #163247; box-shadow: 0 20px 40px rgba(0,0,0,0.6); text-align: center; transform: scale(0.94); opacity: 0; animation: overlayIn 180ms ease-out forwards; }
+.device-action-overlay.success .panel { border-color: #2da44e; }
+.device-action-overlay.error .panel { border-color: #ff6b6b; }
+.device-action-overlay .title { font-weight: 800; font-size: 12px; margin-bottom: 6px; color: #e8f0f8; }
+.device-action-overlay.success .title { color: #9fd2f1; }
+.device-action-overlay.error .title { color: #ff9999; }
+.device-action-overlay .msg { font-size: 11px; color: #e8f0f8; line-height: 1.35; }
+.device-action-overlay .bar { height: 6px; border-radius: 6px; background: #0f2433; border: 1px solid #3d6a8b; margin-top: 12px; overflow: hidden; }
+.device-action-overlay .bar > div { height: 100%; width: 0%; background: #3da5d9; animation: barRun 900ms linear forwards; }
+.device-action-overlay.success .bar > div { background: #2da44e; }
+.device-action-overlay.error .bar > div { background: #ff6b6b; }
+@keyframes overlayIn { to { transform: scale(1); opacity: 1; } }
+@keyframes barRun { to { width: 100%; } }
+</style>
+
+<div class="device-form-container">
+<h2>{% if obj %}✏️ Editează Dispozitiv{% else %}➕ Dispozitiv Nou{% endif %}</h2>
+
+{% if form.non_field_errors %}
+<div class="form-errors">
+  <strong>⚠️ Erori:</strong>
+  <ul>
+  {% for error in form.non_field_errors %}
+    <li>{{ error }}</li>
+  {% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<form method="post" novalidate {% if action_url %}action="{{ action_url }}"{% endif %} data-ajax="{% if is_modal %}1{% else %}0{% endif %}">{% csrf_token %}
+{% if next_url %}<input type="hidden" name="next" value="{{ next_url }}" />{% endif %}
+
+<!-- SECTION 1: BASIC INFORMATION -->
+<div class="form-section">
+  <h3>1. Informații de Bază</h3>
+  
+  <div class="form-row">
+    <div class="form-group">
+      <label for="{{ form.name.id_for_label }}" class="required">Nume Dispozitiv</label>
+      {{ form.name }}
+      {% if form.name.errors %}<span class="form-errors">{{ form.name.errors|join:", " }}</span>{% endif %}
+      <div class="helptext">Exemplu: FINANCIAR, MEDICAL ACCES CLUB, etc.</div>
+    </div>
+    <div class="form-group">
+      <label for="{{ form.serial_number.id_for_label }}">Număr Serie (SN)</label>
+      {{ form.serial_number }}
+      {% if form.serial_number.errors %}<span class="form-errors">{{ form.serial_number.errors|join:", " }}</span>{% endif %}
+      <div class="helptext">Auto-completat din descoperire</div>
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label for="{{ form.device_type.id_for_label }}" class="required">Tip Dispozitiv</label>
+      {{ form.device_type }}
+      {% if form.device_type.errors %}<span class="form-errors">{{ form.device_type.errors|join:", " }}</span>{% endif %}
+    </div>
+    <div class="form-group">
+      <label>Stare</label>
+      <div class="checkbox-options">
+        <label>
+          {{ form.enabled }}
+          <span>Activ (Enabled)</span>
+        </label>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 2: COMMUNICATION SETTINGS -->
+<div class="form-section">
+  <h3>2. Parametri de Comunicare</h3>
+  
+  <div class="form-row full">
+    <div class="form-group">
+      <label class="required">Mod de Comunicare</label>
+      <div class="radio-options">
+        <label>
+          <input type="radio" name="comm_mode" value="tcp" checked onchange="toggleCommMode()">
+          TCP/IP
+        </label>
+        <label>
+          <input type="radio" name="comm_mode" value="rs485" onchange="toggleCommMode()">
+          RS485
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <!-- TCP/IP Fields -->
+  <div id="tcp-group">
+    <div class="form-row">
+      <div class="form-group">
+        <label for="{{ form.ip_address.id_for_label }}" class="required">Adresă IP</label>
+        {{ form.ip_address }}
+        {% if form.ip_address.errors %}<span class="form-errors">{{ form.ip_address.errors|join:", " }}</span>{% endif %}
+        <div class="helptext">Exemplu: 192.168.1.100</div>
+      </div>
+      <div class="form-group">
+        <label for="{{ form.port.id_for_label }}">Port</label>
+        {{ form.port }}
+        {% if form.port.errors %}<span class="form-errors">{{ form.port.errors|join:", " }}</span>{% endif %}
+        <div class="helptext">Implicit: 4370</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RS485 Fields -->
+  <div id="rs485-group" style="display: none;">
+    <div class="form-row">
+      <div class="form-group">
+        <label for="{{ form.rs485_port.id_for_label }}">Port Serial</label>
+        {{ form.rs485_port }}
+        {% if form.rs485_port.errors %}<span class="form-errors">{{ form.rs485_port.errors|join:", " }}</span>{% endif %}
+        <div class="helptext">COM1, COM2, /dev/ttyUSB0</div>
+      </div>
+      <div class="form-group">
+        <label for="{{ form.rs485_baudrate.id_for_label }}">Baud Rate</label>
+        {{ form.rs485_baudrate }}
+        {% if form.rs485_baudrate.errors %}<span class="form-errors">{{ form.rs485_baudrate.errors|join:", " }}</span>{% endif %}
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label for="{{ form.rs485_address.id_for_label }}">Adresă Dispozitiv</label>
+        {{ form.rs485_address }}
+        {% if form.rs485_address.errors %}<span class="form-errors">{{ form.rs485_address.errors|join:", " }}</span>{% endif %}
+        <div class="helptext">Adresă pe magistrala RS485</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-group">
+      <label for="{{ form.comm_password.id_for_label }}">Parolă Comunicare</label>
+      {{ form.comm_password }}
+      {% if form.comm_password.errors %}<span class="form-errors">{{ form.comm_password.errors|join:", " }}</span>{% endif %}
+      <div class="helptext">Opțional - pentru dispozitive cu autentificare</div>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 3: LOCATION & CONFIGURATION -->
+<div class="form-section">
+  <h3>3. Locație și Configurare</h3>
+  
+  <div class="form-row">
+    <div class="form-group">
+      <label for="{{ form.area_name.id_for_label }}">Zonă / Locație</label>
+      {{ form.area_name }}
+      {% if form.area_name.errors %}<span class="form-errors">{{ form.area_name.errors|join:", " }}</span>{% endif %}
+      <div class="helptext">Exemplu: Intrare Principală, Birou Director, etc.</div>
+    </div>
+    <div class="form-group">
+      <label for="{{ form.time_zone.id_for_label }}">Fus Orar</label>
+      {{ form.time_zone }}
+      {% if form.time_zone.errors %}<span class="form-errors">{{ form.time_zone.errors|join:", " }}</span>{% endif %}
+      <div class="helptext">UTC+2, UTC+3, etc.</div>
+    </div>
+  </div>
+
+  <div class="form-row full">
+    <div class="form-group">
+      <label>Opțiuni</label>
+      <div class="checkbox-options">
+        <label>
+          {{ form.auto_sync_time }}
+          <span>Sincronizare Automată a Orei</span>
+        </label>
+        <label>
+          {{ form.clear_on_add }}
+          <span>Șterge Datele din Dispozitiv la Adăugare</span>
+        </label>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 4: TECHNICAL INFORMATION -->
+<div class="form-section">
+  <h3>4. Informații Tehnice</h3>
+  
+  <div class="form-row">
+    <div class="form-group">
+      <label for="{{ form.firmware_version.id_for_label }}">Versiune Firmware</label>
+      {{ form.firmware_version }}
+      <div class="helptext">Auto-detectată din descoperire</div>
+    </div>
+    <div class="form-group">
+      <label for="{{ form.hardware_version.id_for_label }}">Versiune Hardware</label>
+      {{ form.hardware_version }}
+    </div>
+  </div>
+</div>
+
+<!-- SECTION 5: DISCOVERY & TESTING -->
+<div class="discovery-section">
+  <strong>🔍 Descoperire și Testare Dispozitiv</strong>
+  
+  <div class="discovery-row">
+    <div>
+      <label for="netBase">Prefix Rețea (ex. 100.51.101, 110.51.101, 192.168.1):</label>
+      <input type="text" id="netBase" value="100.51.101" placeholder="100.51.101 sau 192.168.1" />
+      <small style="color: #7db3d9; font-size: 8px; margin-top: 2px; display: block;">
+        📌 Primele 3 octeti: Scannează XXX.XXX.XXX.1-254<br/>
+        Exemplu: Dispozitivul la 110.51.101.95? Introdu: 110.51.101
+      </small>
+    </div>
+    <button type="button" class="btn-scan" onclick="discoverDevices()">🔎 Scanează Rețea</button>
+  </div>
+  
+  <div class="discovery-row">
+    <div>
+      <label for="pingIp">Test IP (ping):</label>
+      <input type="text" id="pingIp" placeholder="100.51.101.95" />
+    </div>
+    <button type="button" class="btn-scan" onclick="pingDevice()">📡 Ping</button>
+  </div>
+
+  <div class="discovery-row">
+    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 4px;">
+      <div>
+        <label for="portTestIp">Test Port TCP:</label>
+        <input type="text" id="portTestIp" placeholder="100.51.101.95" />
+      </div>
+      <div>
+        <label for="portTestPort">Port:</label>
+        <input type="number" id="portTestPort" value="4370" placeholder="4370" min="1" max="65535" />
+      </div>
+    </div>
+    <button type="button" class="btn-scan" onclick="testPort()">🔌 Test Port</button>
+  </div>
+  
+  <div id="netResults" class="results-box" style="display: none;"></div>
+</div>
+
+<!-- BUTTONS -->
+<div class="button-group">
+  <button type="submit" class="btn-save">💾 Salvează Dispozitiv</button>
+  <a id="deviceCancelLink" href="{% if next_url %}{{ next_url }}{% else %}{% url 'crud-devices-list' %}{% endif %}" class="btn-cancel">❌ Anulează</a>
+</div>
+
+</form>
+</div>
+
+<script>
+function toggleCommMode() {
+  const modeEl = document.querySelector('input[name="comm_mode"]:checked');
+  const mode = modeEl ? modeEl.value : 'tcp';
+  const tcp = document.getElementById('tcp-group');
+  const rs = document.getElementById('rs485-group');
+  if (tcp) tcp.style.display = (mode === 'tcp') ? 'block' : 'none';
+  if (rs) rs.style.display = (mode === 'rs485') ? 'block' : 'none';
+}
+
+async function discoverDevices() {
+  const base = document.getElementById('netBase').value.trim();
+  if (!base) { alert('Introdu prefixul rețelei (ex: 100.51.101)'); return; }
+  
+  const resultsDiv = document.getElementById('netResults');
+  resultsDiv.style.display = 'block';
+  resultsDiv.textContent = '⏳ Scanare în curs... (poate dura 30-60 secunde pentru subnet complet)';
+  resultsDiv.style.color = '#7db3d9';
+  
+  try {
+    const resp = await fetch(`/agent/devices/discover/?base=${encodeURIComponent(base)}`);
+    const data = await resp.json();
+    
+    if (data.ok && data.responsive && data.responsive.length > 0) {
+      let html = `<strong style="color: #9fd2f1;">✓ Găsite ${data.count} dispozitive în ${data.elapsed_seconds}s</strong><br>`;
+      html += `<small style="color: #7db3d9;">Metoda: ${data.method} | Scannate: ${data.scanned} adrese</small><br><br>`;
+      data.responsive.forEach(ip => {
+        html += `<div class="ip-item" onclick="selectIP('${ip}')">${ip}</div> `;
+      });
+      resultsDiv.innerHTML = html;
+      resultsDiv.style.color = '#9fd2f1';
+    } else {
+      let msg = '❌ Nicio adresă receptivă găsită';
+      if (data.method === 'tcp-fallback') {
+        msg += ' (TCP scan - dispozitivele ar putea nu asculta pe porturi comune)';
+      } else {
+        msg += ' (verific ICMP/firewall - poate fi blocat ping)';
+      }
+      resultsDiv.textContent = msg;
+      resultsDiv.style.color = '#ff9999';
+    }
+  } catch (e) {
+    resultsDiv.textContent = '❌ Eroare: ' + e.message;
+    resultsDiv.style.color = '#ff9999';
+  }
+}
+
+async function pingDevice() {
+  const ip = document.getElementById('pingIp').value.trim();
+  if (!ip) { alert('Introdu o adresă IP'); return; }
+  
+  const resultsDiv = document.getElementById('netResults');
+  resultsDiv.style.display = 'block';
+  resultsDiv.textContent = '⏳ Testare conectivitate...';
+  resultsDiv.style.color = '#7db3d9';
+  
+  try {
+    const resp = await fetch(`/agent/devices/ping/?ip=${encodeURIComponent(ip)}`);
+    const data = await resp.json();
+    
+    if (data.ok) {
+      if (data.alive) {
+        resultsDiv.innerHTML = `<strong style="color: #2da44e;">🟢 ${ip} ONLINE ✓</strong><br>
+          <div class="ip-item" onclick="selectIP('${ip}')">➕ Selectează IP</div>`;
+        resultsDiv.style.color = '#2da44e';
+      } else {
+        resultsDiv.textContent = `🔴 ${ip} NU RĂSPUNDE la ping`;
+        resultsDiv.style.color = '#ff9999';
+      }
+    } else {
+      resultsDiv.textContent = '❌ Eroare ping: ' + data.error;
+      resultsDiv.style.color = '#ff9999';
+    }
+  } catch (e) {
+    resultsDiv.textContent = '❌ Eroare: ' + e.message;
+    resultsDiv.style.color = '#ff9999';
+  }
+}
+
+async function testPort() {
+  const ip = document.getElementById('portTestIp').value.trim();
+  const port = document.getElementById('portTestPort').value.trim() || '4370';
+  
+  if (!ip) { 
+    alert('Introdu adresa IP pentru testare port'); 
+    return; 
+  }
+  
+  const resultsDiv = document.getElementById('netResults');
+  resultsDiv.style.display = 'block';
+  resultsDiv.textContent = `⏳ Testare port ${port} pe ${ip}...`;
+  resultsDiv.style.color = '#7db3d9';
+  
+  try {
+    const resp = await fetch(`/agent/devices/port-test/?ip=${encodeURIComponent(ip)}&port=${encodeURIComponent(port)}`);
+    const data = await resp.json();
+    
+    if (data.ok) {
+      if (data.open) {
+        resultsDiv.innerHTML = `<strong style="color: #2da44e;">✓ Port ${data.port} DESCHIS pe ${data.ip}</strong><br>
+          <small style="color: #9fd2f1;">Dispozitivul ascultă pe acest port și poate primi comenzi!</small><br>
+          <div class="ip-item" onclick="selectIP('${ip}', ${port})">➕ Folosește ${ip}:${port}</div>`;
+        resultsDiv.style.color = '#2da44e';
+      } else {
+        resultsDiv.innerHTML = `<strong style="color: #ff9999;">✗ Port ${data.port} ÎNCHIS/FILTRAT pe ${data.ip}</strong><br>
+          <small style="color: #ff9999;">Posibile cauze:</small><br>
+          <small style="color: #7db3d9;">
+            • Dispozitivul nu ascultă pe acest port<br>
+            • Firewall blochează conexiunea<br>
+            • Device-ul e offline sau pe rețea diferită<br>
+            • Port-ul greșit (încercă 8080, 80, 4370)
+          </small>`;
+        resultsDiv.style.color = '#ff9999';
+      }
+    } else {
+      resultsDiv.textContent = '❌ Eroare: ' + (data.error || 'Unknown error');
+      resultsDiv.style.color = '#ff9999';
+    }
+  } catch (e) {
+    resultsDiv.textContent = '❌ Eroare request: ' + e.message;
+    resultsDiv.style.color = '#ff9999';
+  }
+}
+
+function selectIP(ip, port) {
+  // Find IP address input field
+  const ipInput = document.getElementById('{{ form.ip_address.id_for_label }}');
+  if (ipInput) {
+    ipInput.value = ip;
+    ipInput.focus();
+    // Visual feedback
+    ipInput.style.background = '#2da44e';
+    ipInput.style.color = '#fff';
+    setTimeout(() => {
+      ipInput.style.background = '#163247';
+      ipInput.style.color = '#e8f0f8';
+    }, 1000);
+  } else {
+    console.error('IP input field not found. Expected ID:', '{{ form.ip_address.id_for_label }}');
+  }
+  
+  // If port is provided, fill port field too
+  if (port) {
+    const portInput = document.getElementById('{{ form.port.id_for_label }}');
+    if (portInput) {
+      portInput.value = port;
+      // Visual feedback for port too
+      portInput.style.background = '#2da44e';
+      portInput.style.color = '#fff';
+      setTimeout(() => {
+        portInput.style.background = '#163247';
+        portInput.style.color = '#e8f0f8';
+      }, 1000);
+    }
+  }
+}
+
+function _ensureDeviceActionOverlay(){
+  let el = document.getElementById('deviceActionOverlay');
+  if(el) return el;
+  el = document.createElement('div');
+  el.id = 'deviceActionOverlay';
+  el.className = 'device-action-overlay';
+  el.setAttribute('aria-hidden', 'true');
+  el.innerHTML = '<div class="panel">' +
+    '<div class="title" id="deviceActionTitle">Rezultat</div>' +
+    '<div class="msg" id="deviceActionMsg"></div>' +
+    '<div class="bar"><div></div></div>' +
+  '</div>';
+  document.body.appendChild(el);
+  return el;
+}
+
+function showDeviceActionOverlay(message, ok){
+  const el = _ensureDeviceActionOverlay();
+  const t = document.getElementById('deviceActionTitle');
+  const m = document.getElementById('deviceActionMsg');
+  if(t) t.textContent = ok ? 'Succes' : 'Eroare';
+  if(m) m.textContent = message || '';
+  el.classList.remove('success','error');
+  el.classList.add(ok ? 'success' : 'error');
+  el.style.display = 'flex';
+  setTimeout(()=>{ el.style.display = 'none'; }, ledelay);
+}
+
+const ledelay = 1100;
+
+function _getCookie(name) {
+  let v = null;
+  if (document.cookie && document.cookie !== '') {
+    document.cookie.split(';').forEach(c => {
+      c = c.trim();
+      if (c.substring(0, name.length + 1) === (name + '=')) v = decodeURIComponent(c.substring(name.length + 1));
+    });
+  }
+  return v;
+}
+
+(function initDeviceForm(){
+  // Ensure communication sections are correct even when injected after DOMContentLoaded
+  try { toggleCommMode(); } catch(e) {}
+  if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', function(){ try { toggleCommMode(); } catch(e) {} });
+  }
+
+  const formEl = document.currentScript && document.currentScript.closest('.device-form-scope')
+    ? document.currentScript.closest('.device-form-scope').querySelector('form')
+    : document.querySelector('.device-form-scope form');
+  if(!formEl) return;
+  const isModal = (formEl.getAttribute('data-ajax') === '1');
+
+  // In modal, cancel should close modal instead of navigating
+  if(isModal){
+    const cancel = document.getElementById('deviceCancelLink');
+    if(cancel){
+      cancel.addEventListener('click', function(e){
+        e.preventDefault();
+        if(typeof window.closeDeviceModal === 'function') window.closeDeviceModal();
+      });
+    }
+  }
+
+  if(!isModal) return;
+
+  formEl.addEventListener('submit', async function(e){
+    e.preventDefault();
+    const fd = new FormData(formEl);
+    try{
+      const resp = await fetch(formEl.getAttribute('action') || window.location.pathname, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': _getCookie('csrftoken') || '', 'X-Requested-With': 'XMLHttpRequest' },
+        body: fd,
+      });
+      const data = await resp.json();
+      if(data && data.ok){
+        showDeviceActionOverlay(data.message || 'Succes!', true);
+        setTimeout(()=>{
+          if(data.redirect_url){ window.location.href = data.redirect_url; }
+          else { window.location.reload(); }
+        }, 900);
+      } else {
+        const msg = (data && (data.error || data.message)) || 'Eroare salvare';
+        showDeviceActionOverlay(msg, false);
+        if(data && data.html && typeof window.replaceDeviceModalContent === 'function'){
+          window.replaceDeviceModalContent(data.html);
+        }
+      }
+    }catch(err){
+      const msg = err && err.message ? err.message : String(err);
+      showDeviceActionOverlay(msg, false);
+    }
+  });
+})();
+</script>

@@ -1,0 +1,48 @@
+<div class="access-pane" data-tab="doors">
+  <div class="action-bar">
+    <div class="action-left">
+      <span class="access-badge">Uși</span>
+      <span class="hint">Configurare uși și mapare pe device</span>
+    </div>
+    <div class="action-right">
+      <button class="btn-secondary btn-small" type="button" data-access-ui="reload" title="Reîncarcă lista de uși">🔄 Reîncarcă</button>
+      <button class="btn-secondary btn-small" type="button" data-access-ui="export" title="Exportă CSV (format importabil)">📥 Export</button>
+      <button class="btn-secondary btn-small" type="button" data-access-ui="import" data-access-module="door" data-access-title="Uși" title="Importă uși din CSV">📤 Import</button>
+      <button class="btn-secondary btn-small" type="button" data-access-ui="logs" data-access-module="door" data-access-title="Uși" title="Deschide logurile pentru uși">📋 Loguri</button>
+      {% if can_edit %}
+      <button class="btn-primary btn-small" type="button" data-access-open="1" data-title="Adaugă ușă" data-url="{% url 'crud-door-create' %}?modal=1" title="Adaugă o ușă nouă">+ Adaugă ușă</button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="table-shell">
+    <table>
+      <thead><tr><th>Nume</th><th>Device</th><th>Locație</th><th>Activă</th><th>Stare</th><th class="col-w-150">Acțiuni</th></tr></thead>
+      <tbody>
+        {% for d in page.object_list %}
+        <tr>
+          <td>{{ d.name }}</td>
+          <td>{% if d.device %}{{ d.device.device_name }} (SN:{{ d.device.serial_number }}){% else %}-{% endif %}</td>
+          <td>{{ d.location|default:'-' }}</td>
+          <td>{% if d.enabled %}DA{% else %}NU{% endif %}</td>
+          <td>{{ d.state|default:'-' }}</td>
+          <td>
+            {% if can_edit %}
+            <button type="button" class="btn-success btn-small" data-access-open="1" data-title="Editează ușă" data-url="{% url 'crud-door-edit' d.id %}?modal=1" title="Editează ușa">Editează</button>
+            <button type="button" class="btn-danger btn-small" data-access-del="1" data-confirm="Ștergi ușa?" data-url="{% url 'crud-door-delete' d.id %}" title="Șterge ușa">Șterge</button>
+            {% else %}-{% endif %}
+          </td>
+        </tr>
+        {% empty %}
+          <tr><td colspan="6" class="td-center-muted">Nu există uși</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="access-pager">
+    <span>{{ page.number }}/{{ page.paginator.num_pages }}</span>
+    {% if page.has_previous %}<a class="btn-secondary btn-small" data-access-page="1" href="{{ request.path }}?embed=1&page={{ page.previous_page_number }}">«</a>{% endif %}
+    {% if page.has_next %}<a class="btn-secondary btn-small" data-access-page="1" href="{{ request.path }}?embed=1&page={{ page.next_page_number }}">»</a>{% endif %}
+  </div>
+</div>

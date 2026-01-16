@@ -40,7 +40,7 @@
 <td>{{ d.code }}</td>
 <td>
 <a href="{% url 'crud-dept-edit' d.id %}" data-tip="Editează" title="Editează">Edit</a>
-<form method="post" action="{% url 'crud-dept-delete' d.id %}" style="display:inline" onsubmit="return confirm('Ștergi?');">
+<form method="post" action="{% url 'crud-dept-delete' d.id %}" style="display:inline" onsubmit="return (window.zkConfirmThenSubmit ? zkConfirmThenSubmit(this,{title:'Confirmare',message:'Ștergi departamentul?',okText:'Șterge',cancelText:'Renunță',variant:'danger'}) : confirm('Ștergi?'));">
 {% csrf_token %}<button data-tip="Șterge" title="Șterge">X</button>
 </form>
 </td>

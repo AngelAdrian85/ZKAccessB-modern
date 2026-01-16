@@ -786,7 +786,10 @@ function wsConnect(){
       }
     } else if(data.type==='event.batch'){
       if(data.descriptions && data.codes){
-        data.descriptions.forEach((desc,i)=>{ addEvent({ point:data.point_id||'', description:desc, code:data.codes[i]}); });
+        data.descriptions.forEach((desc,i)=>{
+          const vm = (data.verify_modes && data.verify_modes[i]) ? data.verify_modes[i] : '';
+          addEvent({ point:data.point_id||'', description:desc, code:data.codes[i], verify_mode: vm, _source: 'event.batch' });
+        });
       } else { addEvent({ point:data.point_id||'', description:`Events x${data.count||0}`}); }
     } else if(data.type==='legacy.event'){
       addEvent({
@@ -820,7 +823,7 @@ function wsConnect(){
           // Door events are filtered by toggle; still update device icons but only
           // add a visible event row if user enabled showing door events
           if(getShowRtlog()){
-            addEvent({ description:data.type, point: pid, name: nm, _source: data.type });
+            addEvent({ description:(data.event_description||data.description||data.type), point: pid, name: nm, verify_mode:(data.verify_mode||''), _source: data.type });
           }
       } catch { addEvent({ description:data.type, point: (data.point_id||data.door_id||'') }); }
     } else { addEvent(data); }
@@ -1090,7 +1093,7 @@ function openAddCardModal(card){
     host = document.createElement('div'); host.id='monitorAddCardModal';
     host.style.position='fixed'; host.style.inset='0'; host.style.background='rgba(0,0,0,0.6)'; host.style.zIndex='1000'; host.style.display='none';
     const panel = document.createElement('div'); panel.style.margin='60px auto'; panel.style.maxWidth='900px'; panel.style.background='#2d5a7b'; panel.style.border='1px solid #3d6a8b'; panel.style.borderRadius='6px'; panel.style.padding='10px';
-    panel.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;color:#fff;margin-bottom:8px;"><strong>Adaugă Angajat / Card</strong><button onclick="document.getElementById('monitorAddCardModal').style.display='none'" style="background:#d97e4a;color:#fff;border:none;border-radius:12px;width:24px;height:24px;cursor:pointer;">×</button></div><div id="monitorAddCardBody" style="background:#fff;border-radius:4px;overflow:auto;max-height:70vh;"><div style="padding:20px;text-align:center;color:#999;">Loading...</div></div>`;
+    panel.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;color:#fff;margin-bottom:8px;"><strong>Adaugă Angajat / Card</strong><button onclick="document.getElementById('monitorAddCardModal').style.display='none'" style="background:rgba(15,42,71,0.55);color:#fff;border:1px solid rgba(255,255,255,0.22);border-radius:9px;width:30px;height:30px;cursor:pointer;">×</button></div><div id="monitorAddCardBody" style="background:transparent;border-radius:8px;overflow:auto;max-height:70vh;"><div style="padding:20px;text-align:center;color:#7db3d9;font-weight:700;">Loading...</div></div>`;
     host.appendChild(panel); document.body.appendChild(host);
   }
   host.style.display='block';

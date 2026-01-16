@@ -43,7 +43,7 @@
 	<a href="{% url 'crud-issuecard-edit' c.id %}" data-tip="Editează">Edit</a>
 	<button type="button" class="quickDeactivate" data-id="{{ c.id }}" data-tip="Dezactivează rapid">Deactivate</button>
 	<button type="button" class="quickReissue" data-id="{{ c.id }}" data-tip="Reemite rapid">Reissue</button>
-	<form method="post" action="{% url 'crud-issuecard-delete' c.id %}" style="display:inline" onsubmit="return confirm('Ștergi card?');">{% csrf_token %}<button data-tip="Șterge">X</button></form>
+	<form method="post" action="{% url 'crud-issuecard-delete' c.id %}" style="display:inline" onsubmit="return (window.zkConfirmThenSubmit ? zkConfirmThenSubmit(this,{title:'Confirmare',message:'Ștergi cardul?',okText:'Șterge',cancelText:'Renunță',variant:'danger'}) : confirm('Ștergi card?'));">{% csrf_token %}<button data-tip="Șterge">X</button></form>
 </td>
 </tr>
 {% endfor %}
