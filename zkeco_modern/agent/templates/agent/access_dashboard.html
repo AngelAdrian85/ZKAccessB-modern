@@ -187,12 +187,12 @@ table tbody td:last-child { border-right: none; }
   <section class="panel">
     <h2>⚙️ Quick Actions</h2>
     <ul style="list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
-      <li><a href="#" onclick="openQuickAddEmployee(); return false;" class="op">➕ Person</a></li>
+      <li><a href="#" onclick="openQuickAddEmployee(); return false;" class="op">➕ Angajat</a></li>
       <li><a href="#" onclick="openQuickAddDevice(); return false;" class="op">➕ Device</a></li>
-      <li><a href="{% url 'crud-dept-create' %}" class="op">➕ Dept</a></li>
-      <li><a href="{% url 'agent-monitor' %}" class="op">🔴 Monitor</a></li>
-      <li><a href="{% url 'crud-access-logs-list' %}" class="op">📋 Logs</a></li>
-      <li><a href="{% url 'agent-report-alarms' %}" class="op">📊 Reports</a></li>
+      <li><a href="#" onclick="openQuickAddDept(); return false;" class="op">➕ Departament</a></li>
+      <li><a href="{% url 'agent-monitor' %}" class="op">🔴 Monitorizare</a></li>
+      <li><a href="#" onclick="openDashboardLogs(); return false;" class="op">📋 Loguri</a></li>
+      <li><a href="#" onclick="openDashboardReports(); return false;" class="op">📊 Rapoarte</a></li>
       <li><a href="{% url 'agent-control-center' %}" class="op" style="background: #2da44e; font-weight: 600;">🎮 Control</a></li>
       <li><a href="{% url 'crud-employee-create' %}" class="op">👆 Biometric</a></li>
     </ul>
@@ -302,7 +302,7 @@ table tbody td:last-child { border-right: none; }
   <div class="modal-content">
     <button class="modal-close" onclick="closeEmployeeModal()">&times;</button>
     <div class="modal-inner">
-      <div class="modal-titlebar">Add Employee</div>
+      <div class="modal-titlebar">Adaugă Angajat</div>
       <div class="modal-body-wrapper">
         <div id="employeeModalBody">
           <div style="padding:20px;text-align:center;color:#999;">Loading...</div>
@@ -316,10 +316,47 @@ table tbody td:last-child { border-right: none; }
   <div class="modal-content">
     <button class="modal-close" onclick="closeDeviceModal()">&times;</button>
     <div class="modal-inner">
-      <div class="modal-titlebar">Add Device</div>
+      <div class="modal-titlebar">Adaugă Dispozitiv</div>
       <div class="modal-body-wrapper">
         <div id="deviceModalBody">
           <div style="padding:20px;text-align:center;color:#999;">Loading...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="deptModal" class="modal">
+  <div class="modal-content">
+    <button class="modal-close" onclick="closeDeptModal()">&times;</button>
+    <div class="modal-inner">
+      <div class="modal-titlebar">Adaugă Departament</div>
+      <div class="modal-body-wrapper">
+        <div id="deptModalBody" style="padding:14px;">
+          <div style="font-size:12px;color:#a8c5d8;margin-bottom:10px;line-height:1.35;">
+            Creează rapid un departament. Îl poți edita complet ulterior din meniul <b>Personal → Departamente</b>.
+          </div>
+          <div style="display:grid;grid-template-columns: 1fr 1fr;gap:10px;">
+            <div>
+              <label style="display:block;font-size:12px;color:#cfe9f8;font-weight:600;margin-bottom:4px;">Nume departament *</label>
+              <input id="deptNameInput" type="text" placeholder="Ex: Producție" style="width:100%;padding:8px;border-radius:6px;border:1px solid rgba(61,165,217,0.25);background:#0f2738;color:#e8f0f8;" />
+            </div>
+            <div>
+              <label style="display:block;font-size:12px;color:#cfe9f8;font-weight:600;margin-bottom:4px;">Cod (opțional)</label>
+              <input id="deptCodeInput" type="text" placeholder="Ex: PRD" style="width:100%;padding:8px;border-radius:6px;border:1px solid rgba(61,165,217,0.25);background:#0f2738;color:#e8f0f8;" />
+            </div>
+          </div>
+          <div style="margin-top:10px;display:grid;grid-template-columns: 1fr;gap:10px;">
+            <div>
+              <label style="display:block;font-size:12px;color:#cfe9f8;font-weight:600;margin-bottom:4px;">Notițe (opțional)</label>
+              <textarea id="deptNoteInput" rows="2" placeholder="Ex: departament nou pentru linia 2" style="width:100%;padding:8px;border-radius:6px;border:1px solid rgba(61,165,217,0.25);background:#0f2738;color:#e8f0f8;resize:vertical;"></textarea>
+            </div>
+          </div>
+          <div id="deptQuickStatus" style="margin-top:10px;font-size:12px;color:#9fd2f1;"></div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px;">
+            <button class="op" onclick="submitDeptQuick(); return false;" style="background:#3da5d9;">Salvează</button>
+            <button class="op" onclick="closeDeptModal(); return false;" style="background:#2d5a7b;">Renunță</button>
+          </div>
         </div>
       </div>
     </div>
@@ -378,6 +415,101 @@ function closeEmployeeModal() {
 function closeDeviceModal() { 
   document.getElementById('deviceModal').classList.remove('show'); 
 }
+
+function openQuickAddDept(){
+  const modal = document.getElementById('deptModal');
+  const name = document.getElementById('deptNameInput');
+  const code = document.getElementById('deptCodeInput');
+  const note = document.getElementById('deptNoteInput');
+  const status = document.getElementById('deptQuickStatus');
+  modal.classList.add('show');
+  if(status) status.textContent = '';
+  if(name) name.value = '';
+  if(code) code.value = '';
+  if(note) note.value = '';
+  window.setTimeout(()=>{ try{ name && name.focus(); }catch(e){} }, 30);
+}
+
+function closeDeptModal(){
+  document.getElementById('deptModal').classList.remove('show');
+}
+
+function openDashboardLogs(){
+  const url = '/agent/menu/access/?tab=logs&embed=1';
+  if(window.zkFrameModal && typeof window.zkFrameModal.open === 'function'){
+    window.zkFrameModal.open({ title: 'Loguri acces', url });
+  } else {
+    window.location.href = '/agent/menu/access/?tab=logs';
+  }
+}
+
+function openDashboardReports(){
+  const url = '/agent/menu/reports/?tab=accesslog&embed=1&mode=full';
+  if(window.zkFrameModal && typeof window.zkFrameModal.open === 'function'){
+    window.zkFrameModal.open({ title: 'Rapoarte', url });
+  } else {
+    window.location.href = '/agent/menu/reports/?tab=accesslog';
+  }
+}
+
+function submitDeptQuick(){
+  const name = (document.getElementById('deptNameInput') || {}).value || '';
+  const code = (document.getElementById('deptCodeInput') || {}).value || '';
+  const note = (document.getElementById('deptNoteInput') || {}).value || '';
+  const status = document.getElementById('deptQuickStatus');
+  if(!name.trim()){
+    if(status) status.innerHTML = '<span style="color:#ff8c99;">Completează numele departamentului.</span>';
+    return;
+  }
+
+  if(window.zkBusy && typeof window.zkBusy.loading === 'function'){
+    try{ window.zkBusy.loading('Salvare departament...', ''); }catch(e){}
+  }
+
+  const data = new FormData();
+  data.append('DeptName', name.trim());
+  data.append('code', code.trim());
+  if(note && note.trim()) data.append('notes', note.trim());
+
+  fetch('{% url "crud-dept-create" %}', {
+    method: 'POST',
+    body: data,
+    headers: { 'X-CSRFToken': getCSRF(), 'X-Requested-With': 'XMLHttpRequest' }
+  })
+  .then(async (r)=>{
+    const text = await r.text();
+    if(!r.ok) throw new Error('Eroare salvare');
+    // Best-effort: if form invalid, server returns the form again
+    if(text && text.indexOf('errorlist') !== -1){
+      if(status) status.innerHTML = '<span style="color:#ff8c99;">Nu s-a putut salva. Verifică datele.</span>';
+      return;
+    }
+    if(status) status.innerHTML = '<span style="color:#2da44e;">✓ Departament adăugat.</span>';
+    window.setTimeout(()=>{ closeDeptModal(); location.reload(); }, 800);
+  })
+  .catch((e)=>{
+    if(status) status.innerHTML = '<span style="color:#ff8c99;">' + (e && e.message ? e.message : 'Eroare') + '</span>';
+  })
+  .finally(()=>{
+    if(window.zkBusy && typeof window.zkBusy.hide === 'function'){
+      try{ window.zkBusy.hide(); }catch(e){}
+    }
+  });
+}
+
+// Keyboard helpers for dept modal
+document.addEventListener('keydown', (e)=>{
+  const modal = document.getElementById('deptModal');
+  if(!modal || !modal.classList.contains('show')) return;
+  if(e.key === 'Escape') closeDeptModal();
+  if(e.key === 'Enter'){
+    const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
+    if(tag !== 'textarea'){
+      e.preventDefault();
+      submitDeptQuick();
+    }
+  }
+});
 
 // Modal UX: click outside to close + Escape to close
 document.addEventListener('click', (e) => {

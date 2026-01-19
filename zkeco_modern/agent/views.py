@@ -1424,6 +1424,10 @@ def menu_access_control(request: HttpRequest):
     if not request.user.is_authenticated:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
+    if request.GET.get('embed') == '1':
+        resp = render(request, 'agent/menu_access_embed.html')
+        resp['X-Frame-Options'] = 'SAMEORIGIN'
+        return resp
     return render(request, 'agent/menu_access.html')
 
 
@@ -1442,6 +1446,33 @@ def menu_reports(request: HttpRequest):
     q = (request.GET.get('q') or '').strip()
     date_from = (request.GET.get('from') or '').strip()
     date_to = (request.GET.get('to') or '').strip()
+
+    # Sorting
+    sort_key = (request.GET.get('sort') or '').strip().lower()
+    sort_dir = (request.GET.get('dir') or 'desc').strip().lower()
+    if sort_dir not in ('asc', 'desc'):
+        sort_dir = 'desc'
+
+    def _sort_href(field: str, *, default_dir: str = 'desc') -> str:
+        """Build a querystring that toggles direction for the same sort field."""
+        try:
+            qd = request.GET.copy()
+            if 'page' in qd:
+                qd.pop('page')
+            if field == sort_key:
+                next_dir = 'asc' if sort_dir == 'desc' else 'desc'
+            else:
+                next_dir = default_dir
+            qd['sort'] = field
+            qd['dir'] = next_dir
+            return '?' + qd.urlencode()
+        except Exception:
+            return ''
+
+    def _sort_indicator(field: str) -> str:
+        if field != sort_key:
+            return ''
+        return '▲' if sort_dir == 'asc' else '▼'
 
     page = None
     page_exists = False
@@ -1674,13 +1705,24 @@ def menu_reports(request: HttpRequest):
                     event_desc = str(payload.get('event_description') or '').strip()
                     verify_label = _describe_verify(str(payload.get('verify_mode') or ''))
                     status_text = str(payload.get('status_text') or '').strip()
+                    # Normalize status_text: older records may embed "<ip> - <door> RESPINS".
+                    try:
+                        st_u = status_text.upper()
+                        if 'RESPINS' in st_u or 'DENIED' in st_u or st_u.strip() == 'DENY':
+                            status_text = 'RESPINS'
+                        elif 'ACCEPTAT' in st_u or 'ACCEPTED' in st_u or st_u.strip() == 'OK':
+                            status_text = 'ACCEPTAT'
+                    except Exception:
+                        pass
                     if not status_text:
                         act = str(getattr(a, 'action', '') or '').lower()
                         status_text = 'ACCEPTAT' if act != 'denied' else 'RESPINS'
-                    status_display = (f"{ip_addr} - {door_name} {status_text}").strip() if ip_addr else status_text
+                    status_hint = str(ip_addr or '').strip()
 
                     # Show operator only for remote actions (door commands or accesslog remote_open)
                     operator = ''
+                    is_remote = False
+                    mod = ''
                     try:
                         mod = str(getattr(a, 'module', '') or '').lower()
                         is_remote = bool(payload.get('remote_open')) or event_desc.lower().startswith('remote')
@@ -1688,6 +1730,19 @@ def menu_reports(request: HttpRequest):
                             operator = (getattr(a, 'user', None) or '')
                     except Exception:
                         operator = ''
+                        is_remote = False
+                        mod = ''
+
+                    # Access action classification (for the dedicated "Acțiune" column)
+                    st_norm = (status_text or '').strip().upper()
+                    if mod == 'door':
+                        access_action = 'command'
+                    elif is_remote or (event_desc.lower().startswith('remote')):
+                        access_action = 'remote'
+                    elif st_norm in ('ACCEPTAT', 'RESPINS'):
+                        access_action = 'scan'
+                    else:
+                        access_action = 'event'
 
                     audit_items.append({
                         '_ts': ts_local,
@@ -1701,7 +1756,9 @@ def menu_reports(request: HttpRequest):
                         'employee_pin': emp_pin,
                         'employee_name': emp_name,
                         'department_name': dept_name,
-                        'status_text': status_display,
+                        'status_text': status_text,
+                        'status_hint': status_hint,
+                        'access_action': access_action,
                         'verify_mode': verify_label,
                         'operator': operator,
                         'remarks': '',
@@ -1893,7 +1950,6 @@ def menu_reports(request: HttpRequest):
                 except Exception:
                     dept_name = ''
 
-                status_display = (f"{ip_addr} - {door_name} {status_text}").strip() if ip_addr else status_text
                 device_items.append({
                     '_ts': timezone.localtime(created_at) if created_at else timezone.localtime(timezone.now()),
                     'action_time': ts_str or (timezone.localtime(created_at).strftime('%Y-%m-%d %H:%M:%S') if created_at else ''),
@@ -1906,19 +1962,43 @@ def menu_reports(request: HttpRequest):
                     'employee_pin': employee_pin,
                     'employee_name': employee_name,
                     'department_name': dept_name,
-                    'status_text': status_display,
+                    'status_text': status_text,
+                    'status_hint': str(ip_addr or '').strip(),
+                    'access_action': 'scan' if str(status_text).strip().upper() in ('ACCEPTAT', 'RESPINS') else 'event',
                     'verify_mode': verify_label,
                     'operator': '',
                     'remarks': '',
                 })
 
-        # Merge + sort newest first
+        # Merge + sort
         merged = []
         merged.extend(audit_items)
         merged.extend(device_items)
         if not merged:
             missing_accesslog = True
-        merged.sort(key=lambda x: x.get('_ts') or timezone.localtime(timezone.now()), reverse=True)
+
+        access_sort_map = {
+            'ts': '_ts',
+            'zone': 'area_name',
+            'device': 'device_name',
+            'point': 'event_point',
+            'event': 'event_description',
+            'card': 'card_number',
+            'pin': 'employee_pin',
+            'name': 'employee_name',
+            'dept': 'department_name',
+            'action': 'access_action',
+            'user': 'operator',
+            'status': 'status_text',
+            'method': 'verify_mode',
+        }
+        sort_field = access_sort_map.get(sort_key or 'ts', '_ts')
+        reverse = (sort_dir != 'asc')
+        if sort_field == '_ts':
+            merged.sort(key=lambda x: x.get('_ts') or timezone.localtime(timezone.now()), reverse=reverse)
+        else:
+            merged.sort(key=lambda x: str(x.get(sort_field) or '').lower(), reverse=reverse)
+
         merged = _dedupe_remote_rows(merged, window_seconds=3)
         page = _paginate_list(merged, request, per_page=50)
         page_exists = True
@@ -1999,6 +2079,7 @@ def menu_reports(request: HttpRequest):
 
                     dev_name = str(payload.get('device_name') or '').strip()
                     area_name = str(payload.get('area_name') or '').strip()
+                    ip_addr = ''
                     try:
                         dev_id_val = payload.get('device_id')
                         if dev_id_val is not None:
@@ -2007,6 +2088,8 @@ def menu_reports(request: HttpRequest):
                                 dev_name = getattr(dev_obj, 'name', '') or ''
                             if dev_obj and not area_name:
                                 area_name = getattr(dev_obj, 'area_name', '') or ''
+                            if dev_obj:
+                                ip_addr = getattr(dev_obj, 'ip_address', '') or ''
                     except Exception:
                         pass
 
@@ -2019,6 +2102,17 @@ def menu_reports(request: HttpRequest):
                     except Exception:
                         operator = ''
 
+                    status_text = str(payload.get('status_text') or '').strip()
+                    # Normalize status_text: older records may embed "<ip> - <door> RESPINS".
+                    try:
+                        st_u = status_text.upper()
+                        if 'RESPINS' in st_u or 'DENIED' in st_u or st_u.strip() == 'DENY':
+                            status_text = 'RESPINS'
+                        elif 'ACCEPTAT' in st_u or 'ACCEPTED' in st_u or st_u.strip() == 'OK':
+                            status_text = 'ACCEPTAT'
+                    except Exception:
+                        pass
+
                     audit_rows.append({
                         '_ts': ts_local,
                         'action_time': ts_local.strftime('%Y-%m-%d %H:%M:%S'),
@@ -2030,9 +2124,11 @@ def menu_reports(request: HttpRequest):
                         'employee_pin': str(payload.get('employee_pin') or payload.get('employee_id') or ''),
                         'employee_name': str(payload.get('employee_name') or ''),
                         'department_name': str(payload.get('department_name') or ''),
-                        'status_text': str(payload.get('status_text') or ''),
+                        'status_text': status_text,
+                        'status_hint': str(ip_addr or '').strip(),
                         'verify_mode': _describe_verify(str(payload.get('verify_mode') or '')),
                         'operator': operator,
+                        'action': str(getattr(a, 'action', '') or '').strip().lower(),
                         'remarks': '',
                     })
 
@@ -2204,25 +2300,129 @@ def menu_reports(request: HttpRequest):
                             'employee_name': employee_name,
                             'department_name': dept_name,
                             'status_text': 'ACCEPTAT' if str(code) == '200' else ('RESPINS' if str(code) == '201' else ''),
+                            'status_hint': '',
                             'verify_mode': verify_label,
                             'operator': '',
+                            'action': 'others',
                             'remarks': '',
                         })
 
                 combined = []
                 combined.extend(audit_rows)
                 combined.extend(hw_rows)
-                combined.sort(key=lambda x: x.get('_ts') or timezone.localtime(timezone.now()), reverse=True)
+
+                system_sort_map = {
+                    'ts': '_ts',
+                    'zone': 'area_name',
+                    'device': 'device_name',
+                    'point': 'event_point',
+                    'event': 'event_description',
+                    'card': 'card_number',
+                    'pin': 'employee_pin',
+                    'name': 'employee_name',
+                    'dept': 'department_name',
+                    'action': 'action',
+                    'user': 'operator',
+                    'status': 'status_text',
+                    'method': 'verify_mode',
+                }
+                sort_field = system_sort_map.get(sort_key or 'ts', '_ts')
+                reverse = (sort_dir != 'asc')
+                if sort_field == '_ts':
+                    combined.sort(key=lambda x: x.get('_ts') or timezone.localtime(timezone.now()), reverse=reverse)
+                else:
+                    combined.sort(key=lambda x: str(x.get(sort_field) or '').lower(), reverse=reverse)
+
                 combined = _dedupe_remote_rows(combined, window_seconds=3)
                 page = _paginate_list(combined, request, per_page=50)
                 page_exists = True
                 system_rows = list(getattr(page, 'object_list', []) or [])
             else:
+                audit_sort_map = {
+                    'ts': 'timestamp',
+                    'module': 'module',
+                    'object': 'entity_name',
+                    'action': 'action',
+                    'user': 'user',
+                }
+                order_field = audit_sort_map.get(sort_key or 'ts', 'timestamp')
+                prefix = '' if sort_dir == 'asc' else '-'
+                try:
+                    qs = qs.order_by(prefix + order_field)
+                except Exception:
+                    pass
                 page = _paginate(qs, request, per_page=50)
                 page_exists = True
 
+    embed_full = (request.GET.get('embed') == '1') and ((request.GET.get('mode') or '').strip().lower() == 'full')
+    if embed_full:
+        resp = render(request, 'agent/menu_reports_embed.html', {
+            'tab': tab,
+            'page': page,
+            'page_exists': page_exists,
+            'missing_accesslog': missing_accesslog,
+            'access_rows': access_rows,
+            'system_rows': system_rows,
+            'access_filters': {
+                'card': (request.GET.get('card') or '').strip(),
+                'door': (request.GET.get('door') or '').strip(),
+                'person': (request.GET.get('person') or '').strip(),
+                'status': (request.GET.get('status') or '').strip().lower(),
+                'verify': (request.GET.get('verify') or '').strip(),
+            },
+            'query_no_page': _qs_without_page(request),
+            'sort': sort_key or 'ts',
+            'dir': sort_dir,
+            'sort_hrefs': {
+                'ts': _sort_href('ts', default_dir='desc'),
+                'zone': _sort_href('zone', default_dir='asc'),
+                'device': _sort_href('device', default_dir='asc'),
+                'point': _sort_href('point', default_dir='asc'),
+                'event': _sort_href('event', default_dir='asc'),
+                'card': _sort_href('card', default_dir='asc'),
+                'pin': _sort_href('pin', default_dir='asc'),
+                'name': _sort_href('name', default_dir='asc'),
+                'dept': _sort_href('dept', default_dir='asc'),
+                'action': _sort_href('action', default_dir='asc'),
+                'user': _sort_href('user', default_dir='asc'),
+                'status': _sort_href('status', default_dir='asc'),
+                'method': _sort_href('method', default_dir='asc'),
+                'module': _sort_href('module', default_dir='asc'),
+                'object': _sort_href('object', default_dir='asc'),
+            },
+            'sort_ind': {
+                'ts': _sort_indicator('ts'),
+                'zone': _sort_indicator('zone'),
+                'device': _sort_indicator('device'),
+                'point': _sort_indicator('point'),
+                'event': _sort_indicator('event'),
+                'card': _sort_indicator('card'),
+                'pin': _sort_indicator('pin'),
+                'name': _sort_indicator('name'),
+                'dept': _sort_indicator('dept'),
+                'action': _sort_indicator('action'),
+                'user': _sort_indicator('user'),
+                'status': _sort_indicator('status'),
+                'method': _sort_indicator('method'),
+                'module': _sort_indicator('module'),
+                'object': _sort_indicator('object'),
+            },
+            'current_username': (getattr(getattr(request, 'user', None), 'username', '') or ''),
+            'filters': {
+                'user': user_q,
+                'action': action_q or 'all',
+                'q': q,
+                'from_val': date_from,
+                'to_val': date_to,
+            },
+            'embed_full': True,
+            'embed_suffix': '&embed=1&mode=full',
+        })
+        resp['X-Frame-Options'] = 'SAMEORIGIN'
+        return resp
+
     if (request.GET.get('embed') == '1') and (tab == 'accesslog'):
-        return render(request, 'agent/reports_accesslog_embed.html', {
+        resp = render(request, 'agent/reports_accesslog_embed.html', {
             'tab': tab,
             'page': page,
             'page_exists': page_exists,
@@ -2230,6 +2430,8 @@ def menu_reports(request: HttpRequest):
             'access_rows': access_rows,
             'query_no_page': _qs_without_page(request),
         })
+        resp['X-Frame-Options'] = 'SAMEORIGIN'
+        return resp
 
     return render(request, 'agent/menu_reports.html', {
         'tab': tab,
@@ -2246,6 +2448,42 @@ def menu_reports(request: HttpRequest):
             'verify': (request.GET.get('verify') or '').strip(),
         },
         'query_no_page': _qs_without_page(request),
+        'sort': sort_key or 'ts',
+        'dir': sort_dir,
+        'sort_hrefs': {
+            'ts': _sort_href('ts', default_dir='desc'),
+            'zone': _sort_href('zone', default_dir='asc'),
+            'device': _sort_href('device', default_dir='asc'),
+            'point': _sort_href('point', default_dir='asc'),
+            'event': _sort_href('event', default_dir='asc'),
+            'card': _sort_href('card', default_dir='asc'),
+            'pin': _sort_href('pin', default_dir='asc'),
+            'name': _sort_href('name', default_dir='asc'),
+            'dept': _sort_href('dept', default_dir='asc'),
+            'action': _sort_href('action', default_dir='asc'),
+            'user': _sort_href('user', default_dir='asc'),
+            'status': _sort_href('status', default_dir='asc'),
+            'method': _sort_href('method', default_dir='asc'),
+            'module': _sort_href('module', default_dir='asc'),
+            'object': _sort_href('object', default_dir='asc'),
+        },
+        'sort_ind': {
+            'ts': _sort_indicator('ts'),
+            'zone': _sort_indicator('zone'),
+            'device': _sort_indicator('device'),
+            'point': _sort_indicator('point'),
+            'event': _sort_indicator('event'),
+            'card': _sort_indicator('card'),
+            'pin': _sort_indicator('pin'),
+            'name': _sort_indicator('name'),
+            'dept': _sort_indicator('dept'),
+            'action': _sort_indicator('action'),
+            'user': _sort_indicator('user'),
+            'status': _sort_indicator('status'),
+            'method': _sort_indicator('method'),
+            'module': _sort_indicator('module'),
+            'object': _sort_indicator('object'),
+        },
         'current_username': (getattr(getattr(request, 'user', None), 'username', '') or ''),
         'filters': {
             'user': user_q,
@@ -2254,6 +2492,8 @@ def menu_reports(request: HttpRequest):
             'from_val': date_from,
             'to_val': date_to,
         },
+        'embed_full': False,
+        'embed_suffix': '',
     })
 
 # ---------------- Legacy-style placeholder pages -----------------

@@ -1,0 +1,426 @@
+<style>
+  .access-module-container{max-width:98%;margin:6px auto;background:#1e4a6b;padding:6px;border-radius:2px;border:2px solid #3da5d9;}
+  .access-container{padding:0;margin:0 auto;}
+  .access-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 6px 0;flex-wrap:wrap;}
+  .access-title{color:#7db3d9;border-bottom:1px solid #3da5d9;padding-bottom:4px;margin:0;font-size:13px;font-weight:bold;flex:1;}
+  /* Tabs (PERSONAL screenshot style) */
+  .access-tabs{display:flex;gap:2px;margin-bottom:6px;border-bottom:1px solid #3d6a8b;overflow-x:auto;}
+  .access-tab-btn{padding:4px 12px;background:#163247;border:1px solid #3d6a8b;border-bottom:none;color:#9fd2f1;cursor:pointer;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;border-radius:2px 2px 0 0;transition:all 0.2s;white-space:nowrap;flex:0 0 auto;}
+  .access-tab-btn:hover{color:#7db3d9;}
+  .access-tab-btn.is-active{background:#3da5d9;color:#fff;border-color:#3da5d9;}
+
+  .access-body{border:1px solid #3d6a8b;border-radius:2px;overflow:hidden;background:transparent;}
+  .td-center-muted{text-align:center;color:var(--text-muted);}
+
+  .access-pane{padding:6px;}
+  .access-pane .action-bar{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;margin-bottom:4px;padding:4px 6px;background:#163247;border:1px solid #3d6a8b;border-radius:2px;}
+  .access-pane .action-left{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .access-badge{padding:2px 8px;border-radius:999px;font-size:10px;font-weight:900;background:rgba(61,165,217,0.25);border:1px solid rgba(61,165,217,0.35);color:#e8f1f8;}
+  .access-pane .hint{color:var(--text-muted);font-size:12px;}
+  .btn-small{padding:3px 8px;border-radius:2px;font-weight:600;font-size:9px;border:1px solid #3d6a8b;cursor:pointer;display:inline-flex;align-items:center;gap:3px;}
+
+  .access-pager{margin-top:8px;display:flex;align-items:center;justify-content:flex-end;gap:8px;color:#cfe9f8;font-size:11px;flex-wrap:wrap;}
+  .access-pager a{color:#cfe9f8;text-decoration:none;}
+
+  .col-w-150{width:150px;}
+
+  /* Modal: EXACT like screenshot 2 (legacy device modal) */
+  #modalAccess.modal-backdrop,#modalAccessLogs.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.72);display:none;align-items:center;justify-content:center;z-index:2500;padding:12px;opacity:0;transition:opacity 160ms ease;}
+  #modalAccess.modal-backdrop.is-open,#modalAccessLogs.modal-backdrop.is-open{opacity:1;}
+  #modalAccess .modal,#modalAccessLogs .modal{width:min(980px, calc(100vw - 28px));max-height:92vh;background:#1e4a6b;border:2px solid #3da5d9;border-radius:2px;box-shadow:0 20px 50px rgba(0,0,0,0.55);overflow:hidden;display:flex;flex-direction:column;transform:translateY(10px) scale(0.985);opacity:0;transition:transform 180ms ease, opacity 180ms ease, box-shadow 180ms ease;}
+  #modalAccess.modal-backdrop.is-open .modal,#modalAccessLogs.modal-backdrop.is-open .modal{transform:translateY(0) scale(1);opacity:1;}
+  #modalAccess .modal-header,#modalAccessLogs .modal-header{background:#163247;border-bottom:1px solid #3da5d9;padding:4px 6px;display:flex;align-items:center;justify-content:space-between;gap:8px;color:#7db3d9;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.3px;position:relative;}
+  #modalAccess .modal-header::before,#modalAccess .modal-header::after,#modalAccessLogs .modal-header::before,#modalAccessLogs .modal-header::after{display:none;content:none;}
+  #modalAccess .modal-title,#modalAccessLogs .modal-title{text-align:left;flex:1;}
+  #modalAccess .modal-title::before,#modalAccessLogs .modal-title::before{content:"+ ";color:#9fd2f1;}
+  #modalAccess .modal-close,#modalAccessLogs .modal-close{background:#163247;border:1px solid #3d6a8b;color:#9fd2f1;width:22px;height:22px;border-radius:2px;cursor:pointer;font-weight:700;font-size:14px;}
+  #modalAccess .modal-close:hover,#modalAccessLogs .modal-close:hover{background:#3da5d9;border-color:#3da5d9;color:#fff;}
+  #modalAccess .modal-body,#modalAccessLogs .modal-body{padding:6px;overflow:auto;color:#e8f0f8;}
+
+  /* simple table chrome inside logs modal */
+  #modalAccessLogs table{width:100%;border-collapse:collapse;font-size:10px;background:#163247;color:#e8f0f8;}
+  #modalAccessLogs thead{background:linear-gradient(to bottom, #3da5d9 0%, #2d7ba5 100%);color:#fff;}
+  #modalAccessLogs th,#modalAccessLogs td{padding:4px 6px;border-bottom:1px solid rgba(61,106,139,0.65);border-right:1px solid rgba(61,106,139,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  #modalAccessLogs th:last-child,#modalAccessLogs td:last-child{border-right:none;}
+</style>
+
+<div class="access-module-container">
+<div class="access-container">
+  <div class="access-head">
+    <div class="access-title">CONTROL ACCES <span class="access-badge" id="accessActiveBadge">Uși</span></div>
+  </div>
+
+  <div class="access-tabs" role="tablist" aria-label="Acces">
+      <button type="button" class="access-tab-btn" data-tab="doors">Uși</button>
+      <button type="button" class="access-tab-btn" data-tab="segments">Intervale</button>
+      <button type="button" class="access-tab-btn" data-tab="holidays">Sărbători</button>
+      <button type="button" class="access-tab-btn" data-tab="levels">Niveluri</button>
+      <button type="button" class="access-tab-btn" data-tab="logs">Loguri</button>
+  </div>
+
+  <div class="access-body" id="accessTabBody">
+    <div class="access-pane"><div class="hint">Se încarcă...</div></div>
+  </div>
+  </div>
+</div>
+
+<div id="modalAccess" class="modal-backdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <div style="width:30px;"></div>
+      <div class="modal-title" id="modalAccessTitle">Formular</div>
+      <button type="button" class="modal-close" id="modalAccessClose" title="Închide">✕</button>
+    </div>
+    <div class="modal-body" id="modalAccessBody"></div>
+  </div>
+</div>
+
+<div id="modalAccessLogs" class="modal-backdrop" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <div style="width:30px;"></div>
+      <div class="modal-title" id="modalAccessLogsTitle">Loguri</div>
+      <button type="button" class="modal-close" id="modalAccessLogsClose" title="Închide">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="hint" id="modalAccessLogsHint">Se încarcă...</div>
+      <div style="margin-top:8px;" class="table-shell">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:160px;">Data</th>
+              <th style="width:140px;">Modul</th>
+              <th>Entitate</th>
+              <th style="width:140px;">Utilizator</th>
+              <th style="width:120px;">Acțiune</th>
+              <th>Detalii</th>
+            </tr>
+          </thead>
+          <tbody id="modalAccessLogsBody"><tr><td colspan="6" class="td-center-muted">Se încarcă...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const tabBody = document.getElementById('accessTabBody');
+  const badge = document.getElementById('accessActiveBadge');
+  const buttons = Array.from(document.querySelectorAll('.access-tab-btn[data-tab]'));
+
+  const modalBackdrop = document.getElementById('modalAccess');
+  const modalBody = document.getElementById('modalAccessBody');
+  const modalTitle = document.getElementById('modalAccessTitle');
+  const modalClose = document.getElementById('modalAccessClose');
+
+  const logsBackdrop = document.getElementById('modalAccessLogs');
+  const logsTitle = document.getElementById('modalAccessLogsTitle');
+  const logsClose = document.getElementById('modalAccessLogsClose');
+  const logsHint = document.getElementById('modalAccessLogsHint');
+  const logsBody = document.getElementById('modalAccessLogsBody');
+
+  const TAB_META = {
+    doors:   {label: 'Uși',        url: '/agent/crud/doors/?embed=1'},
+    segments:{label: 'Intervale',  url: '/agent/crud/time-segments/?embed=1'},
+    holidays:{label: 'Sărbători',  url: '/agent/crud/holidays/?embed=1'},
+    levels:  {label: 'Niveluri',   url: '/agent/crud/access-levels/?embed=1'},
+    logs:    {label: 'Loguri',     url: '/agent/menu/reports/?tab=accesslog&embed=1'},
+  };
+
+  function getCookie(name){
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if(parts.length === 2) return parts.pop().split(';').shift();
+    return '';
+  }
+  function getCSRF(){ return getCookie('csrftoken'); }
+
+  let currentTab = null;
+  let currentTabUrl = null;
+  let currentModalUrl = null;
+
+  function setActiveTab(tab){
+    currentTab = tab;
+    const meta = TAB_META[tab] || TAB_META.doors;
+    badge.textContent = meta.label;
+    buttons.forEach(b=> b.classList.toggle('is-active', b.getAttribute('data-tab') === tab));
+    const url = new URL(window.location.href);
+    url.searchParams.set('tab', tab);
+    window.history.replaceState({}, '', url.toString());
+  }
+
+  async function loadTab(tab, urlOverride){
+    const meta = TAB_META[tab] || TAB_META.doors;
+    setActiveTab(tab);
+    currentTabUrl = urlOverride || meta.url;
+    tabBody.innerHTML = '<div class="access-pane"><div class="hint">Se încarcă...</div></div>';
+    const resp = await fetch(currentTabUrl, {headers:{'X-Requested-With':'XMLHttpRequest'}});
+    const html = await resp.text();
+    tabBody.innerHTML = html;
+  }
+
+  function openModal(){
+    modalBackdrop.style.display = 'flex';
+    requestAnimationFrame(()=> modalBackdrop.classList.add('is-open'));
+    modalBackdrop.setAttribute('aria-hidden', 'false');
+  }
+  function closeModal(){
+    modalBackdrop.classList.remove('is-open');
+    modalBackdrop.setAttribute('aria-hidden', 'true');
+    window.setTimeout(()=>{ modalBackdrop.style.display = 'none'; }, 180);
+    currentModalUrl = null;
+  }
+
+  function openLogsModal(){
+    logsBackdrop.style.display = 'flex';
+    requestAnimationFrame(()=> logsBackdrop.classList.add('is-open'));
+    logsBackdrop.setAttribute('aria-hidden', 'false');
+  }
+  function closeLogsModal(){
+    logsBackdrop.classList.remove('is-open');
+    logsBackdrop.setAttribute('aria-hidden', 'true');
+    window.setTimeout(()=>{ logsBackdrop.style.display = 'none'; }, 180);
+  }
+  logsClose?.addEventListener('click', closeLogsModal);
+  logsBackdrop?.addEventListener('click', (e)=>{ if(e && e.target === logsBackdrop) closeLogsModal(); });
+
+  modalClose?.addEventListener('click', closeModal);
+  modalBackdrop?.addEventListener('click', (e)=>{ if(e && e.target === modalBackdrop) closeModal(); });
+  document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape' && modalBackdrop.style.display === 'flex') closeModal(); });
+  document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape' && logsBackdrop.style.display === 'flex') closeLogsModal(); });
+
+  function openImportModal(module, title){
+    const mod = module || 'access';
+    const ttl = title || 'Import';
+    if(window.zkActionModal && typeof window.zkActionModal.openCsvImport === 'function'){
+      window.zkActionModal.openCsvImport(
+        mod,
+        `IMPORT – ${ttl}`,
+        'Import CSV (separator ;)',
+        async ()=>{ try{ await loadTab(currentTab, currentTabUrl); }catch(_e){} }
+      );
+      return;
+    }
+    alert('Import indisponibil (modal global lipsă).');
+  }
+
+  async function openAccessAuditLogs(module, title){
+    if(!logsBackdrop || !logsBody) return;
+    if(logsTitle) logsTitle.textContent = title ? `Loguri – ${title}` : 'Loguri';
+    if(logsHint) logsHint.textContent = 'Se încarcă...';
+    logsBody.innerHTML = '<tr><td colspan="6" class="td-center-muted">Se încarcă...</td></tr>';
+    openLogsModal();
+    try{
+      const url = `/agent/logs/view/?module=${encodeURIComponent(String(module || 'access'))}`;
+      const resp = await fetch(url, {headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}});
+      const data = await resp.json();
+      const items = (data && Array.isArray(data.items)) ? data.items : [];
+      if(logsHint) logsHint.textContent = `Înregistrări: ${items.length}`;
+      if(items.length === 0){
+        logsBody.innerHTML = '<tr><td colspan="6" class="td-center-muted">Nu există loguri.</td></tr>';
+        return;
+      }
+      logsBody.innerHTML = items.map(it => {
+        const dt = (it.datetime || '').replace('T',' ').slice(0,19);
+        return `<tr>
+          <td>${String(dt).replace(/\</g,'&lt;')}</td>
+          <td>${String(it.module||'').replace(/\</g,'&lt;')}</td>
+          <td>${String(it.entity||'').replace(/\</g,'&lt;')}</td>
+          <td>${String(it.employee||'').replace(/\</g,'&lt;')}</td>
+          <td>${String(it.event||'').replace(/\</g,'&lt;')}</td>
+          <td>${String(it.details||'').replace(/\</g,'&lt;')}</td>
+        </tr>`;
+      }).join('');
+    }catch(err){
+      if(logsHint) logsHint.textContent = 'Eroare încărcare loguri.';
+      logsBody.innerHTML = `<tr><td colspan="6" class="td-center-muted">${String(err).replace(/\</g,'&lt;')}</td></tr>`;
+    }
+  }
+
+  async function openAccessModal(url, title){
+    currentModalUrl = url;
+    modalTitle.textContent = title || 'Formular';
+    modalBody.innerHTML = '<div class="hint">Se încarcă...</div>';
+    openModal();
+    const resp = await fetch(url, {headers:{'X-Requested-With':'XMLHttpRequest'}});
+    const html = await resp.text();
+    modalBody.innerHTML = html;
+    wireModalBody();
+  }
+
+  function isSavedContent(){
+    return Boolean(modalBody.querySelector('[data-access-saved="1"], [data-segment-saved="1"]'));
+  }
+
+  function wireModalBody(){
+    modalBody.querySelectorAll('[data-modal-close="1"]').forEach(btn => btn.addEventListener('click', closeModal));
+    const form = modalBody.querySelector('form[data-modal-form="1"]');
+    if(form){
+      form.addEventListener('submit', async (e)=>{
+        e.preventDefault();
+        const url = currentModalUrl || window.location.href;
+
+        const hasActionModal = window.zkActionModal && typeof window.zkActionModal.open === 'function' && typeof window.zkActionModal.setState === 'function';
+        if(hasActionModal){
+          try{
+            window.zkActionModal.open({mode:'', module:'', title:'UPDATE', subtitle:'Salvare date'});
+            window.zkActionModal.setState('loading', 'UPDATE ÎN CURS', 'Se salvează datele...');
+          }catch(_e){}
+        }
+
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: {'X-Requested-With':'XMLHttpRequest','X-CSRFToken': getCSRF()},
+          body: new FormData(form)
+        });
+        const html = await resp.text();
+        modalBody.innerHTML = html;
+        wireModalBody();
+        if(isSavedContent()){
+          window.setTimeout(async ()=>{
+            try{ await loadTab(currentTab, currentTabUrl); }catch(e){}
+            closeModal();
+
+            if(hasActionModal){
+              try{
+                window.zkActionModal.setState('success', 'UPDATE REALIZAT CU SUCCES', 'Datele au fost salvate.');
+                window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1200);
+              }catch(_e){}
+            }
+          }, 250);
+        } else {
+          if(hasActionModal){
+            try{
+              window.zkActionModal.setState('error', 'UPDATE NEREUȘIT', 'Verifică câmpurile din formular.');
+              window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1400);
+            }catch(_e){}
+          }
+        }
+      });
+    }
+  }
+
+  async function doDelete(url, message){
+    const ok = window.zkConfirmDialog ? await zkConfirmDialog({
+      title:'Confirmare',
+      message: message || 'Ștergi înregistrarea?',
+      okText:'Șterge',
+      cancelText:'Renunță',
+      variant:'danger'
+    }) : confirm(message || 'Delete?');
+
+    if(!ok) return;
+
+    const hasActionModal = window.zkActionModal && typeof window.zkActionModal.open === 'function' && typeof window.zkActionModal.setState === 'function';
+    if(hasActionModal){
+      try{
+        window.zkActionModal.open({mode:'', module:'', title:'ȘTERGERE', subtitle:'Operațiune'});
+        window.zkActionModal.setState('loading', 'ȘTERGERE ÎN CURS', 'Se șterge înregistrarea...');
+      }catch(_e){}
+    }
+
+    try{
+      const resp = await fetch(url, {method:'POST', headers:{'X-CSRFToken': getCSRF()}});
+      const data = await resp.json().catch(()=>null);
+      if(data && data.ok){
+        await loadTab(currentTab, currentTabUrl);
+        if(hasActionModal){
+          try{
+            window.zkActionModal.setState('success', 'ȘTERS CU SUCCES', 'Înregistrarea a fost ștearsă.');
+            window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1000);
+          }catch(_e){}
+        }
+        return;
+      }
+      const errMsg = (data && data.error) ? String(data.error) : 'Delete failed';
+      if(hasActionModal){
+        try{
+          window.zkActionModal.setState('error', 'ȘTERGERE NEREUȘITĂ', errMsg);
+        }catch(_e){}
+      } else {
+        alert(errMsg);
+      }
+    }catch(err){
+      const msg = (err && err.message) ? err.message : String(err);
+      if(hasActionModal){
+        try{ window.zkActionModal.setState('error', 'ȘTERGERE NEREUȘITĂ', msg); }catch(_e){}
+      } else {
+        alert(msg);
+      }
+    }
+  }
+
+  document.addEventListener('click', (e)=>{
+    const tabBtn = e.target && e.target.closest ? e.target.closest('.access-tab-btn[data-tab]') : null;
+    if(tabBtn){
+      const tab = tabBtn.getAttribute('data-tab');
+      loadTab(tab);
+      return;
+    }
+
+    const openBtn = e.target && e.target.closest ? e.target.closest('[data-access-open="1"]') : null;
+    if(openBtn){
+      const url = openBtn.getAttribute('data-url');
+      const title = openBtn.getAttribute('data-title') || 'Formular';
+      if(url) openAccessModal(url, title);
+      return;
+    }
+
+    const delBtn = e.target && e.target.closest ? e.target.closest('[data-access-del="1"]') : null;
+    if(delBtn){
+      const url = delBtn.getAttribute('data-url');
+      const msg = delBtn.getAttribute('data-confirm') || 'Ștergi înregistrarea?';
+      if(url) doDelete(url, msg);
+      return;
+    }
+
+    const pageLink = e.target && e.target.closest ? e.target.closest('[data-access-page="1"]') : null;
+    if(pageLink){
+      const href = pageLink.getAttribute('href');
+      if(href){
+        e.preventDefault();
+        loadTab(currentTab, href);
+      }
+    }
+
+    const uiBtn = e.target && e.target.closest ? e.target.closest('[data-access-ui]') : null;
+    if(uiBtn){
+      const kind = uiBtn.getAttribute('data-access-ui');
+      if(kind === 'reload'){
+        loadTab(currentTab, currentTabUrl);
+        return;
+      }
+      if(kind === 'export'){
+        const mod = uiBtn.getAttribute('data-access-module') || (currentTab === 'doors' ? 'door' : currentTab);
+        const ttl = uiBtn.getAttribute('data-access-title') || (TAB_META[currentTab] ? TAB_META[currentTab].label : 'Export');
+        if(window.zkActionModal && typeof window.zkActionModal.openCsvExport === 'function'){
+          window.zkActionModal.openCsvExport(mod, `EXPORT – ${ttl}`, 'Export CSV (separator ;)');
+        } else {
+          window.location = `/agent/api/csv/${encodeURIComponent(String(mod))}/export/`;
+        }
+        return;
+      }
+      if(kind === 'import'){
+        const mod = uiBtn.getAttribute('data-access-module') || 'access';
+        const ttl = uiBtn.getAttribute('data-access-title') || (TAB_META[currentTab] ? TAB_META[currentTab].label : 'Import');
+        openImportModal(mod, ttl);
+        return;
+      }
+      if(kind === 'logs'){
+        const mod = uiBtn.getAttribute('data-access-module') || 'access';
+        const ttl = uiBtn.getAttribute('data-access-title') || (TAB_META[currentTab] ? TAB_META[currentTab].label : 'Loguri');
+        openAccessAuditLogs(mod, ttl);
+        return;
+      }
+    }
+  });
+
+  (function init(){
+    const qs = new URLSearchParams(window.location.search);
+    const tab = (qs.get('tab') || 'doors').toLowerCase();
+    const initial = TAB_META[tab] ? tab : 'doors';
+    loadTab(initial);
+  })();
+})();
+</script>

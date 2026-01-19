@@ -1,3 +1,5 @@
+{% load zk_badges %}
+
 <div class="access-pane" data-tab="logs">
   <div class="action-bar">
     <div class="action-left">
@@ -5,7 +7,7 @@
       <span class="hint">Jurnal evenimente acces (din RAPOARTE → Acces)</span>
     </div>
     <div class="action-right" style="display:flex;gap:8px;flex-wrap:wrap;">
-      <a class="btn-secondary btn-small" href="/agent/menu/reports/?tab=accesslog" title="Deschide RAPOARTE → Acces">Deschide raport</a>
+      <a class="btn-secondary btn-small" href="/agent/menu/reports/?tab=accesslog&embed=1&mode=full" title="Deschide RAPOARTE → Acces">Deschide raport</a>
     </div>
   </div>
 
@@ -14,6 +16,18 @@
   {% endif %}
 
   {% if page_exists %}
+    <style>
+      {% zk_badge_css %}
+
+      /* Ultra-compact like screenshot 5 */
+      .table-shell table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:9px;}
+      .table-shell thead{background:linear-gradient(to bottom, #3da5d9 0%, #2d7ba5 100%);color:#fff;}
+      .table-shell th,.table-shell td{padding:2px 4px;border-bottom:1px solid rgba(61,106,139,0.55);border-right:1px solid rgba(61,106,139,0.35);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15;}
+      .table-shell th:last-child,.table-shell td:last-child{border-right:none;}
+      .cell-clip{display:inline-block;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom;}
+      .cell-peek{cursor:pointer;}
+      .cell-peek:hover{filter:brightness(1.15);text-decoration:underline;}
+    </style>
     <div class="table-shell">
       <table>
         <thead>
@@ -40,7 +54,7 @@
               <td>{{ r.card_number }}</td>
               <td>{{ r.employee_pin }}</td>
               <td>{{ r.employee_name }}</td>
-              <td>{{ r.status_text }}</td>
+              <td>{{ r.status_text|zk_status_badge:r.status_hint }}</td>
             </tr>
           {% empty %}
             <tr><td colspan="9" class="td-center-muted">Nu sunt înregistrări.</td></tr>
@@ -67,3 +81,36 @@
     <div class="hint">Nu sunt date.</div>
   {% endif %}
 </div>
+
+<script>
+(function(){
+  function ensurePeekOverlay(){
+    let ov = document.getElementById('zkPeekOverlay');
+    if(ov) return ov;
+    ov = document.createElement('div');
+    ov.id = 'zkPeekOverlay';
+    ov.style.cssText = 'position:fixed;inset:0;display:none;align-items:center;justify-content:center;padding:14px;background:rgba(0,0,0,0.58);z-index:99999';
+    const box = document.createElement('div');
+    box.id = 'zkPeekBox';
+    box.style.cssText = 'width:min(980px, calc(100vw - 28px));max-height:min(70vh, 720px);overflow:auto;background:#0f2433;border:2px solid #3da5d9;border-radius:2px;box-shadow:0 20px 50px rgba(0,0,0,0.55);padding:10px;color:#e8f0f8;font-size:12px;line-height:1.35;white-space:pre-wrap';
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+    function hide(){ ov.style.display='none'; box.textContent=''; }
+    ov.addEventListener('click', function(e){ if(e.target===ov) hide(); });
+    document.addEventListener('keydown', function(e){ if(e.key==='Escape') hide(); });
+    ov.__box = box;
+    return ov;
+  }
+
+  document.addEventListener('click', function(e){
+    const el = e.target && e.target.closest ? e.target.closest('.flag, .cell-peek') : null;
+    if(!el) return;
+    const full = (el.getAttribute('title') || '').trim();
+    if(!full) return;
+    e.preventDefault();
+    const ov = ensurePeekOverlay();
+    ov.__box.textContent = full;
+    ov.style.display = 'flex';
+  });
+})();
+</script>

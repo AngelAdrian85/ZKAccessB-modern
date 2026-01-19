@@ -433,6 +433,17 @@
     }
     @keyframes pulse{0%{opacity:.7}50%{opacity:1}100%{opacity:.7}}
 
+    /* Global frame modal (iframe) for Logs/Reports/etc */
+    #zkFrameOverlay .zk-frame-panel{
+      width:min(1600px, calc(100vw - 28px));
+      max-height:92vh;
+      display:flex;
+      flex-direction:column;
+      overflow:hidden;
+    }
+    #zkFrameOverlay .zk-frame-body{ padding:0; overflow:hidden; background: rgba(15, 42, 71, 0.25); }
+    #zkFrameOverlay iframe{ width:100%; height:min(82vh, 760px); border:0; background:#0f2a47; }
+
     /* Make sidebar module titles clickable without changing layout */
     .nav-section h2[data-href]{ cursor:pointer; }
     .nav-section h2[data-href]:hover{ color:#cfe9f8; }
@@ -445,8 +456,8 @@
     <div class="nav-section">
       <h2 data-href="/agent/monitor/" role="link" tabindex="0">MONITORIZARE</h2>
       <a href="/agent/dashboard/" data-tip="Panou principal cu statistici și starea dispozitivelor">Dashboard</a>
-      <a href="/agent/monitor/" data-tip="Monitorizare evenimente în timp real">Real-time Monitor</a>
-      <a href="/agent/status/" data-tip="Rezumat stare dispozitive și uși">Status Summary</a>
+      <a href="/agent/monitor/" data-tip="Monitorizare evenimente în timp real">Monitorizare live</a>
+      <a href="/agent/status/" data-tip="Rezumat stare dispozitive și uși">Rezumat stare</a>
       <a href="/agent/monitor/legacy-device/" data-tip="Formularul vechi DEVICE (acțiuni rapide pe uși)">Formular DEVICE vechi</a>
     </div>
     <div class="nav-section">
@@ -600,6 +611,19 @@
   </div>
 </div>
 
+<!-- Global Frame Modal (loads same-origin pages inside an iframe) -->
+<div id="zkFrameOverlay" class="modal-overlay zk-modal" aria-hidden="true">
+  <div class="modal-panel zk-modal-panel zk-frame-panel" role="dialog" aria-modal="true" aria-labelledby="zkFrameTitle">
+    <div class="zk-modal-header">
+      <div id="zkFrameTitle" class="zk-modal-title">Fereastră</div>
+      <button type="button" id="zkFrameClose" class="zk-icon-btn" aria-label="Închide">×</button>
+    </div>
+    <div class="zk-frame-body">
+      <iframe id="zkFrame" title="Conținut" referrerpolicy="no-referrer"></iframe>
+    </div>
+  </div>
+</div>
+
 <script>
 // ======= Global confirm modal helpers (async, consistent UI) =======
 (function(){
@@ -686,6 +710,50 @@
     if(!window.zkConfirmDialog) return confirm((opts && opts.message) ? String(opts.message) : 'Ești sigur?');
     window.zkConfirmDialog(opts).then(ok=>{ if(ok){ showLoading(); window.location.href = targetUrl; } });
     return false;
+  };
+})();
+
+// ======= Global Frame Modal (iframe) =======
+(function(){
+  const overlay = document.getElementById('zkFrameOverlay');
+  const titleEl = document.getElementById('zkFrameTitle');
+  const btnClose = document.getElementById('zkFrameClose');
+  const frame = document.getElementById('zkFrame');
+  if(!overlay || !titleEl || !btnClose || !frame) return;
+
+  function isOpen(){ return overlay.classList.contains('is-open'); }
+  function open(){
+    overlay.classList.remove('is-closing');
+    overlay.classList.add('is-open');
+    overlay.setAttribute('aria-hidden','false');
+    window.setTimeout(()=>{ try{ btnClose.focus(); }catch(e){} }, 10);
+  }
+  function close(){
+    if(!isOpen()) return;
+    overlay.classList.add('is-closing');
+    overlay.setAttribute('aria-hidden','true');
+    window.setTimeout(()=>{
+      overlay.classList.remove('is-open');
+      overlay.classList.remove('is-closing');
+      try{ frame.src = 'about:blank'; }catch(e){}
+    }, 150);
+  }
+
+  overlay.addEventListener('click', (e)=>{ if(e.target === overlay) close(); });
+  btnClose.addEventListener('click', close);
+  document.addEventListener('keydown', (e)=>{ if(isOpen() && e.key === 'Escape'){ e.preventDefault(); close(); } });
+
+  window.zkFrameModal = {
+    open: function(opts){
+      const o = opts || {};
+      const title = String(o.title || 'Fereastră');
+      const url = String(o.url || '');
+      if(!url) return;
+      titleEl.textContent = title;
+      frame.src = url;
+      open();
+    },
+    close
   };
 })();
 
@@ -947,7 +1015,14 @@ window.addEventListener('pageshow', hideLoading);
 document.addEventListener('DOMContentLoaded',()=>{
   document.querySelectorAll('a').forEach(a=>{
     a.addEventListener('click', e => {
-      if(a.target==='_blank' || a.getAttribute('href')=== '#' || a.href.startsWith('javascript:')) return;
+      const hrefAttr = (a.getAttribute('href') || '').trim();
+      // Don't show the global loading overlay for tab switches / hash-only navigation.
+      // Example: /agent/menu/personnel/#departments changes only the fragment.
+      if(hrefAttr.startsWith('#')) return;
+      try{
+        if(a.hash && a.origin === window.location.origin && a.pathname === window.location.pathname && a.search === window.location.search) return;
+      }catch(_e){}
+      if(a.target==='_blank' || hrefAttr === '#' || a.href.startsWith('javascript:')) return;
       showLoading();
     });
   });
@@ -1050,34 +1125,67 @@ document.getElementById('btnCfgReaders').addEventListener('click', async ()=>{
 </script>
 
 <script>
-(function syncSidebarActive(){
-  try {
-    const current = new URL(window.location.href);
-    const currentTab = current.searchParams.get('tab') || '';
-    const links = Array.from(document.querySelectorAll('.sidebar .nav-section a[href]'));
+(function(){
+  function syncSidebarActive(){
+    try {
+      const currentUrl = new URL(window.location.href);
+      const currentTab = currentUrl.searchParams.get('tab') || '';
+      const currentHash = (window.location.hash || '').trim();
+      const links = Array.from(document.querySelectorAll('.sidebar .nav-section a[href]'));
 
-    let matched = null;
-    for (const link of links) {
-      let linkUrl;
-      try { linkUrl = new URL(link.getAttribute('href'), current.origin); } catch (e) { continue; }
-      if (linkUrl.pathname !== current.pathname) continue;
+      // Clear previous states
+      for (const l of links) l.classList.remove('active');
+      document.querySelectorAll('.sidebar .nav-section.is-active').forEach(s=>s.classList.remove('is-active'));
 
-      const linkTab = linkUrl.searchParams.get('tab');
-      if (linkTab != null) {
-        if (String(linkTab) === String(currentTab)) { matched = link; break; }
-        continue;
+      let matched = null;
+
+      // 1) Prefer exact tab match (?tab=...)
+      if (currentTab) {
+        for (const link of links) {
+          let linkUrl;
+          try { linkUrl = new URL(link.getAttribute('href'), currentUrl.origin); } catch (e) { continue; }
+          if (linkUrl.pathname !== currentUrl.pathname) continue;
+          const linkTab = linkUrl.searchParams.get('tab');
+          if (linkTab != null && String(linkTab) === String(currentTab)) { matched = link; break; }
+        }
       }
 
-      // If link has no tab param, accept same path (fallback)
-      if (!matched) matched = link;
-    }
+      // 2) Prefer exact hash match (PERSONAL uses #departments/#cards/#logs)
+      if (!matched && currentHash) {
+        for (const link of links) {
+          let linkUrl;
+          try { linkUrl = new URL(link.getAttribute('href'), currentUrl.origin); } catch (e) { continue; }
+          if (linkUrl.pathname !== currentUrl.pathname) continue;
+          if ((linkUrl.hash || '') === currentHash) { matched = link; break; }
+        }
+      }
 
-    if (matched) {
-      matched.classList.add('active');
-      const section = matched.closest('.nav-section');
-      if (section) section.classList.add('is-active');
-    }
-  } catch (e) {}
+      // 3) Fallback: same path with no tab (and prefer no-hash when current has no hash)
+      if (!matched) {
+        for (const link of links) {
+          let linkUrl;
+          try { linkUrl = new URL(link.getAttribute('href'), currentUrl.origin); } catch (e) { continue; }
+          if (linkUrl.pathname !== currentUrl.pathname) continue;
+          const linkTab = linkUrl.searchParams.get('tab');
+          if (linkTab != null) continue;
+          if (!currentHash && (linkUrl.hash || '')) continue;
+          matched = link;
+          break;
+        }
+      }
+
+      if (matched) {
+        matched.classList.add('active');
+        const section = matched.closest('.nav-section');
+        if (section) section.classList.add('is-active');
+      }
+    } catch (e) {}
+  }
+
+  // Run now + keep in sync for hash/tab navigation
+  syncSidebarActive();
+  window.addEventListener('hashchange', syncSidebarActive);
+  window.addEventListener('popstate', syncSidebarActive);
 })();
 </script>
 

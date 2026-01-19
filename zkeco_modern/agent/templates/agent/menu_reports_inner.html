@@ -1,0 +1,467 @@
+{% load zk_badges %}
+
+<style>
+  /* Match PERSONAL screenshot (container + tabs) */
+  .reports-container{max-width:98%;margin:6px auto;background:#1e4a6b;padding:6px;border-radius:2px;border:2px solid #3da5d9;}
+  .reports-title{color:#7db3d9;border-bottom:1px solid #3da5d9;padding-bottom:4px;margin:0 0 6px 0;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:.3px;}
+  .reports-tabs{display:flex;gap:2px;margin-bottom:6px;border-bottom:1px solid #3d6a8b;overflow-x:auto;flex-wrap:nowrap;}
+  .reports-tab{padding:4px 12px;background:#163247;border:1px solid #3d6a8b;border-bottom:none;color:#9fd2f1;cursor:pointer;text-decoration:none;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;border-radius:2px 2px 0 0;transition:all 0.2s;white-space:nowrap;}
+  .reports-tab:hover{color:#7db3d9;}
+  .reports-tab.active{background:#3da5d9;color:#fff;border-color:#3da5d9;}
+
+  .panel{background:transparent;border:1px solid #3d6a8b;border-radius:2px;padding:6px;}
+  .panel h3{margin:0 0 6px 0;color:#7db3d9;font-size:10px;font-weight:bold;text-transform:uppercase;letter-spacing:0.3px;}
+
+  /* Filter bar like PERSONAL */
+  .filter-row{display:flex;gap:4px;flex-wrap:wrap;align-items:flex-end;margin:2px 0;}
+  .filter-row label{color:#e8f0f8;font-weight:600;font-size:9px;display:block;}
+  .filter-row input,.filter-row select{background:rgba(10,26,39,0.65);border:1px solid rgba(61,165,217,0.35);color:#e8f0f8;border-radius:2px;padding:2px 5px;font-size:9px;}
+
+  .btn-small{padding:3px 8px;background:#3da5d9;color:#fff;border:1px solid #2c8ec0;border-radius:2px;font-size:9px;cursor:pointer;font-weight:600;text-decoration:none;display:inline-flex;align-items:center;gap:3px;transition:all 0.2s;}
+  .btn-small:hover{background:#2c8ec0;transform:translateY(-1px);}
+  .btn-secondary{background:#2d5a7b;border-color:#3d6a8b;}
+  .btn-secondary:hover{background:#3d6a8b;}
+
+  .pagination{margin-top:6px;display:flex;gap:6px;align-items:center;color:#9fd2f1;font-size:9px;flex-wrap:wrap;}
+  .muted{color:#9fd2f1;font-size:9px;}
+
+  /* Unified Romanian badges for status/action */
+  {% zk_badge_css %}
+
+  .legend{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin:6px 0 8px 0;padding:6px 8px;border:1px solid rgba(61,165,217,0.18);background:rgba(10,26,39,0.35);border-radius:2px;}
+  .legend-title{color:#cfefff;font-weight:900;font-size:9px;text-transform:uppercase;letter-spacing:.3px;opacity:.95;margin-right:2px;}
+  .legend-toggle{margin-left:6px;background:#163247;border:1px solid rgba(61,165,217,0.35);color:#cfefff;border-radius:2px;padding:1px 6px;font-size:9px;cursor:pointer;}
+  .legend.is-collapsed{padding:3px 8px;margin:4px 0 6px 0;}
+  .legend.is-collapsed .flag{display:none;}
+  .legend.is-collapsed .legend-spacer{display:none;}
+
+  /* Ultra-compact table like screenshot 5 */
+  .compact-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:9px;background:rgba(10,26,39,0.35);}
+  .compact-table thead{background:linear-gradient(to bottom, #3da5d9 0%, #2d7ba5 100%);color:#fff;}
+  .compact-table th,.compact-table td{padding:2px 4px;border-bottom:1px solid rgba(61,106,139,0.55);border-right:1px solid rgba(61,106,139,0.35);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.15;}
+  .compact-table th:last-child,.compact-table td:last-child{border-right:none;}
+
+  /* In modal/embed: do NOT stretch columns to fill container (prevents empty space in cells) */
+  .reports-container.is-embed-full .compact-table{width:auto;}
+
+  /* Mild guidance for key columns */
+  .compact-table th.col-date,.compact-table td.col-date{width:135px;}
+  .compact-table th.col-event,.compact-table td.col-event{width:190px;}
+  .compact-table th.col-name,.compact-table td.col-name{width:150px;}
+
+  /* Balanced column widths (avoid huge gaps / huge columns) */
+  .compact-table.accesslog-table th:nth-child(1), .compact-table.accesslog-table td:nth-child(1){width:132px;} /* Data */
+  .compact-table.accesslog-table th:nth-child(2), .compact-table.accesslog-table td:nth-child(2){width:72px;}  /* Zona */
+  .compact-table.accesslog-table th:nth-child(3), .compact-table.accesslog-table td:nth-child(3){width:92px;}  /* Dispozitiv */
+  .compact-table.accesslog-table th:nth-child(4), .compact-table.accesslog-table td:nth-child(4){width:92px;}  /* Punct */
+  .compact-table.accesslog-table th:nth-child(5), .compact-table.accesslog-table td:nth-child(5){width:160px;} /* Eveniment */
+  .compact-table.accesslog-table th:nth-child(6), .compact-table.accesslog-table td:nth-child(6){width:82px;}  /* Card */
+  .compact-table.accesslog-table th:nth-child(7), .compact-table.accesslog-table td:nth-child(7){width:48px;}  /* PIN */
+  .compact-table.accesslog-table th:nth-child(8), .compact-table.accesslog-table td:nth-child(8){width:120px;} /* Nume */
+  .compact-table.accesslog-table th:nth-child(9), .compact-table.accesslog-table td:nth-child(9){width:102px;} /* Departament */
+  .compact-table.accesslog-table th:nth-child(10), .compact-table.accesslog-table td:nth-child(10){width:72px;} /* Utilizator */
+  .compact-table.accesslog-table th:nth-child(11), .compact-table.accesslog-table td:nth-child(11){width:90px;} /* Actiune */
+  .compact-table.accesslog-table th:nth-child(12), .compact-table.accesslog-table td:nth-child(12){width:80px;} /* Stare */
+  .compact-table.accesslog-table th:nth-child(13), .compact-table.accesslog-table td:nth-child(13){width:90px;} /* Metoda */
+  .compact-table.accesslog-table th:nth-child(14), .compact-table.accesslog-table td:nth-child(14){width:140px;} /* Observatii */
+
+  .compact-table.system-table th:nth-child(1), .compact-table.system-table td:nth-child(1){width:132px;} /* Data */
+  .compact-table.system-table th:nth-child(2), .compact-table.system-table td:nth-child(2){width:72px;}  /* Zona */
+  .compact-table.system-table th:nth-child(3), .compact-table.system-table td:nth-child(3){width:92px;}  /* Dispozitiv */
+  .compact-table.system-table th:nth-child(4), .compact-table.system-table td:nth-child(4){width:92px;}  /* Punct */
+  .compact-table.system-table th:nth-child(5), .compact-table.system-table td:nth-child(5){width:160px;} /* Eveniment */
+  .compact-table.system-table th:nth-child(6), .compact-table.system-table td:nth-child(6){width:82px;}  /* Card */
+  .compact-table.system-table th:nth-child(7), .compact-table.system-table td:nth-child(7){width:48px;}  /* PIN */
+  .compact-table.system-table th:nth-child(8), .compact-table.system-table td:nth-child(8){width:120px;} /* Nume */
+  .compact-table.system-table th:nth-child(9), .compact-table.system-table td:nth-child(9){width:102px;} /* Departament */
+  .compact-table.system-table th:nth-child(10), .compact-table.system-table td:nth-child(10){width:80px;} /* Actiune */
+  .compact-table.system-table th:nth-child(11), .compact-table.system-table td:nth-child(11){width:72px;} /* Utilizator */
+  .compact-table.system-table th:nth-child(12), .compact-table.system-table td:nth-child(12){width:80px;} /* Stare */
+  .compact-table.system-table th:nth-child(13), .compact-table.system-table td:nth-child(13){width:90px;} /* Metoda */
+
+  .sort-link{color:#fff;text-decoration:none;display:inline-flex;gap:4px;align-items:center;}
+  .sort-link:hover{filter:brightness(1.12);text-decoration:underline;}
+  .sort-ind{opacity:.95;font-weight:900;}
+
+  .cell-clip{display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom;}
+  .cell-peek{cursor:pointer;}
+  .cell-peek:hover{filter:brightness(1.15);text-decoration:underline;}
+</style>
+
+<div class="reports-container {% if embed_full %}is-embed-full{% endif %}">
+  <div class="reports-title">RAPOARTE</div>
+  <div class="reports-tabs">
+    <a class="reports-tab {% if tab == 'accesslog' %}active{% endif %}" href="/agent/menu/reports/?tab=accesslog{{ embed_suffix }}">Acces</a>
+    <a class="reports-tab {% if tab == 'device' %}active{% endif %}" href="/agent/menu/reports/?tab=device{{ embed_suffix }}">Dispozitive</a>
+    <a class="reports-tab {% if tab == 'personal' %}active{% endif %}" href="/agent/menu/reports/?tab=personal{{ embed_suffix }}">Personal</a>
+    <a class="reports-tab {% if tab == 'system' %}active{% endif %}" href="/agent/menu/reports/?tab=system{{ embed_suffix }}">Sistem</a>
+  </div>
+
+  <div class="panel">
+    <div class="legend is-collapsed" id="zkLegend">
+      <span class="legend-title">Legendă:</span>
+      <button type="button" class="legend-toggle" id="zkLegendToggle" title="Arată/ascunde legenda">Arată</button>
+      <span class="flag flag-ok" title="Operațiune reușită / acces permis">ACCEPTAT / OK</span>
+      <span class="flag flag-deny" title="Operațiune respinsă / acces nepermis">RESPINS</span>
+      <span class="flag flag-alarm" title="Stare de alarmă / eveniment critic">ALARMĂ</span>
+      <span class="flag flag-err" title="Eroare de comunicare sau execuție">EROARE</span>
+      <span class="flag flag-timeout" title="Timeout: dispozitivul nu a răspuns la timp">TIMEOUT</span>
+      <span class="flag flag-open" title="Stare ușă: deschisă">DESCHIS</span>
+      <span class="flag flag-closed" title="Stare ușă: închisă">ÎNCHIS</span>
+      <span class="flag flag-info" title="Informativ">INFO</span>
+      <span class="flag flag-muted" title="Stare necunoscută">NECUNOSCUT</span>
+
+      {% if tab == 'accesslog' %}
+        <span class="legend-spacer" style="flex:0 0 10px"></span>
+        <span class="flag flag-muted" title="Scanare (card/PIN/biometric)">SCAN</span>
+        <span class="flag flag-info" title="Acțiune remote (ex: Remote Open)">REMOTE</span>
+        <span class="flag flag-info" title="Comandă (door control / acțiune operator)">COMANDĂ</span>
+        <span class="flag flag-muted" title="Eveniment dispozitiv (door open/close etc.)">EVENT</span>
+      {% endif %}
+
+      <span class="legend-spacer" style="flex:1 1 auto"></span>
+      <span class="flag flag-ok" title="Înregistrare nouă creată">ADĂUGARE</span>
+      <span class="flag flag-info" title="Înregistrare modificată">MODIFICARE</span>
+      <span class="flag flag-deny" title="Înregistrare ștearsă">ȘTERGERE</span>
+      <span class="flag flag-muted" title="Acțiune neclasificată">ALTELE</span>
+    </div>
+
+    {% if tab == 'accesslog' %}
+      <h3>📋 AccessLog (intrări / ieșiri)</h3>
+      <form method="get">
+        <input type="hidden" name="tab" value="accesslog" />
+        {% if embed_full %}
+          <input type="hidden" name="embed" value="1" />
+          <input type="hidden" name="mode" value="full" />
+        {% endif %}
+        <div class="filter-row">
+          <div>
+            <label>De la</label>
+            <input type="datetime-local" name="from" value="{{ filters.from_val }}" />
+          </div>
+          <div>
+            <label>Până la</label>
+            <input type="datetime-local" name="to" value="{{ filters.to_val }}" />
+          </div>
+          <div>
+            <label>Card</label>
+            <input type="text" name="card" value="{{ access_filters.card }}" />
+          </div>
+          <div>
+            <label>Ușă</label>
+            <input type="text" name="door" value="{{ access_filters.door }}" />
+          </div>
+          <div>
+            <label>UserID / PIN</label>
+            <input type="text" name="person" value="{{ access_filters.person }}" />
+          </div>
+          <div>
+            <label>Stare</label>
+            <select name="status">
+              <option value="" {% if not access_filters.status %}selected{% endif %}>Toate</option>
+              <option value="accepted" {% if access_filters.status == 'accepted' or access_filters.status == 'acceptat' %}selected{% endif %}>Acceptat</option>
+              <option value="denied" {% if access_filters.status == 'denied' or access_filters.status == 'respins' %}selected{% endif %}>Respins</option>
+            </select>
+          </div>
+          <div>
+            <label>Verify</label>
+            <input type="text" name="verify" value="{{ access_filters.verify }}" placeholder="card/pin/..." />
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn-small btn-primary" type="submit">Caută</button>
+            <a class="btn-small btn-secondary" href="/agent/menu/reports/?tab=accesslog{{ embed_suffix }}">Resetează</a>
+          </div>
+        </div>
+      </form>
+      {% if missing_accesslog %}
+        <div class="muted" style="color:#ffb3b3;">AccessLog indisponibil (nu există sursă RTLog/EventLog).</div>
+      {% endif %}
+
+      {% if page_exists %}
+        <div class="muted">Total {{ page.paginator.count }} Entry / {{ page.paginator.num_pages }} Page</div>
+        <table class="compact-table accesslog-table">
+          <thead>
+            <tr>
+              <th class="col-date"><a class="sort-link" href="{{ sort_hrefs.ts }}">Data <span class="sort-ind">{{ sort_ind.ts }}</span></a></th>
+              <th><a class="sort-link" href="{{ sort_hrefs.zone }}">ZONA <span class="sort-ind">{{ sort_ind.zone }}</span></a></th>
+              <th><a class="sort-link" href="{{ sort_hrefs.device }}">Dispozitiv <span class="sort-ind">{{ sort_ind.device }}</span></a></th>
+              <th><a class="sort-link" href="{{ sort_hrefs.point }}">Punct <span class="sort-ind">{{ sort_ind.point }}</span></a></th>
+              <th class="col-event"><a class="sort-link" href="{{ sort_hrefs.event }}">Eveniment <span class="sort-ind">{{ sort_ind.event }}</span></a></th>
+              <th><a class="sort-link" href="{{ sort_hrefs.card }}">Card <span class="sort-ind">{{ sort_ind.card }}</span></a></th>
+              <th><a class="sort-link" href="{{ sort_hrefs.pin }}">PIN <span class="sort-ind">{{ sort_ind.pin }}</span></a></th>
+              <th class="col-name"><a class="sort-link" href="{{ sort_hrefs.name }}">Nume <span class="sort-ind">{{ sort_ind.name }}</span></a></th>
+              <th><a class="sort-link" href="{{ sort_hrefs.dept }}">Departament <span class="sort-ind">{{ sort_ind.dept }}</span></a></th>
+              <th><a class="sort-link" href="{{ sort_hrefs.user }}">Utilizator <span class="sort-ind">{{ sort_ind.user }}</span></a></th>
+              <th><a class="sort-link" href="{{ sort_hrefs.action }}">Acțiune <span class="sort-ind">{{ sort_ind.action }}</span></a></th>
+              <th><a class="sort-link" href="{{ sort_hrefs.status }}">Stare <span class="sort-ind">{{ sort_ind.status }}</span></a></th>
+              <th><a class="sort-link" href="{{ sort_hrefs.method }}">Metodă <span class="sort-ind">{{ sort_ind.method }}</span></a></th>
+              <th>Observații</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in access_rows %}
+              <tr>
+                <td class="col-date">{{ r.action_time }}</td>
+                <td><span class="cell-clip cell-peek" title="{{ r.area_name }}">{{ r.area_name|truncatechars:20 }}</span></td>
+                <td><span class="cell-clip cell-peek" title="{{ r.device_name }}">{{ r.device_name|truncatechars:20 }}</span></td>
+                <td><span class="cell-clip cell-peek" title="{{ r.event_point|default:'-' }}">{{ r.event_point|default:'-'|truncatechars:18 }}</span></td>
+                <td class="col-event">
+                  {% with ev=r.event_description|default:'-' %}
+                    <span class="cell-clip cell-peek" title="{{ ev }}">{{ ev|truncatechars:34 }}</span>
+                  {% endwith %}
+                </td>
+                <td><span class="cell-clip cell-peek" title="{{ r.card_number }}">{{ r.card_number|truncatechars:18 }}</span></td>
+                <td><span class="cell-clip cell-peek" title="{{ r.employee_pin }}">{{ r.employee_pin|truncatechars:12 }}</span></td>
+                <td class="col-name"><span class="cell-clip cell-peek" title="{{ r.employee_name }}">{{ r.employee_name|truncatechars:22 }}</span></td>
+                <td><span class="cell-clip cell-peek" title="{{ r.department_name }}">{{ r.department_name|truncatechars:18 }}</span></td>
+                <td><span class="cell-clip cell-peek" title="{{ r.operator|default:'' }}">{{ r.operator|default:''|truncatechars:16 }}</span></td>
+                <td>{{ r.access_action|zk_access_action_badge }}</td>
+                <td>{{ r.status_text|zk_status_badge:r.status_hint }}</td>
+                <td><span class="cell-clip cell-peek" title="{{ r.verify_mode }}">{{ r.verify_mode|truncatechars:18 }}</span></td>
+                <td>
+                  {% with rem=r.remarks|default:'' %}
+                    <span class="cell-clip cell-peek" title="{{ rem }}">{{ rem|truncatechars:48 }}</span>
+                  {% endwith %}
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="14">No entries</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        <div class="pagination">
+          {% if page.paginator.count %}
+            <span>{{ page.start_index }}-{{ page.end_index }} / {{ page.paginator.count }}</span>
+          {% endif %}
+          {% if page.has_previous %}
+            <a class="btn-small btn-primary" href="?{{ query_no_page }}&page=1">«</a>
+            <a class="btn-small btn-primary" href="?{{ query_no_page }}&page={{ page.previous_page_number }}">‹</a>
+          {% endif %}
+          <span>{{ page.number }}/{{ page.paginator.num_pages }}</span>
+          {% if page.has_next %}
+            <a class="btn-small btn-primary" href="?{{ query_no_page }}&page={{ page.next_page_number }}">›</a>
+            <a class="btn-small btn-primary" href="?{{ query_no_page }}&page={{ page.paginator.num_pages }}">»</a>
+          {% endif %}
+        </div>
+      {% endif %}
+
+    {% else %}
+      {% if tab == 'device' %}
+        <h3>🛠️ Device Status (modificări dispozitive)</h3>
+      {% elif tab == 'personal' %}
+        <h3>👤 Personal Status (modificări personal + carduri)</h3>
+      {% else %}
+        <h3>🧾 Log Events (modificări sistem)</h3>
+      {% endif %}
+
+      <form method="get">
+        <input type="hidden" name="tab" value="{{ tab }}" />
+        {% if embed_full %}
+          <input type="hidden" name="embed" value="1" />
+          <input type="hidden" name="mode" value="full" />
+        {% endif %}
+        <div class="filter-row">
+          <div>
+            <label>Utilizator <a class="muted" style="margin-left:6px;" href="?{{ query_no_page }}&user=">Toți</a></label>
+            <input type="text" name="user" value="{{ filters.user }}" />
+          </div>
+          <div>
+            <label>Acțiune</label>
+            <select name="action">
+              <option value="all" {% if filters.action == 'all' %}selected{% endif %}>Toate</option>
+              <option value="create" {% if filters.action == 'create' %}selected{% endif %}>Adăugare</option>
+              <option value="update" {% if filters.action == 'update' %}selected{% endif %}>Modificare</option>
+              <option value="delete" {% if filters.action == 'delete' %}selected{% endif %}>Ștergere</option>
+              <option value="others" {% if filters.action == 'others' %}selected{% endif %}>Altele</option>
+            </select>
+          </div>
+          <div>
+            <label>De la</label>
+            <input type="datetime-local" name="from" value="{{ filters.from_val }}" />
+          </div>
+          <div>
+            <label>Până la</label>
+            <input type="datetime-local" name="to" value="{{ filters.to_val }}" />
+          </div>
+          <div style="min-width:220px;">
+            <label>Caută</label>
+            <input type="text" name="q" value="{{ filters.q }}" placeholder="object/descriere..." style="width:100%;" />
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn-small btn-primary" type="submit">Caută</button>
+            <a class="btn-small btn-secondary" href="/agent/menu/reports/?tab={{ tab }}&user={{ current_username }}{{ embed_suffix }}">Resetează</a>
+          </div>
+        </div>
+      </form>
+
+      {% if page_exists %}
+        <div class="muted">Total {{ page.paginator.count }} Entry / {{ page.paginator.num_pages }} Page</div>
+
+        {% if tab == 'system' %}
+          <table class="compact-table system-table">
+            <thead>
+              <tr>
+                <th class="col-date"><a class="sort-link" href="{{ sort_hrefs.ts }}">Data <span class="sort-ind">{{ sort_ind.ts }}</span></a></th>
+                <th><a class="sort-link" href="{{ sort_hrefs.zone }}">ZONA <span class="sort-ind">{{ sort_ind.zone }}</span></a></th>
+                <th><a class="sort-link" href="{{ sort_hrefs.device }}">Dispozitiv <span class="sort-ind">{{ sort_ind.device }}</span></a></th>
+                <th><a class="sort-link" href="{{ sort_hrefs.point }}">Punct <span class="sort-ind">{{ sort_ind.point }}</span></a></th>
+                <th class="col-event"><a class="sort-link" href="{{ sort_hrefs.event }}">Eveniment <span class="sort-ind">{{ sort_ind.event }}</span></a></th>
+                <th><a class="sort-link" href="{{ sort_hrefs.card }}">Card <span class="sort-ind">{{ sort_ind.card }}</span></a></th>
+                <th><a class="sort-link" href="{{ sort_hrefs.pin }}">PIN <span class="sort-ind">{{ sort_ind.pin }}</span></a></th>
+                <th class="col-name"><a class="sort-link" href="{{ sort_hrefs.name }}">Nume <span class="sort-ind">{{ sort_ind.name }}</span></a></th>
+                <th><a class="sort-link" href="{{ sort_hrefs.dept }}">Departament <span class="sort-ind">{{ sort_ind.dept }}</span></a></th>
+                <th><a class="sort-link" href="{{ sort_hrefs.action }}">Acțiune <span class="sort-ind">{{ sort_ind.action }}</span></a></th>
+                <th><a class="sort-link" href="{{ sort_hrefs.user }}">Utilizator <span class="sort-ind">{{ sort_ind.user }}</span></a></th>
+                <th><a class="sort-link" href="{{ sort_hrefs.status }}">Stare <span class="sort-ind">{{ sort_ind.status }}</span></a></th>
+                <th><a class="sort-link" href="{{ sort_hrefs.method }}">Metodă <span class="sort-ind">{{ sort_ind.method }}</span></a></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in system_rows %}
+                <tr>
+                  <td class="col-date">{{ r.action_time }}</td>
+                  <td><span class="cell-clip cell-peek" title="{{ r.area_name }}">{{ r.area_name|truncatechars:20 }}</span></td>
+                  <td><span class="cell-clip cell-peek" title="{{ r.device_name }}">{{ r.device_name|truncatechars:20 }}</span></td>
+                  <td><span class="cell-clip cell-peek" title="{{ r.event_point|default:'-' }}">{{ r.event_point|default:'-'|truncatechars:18 }}</span></td>
+                  <td class="col-event">
+                    {% with ev=r.event_description|default:'-' %}
+                      <span class="cell-clip cell-peek" title="{{ ev }}">{{ ev|truncatechars:34 }}</span>
+                    {% endwith %}
+                  </td>
+                  <td><span class="cell-clip cell-peek" title="{{ r.card_number }}">{{ r.card_number|truncatechars:18 }}</span></td>
+                  <td><span class="cell-clip cell-peek" title="{{ r.employee_pin }}">{{ r.employee_pin|truncatechars:12 }}</span></td>
+                  <td class="col-name"><span class="cell-clip cell-peek" title="{{ r.employee_name }}">{{ r.employee_name|truncatechars:22 }}</span></td>
+                  <td><span class="cell-clip cell-peek" title="{{ r.department_name }}">{{ r.department_name|truncatechars:18 }}</span></td>
+                  <td>{{ r.action|zk_action_badge }}</td>
+                  <td><span class="cell-clip cell-peek" title="{{ r.operator|default:'' }}">{{ r.operator|default:''|truncatechars:16 }}</span></td>
+                  <td>{{ r.status_text|zk_status_badge:r.status_hint }}</td>
+                  <td><span class="cell-clip cell-peek" title="{{ r.verify_mode }}">{{ r.verify_mode|truncatechars:18 }}</span></td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="13">No entries</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <table class="compact-table">
+            <thead>
+              <tr>
+                <th><a class="sort-link" href="{{ sort_hrefs.ts }}">Data <span class="sort-ind">{{ sort_ind.ts }}</span></a></th>
+                <th><a class="sort-link" href="{{ sort_hrefs.module }}">Modul <span class="sort-ind">{{ sort_ind.module }}</span></a></th>
+                <th><a class="sort-link" href="{{ sort_hrefs.object }}">Obiect <span class="sort-ind">{{ sort_ind.object }}</span></a></th>
+                <th><a class="sort-link" href="{{ sort_hrefs.action }}">Acțiune <span class="sort-ind">{{ sort_ind.action }}</span></a></th>
+                <th><a class="sort-link" href="{{ sort_hrefs.user }}">Utilizator <span class="sort-ind">{{ sort_ind.user }}</span></a></th>
+                <th>Detalii</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in page.object_list %}
+                <tr>
+                  <td>{{ r.timestamp }}</td>
+                  <td><span class="cell-clip cell-peek" title="{{ r.module }}">{{ r.module|truncatechars:22 }}</span></td>
+                  <td>
+                    {% with objname=r.entity_name|default:'' %}
+                      {% if objname %}
+                        <span class="cell-clip cell-peek" title="{{ objname }}">{{ objname|truncatechars:28 }}</span>
+                      {% else %}
+                        <span class="cell-clip cell-peek" title="{{ r.entity_id }}">{{ r.entity_id }}</span>
+                      {% endif %}
+                    {% endwith %}
+                  </td>
+                  <td>{{ r.action|zk_action_badge }}</td>
+                  <td><span class="cell-clip cell-peek" title="{{ r.user|default:'system' }}">{{ r.user|default:'system'|truncatechars:22 }}</span></td>
+                  <td>{{ r.details|zk_details_badge }}</td>
+                </tr>
+              {% empty %}
+                <tr><td colspan="6">No entries</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% endif %}
+
+        <div class="pagination">
+          {% if page.paginator.count %}
+            <span>{{ page.start_index }}-{{ page.end_index }} / {{ page.paginator.count }}</span>
+          {% endif %}
+          {% if page.has_previous %}
+            <a class="btn-small btn-primary" href="?{{ query_no_page }}&page=1">«</a>
+            <a class="btn-small btn-primary" href="?{{ query_no_page }}&page={{ page.previous_page_number }}">‹</a>
+          {% endif %}
+          <span>{{ page.number }}/{{ page.paginator.num_pages }}</span>
+          {% if page.has_next %}
+            <a class="btn-small btn-primary" href="?{{ query_no_page }}&page={{ page.next_page_number }}">›</a>
+            <a class="btn-small btn-primary" href="?{{ query_no_page }}&page={{ page.paginator.num_pages }}">»</a>
+          {% endif %}
+        </div>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+
+<script>
+(function(){
+  function ensurePeekOverlay(){
+    let ov = document.getElementById('zkPeekOverlay');
+    if(ov) return ov;
+
+    ov = document.createElement('div');
+    ov.id = 'zkPeekOverlay';
+    ov.style.cssText = [
+      'position:fixed','inset:0','display:none','align-items:center','justify-content:center',
+      'padding:14px','background:rgba(0,0,0,0.58)','z-index:99999'
+    ].join(';');
+
+    const box = document.createElement('div');
+    box.id = 'zkPeekBox';
+    box.style.cssText = [
+      'width:min(980px, calc(100vw - 28px))','max-height:min(70vh, 720px)',
+      'overflow:auto','background:#0f2433','border:2px solid #3da5d9','border-radius:2px',
+      'box-shadow:0 20px 50px rgba(0,0,0,0.55)','padding:10px',
+      'color:#e8f0f8','font-size:12px','line-height:1.35','white-space:pre-wrap'
+    ].join(';');
+
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+
+    function hide(){
+      ov.style.display = 'none';
+      box.textContent = '';
+    }
+
+    ov.addEventListener('click', function(e){ if(e.target === ov) hide(); });
+    document.addEventListener('keydown', function(e){ if(e.key === 'Escape') hide(); });
+    ov.__hide = hide;
+    ov.__box = box;
+    return ov;
+  }
+
+  document.addEventListener('click', function(e){
+    const el = e.target && e.target.closest ? e.target.closest('.cell-peek, .flag') : null;
+    if(!el) return;
+    const full = (el.getAttribute('title') || '').trim();
+    if(!full) return;
+    // prevent accidental text selection changing row height perception
+    e.preventDefault();
+    const ov = ensurePeekOverlay();
+    ov.__box.textContent = full;
+    ov.style.display = 'flex';
+  });
+
+  // Legend toggle (collapsed by default to maximize visible rows)
+  (function(){
+    const legend = document.getElementById('zkLegend');
+    const btn = document.getElementById('zkLegendToggle');
+    if(!legend || !btn) return;
+    function sync(){
+      const collapsed = legend.classList.contains('is-collapsed');
+      btn.textContent = collapsed ? 'Arată' : 'Ascunde';
+    }
+    btn.addEventListener('click', function(){
+      legend.classList.toggle('is-collapsed');
+      sync();
+    });
+    sync();
+  })();
+})();
+</script>

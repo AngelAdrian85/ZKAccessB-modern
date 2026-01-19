@@ -1,4 +1,5 @@
 {% extends 'agent/base_legacy.html' %}
+{% load zk_badges %}
 {% block content %}
 <style>
 .access-shell{margin:8px auto;max-width:1400px;background:#1e4a6b;border:2px solid #3da5d9;border-radius:4px;box-shadow:0 6px 16px rgba(0,0,0,0.35);padding:6px;}
@@ -17,6 +18,8 @@
 .compact-table thead{background:linear-gradient(90deg,#1a3a52 0%,#3da5d9 100%);color:#fff;}
 .compact-table th,.compact-table td{padding:6px 8px;border:1px solid #2d6a8b;text-align:left;}
 .pagination{margin-top:8px;display:flex;gap:8px;align-items:center;color:#9fd2f1;font-size:11px;}
+
+{% zk_badge_css %}
 </style>
 
 <div class="access-shell">
@@ -51,7 +54,7 @@
 					<td>{% if e.door %}{{ e.door.name }}{% endif %}</td>
 					<td>{% if e.device %}{{ e.device.device_name }}{% endif %}</td>
 					<td>{{ e.event_type }}</td>
-					<td>{{ e.result }}</td>
+					<td>{{ e.result|zk_status_badge }}</td>
 					<td>{{ e.info|truncatechars:60 }}</td>
 				</tr>
 				{% endfor %}

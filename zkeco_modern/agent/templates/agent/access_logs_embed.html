@@ -1,3 +1,5 @@
+{% load zk_badges %}
+
 <div class="access-pane" data-tab="logs">
   <div class="action-bar">
     <div class="action-left">
@@ -5,7 +7,7 @@
       <span class="hint">Jurnal evenimente acces (listă compactă)</span>
     </div>
     <div class="action-right" style="display:flex;gap:8px;flex-wrap:wrap;">
-      <a class="btn-secondary btn-small" href="/agent/menu/reports/?tab=accesslog" title="Vezi logurile complete în RAPOARTE">Deschide raport</a>
+      <a class="btn-secondary btn-small" href="/agent/menu/reports/?tab=accesslog&embed=1&mode=full" title="Vezi logurile complete în RAPOARTE">Deschide raport</a>
     </div>
   </div>
 
@@ -14,6 +16,9 @@
   {% endif %}
 
   {% if page %}
+  <style>
+    {% zk_badge_css %}
+  </style>
   <div class="table-shell">
     <table>
       <thead><tr><th>Data</th><th>UserID</th><th>Card</th><th>Ușă</th><th>Device</th><th>Tip</th><th>Rezultat</th><th>Info</th></tr></thead>
@@ -26,7 +31,7 @@
           <td>{% if e.door %}{{ e.door.name }}{% endif %}</td>
           <td>{% if e.device %}{{ e.device.device_name }}{% endif %}</td>
           <td>{{ e.event_type }}</td>
-          <td>{{ e.result }}</td>
+          <td>{{ e.result|zk_status_badge }}</td>
           <td>{{ e.info|truncatechars:60 }}</td>
         </tr>
         {% endfor %}

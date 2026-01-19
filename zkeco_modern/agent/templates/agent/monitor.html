@@ -1,5 +1,5 @@
 {% extends 'agent/base_legacy.html' %}
-{% block title %}Real-Time Monitoring{% endblock %}
+{% block title %}Monitorizare live{% endblock %}
 {% block content %}
 <style>
 .device-icon{width:80px;height:80px;background:#1e303d;border:2px solid #2d4961;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;margin:6px;position:relative;cursor:pointer;transition:all 0.3s;}
@@ -35,18 +35,19 @@
 </style>
 
 <div class="toolbar">
-  <label style="color:#fff;font-weight:600;">Area:</label>
-  <select id="areaFilter"><option>All</option></select>
-  <label style="color:#fff;font-weight:600;">Access Control Panel:</label>
-  <select id="panelFilter"><option value="all">Show all</option><option value="">----------------</option></select>
-  <label style="color:#fff;font-weight:600;">Door:</label>
+  <label style="color:#fff;font-weight:600;">Zonă:</label>
+  <select id="areaFilter"><option>Toate</option></select>
+  <label style="color:#fff;font-weight:600;">Centrală:</label>
+  <select id="panelFilter"><option value="all">Arată toate</option><option value="">----------------</option></select>
+  <label style="color:#fff;font-weight:600;">Ușă:</label>
   <select id="doorFilter"><option>----------------</option></select>
   <button onclick="testDoorOpen()" style="background:#2da44e;" data-tip="Test deschidere pe ușa selectată">🚪 Test Deschidere Ușă</button>
-  <button class="action" onclick="bulkOpen()" data-tip="Deschide toate ușile">▶Open all current doors</button>
-  <button class="danger" onclick="bulkClose()" data-tip="Închide toate ușile">▶Close all current doors</button>
-  <button onclick="cancelAllAlarms()" style="background:#815f00;" data-tip="Anulează toate alarmele">▶Cancel all alarms</button>
+  <button class="action" onclick="bulkOpen()" data-tip="Deschide toate ușile">▶ Deschide toate ușile</button>
+  <button class="danger" onclick="bulkClose()" data-tip="Închide toate ușile">▶ Închide toate ușile</button>
+  <button onclick="cancelAllAlarms()" style="background:#815f00;" data-tip="Anulează toate alarmele">▶ Anulează alarmele</button>
   <input id="testCardInput" placeholder="Card nr (opțional)" style="background:#152a38;border:1px solid #1e303d;color:#cfe9f8;padding:4px 8px;border-radius:4px;font-size:12px;width:160px;" />
   <button onclick="testReadCard()" style="background:#2da44e;" data-tip="Generează o citire de test (8 cifre)">🪪 Test Citire Card</button>
+  <button onclick="openLogsModalFromMonitor()" style="background:#1e3e55;" data-tip="Deschide loguri acces într-un modal">📋 Loguri</button>
 </div>
 
 <div class="device-grid" id="devices"></div>
@@ -92,6 +93,15 @@
 <script>
 console.log('Monitor UI template loaded: v2025-12-10.3 + Physical Card Reader');
 window.__lastPhysicalCard = window.__lastPhysicalCard || '';
+
+function openLogsModalFromMonitor(){
+  const url = '/agent/menu/access/?tab=logs&embed=1';
+  if(window.zkFrameModal && typeof window.zkFrameModal.open === 'function'){
+    window.zkFrameModal.open({ title: 'Loguri acces', url });
+  } else {
+    window.location.href = '/agent/menu/access/?tab=logs';
+  }
+}
 
 // Physical card reader input detection
 (function initCardReader(){
