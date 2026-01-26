@@ -1,0 +1,8 @@
+SALVARE 26-01-2026 Proiect functional 80%
+
+Nume etichetă solicitat (exact): SALVARE-26-01-2026-Proiect-functional-80 la suta
+
+Tag sanitizat creat in repository: SALVARE-26-01-2026-Proiect-functional-80
+Commit asociat (local/main): 27fcd3f1a7aac3e8c3ed4ea99165a2d1f5b331d9
+
+Notă: Git refname nu acceptă spații și caractere speciale în numele tag-urilor; am păstrat numele exact în acest fișier și în mesajul tag-ului.
