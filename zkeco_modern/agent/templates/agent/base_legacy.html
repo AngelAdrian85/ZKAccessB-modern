@@ -986,7 +986,19 @@ refreshMeta(); setInterval(refreshMeta, 20000);
   }
 
   window.zkBusy = {
-    loading: function(title, msg){ _open('loading', title || 'Se încarcă...', msg || ''); },
+    loading: function(title, msg){
+      try{
+        const actionOverlay = document.getElementById('zkActionOverlay');
+        if(actionOverlay){
+          const ariaHidden = actionOverlay.getAttribute('aria-hidden');
+          const state = (actionOverlay.dataset && actionOverlay.dataset.state) ? String(actionOverlay.dataset.state) : '';
+          if(ariaHidden === 'false' || (state && state !== 'idle')){
+            return; // don't show global busy while action modal is active
+          }
+        }
+      }catch(_e){}
+      _open('loading', title || 'Se încarcă...', msg || '');
+    },
     success: function(title, msg, autoCloseMs){
       _open('success', title || 'GATA', msg || '');
       const ms = (autoCloseMs === 0 || autoCloseMs === false) ? 0 : (Number(autoCloseMs) || 1200);
