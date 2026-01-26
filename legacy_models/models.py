@@ -65,13 +65,13 @@ class IssueCard(models.Model):
 
 class AccessLog(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True)
-    employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True)
+    employee = models.ForeignKey(Employee, on_delete=models.SET_NULL, null=True, related_name='accesslogs_by_employee')
     door = models.ForeignKey('Door', on_delete=models.SET_NULL, null=True)
     SN = models.CharField(max_length=128, null=True, blank=True)
     device_name = models.CharField(max_length=200, null=True, blank=True)
     
     # Legacy-style fields expected by ETL/tests
-    userid = models.ForeignKey('Employee', on_delete=models.SET_NULL, null=True, blank=True)
+    userid = models.ForeignKey('Employee', on_delete=models.SET_NULL, null=True, blank=True, related_name='accesslogs_by_userid')
     cardno = models.CharField(max_length=64, null=True, blank=True)
     device = models.ForeignKey('Device', on_delete=models.SET_NULL, null=True, blank=True)
     event_type = models.CharField(max_length=64, null=True, blank=True)

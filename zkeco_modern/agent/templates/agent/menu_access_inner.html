@@ -27,6 +27,7 @@
   /* Modal: EXACT like screenshot 2 (legacy device modal) */
   #modalAccess.modal-backdrop,#modalAccessLogs.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.72);display:none;align-items:center;justify-content:center;z-index:2500;padding:12px;opacity:0;transition:opacity 160ms ease;}
   #modalAccess.modal-backdrop.is-open,#modalAccessLogs.modal-backdrop.is-open{opacity:1;}
+  /* Ultra-compact modal size (legacy-like) */
   #modalAccess .modal,#modalAccessLogs .modal{width:min(980px, calc(100vw - 28px));max-height:92vh;background:#1e4a6b;border:2px solid #3da5d9;border-radius:2px;box-shadow:0 20px 50px rgba(0,0,0,0.55);overflow:hidden;display:flex;flex-direction:column;transform:translateY(10px) scale(0.985);opacity:0;transition:transform 180ms ease, opacity 180ms ease, box-shadow 180ms ease;}
   #modalAccess.modal-backdrop.is-open .modal,#modalAccessLogs.modal-backdrop.is-open .modal{transform:translateY(0) scale(1);opacity:1;}
   #modalAccess .modal-header,#modalAccessLogs .modal-header{background:#163247;border-bottom:1px solid #3da5d9;padding:4px 6px;display:flex;align-items:center;justify-content:space-between;gap:8px;color:#7db3d9;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.3px;position:relative;}
@@ -52,9 +53,11 @@
 
   <div class="access-tabs" role="tablist" aria-label="Acces">
       <button type="button" class="access-tab-btn" data-tab="doors">Uși</button>
+      <button type="button" class="access-tab-btn" data-tab="doorconfig">Configurare uși</button>
       <button type="button" class="access-tab-btn" data-tab="segments">Intervale</button>
       <button type="button" class="access-tab-btn" data-tab="holidays">Sărbători</button>
       <button type="button" class="access-tab-btn" data-tab="levels">Niveluri</button>
+      <button type="button" class="access-tab-btn" data-tab="personal_levels">Nivel Acces personal</button>
       <button type="button" class="access-tab-btn" data-tab="logs">Loguri</button>
   </div>
 
@@ -121,10 +124,12 @@
   const logsBody = document.getElementById('modalAccessLogsBody');
 
   const TAB_META = {
-    doors:   {label: 'Uși',        url: '/agent/crud/doors/?embed=1'},
+    doors:     {label: 'Uși',             url: '/agent/crud/doors/?embed=1&mode=monitor'},
+    doorconfig:{label: 'Configurare uși', url: '/agent/crud/doors/?embed=1&mode=config'},
     segments:{label: 'Intervale',  url: '/agent/crud/time-segments/?embed=1'},
     holidays:{label: 'Sărbători',  url: '/agent/crud/holidays/?embed=1'},
     levels:  {label: 'Niveluri',   url: '/agent/crud/access-levels/?embed=1'},
+    personal_levels:{label: 'Nivel Acces personal', url: '/agent/crud/access-levels-personnel/?embed=1'},
     logs:    {label: 'Loguri',     url: '/agent/menu/reports/?tab=accesslog&embed=1'},
   };
 
@@ -299,6 +304,283 @@
         }
       });
     }
+
+    // Initialize lightweight widgets inside modal content. Note: scripts in injected
+    // HTML are not executed (innerHTML), so any initialization must happen here.
+    try{
+      const doorForm = modalBody.querySelector('form[data-door-form="1"]');
+      if(doorForm){
+        const ip = (doorForm.getAttribute('data-device-ip') || '').trim();
+        const doorNoEl = doorForm.querySelector('select[name="door_number"], input[name="door_number"]');
+        const inEl = doorForm.querySelector('input[name="reader_in_custom_name"]');
+        const outEl = doorForm.querySelector('input[name="reader_out_custom_name"]');
+        const prevDoorNo = doorNoEl ? String(doorNoEl.value || '').trim() : '';
+        function isDerived(val, dn){
+          try{
+            const v = String(val||'').trim();
+            const d = String(dn||'').trim();
+            if(!v || !ip || !d) return false;
+            return v === `${ip}-${d} In` || v === `${ip}-${d} Out`;
+          }catch(_e){ return false; }
+        }
+        function renderReaders(){
+          const dn = doorNoEl ? String(doorNoEl.value || '').trim() : '';
+          const derivedIn = (ip && dn) ? `${ip}-${dn} In` : '';
+          const derivedOut = (ip && dn) ? `${ip}-${dn} Out` : '';
+          const placeholderIn = ip ? (dn ? `${ip}-${dn} In` : `${ip}-<Nr> In`) : '';
+          const placeholderOut = ip ? (dn ? `${ip}-${dn} Out` : `${ip}-<Nr> Out`) : '';
+
+          // If user previously had auto-derived values (from old door number), refresh
+          // them when door number changes. If user typed a real custom value, keep it.
+          let oldDn = '';
+          try{ oldDn = doorForm.getAttribute('data-prev-door-no') || ''; }catch(_e){}
+          if(!oldDn){ oldDn = prevDoorNo; }
+          const derivedInOld = (ip && oldDn) ? `${ip}-${oldDn} In` : '';
+          const derivedOutOld = (ip && oldDn) ? `${ip}-${oldDn} Out` : '';
+
+          if(inEl){
+            try{ inEl.setAttribute('placeholder', placeholderIn || ''); }catch(_e){}
+            const cur = String(inEl.value || '').trim();
+            if((!cur && derivedIn) || (derivedInOld && cur === derivedInOld)){
+              if(derivedIn) inEl.value = derivedIn;
+            }
+          }
+          if(outEl){
+            try{ outEl.setAttribute('placeholder', placeholderOut || ''); }catch(_e){}
+            const cur = String(outEl.value || '').trim();
+            if((!cur && derivedOut) || (derivedOutOld && cur === derivedOutOld)){
+              if(derivedOut) outEl.value = derivedOut;
+            }
+          }
+
+          try{ doorForm.setAttribute('data-prev-door-no', dn); }catch(_e){}
+        }
+        if(doorNoEl){ doorNoEl.addEventListener('change', renderReaders); doorNoEl.addEventListener('keyup', renderReaders); }
+        renderReaders();
+      }
+    }catch(_e){}
+
+    // Initialize device modal widgets (comm mode groups) - injected scripts don't run.
+    try{
+      const devScope = modalBody.querySelector('.device-form-scope');
+      if(devScope){
+        const tcp = devScope.querySelector('#tcp-group');
+        const rs = devScope.querySelector('#rs485-group');
+        function applyCommMode(){
+          const modeEl = devScope.querySelector('input[name="comm_mode"]:checked');
+          const mode = modeEl ? String(modeEl.value || 'tcp') : 'tcp';
+          if(tcp) tcp.style.display = (mode === 'tcp') ? 'block' : 'none';
+          if(rs) rs.style.display = (mode === 'rs485') ? 'block' : 'none';
+        }
+        devScope.querySelectorAll('input[name="comm_mode"]').forEach(r=>{
+          r.addEventListener('change', applyCommMode);
+        });
+        applyCommMode();
+      }
+    }catch(_e){}
+  }
+
+  // === Mini discovery modal for Access device edit (scan/ping/port-test) ===
+  let _accessDiscoveryMini = null;
+  function _ensureAccessDiscoveryMini(){
+    if(_accessDiscoveryMini) return _accessDiscoveryMini;
+
+    const style = document.createElement('style');
+    style.textContent = `
+      #accessDiscoveryMini{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);z-index:99999;}
+      #accessDiscoveryMini .box{width:560px;max-width:calc(100vw - 24px);max-height:calc(100vh - 24px);overflow:auto;background:#0a1a27;border:1px solid #3d6a8b;border-radius:3px;box-shadow:0 18px 44px rgba(0,0,0,0.6);padding:10px;}
+      #accessDiscoveryMini .hdr{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;}
+      #accessDiscoveryMini .ttl{color:#9fd2f1;font-weight:900;font-size:12px;text-transform:uppercase;letter-spacing:0.2px;}
+      #accessDiscoveryMini .btn{padding:4px 10px;border:1px solid #3d6a8b;border-radius:2px;background:#163247;color:#e8f0f8;font-size:10px;font-weight:900;cursor:pointer;}
+      #accessDiscoveryMini .btn.green{background:#2da44e;border-color:#2da44e;color:#fff;}
+      #accessDiscoveryMini .row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;margin:8px 0;}
+      #accessDiscoveryMini label{display:block;color:#9fd2f1;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.2px;margin-bottom:2px;}
+      #accessDiscoveryMini input{width:100%;background:#0f2433;border:1px solid #3d6a8b;color:#e8f0f8;border-radius:2px;padding:4px 6px;font-size:10px;}
+      #accessDiscoveryMini .hint{color:#7db3d9;font-size:10px;line-height:1.25;}
+      #accessDiscoveryMini .results{display:none;margin-top:8px;border:1px solid rgba(61,106,139,0.65);background:#0f2433;border-radius:2px;padding:8px;}
+      #accessDiscoveryMini .ip{display:inline-block;margin:3px 6px 3px 0;padding:3px 6px;border:1px solid rgba(61,165,217,0.35);background:rgba(61,165,217,0.12);border-radius:2px;cursor:pointer;font-weight:900;font-size:10px;color:#e8f0f8;}
+      #accessDiscoveryMini .ip:hover{background:rgba(61,165,217,0.22);}
+    `;
+    document.head.appendChild(style);
+
+    const wrap = document.createElement('div');
+    wrap.id = 'accessDiscoveryMini';
+    wrap.innerHTML = `
+      <div class="box" role="dialog" aria-modal="true">
+        <div class="hdr">
+          <div class="ttl">Descoperire / Testare dispozitive</div>
+          <button type="button" class="btn" data-mini-close="1">✕</button>
+        </div>
+
+        <div class="row">
+          <div>
+            <label>Prefix rețea (ex: 192.168.1)</label>
+            <input type="text" id="admNetBase" placeholder="192.168.1" />
+            <div class="hint">Scanează XXX.XXX.XXX.1-254</div>
+          </div>
+          <button type="button" class="btn green" data-mini-scan="1">Scanează</button>
+        </div>
+
+        <div class="row">
+          <div>
+            <label>Test IP (ping)</label>
+            <input type="text" id="admPingIp" placeholder="192.168.1.201" />
+          </div>
+          <button type="button" class="btn" data-mini-ping="1">Ping</button>
+        </div>
+
+        <div class="row" style="grid-template-columns:1fr 110px auto;">
+          <div>
+            <label>Test port TCP</label>
+            <input type="text" id="admPortIp" placeholder="192.168.1.201" />
+          </div>
+          <div>
+            <label>Port</label>
+            <input type="number" id="admPort" value="4370" min="1" max="65535" />
+          </div>
+          <button type="button" class="btn" data-mini-port="1">Test</button>
+        </div>
+
+        <div class="results" id="admResults"></div>
+      </div>
+    `;
+    document.body.appendChild(wrap);
+
+    function showResults(html, show=true){
+      const r = wrap.querySelector('#admResults');
+      if(!r) return;
+      r.style.display = show ? 'block' : 'none';
+      if(show){ r.innerHTML = html; }
+    }
+
+    function getActiveDeviceInputs(){
+      const ipEl = modalBody ? modalBody.querySelector('input[name="ip_address"]') : null;
+      const portEl = modalBody ? modalBody.querySelector('input[name="port"]') : null;
+      return {ipEl, portEl};
+    }
+
+    function selectAddress(ip, port){
+      const {ipEl, portEl} = getActiveDeviceInputs();
+      if(ipEl && ip){
+        ipEl.value = ip;
+        try{ ipEl.style.background = '#2da44e'; ipEl.style.color = '#fff'; setTimeout(()=>{ ipEl.style.background=''; ipEl.style.color=''; }, 800);}catch(_e){}
+      }
+      if(portEl && port){
+        portEl.value = String(port);
+        try{ portEl.style.background = '#2da44e'; portEl.style.color = '#fff'; setTimeout(()=>{ portEl.style.background=''; portEl.style.color=''; }, 800);}catch(_e){}
+      }
+      closeAccessDiscoveryMini();
+    }
+
+    async function doScan(){
+      const base = String(wrap.querySelector('#admNetBase')?.value || '').trim();
+      if(!base){ showResults('<div class="hint" style="color:#ffbdbd;">Introdu prefixul rețelei.</div>'); return; }
+      showResults('<div class="hint">⏳ Scanare în curs...</div>');
+      try{
+        const resp = await fetch(`/agent/devices/discover/?base=${encodeURIComponent(base)}`);
+        const data = await resp.json();
+        if(data && data.ok && Array.isArray(data.responsive) && data.responsive.length){
+          let html = `<div style="color:#9fd2f1;font-weight:900;">✓ Găsite ${data.count} dispozitive</div>`;
+          html += `<div class="hint">Metoda: ${data.method || '-'} | Scannate: ${data.scanned || '-'} | ${data.elapsed_seconds || '-'}s</div><div style="margin-top:6px;">`;
+          data.responsive.forEach(ip=>{ html += `<span class="ip" data-mini-pick-ip="${ip}">${ip}</span>`; });
+          html += '</div>';
+          showResults(html);
+        } else {
+          showResults('<div class="hint" style="color:#ffbdbd;">❌ Nicio adresă receptivă găsită.</div>');
+        }
+      }catch(err){
+        showResults(`<div class="hint" style="color:#ffbdbd;">❌ Eroare: ${(err && err.message) ? err.message : String(err)}</div>`);
+      }
+    }
+
+    async function doPing(){
+      const ip = String(wrap.querySelector('#admPingIp')?.value || '').trim();
+      if(!ip){ showResults('<div class="hint" style="color:#ffbdbd;">Introdu o adresă IP.</div>'); return; }
+      showResults('<div class="hint">⏳ Ping...</div>');
+      try{
+        const resp = await fetch(`/agent/devices/ping/?ip=${encodeURIComponent(ip)}`);
+        const data = await resp.json();
+        if(data && data.ok && data.alive){
+          showResults(`<div style="color:#2da44e;font-weight:900;">🟢 ${ip} ONLINE</div><div style="margin-top:6px;"><span class="ip" data-mini-pick-ip="${ip}">Folosește ${ip}</span></div>`);
+        } else if(data && data.ok){
+          showResults(`<div class="hint" style="color:#ffbdbd;">🔴 ${ip} NU răspunde la ping</div>`);
+        } else {
+          showResults(`<div class="hint" style="color:#ffbdbd;">❌ Eroare ping: ${(data && data.error) ? data.error : 'unknown'}</div>`);
+        }
+      }catch(err){
+        showResults(`<div class="hint" style="color:#ffbdbd;">❌ Eroare: ${(err && err.message) ? err.message : String(err)}</div>`);
+      }
+    }
+
+    async function doPort(){
+      const ip = String(wrap.querySelector('#admPortIp')?.value || '').trim();
+      const port = String(wrap.querySelector('#admPort')?.value || '4370').trim();
+      if(!ip){ showResults('<div class="hint" style="color:#ffbdbd;">Introdu IP pentru test port.</div>'); return; }
+      showResults(`<div class="hint">⏳ Test port ${port}...</div>`);
+      try{
+        const resp = await fetch(`/agent/devices/port-test/?ip=${encodeURIComponent(ip)}&port=${encodeURIComponent(port)}`);
+        const data = await resp.json();
+        if(data && data.ok && data.open){
+          showResults(`<div style="color:#2da44e;font-weight:900;">✓ Port ${data.port} DESCHIS pe ${data.ip}</div><div class="hint">Poți folosi această adresă pentru centrală.</div><div style="margin-top:6px;"><span class="ip" data-mini-pick-ip="${ip}" data-mini-pick-port="${data.port}">Folosește ${ip}:${data.port}</span></div>`);
+        } else if(data && data.ok){
+          showResults(`<div class="hint" style="color:#ffbdbd;">✗ Port ${data.port} ÎNCHIS/FILTRAT pe ${data.ip}</div>`);
+        } else {
+          showResults(`<div class="hint" style="color:#ffbdbd;">❌ Eroare: ${(data && data.error) ? data.error : 'unknown'}</div>`);
+        }
+      }catch(err){
+        showResults(`<div class="hint" style="color:#ffbdbd;">❌ Eroare: ${(err && err.message) ? err.message : String(err)}</div>`);
+      }
+    }
+
+    wrap.addEventListener('click', (ev)=>{
+      const c = ev.target && ev.target.closest ? ev.target.closest('[data-mini-close="1"], [data-mini-scan="1"], [data-mini-ping="1"], [data-mini-port="1"], [data-mini-pick-ip]') : null;
+      if(!c) return;
+      if(c.hasAttribute('data-mini-close')){ closeAccessDiscoveryMini(); return; }
+      if(c.hasAttribute('data-mini-scan')){ doScan(); return; }
+      if(c.hasAttribute('data-mini-ping')){ doPing(); return; }
+      if(c.hasAttribute('data-mini-port')){ doPort(); return; }
+      if(c.hasAttribute('data-mini-pick-ip')){
+        const ip = c.getAttribute('data-mini-pick-ip');
+        const p = c.getAttribute('data-mini-pick-port');
+        selectAddress(ip, p);
+        return;
+      }
+    });
+
+    _accessDiscoveryMini = {
+      el: wrap,
+      showResults,
+    };
+    return _accessDiscoveryMini;
+  }
+
+  function openAccessDiscoveryMini(){
+    const ui = _ensureAccessDiscoveryMini();
+    // Seed prefix/ip from current device modal, if present
+    try{
+      const ipEl = modalBody ? modalBody.querySelector('input[name="ip_address"]') : null;
+      const currentIp = ipEl ? String(ipEl.value || '').trim() : '';
+      const baseEl = ui.el.querySelector('#admNetBase');
+      const pingEl = ui.el.querySelector('#admPingIp');
+      const portIpEl = ui.el.querySelector('#admPortIp');
+      if(currentIp){
+        if(pingEl && !pingEl.value) pingEl.value = currentIp;
+        if(portIpEl && !portIpEl.value) portIpEl.value = currentIp;
+        const parts = currentIp.split('.');
+        if(parts.length === 4 && baseEl && !baseEl.value){
+          baseEl.value = `${parts[0]}.${parts[1]}.${parts[2]}`;
+        }
+      } else {
+        if(baseEl && !baseEl.value) baseEl.value = '192.168.1';
+      }
+      ui.showResults('', false);
+    }catch(_e){}
+    ui.el.style.display = 'flex';
+  }
+
+  function closeAccessDiscoveryMini(){
+    const ui = _ensureAccessDiscoveryMini();
+    ui.el.style.display = 'none';
   }
 
   async function doDelete(url, message){
@@ -352,6 +634,102 @@
   }
 
   document.addEventListener('click', (e)=>{
+    // Access device edit: open mini discovery modal
+    const discBtn = e.target && e.target.closest ? e.target.closest('[data-access-device-discovery="1"]') : null;
+    if(discBtn){
+      try{ e.preventDefault(); e.stopPropagation(); }catch(_e){}
+      openAccessDiscoveryMini();
+      return;
+    }
+
+    // Expand/collapse controller -> doors details (both Doors and Door Configuration tabs)
+    const tgl = e.target && e.target.closest ? e.target.closest('[data-doors-toggle="1"]') : null;
+    if(tgl){
+      const id = tgl.getAttribute('data-device-id');
+      const row = document.querySelector('[data-doors-detail-row="1"][data-device-id="'+id+'"]');
+      if(row){
+        let isHidden = false;
+        try{ isHidden = (row.style.display === 'none') || (window.getComputedStyle && window.getComputedStyle(row).display === 'none'); }catch(_e){ isHidden = (row.style.display === 'none'); }
+        const open = isHidden;
+        row.style.display = open ? 'table-row' : 'none';
+        // Legacy Door Configuration uses +/− button
+        if(tgl.tagName === 'BUTTON'){
+          const txt = (tgl.textContent || '').trim();
+          if(txt === '+' || txt === '−' || txt === '-') tgl.textContent = open ? '−' : '+';
+        }
+      }
+      return;
+    }
+
+    // Door auto-assign mapping (repairs imported/legacy doors)
+    const autoAssign = e.target && e.target.closest ? e.target.closest('[data-auto-assign="1"]') : null;
+    if(autoAssign){
+      const id = autoAssign.getAttribute('data-device-id');
+      if(!id) return;
+      const hasActionModal = window.zkActionModal && typeof window.zkActionModal.open === 'function' && typeof window.zkActionModal.setState === 'function';
+      if(hasActionModal){
+        try{ window.zkActionModal.open({mode:'', module:'door', title:'DOOR CONFIGURATION', subtitle:'Auto-map'}); window.zkActionModal.setState('loading', 'IN PROGRESS', 'Auto-mapping doors...'); }catch(_e){}
+      }
+      fetch('/agent/api/devices/' + encodeURIComponent(String(id)) + '/doors/auto-assign/', {
+        method:'POST',
+        headers:{'X-CSRFToken': getCSRF()}
+      })
+      .then(r=>r.json())
+      .then(d=>{
+        if(d && d.ok){
+          if(hasActionModal){
+            try{ window.zkActionModal.setState('success', 'OK', 'Doors mapped.'); setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 900);}catch(_e){}
+          }
+          loadTab(currentTab, currentTabUrl);
+        } else {
+          const msg = (d && d.error) ? String(d.error) : 'Error';
+          if(hasActionModal){ try{ window.zkActionModal.setState('error', 'FAILED', msg); }catch(_e){} }
+          else { alert(msg); }
+        }
+      })
+      .catch(err=>{
+        const msg = err && err.message ? err.message : String(err);
+        if(hasActionModal){ try{ window.zkActionModal.setState('error', 'FAILED', msg); }catch(_e){} }
+        else { alert(msg); }
+      });
+      return;
+    }
+
+    // Doors tab actions (OPEN/CLOSE buttons)
+    const doorAct = e.target && e.target.closest ? e.target.closest('[data-door-action]') : null;
+    if(doorAct){
+      const kind = doorAct.getAttribute('data-door-action');
+      const pk = doorAct.getAttribute('data-door-pk');
+      if(!pk) return;
+      let url = null;
+      if(kind === 'open') url = '/agent/api/doors/' + encodeURIComponent(pk) + '/open/';
+      if(kind === 'close') url = '/agent/api/doors/' + encodeURIComponent(pk) + '/close/';
+      if(!url) return;
+      const hasActionModal = window.zkActionModal && typeof window.zkActionModal.open === 'function' && typeof window.zkActionModal.setState === 'function';
+      if(hasActionModal){
+        try{ window.zkActionModal.open({mode:'', module:'', title:'UȘĂ', subtitle:'Comandă'}); window.zkActionModal.setState('loading', 'COMANDĂ ÎN CURS', kind.toUpperCase()); }catch(_e){}
+      }
+      fetch(url, {method:'POST', headers:{'X-CSRFToken': getCSRF()}})
+        .then(r=>r.json())
+        .then(d=>{
+          if(d && d.ok){
+            if(hasActionModal){
+              try{ window.zkActionModal.setState('success', 'OK', 'Comanda a fost trimisă.'); setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 900);}catch(_e){}
+            }
+          } else {
+            const msg = (d && d.error) ? String(d.error) : 'Eroare';
+            if(hasActionModal){ try{ window.zkActionModal.setState('error', 'EȘEC', msg); }catch(_e){} }
+            else { alert(msg); }
+          }
+        })
+        .catch(err=>{
+          const msg = err && err.message ? err.message : String(err);
+          if(hasActionModal){ try{ window.zkActionModal.setState('error', 'EȘEC', msg); }catch(_e){} }
+          else { alert(msg); }
+        });
+      return;
+    }
+
     const tabBtn = e.target && e.target.closest ? e.target.closest('.access-tab-btn[data-tab]') : null;
     if(tabBtn){
       const tab = tabBtn.getAttribute('data-tab');
@@ -359,12 +737,168 @@
       return;
     }
 
+    // Door Configuration Search/Clear must build the URL from inputs
+    const dcSearch = e.target && e.target.closest ? e.target.closest('#dcSearchLink') : null;
+    if(dcSearch){
+      e.preventDefault();
+      const dev = (document.getElementById('dcDeviceName')||{}).value || '';
+      const door = (document.getElementById('dcDoorName')||{}).value || '';
+      const params = new URLSearchParams();
+      params.set('embed','1');
+      params.set('mode','config');
+      if(dev.trim()) params.set('device_name', dev.trim());
+      if(door.trim()) params.set('door_name', door.trim());
+      const href = '/agent/crud/doors/?' + params.toString();
+      loadTab(currentTab, href);
+      return;
+    }
+    const dcClear = e.target && e.target.closest ? e.target.closest('#dcClearLink') : null;
+    if(dcClear){
+      e.preventDefault();
+      try{
+        const d1 = document.getElementById('dcDeviceName');
+        const d2 = document.getElementById('dcDoorName');
+        if(d1) d1.value='';
+        if(d2) d2.value='';
+      }catch(_e){}
+      loadTab(currentTab, '/agent/crud/doors/?embed=1&mode=config');
+      return;
+    }
+
+    // Nivel Acces personal: filter levels list
+    const palFilterBtn = e.target && e.target.closest ? e.target.closest('[data-pal-filter="1"]') : null;
+    if(palFilterBtn){
+      try{ e.preventDefault(); }catch(_e){}
+      const q = String((document.getElementById('palLevelFilter')||{}).value || '').trim();
+      try{
+        const base = new URL(String(currentTabUrl || TAB_META.personal_levels.url), window.location.origin);
+        base.searchParams.set('embed','1');
+        if(q){ base.searchParams.set('q', q); } else { base.searchParams.delete('q'); }
+        base.searchParams.delete('page');
+        base.searchParams.delete('level_id');
+        loadTab(currentTab, base.pathname + base.search);
+      }catch(_e){
+        loadTab(currentTab, TAB_META.personal_levels.url + (q ? ('&q=' + encodeURIComponent(q)) : ''));
+      }
+      return;
+    }
+
+    // Nivel Acces personal: select-all toggle
+    if(e && e.target && e.target.id === 'palSelAll'){
+      try{
+        const on = Boolean(e.target.checked);
+        document.querySelectorAll('#palAssignedTable input[name="pal_emp"]').forEach(ch => { try{ ch.checked = on; }catch(_e){} });
+      }catch(_e){}
+      return;
+    }
+
+    // Nivel Acces personal: employee search
+    const palEmpSearchBtn = e.target && e.target.closest ? e.target.closest('[data-pal-emp-search="1"]') : null;
+    if(palEmpSearchBtn){
+      try{ e.preventDefault(); }catch(_e){}
+      const msg = document.getElementById('palMsg');
+      const q = String((document.getElementById('palEmpSearch')||{}).value || '').trim();
+      const sel = document.getElementById('palEmpResults');
+      if(msg) msg.textContent = 'Se caută...';
+      if(sel) sel.innerHTML = '';
+      fetch('/agent/api/employees/search/?q=' + encodeURIComponent(q) + '&limit=25', {headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}})
+        .then(r => r.json())
+        .then(data => {
+          const items = (data && Array.isArray(data.items)) ? data.items : [];
+          if(sel){
+            sel.innerHTML = items.map(it => `<option value="${String(it.id).replace(/\"/g,'&quot;')}">${String(it.label||'').replace(/\</g,'&lt;')}</option>`).join('');
+          }
+          if(msg) msg.textContent = items.length ? (`Găsite: ${items.length}`) : 'Nimic găsit.';
+        })
+        .catch(err => {
+          if(msg) msg.textContent = (err && err.message) ? err.message : String(err);
+        });
+      return;
+    }
+
+    // Nivel Acces personal: add selected employee to level
+    const palAddBtn = e.target && e.target.closest ? e.target.closest('[data-pal-add="1"]') : null;
+    if(palAddBtn){
+      try{ e.preventDefault(); }catch(_e){}
+      const msg = document.getElementById('palMsg');
+      const url = palAddBtn.getAttribute('data-url');
+      const sel = document.getElementById('palEmpResults');
+      const empId = sel ? String(sel.value || '').trim() : '';
+      if(!url){ if(msg) msg.textContent = 'URL lipsă.'; return; }
+      if(!empId){ if(msg) msg.textContent = 'Selectează o persoană.'; return; }
+      const fd = new FormData();
+      fd.append('employee_id', empId);
+      if(msg) msg.textContent = 'Se adaugă...';
+      fetch(url, {method:'POST', headers:{'X-Requested-With':'XMLHttpRequest','X-CSRFToken': getCSRF()}, body: fd})
+        .then(r => r.json())
+        .then(data => {
+          if(data && data.ok){
+            if(msg) msg.textContent = 'Adăugat.';
+            loadTab(currentTab, currentTabUrl);
+          } else {
+            if(msg) msg.textContent = (data && (data.message || data.error)) ? (data.message || data.error) : 'Eroare.';
+          }
+        })
+        .catch(err => { if(msg) msg.textContent = (err && err.message) ? err.message : String(err); });
+      return;
+    }
+
+    // Nivel Acces personal: remove selected employees
+    const palRemoveBtn = e.target && e.target.closest ? e.target.closest('[data-pal-remove="1"]') : null;
+    if(palRemoveBtn){
+      try{ e.preventDefault(); }catch(_e){}
+      const msg = document.getElementById('palMsg');
+      const url = palRemoveBtn.getAttribute('data-url');
+      if(!url){ if(msg) msg.textContent = 'URL lipsă.'; return; }
+      const ids = Array.from(document.querySelectorAll('#palAssignedTable input[name="pal_emp"]:checked')).map(ch => String(ch.value||'').trim()).filter(Boolean);
+      if(ids.length === 0){ if(msg) msg.textContent = 'Nimic selectat.'; return; }
+      const fd = new FormData();
+      ids.forEach(id => fd.append('employee_ids', id));
+      if(msg) msg.textContent = 'Se șterge...';
+      fetch(url, {method:'POST', headers:{'X-Requested-With':'XMLHttpRequest','X-CSRFToken': getCSRF()}, body: fd})
+        .then(r => r.json())
+        .then(data => {
+          if(data && data.ok){
+            if(msg) msg.textContent = `Șterși: ${data.removed || ids.length}`;
+            loadTab(currentTab, currentTabUrl);
+          } else {
+            if(msg) msg.textContent = (data && (data.message || data.error)) ? (data.message || data.error) : 'Eroare.';
+          }
+        })
+        .catch(err => { if(msg) msg.textContent = (err && err.message) ? err.message : String(err); });
+      return;
+    }
+
     const openBtn = e.target && e.target.closest ? e.target.closest('[data-access-open="1"]') : null;
     if(openBtn){
+      // If the trigger is an <a href=...>, prevent browser navigation.
+      try{ e.preventDefault(); }catch(_e){}
+      // Close any open "More..." menus.
+      try{ document.querySelectorAll('[data-more-menu="1"]').forEach(m=>{ m.style.display = 'none'; }); }catch(_e){}
       const url = openBtn.getAttribute('data-url');
       const title = openBtn.getAttribute('data-title') || 'Formular';
       if(url) openAccessModal(url, title);
       return;
+    }
+
+    // "More..." dropdown (Door Configuration)
+    const moreToggle = e.target && e.target.closest ? e.target.closest('[data-more-toggle="1"]') : null;
+    if(moreToggle){
+      try{ e.preventDefault(); e.stopPropagation(); }catch(_e){}
+      const id = moreToggle.getAttribute('data-device-id');
+      const menu = document.querySelector('[data-more-menu="1"][data-device-id="'+id+'"]');
+      // close others
+      document.querySelectorAll('[data-more-menu="1"]').forEach(m=>{ if(m !== menu) m.style.display = 'none'; });
+      if(menu){
+        menu.style.display = (menu.style.display === 'none' || !menu.style.display) ? 'block' : 'none';
+      }
+      return;
+    }
+
+    // Click outside closes any open "More" menus
+    const insideMore = e.target && e.target.closest ? e.target.closest('[data-more-menu="1"], [data-more-toggle="1"]') : null;
+    if(!insideMore){
+      document.querySelectorAll('[data-more-menu="1"]').forEach(m=>{ m.style.display = 'none'; });
     }
 
     const delBtn = e.target && e.target.closest ? e.target.closest('[data-access-del="1"]') : null;

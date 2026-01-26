@@ -1,0 +1,23 @@
+{% load static %}
+
+<form method="post" action="/agent/system/set-time/">
+  {% csrf_token %}
+
+  <div class="form-row">
+    <div class="form-col">
+      <label for="local_datetime">Data / Ora (local)</label>
+      <input class="form-control" type="datetime-local" id="local_datetime" name="local_datetime" value="{{ now_local_input|default:'' }}" required />
+      <div class="helptext">Se interpretează în TZ curent: <strong>{{ tz_key|default:'' }}</strong></div>
+      <div class="helptext" style="margin-top:4px;color:#ffd6d3;">Atenție: dacă ai ales "Etc/GMT+2", acesta înseamnă UTC-02:00 (semn invers). Pentru UTC+02:00 folosește Europe/Bucharest sau Etc/GMT-2.</div>
+    </div>
+  </div>
+
+  <div class="helptext" style="margin-bottom:8px;">
+    Trimite comanda <strong>SYNC_TIME</strong> către echipamentele <strong>active</strong>.
+  </div>
+
+  <div style="display:flex;justify-content:flex-end;gap:6px;">
+    <button type="submit" class="btn">Trimite</button>
+    <button type="button" class="btn btn-secondary" onclick="(window.SystemUI&&SystemUI.closeModal?SystemUI.closeModal():(window.SysOptUI&&SysOptUI.closeModal?SysOptUI.closeModal():null))">Anulează</button>
+  </div>
+</form>

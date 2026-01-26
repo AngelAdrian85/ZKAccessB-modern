@@ -1,0 +1,309 @@
+<div class="access-pane" data-tab="doors">
+  <style>
+    .doors-dev-table{width:100%;border-collapse:collapse;font-size:10px;background:#163247;color:#e8f0f8;}
+    .doors-dev-table thead{background:linear-gradient(to bottom,#3da5d9 0%,#2d7ba5 100%);color:#fff;}
+    .doors-dev-table th,.doors-dev-table td{padding:4px 6px;border-bottom:1px solid rgba(61,106,139,0.65);border-right:1px solid rgba(61,106,139,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:top;}
+    .doors-dev-table th:last-child,.doors-dev-table td:last-child{border-right:none;}
+    .doors-dev-table tbody tr:nth-child(even){background:#0f2433;}
+    .doors-dev-table tbody tr:hover{background:#1e4a6b;}
+
+    .doors-dev-actions{display:flex;gap:6px;align-items:center;}
+    .doors-link{color:#9fd2f1;text-decoration:none;font-weight:800;border:1px solid rgba(61,165,217,0.35);background:rgba(61,165,217,0.12);padding:2px 6px;border-radius:2px;}
+    .doors-link:hover{background:rgba(61,165,217,0.22);}
+    .doors-muted{color:#a8c5d8;}
+
+    .doors-detail{padding:6px;background:#0f2433;border:1px solid rgba(61,106,139,0.55);border-radius:2px;}
+    .doors-detail h4{margin:0 0 6px 0;color:#9fd2f1;font-size:11px;}
+    .doors-subtable{width:100%;border-collapse:collapse;font-size:10px;background:#0a1a27;color:#e8f0f8;}
+    .doors-subtable th,.doors-subtable td{padding:3px 5px;border-bottom:1px solid rgba(61,106,139,0.45);border-right:1px solid rgba(61,106,139,0.35);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .doors-subtable th:last-child,.doors-subtable td:last-child{border-right:none;}
+    .pill{display:inline-block;padding:1px 6px;border-radius:999px;font-size:10px;font-weight:900;background:rgba(61,165,217,0.20);border:1px solid rgba(61,165,217,0.35);color:#e8f1f8;}
+
+    .door-act{padding:2px 6px;border-radius:2px;border:1px solid rgba(61,106,139,0.85);background:#163247;color:#e8f0f8;font-size:9px;font-weight:800;cursor:pointer;}
+    .door-act:hover{background:#1e4a6b;}
+    .door-act.ok{border-color:rgba(45,164,78,0.8);}
+    .door-act.warn{border-color:rgba(217,126,74,0.8);}
+    .door-act.danger{border-color:rgba(255,107,107,0.8);}
+  </style>
+
+  <div class="action-bar">
+    <div class="action-left">
+      {% if mode == 'config' %}
+        <span class="access-badge">Configurare uși</span>
+        <span class="hint">Ca în vechi: centrală → extinde → editează fiecare ușă (Reader1 In / Reader2 Out).</span>
+      {% else %}
+        <span class="access-badge">Uși</span>
+        <span class="hint">Monitorizare/Comenzi: extinde o centrală și operează ușile.</span>
+      {% endif %}
+    </div>
+    <div class="action-right">
+      <button class="btn-secondary btn-small" type="button" data-access-ui="reload" title="Reîncarcă lista">🔄 Reîncarcă</button>
+      <button class="btn-secondary btn-small" type="button" data-access-ui="export" data-access-module="door" data-access-title="Uși" title="Exportă CSV">📥 Export</button>
+      <button class="btn-secondary btn-small" type="button" data-access-ui="import" data-access-module="door" data-access-title="Uși" title="Importă CSV">📤 Import</button>
+      <button class="btn-secondary btn-small" type="button" data-access-ui="logs" data-access-module="door" data-access-title="Uși" title="Loguri">📋 Loguri</button>
+      {% if can_edit %}
+      <button class="btn-primary btn-small" type="button" data-access-open="1" data-title="Adaugă ușă" data-url="{% url 'crud-door-create' %}?modal=1" title="Adaugă ușă">+ Adaugă ușă</button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="table-shell">
+    <table class="doors-dev-table" aria-label="Centrale și uși">
+      <colgroup>
+        <col style="width:70px;" />
+        <col style="width:280px;" />
+        <col style="width:140px;" />
+        <col />
+        <col style="width:200px;" />
+      </colgroup>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Centrală</th>
+          <th>IP</th>
+          <th>Uși</th>
+          <th>Acțiuni</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for dev in page.object_list %}
+          <tr>
+            <td><strong>#{{ dev.id }}</strong></td>
+            <td>
+              <strong>{{ dev.name }}</strong>
+              <div class="doors-muted">{% if dev.serial_number %}SN: {{ dev.serial_number }}{% else %}SN: —{% endif %}</div>
+            </td>
+            <td>{% if dev.ip_address %}{{ dev.ip_address }}{% else %}—{% endif %}</td>
+            <td>
+              {% if dev.doors_total %}
+                {% for d in dev.prefetched_doors %}
+                  {% if d.door_number %}
+                    <span class="pill" title="Ușa {{ d.door_number }}">{{ d.door_number }}</span>
+                  {% endif %}
+                {% endfor %}
+                {% if dev.doors_unconfigured %}
+                  <span class="pill" title="Uși existente dar neconfigurate (lipsește numărul ușii)" style="background:rgba(255,107,107,0.14);border-color:rgba(255,107,107,0.35);">+{{ dev.doors_unconfigured }}</span>
+                {% endif %}
+                <span class="doors-muted" style="margin-left:6px;">({{ dev.doors_total }} total)</span>
+              {% else %}
+                <span class="doors-muted">—</span>
+              {% endif %}
+            </td>
+            <td>
+              <div class="doors-dev-actions">
+                <button type="button" class="btn-secondary btn-small" data-doors-toggle="1" data-device-id="{{ dev.id }}" title="Arată/ascunde ușile">Detalii</button>
+                {% if can_edit %}
+                  <button type="button" class="btn-success btn-small" data-access-open="1" data-title="Editează centrală #{{ dev.id }}" data-url="{% url 'crud-device-edit-access' dev.id %}?next_tab={{ next_tab }}">Editează centrală</button>
+                {% endif %}
+                <a class="doors-link" href="/agent/crud/devices/{{ dev.id }}/edit/?next=/agent/menu/access/?tab={{ next_tab }}" target="_blank" title="Deschide pagina completă a centralei">Meniu</a>
+              </div>
+            </td>
+          </tr>
+          <tr data-doors-detail-row="1" data-device-id="{{ dev.id }}" style="display:none;">
+            <td colspan="5">
+              <div class="doors-detail">
+                <h4>Uși (Reader1 In / Reader2 Out)</h4>
+                {% if mode == 'config' and can_edit and dev.doors_unconfigured %}
+                  <div class="doors-muted" style="margin:-2px 0 8px 0;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;">
+                    <div>
+                      Există <strong>{{ dev.doors_unconfigured }}</strong> uși legate de această centrală dar fără <strong>Număr ușă</strong>. Le poți edita manual sau poți auto-aloca numere.
+                    </div>
+                    <button type="button" class="door-act warn" data-auto-assign="1" data-device-id="{{ dev.id }}">AUTO-ALOCĂ #1..N</button>
+                  </div>
+                {% endif %}
+                {% if dev.prefetched_doors and dev.prefetched_doors|length %}
+                  <table class="doors-subtable" aria-label="Uși">
+                    <thead>
+                      <tr>
+                        <th style="width:70px;">Ușă</th>
+                        <th>Nume</th>
+                        <th style="width:240px;">Reader1 (In)</th>
+                        <th style="width:240px;">Reader2 (Out)</th>
+                        <th style="width:90px;">Stare</th>
+                        <th style="width:280px;">Acțiuni</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for d in dev.prefetched_doors %}
+                        <tr>
+                          <td>
+                            {% if d.door_number %}
+                              <span class="pill">{{ d.door_number }}</span>
+                            {% else %}
+                              <span class="pill" style="background:rgba(255,107,107,0.14);border-color:rgba(255,107,107,0.35);">NECONFIG</span>
+                            {% endif %}
+                          </td>
+                          <td title="Door ID {{ d.id }}">{{ d.name }}</td>
+                          <td>{{ d.reader_in_name|default:'—' }}</td>
+                          <td>{{ d.reader_out_name|default:'—' }}</td>
+                          <td>{% if d.is_open %}<span class="pill" style="background:rgba(45,164,78,0.18);border-color:rgba(45,164,78,0.35);">OPEN</span>{% else %}<span class="pill" style="background:rgba(217,126,74,0.16);border-color:rgba(217,126,74,0.35);">CLOSED</span>{% endif %}</td>
+                          <td>
+                            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                              {% if mode != 'config' %}
+                                <button type="button" class="door-act ok" data-door-action="open" data-door-pk="{{ d.id }}">OPEN</button>
+                                <button type="button" class="door-act warn" data-door-action="close" data-door-pk="{{ d.id }}">CLOSE</button>
+                              {% endif %}
+                              {% if can_edit %}
+                                <button type="button" class="door-act" data-access-open="1" data-title="Editează ușă #{{ d.id }}" data-url="{% url 'crud-door-edit' d.id %}?modal=1">Editează</button>
+                                <button type="button" class="door-act danger" data-access-del="1" data-confirm="Ștergi ușa?" data-url="{% url 'crud-door-delete' d.id %}">Șterge</button>
+                              {% endif %}
+                            </div>
+                          </td>
+                        </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                {% else %}
+                  <div class="doors-muted">Nu există uși pentru această centrală.</div>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5" class="td-center-muted">Nu există centrale</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="access-pager">
+    <span>{{ page.number }}/{{ page.paginator.num_pages }}</span>
+    {% if page.has_previous %}<a class="btn-secondary btn-small" data-access-page="1" href="{{ request.path }}?embed=1&page={{ page.previous_page_number }}">«</a>{% endif %}
+    {% if page.has_next %}<a class="btn-secondary btn-small" data-access-page="1" href="{{ request.path }}?embed=1&page={{ page.next_page_number }}">»</a>{% endif %}
+  </div>
+
+  {% if unassigned_doors and unassigned_doors|length %}
+    <div style="margin-top:10px;" class="doors-detail">
+      <h4>Uși nealocate (fără centrală)</h4>
+      <div class="doors-muted" style="margin-bottom:6px;">Aceste uși există în sistem, dar nu sunt legate de o centrală (device). Le poți edita și aloca.</div>
+      <table class="doors-subtable" aria-label="Uși nealocate">
+        <thead>
+          <tr>
+            <th style="width:90px;">ID</th>
+            <th>Nume</th>
+            <th style="width:140px;">Număr ușă</th>
+            <th style="width:240px;">Acțiuni</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in unassigned_doors %}
+            <tr>
+              <td><strong>#{{ d.id }}</strong></td>
+              <td>{{ d.name }}</td>
+              <td>{% if d.door_number %}{{ d.door_number }}{% else %}<span class="pill" style="background:rgba(255,107,107,0.14);border-color:rgba(255,107,107,0.35);">NECONFIG</span>{% endif %}</td>
+              <td>
+                {% if can_edit %}
+                  <button type="button" class="door-act" data-access-open="1" data-title="Editează ușă #{{ d.id }}" data-url="{% url 'crud-door-edit' d.id %}?modal=1">Editează / Alocă</button>
+                {% else %}
+                  —
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+
+  <script>
+  (function(){
+    function getCookie(name){
+      let v=null;
+      if(document.cookie&&document.cookie!==''){
+        document.cookie.split(';').forEach(c=>{
+          c=c.trim();
+          if(c.substring(0,name.length+1)===(name+'=')) v=decodeURIComponent(c.substring(name.length+1));
+        });
+      }
+      return v;
+    }
+
+    document.addEventListener('click', function(e){
+      const tgl = e.target && e.target.closest ? e.target.closest('[data-doors-toggle="1"]') : null;
+      if(tgl){
+        const id = tgl.getAttribute('data-device-id');
+        const row = document.querySelector('[data-doors-detail-row="1"][data-device-id="'+id+'"]');
+        if(row){
+          row.style.display = (row.style.display === 'none' || !row.style.display) ? '' : 'none';
+        }
+        return;
+      }
+
+      const autoAssign = e.target && e.target.closest ? e.target.closest('[data-auto-assign="1"]') : null;
+      if(autoAssign){
+        const id = autoAssign.getAttribute('data-device-id');
+        if(!id) return;
+
+        const hasActionModal = window.zkActionModal && typeof window.zkActionModal.open === 'function' && typeof window.zkActionModal.setState === 'function';
+        if(hasActionModal){
+          try{ window.zkActionModal.open({mode:'', module:'door', title:'CONFIGURARE UȘI', subtitle:'Auto-alocare numere'}); window.zkActionModal.setState('loading', 'SE PROCSESEAZĂ', 'Se auto-aloacă numerele ușilor...'); }catch(_e){}
+        }
+
+        fetch('/agent/api/devices/' + encodeURIComponent(String(id)) + '/doors/auto-assign/', {
+          method:'POST',
+          headers:{'X-CSRFToken': getCookie('csrftoken') || ''}
+        })
+        .then(r=>r.json())
+        .then(d=>{
+          if(d && d.ok){
+            if(hasActionModal){
+              try{ window.zkActionModal.setState('success', 'OK', 'Numerele au fost alocate.'); setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 900);}catch(_e){}
+            }
+            // Trigger Access module reload if available, otherwise hard reload.
+            try{
+              const btn = document.querySelector('[data-access-ui="reload"]');
+              if(btn) btn.click();
+              else window.location.reload();
+            }catch(_e){ window.location.reload(); }
+          } else {
+            const msg = (d && d.error) ? String(d.error) : 'Eroare';
+            if(hasActionModal){ try{ window.zkActionModal.setState('error', 'EȘEC', msg); }catch(_e){} }
+            else { alert(msg); }
+          }
+        })
+        .catch(err=>{
+          const msg = err && err.message ? err.message : String(err);
+          if(hasActionModal){ try{ window.zkActionModal.setState('error', 'EȘEC', msg); }catch(_e){} }
+          else { alert(msg); }
+        });
+        return;
+      }
+
+      const act = e.target && e.target.closest ? e.target.closest('[data-door-action]') : null;
+      if(act){
+        const kind = act.getAttribute('data-door-action');
+        const pk = act.getAttribute('data-door-pk');
+        if(!pk) return;
+        let url = null;
+        if(kind === 'open') url = '/agent/api/doors/' + encodeURIComponent(pk) + '/open/';
+        if(kind === 'close') url = '/agent/api/doors/' + encodeURIComponent(pk) + '/close/';
+        if(!url) return;
+
+        const hasActionModal = window.zkActionModal && typeof window.zkActionModal.open === 'function' && typeof window.zkActionModal.setState === 'function';
+        if(hasActionModal){
+          try{ window.zkActionModal.open({mode:'', module:'', title:'UȘĂ', subtitle:'Comandă'}); window.zkActionModal.setState('loading', 'COMANDĂ ÎN CURS', kind.toUpperCase()); }catch(_e){}
+        }
+
+        fetch(url, {method:'POST', headers:{'X-CSRFToken': getCookie('csrftoken') || ''}})
+          .then(r=>r.json())
+          .then(d=>{
+            if(d && d.ok){
+              if(hasActionModal){
+                try{ window.zkActionModal.setState('success', 'OK', 'Comanda a fost trimisă.'); setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 900);}catch(_e){}
+              }
+            } else {
+              const msg = (d && d.error) ? String(d.error) : 'Eroare';
+              if(hasActionModal){ try{ window.zkActionModal.setState('error', 'EȘEC', msg); }catch(_e){} }
+              else { alert(msg); }
+            }
+          })
+          .catch(err=>{
+            const msg = err && err.message ? err.message : String(err);
+            if(hasActionModal){ try{ window.zkActionModal.setState('error', 'EȘEC', msg); }catch(_e){} }
+            else { alert(msg); }
+          });
+      }
+    });
+  })();
+  </script>
+</div>

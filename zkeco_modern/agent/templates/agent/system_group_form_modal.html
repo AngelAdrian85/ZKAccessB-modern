@@ -1,0 +1,39 @@
+{% if mode == 'edit' %}
+<form method="post" action="/agent/system/groups/{{ obj.id }}/edit/">
+{% else %}
+<form method="post" action="/agent/system/groups/new/">
+{% endif %}
+  {% csrf_token %}
+
+  {% if mode == 'edit' %}
+    <div style="margin-bottom:6px;padding:6px 8px;border:1px solid rgba(61,165,217,0.55);background:rgba(15,36,51,0.75);border-radius:3px;color:#e8f0f8;font-weight:900;">
+      ID (DB): <span style="color:#7db3d9;">{{ obj.id }}</span>
+    </div>
+  {% endif %}
+
+  <div class="form-row">
+    <div class="form-col">
+      <label>Nume grup</label>
+      {{ form.name }}
+      {% if form.name.errors %}<div class="helptext" style="color:#ffd6d3;">{{ form.name.errors|striptags }}</div>{% endif %}
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-col">
+      <label>Permisiuni (Django)</label>
+      {{ form.permissions }}
+      <div class="helptext">Selectare multiplă: Ctrl/Shift</div>
+      {% if form.permissions.errors %}<div class="helptext" style="color:#ffd6d3;">{{ form.permissions.errors|striptags }}</div>{% endif %}
+    </div>
+  </div>
+
+  {% if form.non_field_errors %}
+    <div class="helptext" style="color:#ffd6d3;margin-bottom:6px;">{{ form.non_field_errors|striptags }}</div>
+  {% endif %}
+
+  <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:8px;">
+    <button type="button" class="btn btn-secondary" onclick="SystemUI.closeModal()">Renunță</button>
+    <button type="submit" class="btn">Salvează</button>
+  </div>
+</form>

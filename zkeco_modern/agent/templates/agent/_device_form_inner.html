@@ -23,6 +23,28 @@
   border: none;
 }
 .device-form-scope .device-form-container h2 { display: none; }
+
+/* Ultra-compact modal density (match Access->Uși modal feel) */
+.device-form-scope{font-size:10px;}
+.device-form-scope .form-section{padding:4px 0;}
+.device-form-scope .form-section:first-of-type{padding-top:4px;}
+.device-form-scope .form-section h3{font-size:9px;padding:3px 0;margin:0 0 3px 0;}
+.device-form-scope .form-row{gap:4px;margin-bottom:3px;}
+.device-form-scope .form-group{gap:2px;}
+.device-form-scope .form-group label{font-size:8px;margin-bottom:0;}
+.device-form-scope .form-group .helptext{font-size:8px;line-height:1.15;}
+.device-form-scope input[type="text"],
+.device-form-scope input[type="number"],
+.device-form-scope input[type="password"],
+.device-form-scope select{padding:2px 4px;font-size:9px;}
+.device-form-scope .radio-options{gap:10px;margin:1px 0;}
+.device-form-scope .radio-options label{font-size:9px;}
+.device-form-scope .checkbox-options label{font-size:9px;}
+.device-form-scope .button-group{margin-top:6px;}
+.device-form-scope .btn-save,.device-form-scope .btn-cancel{padding:4px 10px;font-size:10px;}
+.device-form-scope table.derived-doors-table{font-size:9px;}
+.device-form-scope table.derived-doors-table th{font-size:8px;padding:3px 4px;}
+.device-form-scope table.derived-doors-table td{padding:3px 4px;}
 {% endif %}
 .device-form-scope .device-form-container h2 {
   position: relative;
@@ -90,6 +112,48 @@
   padding: 4px 0; 
   margin: 0 0 4px 0; 
   color: #7db3d9;
+}
+
+/* Derived doors preview */
+.device-form-scope .derived-doors-box{
+  background: #0f2433;
+  border: 1px solid #3d6a8b;
+  border-radius: 2px;
+  padding: 6px;
+}
+.device-form-scope .derived-doors-empty{
+  color: #7db3d9;
+  font-size: 10px;
+  line-height: 1.35;
+}
+.device-form-scope table.derived-doors-table{
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+}
+.device-form-scope table.derived-doors-table th,
+.device-form-scope table.derived-doors-table td{
+  border-bottom: 1px solid #2d5a7b;
+  padding: 4px 6px;
+  text-align: left;
+  vertical-align: top;
+}
+.device-form-scope table.derived-doors-table th{
+  color: #9fd2f1;
+  font-weight: 700;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.2px;
+}
+.device-form-scope .derived-pill{
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid #3d6a8b;
+  background: rgba(61,165,217,0.10);
+  color: #e8f0f8;
+  font-size: 9px;
+  white-space: nowrap;
 }
 .device-form-scope .form-row { 
   display: grid; 
@@ -331,6 +395,30 @@
   background: #3d7a9b;
   border-color: #4d8aab;
 }
+
+/* Secondary tiny action buttons (e.g., "Editează" doors) - keep compact inside modals */
+.device-form-scope .btn-secondary{
+  background:#163247;
+  color:#e8f0f8;
+  border:1px solid #3d6a8b;
+  border-radius:2px;
+  cursor:pointer;
+  font-weight:900;
+  text-decoration:none;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+}
+.device-form-scope .btn-secondary:hover{
+  background:#3da5d9;
+  border-color:#3da5d9;
+  color:#ffffff;
+}
+.device-form-scope .btn-small{
+  padding:3px 10px;
+  font-size:10px;
+  line-height:1.1;
+}
 .device-form-scope .required::after { 
   content: " *"; 
   color: #ff6b6b; 
@@ -352,6 +440,14 @@
 .device-action-overlay.error .bar > div { background: #ff6b6b; }
 @keyframes overlayIn { to { transform: scale(1); opacity: 1; } }
 @keyframes barRun { to { width: 100%; } }
+
+{% if access_modal %}
+.device-form-scope .access-device-topbar{display:flex;gap:8px;align-items:center;margin:0 0 6px 0;}
+.device-form-scope .access-two-col{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+@media (max-width: 720px){
+  .device-form-scope .access-two-col{grid-template-columns:1fr;}
+}
+{% endif %}
 </style>
 
 <div class="device-form-container">
@@ -368,8 +464,16 @@
 </div>
 {% endif %}
 
-<form method="post" novalidate {% if action_url %}action="{{ action_url }}"{% endif %} data-ajax="{% if is_modal %}1{% else %}0{% endif %}">{% csrf_token %}
+<form method="post" novalidate {% if action_url %}action="{{ action_url }}"{% endif %} data-ajax="{% if is_modal %}1{% else %}0{% endif %}" {% if access_modal %}data-modal-form="1"{% endif %}>{% csrf_token %}
 {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}" />{% endif %}
+
+{% if access_modal %}
+<div class="access-device-topbar">
+  <button type="button" class="btn-scan" data-access-device-discovery="1" style="background:#2da44e;border-color:#2da44e;color:#fff;">🔍 Descoperire / Testare dispozitive</button>
+  <div class="helptext">Mini-modal → poate completa IP/Port automat.</div>
+</div>
+<div class="access-two-col">
+{% endif %}
 
 <!-- SECTION 1: BASIC INFORMATION -->
 <div class="form-section">
@@ -415,21 +519,24 @@
   <div class="form-row full">
     <div class="form-group">
       <label class="required">Mod de Comunicare</label>
+      {% with cm=form.comm_mode.value|default:'tcp' %}
       <div class="radio-options">
         <label>
-          <input type="radio" name="comm_mode" value="tcp" checked onchange="toggleCommMode()">
+          <input type="radio" name="comm_mode" value="tcp" {% if cm == 'tcp' %}checked{% endif %} onchange="toggleCommMode()">
           TCP/IP
         </label>
         <label>
-          <input type="radio" name="comm_mode" value="rs485" onchange="toggleCommMode()">
+          <input type="radio" name="comm_mode" value="rs485" {% if cm == 'rs485' %}checked{% endif %} onchange="toggleCommMode()">
           RS485
         </label>
       </div>
+      {% endwith %}
     </div>
   </div>
 
+  {% with cm=form.comm_mode.value|default:'tcp' %}
   <!-- TCP/IP Fields -->
-  <div id="tcp-group">
+  <div id="tcp-group" {% if cm != 'tcp' %}style="display:none;"{% endif %}>
     <div class="form-row">
       <div class="form-group">
         <label for="{{ form.ip_address.id_for_label }}" class="required">Adresă IP</label>
@@ -447,7 +554,7 @@
   </div>
 
   <!-- RS485 Fields -->
-  <div id="rs485-group" style="display: none;">
+  <div id="rs485-group" {% if cm == 'tcp' %}style="display:none;"{% endif %}>
     <div class="form-row">
       <div class="form-group">
         <label for="{{ form.rs485_port.id_for_label }}">Port Serial</label>
@@ -470,6 +577,7 @@
       </div>
     </div>
   </div>
+  {% endwith %}
 
   <div class="form-row">
     <div class="form-group">
@@ -493,10 +601,29 @@
       <div class="helptext">Exemplu: Intrare Principală, Birou Director, etc.</div>
     </div>
     <div class="form-group">
-      <label for="{{ form.time_zone.id_for_label }}">Fus Orar</label>
-      {{ form.time_zone }}
-      {% if form.time_zone.errors %}<span class="form-errors">{{ form.time_zone.errors|join:", " }}</span>{% endif %}
-      <div class="helptext">UTC+2, UTC+3, etc.</div>
+      {% with sl=form.scanner_linked.value %}
+      {% if sl == True or sl == 'True' or sl == 'true' or sl == 'on' or sl == '1' or sl == 1 %}
+        <label>Fus Orar (Dispozitiv)</label>
+        <div style="background:#0f2433;border:1px solid #3d6a8b;border-radius:2px;padding:6px 8px;font-size:10px;color:#e8f0f8;">
+          {{ system_time_zone|default:'—' }} <span style="color:#7db3d9;">(moștenit din Sistem - GLOBAL)</span>
+        </div>
+        <input type="hidden" name="time_zone" value="{{ system_time_zone|default:'' }}" />
+        <div class="helptext">Pentru cititoare (ELATEC / ACP), fusul orar este cel al sistemului.</div>
+        {% if system_time_now_local %}<div class="helptext">Ora folosită (Sistem): {{ system_time_now_local }}</div>{% endif %}
+      {% else %}
+        <label for="{{ form.time_zone.id_for_label }}">Fus Orar</label>
+        {{ form.time_zone }}
+        {% if form.time_zone.errors %}<span class="form-errors">{{ form.time_zone.errors|join:", " }}</span>{% endif %}
+        <div class="helptext">Alege fusul orar al locației dispozitivului (folosit pentru programe/intervale).</div>
+        <div class="helptext" style="color:#7db3d9;">Notă: opțiunile Etc/GMT au semnul invers (ex: Etc/GMT+2 == UTC-2).</div>
+      {% endif %}
+      {% endwith %}
+    </div>
+  </div>
+
+  <div class="form-row full">
+    <div class="form-group">
+      <div class="helptext"><a href="/agent/menu/system/" target="_blank" rel="noopener" style="color:#9fd2f1;">Deschide Administrare sistem (Fus orar)</a></div>
     </div>
   </div>
 
@@ -534,62 +661,135 @@
   </div>
 </div>
 
-<!-- SECTION 5: DISCOVERY & TESTING -->
-<div class="discovery-section">
-  <strong>🔍 Descoperire și Testare Dispozitiv</strong>
-  
-  <div class="discovery-row">
-    <div>
-      <label for="netBase">Prefix Rețea (ex. 100.51.101, 110.51.101, 192.168.1):</label>
-      <input type="text" id="netBase" value="100.51.101" placeholder="100.51.101 sau 192.168.1" />
-      <small style="color: #7db3d9; font-size: 8px; margin-top: 2px; display: block;">
-        📌 Primele 3 octeti: Scannează XXX.XXX.XXX.1-254<br/>
-        Exemplu: Dispozitivul la 110.51.101.95? Introdu: 110.51.101
-      </small>
-    </div>
-    <button type="button" class="btn-scan" onclick="discoverDevices()">🔎 Scanează Rețea</button>
-  </div>
-  
-  <div class="discovery-row">
-    <div>
-      <label for="pingIp">Test IP (ping):</label>
-      <input type="text" id="pingIp" placeholder="100.51.101.95" />
-    </div>
-    <button type="button" class="btn-scan" onclick="pingDevice()">📡 Ping</button>
-  </div>
-
-  <div class="discovery-row">
-    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 4px;">
-      <div>
-        <label for="portTestIp">Test Port TCP:</label>
-        <input type="text" id="portTestIp" placeholder="100.51.101.95" />
-      </div>
-      <div>
-        <label for="portTestPort">Port:</label>
-        <input type="number" id="portTestPort" value="4370" placeholder="4370" min="1" max="65535" />
-      </div>
-    </div>
-    <button type="button" class="btn-scan" onclick="testPort()">🔌 Test Port</button>
-  </div>
-  
-  <div id="netResults" class="results-box" style="display: none;"></div>
+{% if access_modal %}
 </div>
+{% endif %}
+
+<!-- SECTION 4b: DERIVED DOORS (Controller) -->
+{% if show_derived_doors|default:True %}
+<div class="form-section" id="derivedDoorsSection">
+  <h3>4b. Uși (derivate din centrală)</h3>
+  <div class="helptext">Fiecare ușă are 2 cititoare: Reader1 (In) și Reader2 (Out). Denumire: <span class="derived-pill">&lt;IP&gt;-&lt;Nr&gt; In/Out</span></div>
+  <div id="derivedDoorsBox" class="derived-doors-box" {% if controller_doors %}data-server-doors="1"{% endif %}>
+    {% if controller_doors %}
+      <table class="derived-doors-table" aria-label="Uși derivate">
+        <thead>
+          <tr>
+            <th style="width: 70px;">Ușă</th>
+            <th>Nume ușă</th>
+            <th style="width: 220px;">Reader1 (In)</th>
+            <th style="width: 220px;">Reader2 (Out)</th>
+            <th style="width: 120px;">Acțiuni</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in controller_doors %}
+          <tr>
+            <td>
+              {% if d.door_number %}
+                <span class="derived-pill">{{ d.door_number }}</span>
+              {% else %}
+                <span class="derived-pill" style="background:rgba(255,107,107,0.14);border-color:rgba(255,107,107,0.35);">NECONFIG</span>
+              {% endif %}
+            </td>
+            <td>{{ d.name }}</td>
+            <td>{{ d.reader_in_name|default:'—' }}</td>
+            <td>{{ d.reader_out_name|default:'—' }}</td>
+            <td>
+              {% if access_shell %}
+                <button type="button" class="btn-secondary btn-small" data-access-open="1" data-title="Editează ușă #{{ d.id }}" data-url="{% url 'crud-door-edit' d.id %}?modal=1">Editează</button>
+              {% elif is_modal %}
+                <button type="button" class="btn-secondary btn-small" data-device-open="1" data-title="Editează ușă #{{ d.id }}" data-url="{% url 'crud-door-edit' d.id %}?modal=1">Editează</button>
+              {% else %}
+                <a class="btn-secondary btn-small" href="{% url 'crud-door-edit' d.id %}">Editează</a>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="derived-doors-empty">
+        Completează <strong>Tip dispozitiv</strong> + <strong>IP</strong> (și opțional <strong>Model</strong> ex. ACP-200) ca să vezi ușile/cititoarele pe care le va avea centrala.
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<!-- SECTION 5: DISCOVERY & TESTING -->
+{% if not access_modal %}
+  <div class="discovery-section">
+    <strong>🔍 Descoperire și Testare Dispozitiv</strong>
+    
+    <div class="discovery-row">
+      <div>
+        <label for="netBase">Prefix Rețea (ex. 100.51.101, 110.51.101, 192.168.1):</label>
+        <input type="text" id="netBase" value="100.51.101" placeholder="100.51.101 sau 192.168.1" />
+        <small style="color: #7db3d9; font-size: 8px; margin-top: 2px; display: block;">
+          📌 Primele 3 octeti: Scannează XXX.XXX.XXX.1-254<br/>
+          Exemplu: Dispozitivul la 110.51.101.95? Introdu: 110.51.101
+        </small>
+      </div>
+      <button type="button" class="btn-scan" onclick="discoverDevices()">🔎 Scanează Rețea</button>
+    </div>
+    
+    <div class="discovery-row">
+      <div>
+        <label for="pingIp">Test IP (ping):</label>
+        <input type="text" id="pingIp" placeholder="100.51.101.95" />
+      </div>
+      <button type="button" class="btn-scan" onclick="pingDevice()">📡 Ping</button>
+    </div>
+
+    <div class="discovery-row">
+      <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 4px;">
+        <div>
+          <label for="portTestIp">Test Port TCP:</label>
+          <input type="text" id="portTestIp" placeholder="100.51.101.95" />
+        </div>
+        <div>
+          <label for="portTestPort">Port:</label>
+          <input type="number" id="portTestPort" value="4370" placeholder="4370" min="1" max="65535" />
+        </div>
+      </div>
+      <button type="button" class="btn-scan" onclick="testPort()">🔌 Test Port</button>
+    </div>
+    
+    <div id="netResults" class="results-box" style="display: none;"></div>
+  </div>
+{% endif %}
 
 <!-- BUTTONS -->
 <div class="button-group">
   <button type="submit" class="btn-save">💾 Salvează Dispozitiv</button>
-  <a id="deviceCancelLink" href="{% if next_url %}{{ next_url }}{% else %}{% url 'crud-devices-list' %}{% endif %}" class="btn-cancel">❌ Anulează</a>
+  {% if is_modal %}
+    <button type="button" class="btn-cancel" data-modal-close="1">❌ Anulează</button>
+  {% else %}
+    <a id="deviceCancelLink" href="{% if next_url %}{{ next_url }}{% else %}{% url 'crud-devices-list' %}{% endif %}" class="btn-cancel">❌ Anulează</a>
+  {% endif %}
 </div>
 
 </form>
 </div>
 
+{% if is_modal or not access_modal %}
 <script>
+function _activeDeviceScope(){
+  try{
+    const scopes = document.querySelectorAll('.device-form-scope');
+    return scopes.length ? scopes[scopes.length - 1] : null;
+  }catch(e){
+    return null;
+  }
+}
+
 function toggleCommMode() {
-  const modeEl = document.querySelector('input[name="comm_mode"]:checked');
+  const scope = _activeDeviceScope();
+  const modeEl = (scope && scope.querySelector('input[name="comm_mode"]:checked')) || document.querySelector('input[name="comm_mode"]:checked');
   const mode = modeEl ? modeEl.value : 'tcp';
-  const tcp = document.getElementById('tcp-group');
-  const rs = document.getElementById('rs485-group');
+  const tcp = (scope && scope.querySelector('#tcp-group')) || document.getElementById('tcp-group');
+  const rs = (scope && scope.querySelector('#rs485-group')) || document.getElementById('rs485-group');
   if (tcp) tcp.style.display = (mode === 'tcp') ? 'block' : 'none';
   if (rs) rs.style.display = (mode === 'rs485') ? 'block' : 'none';
 }
@@ -789,15 +989,27 @@ function _getCookie(name) {
     window.addEventListener('DOMContentLoaded', function(){ try { toggleCommMode(); } catch(e) {} });
   }
 
-  const formEl = document.currentScript && document.currentScript.closest('.device-form-scope')
-    ? document.currentScript.closest('.device-form-scope').querySelector('form')
-    : document.querySelector('.device-form-scope form');
+  // NOTE: In ECHIPAMENTE, inline scripts are extracted into <head>, so
+  // document.currentScript.closest(...) cannot be used reliably.
+  const scopes = document.querySelectorAll('.device-form-scope');
+  const scope = scopes.length ? scopes[scopes.length - 1] : null;
+  const formEl = scope ? scope.querySelector('form') : document.querySelector('.device-form-scope form');
   if(!formEl) return;
   const isModal = (formEl.getAttribute('data-ajax') === '1');
 
   // In modal, cancel should close modal instead of navigating
   if(isModal){
-    const cancel = document.getElementById('deviceCancelLink');
+    // Access-style cancel button
+    const cancelBtn = formEl.querySelector('[data-modal-close="1"]');
+    if(cancelBtn){
+      cancelBtn.addEventListener('click', function(e){
+        e.preventDefault();
+        if(typeof window.closeDeviceModal === 'function') window.closeDeviceModal();
+      });
+    }
+
+    // Fallback: if a cancel link exists inside the injected form, close modal.
+    const cancel = formEl.querySelector('#deviceCancelLink');
     if(cancel){
       cancel.addEventListener('click', function(e){
         e.preventDefault();
@@ -807,6 +1019,22 @@ function _getCookie(name) {
   }
 
   if(!isModal) return;
+
+  // In ECHIPAMENTE modal, allow opening nested modals (e.g., door edit) inside the same shell.
+  formEl.addEventListener('click', function(e){
+    const t = e && e.target ? e.target : null;
+    if(!(t instanceof Element)) return;
+    const btn = t.closest('[data-device-open="1"]');
+    if(!btn) return;
+    e.preventDefault();
+    const url = btn.getAttribute('data-url') || '';
+    const title = btn.getAttribute('data-title') || 'Editare';
+    if(url && typeof window.openDeviceModal === 'function'){
+      window.openDeviceModal(url, title);
+    } else if(url) {
+      window.location.href = url;
+    }
+  });
 
   formEl.addEventListener('submit', async function(e){
     e.preventDefault();
@@ -837,4 +1065,114 @@ function _getCookie(name) {
     }
   });
 })();
+
+(function initDerivedDoorsPreview(){
+  const scopes = document.querySelectorAll('.device-form-scope');
+  const scope = scopes.length ? scopes[scopes.length - 1] : null;
+
+  function getEl(id){
+    try{
+      if(scope){
+        const el = scope.querySelector('#' + CSS.escape(id));
+        if(el) return el;
+      }
+    }catch(_e){}
+    return document.getElementById(id);
+  }
+
+  const box = getEl('derivedDoorsBox');
+  const section = getEl('derivedDoorsSection');
+  if(!box || !section) return;
+
+  // If server rendered the doors list (edit mode), do not overwrite.
+  const serverDoors = (box.getAttribute('data-server-doors') === '1');
+
+  function readFieldValue(fieldId){
+    const el = getEl(fieldId);
+    return el ? (el.value || '').trim() : '';
+  }
+
+  function inferCapacity(haystack, deviceType){
+    const hs = (haystack || '').toUpperCase();
+    if (hs.includes('ACP-400') || hs.includes('C3-400') || hs.includes('INBIO-460') || hs.includes('4-DOOR') || hs.includes('4 DOOR')) return 4;
+    if (hs.includes('ACP-200') || hs.includes('C3-200') || hs.includes('INBIO-260') || hs.includes('2-DOOR') || hs.includes('2 DOOR')) return 2;
+    if (hs.includes('ACP-100') || hs.includes('C3-100') || hs.includes('INBIO-160') || hs.includes('1-DOOR') || hs.includes('1 DOOR')) return 1;
+    if (deviceType === 'two_door_panel') return 2;
+    if (deviceType === 'multi_door_panel') return 4;
+    if (deviceType === 'access_panel' || deviceType === 'door_controller') return 1;
+    return 0;
+  }
+
+  function render(){
+    const ip = readFieldValue('{{ form.ip_address.id_for_label }}');
+    const name = readFieldValue('{{ form.name.id_for_label }}');
+    const deviceType = readFieldValue('{{ form.device_type.id_for_label }}');
+    const scannerEl = getEl('{{ form.scanner_linked.id_for_label }}');
+    let scannerLinked = false;
+    try{
+      if(scannerEl){
+        if(String(scannerEl.type||'').toLowerCase() === 'checkbox') scannerLinked = Boolean(scannerEl.checked);
+        else {
+          const v = String(scannerEl.value || '').trim().toLowerCase();
+          scannerLinked = (v === '1' || v === 'true' || v === 'on' || v === 'yes');
+        }
+      }
+    }catch(_e){ scannerLinked = false; }
+    const hw = readFieldValue('{{ form.hardware_version.id_for_label }}');
+    const fw = readFieldValue('{{ form.firmware_version.id_for_label }}');
+
+    const isController = (!scannerLinked) && (deviceType === 'access_panel' || deviceType === 'door_controller' || deviceType === 'two_door_panel' || deviceType === 'multi_door_panel');
+    if(!isController){
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = 'block';
+
+    if(serverDoors){
+      return;
+    }
+
+    const cap = inferCapacity(`${hw} ${fw} ${name}`, deviceType) || 1;
+    if(!ip){
+      box.innerHTML = '<div class="derived-doors-empty">Introdu IP-ul centralei ca să pot deriva cititoarele (In/Out).</div>';
+      return;
+    }
+
+    let html = '<table class="derived-doors-table" aria-label="Uși derivate">' +
+      '<thead><tr>' +
+      '<th style="width: 70px;">Ușă</th>' +
+      '<th>Nume ușă (default)</th>' +
+      '<th style="width: 220px;">Reader1 (In)</th>' +
+      '<th style="width: 220px;">Reader2 (Out)</th>' +
+      '</tr></thead><tbody>';
+    for(let i=1;i<=cap;i++){
+      const doorName = (name ? `${name} ${i}` : `${ip}-${i}`);
+      html += '<tr>' +
+        `<td><span class="derived-pill">${i}</span></td>` +
+        `<td>${doorName}</td>` +
+        `<td>${ip}-${i} In</td>` +
+        `<td>${ip}-${i} Out</td>` +
+        '</tr>';
+    }
+    html += '</tbody></table>';
+    box.innerHTML = html;
+  }
+
+  // Update on key field changes
+  const ids = [
+    '{{ form.ip_address.id_for_label }}',
+    '{{ form.name.id_for_label }}',
+    '{{ form.device_type.id_for_label }}',
+    '{{ form.hardware_version.id_for_label }}',
+    '{{ form.firmware_version.id_for_label }}',
+  ];
+  ids.forEach(id => {
+    const el = getEl(id);
+    if(!el) return;
+    el.addEventListener('change', render);
+    el.addEventListener('input', render);
+  });
+  render();
+})();
 </script>
+{% endif %}

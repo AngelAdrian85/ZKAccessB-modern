@@ -543,11 +543,11 @@ function renderDevices(){
       const title = `${dn} | State: ${state}`;
       const deviceId = d.device_id || '';
       
-      const panel = (d.device_name || '').trim();
+      const panel = ''; // legacy: show ONLY door name in realtime monitoring
       return `<div class='device-icon online' title='${title}${panel?` | Panel: ${panel}`:''}' data-door-id='${d.id}' data-device-id='${deviceId}' data-state='${state}' style='border-color: ${color}; background: ${bgColor}; box-shadow: 0 0 15px ${glowColor};' onclick='onDoorIconClick(${deviceId||"null"},${d.id})'>
         <div class='icon' style='font-size: 36px;'>${icon}</div>
         <div class='label name-anim' style='font-weight:600; color:${color};'>${dn}</div>
-        ${panel?`<div class="door-panel">${panel}</div>`:''}
+        ${''}
         <div class='device-actions'>
           <button onclick='event.stopPropagation(); onDoorAction("open", ${deviceId||"null"}, ${d.id})'>Open</button>
           <button onclick='event.stopPropagation(); onDoorAction("close", ${deviceId||"null"}, ${d.id})'>Close</button>
@@ -1192,7 +1192,7 @@ async function populateDoors(){
       filtered.forEach(d=>{
         const opt = document.createElement('option');
         opt.value = d.id;
-        opt.textContent = (d.device_name? (d.device_name+': ') : '') + d.name + ` (id=${d.id})`;
+        opt.textContent = d.name + ` (id=${d.id})`;
         doorSel.appendChild(opt);
       });
       // Update caches for renderDevices to show only relevant doors

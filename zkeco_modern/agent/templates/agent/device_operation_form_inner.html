@@ -1,0 +1,72 @@
+<style>
+  .op-card{background:#0a1a27;border:1px solid #2f5876;border-radius:2px;padding:8px;}
+  .op-title{margin:0 0 6px 0;color:#9fd2f1;font-size:11px;font-weight:900;letter-spacing:0.2px;text-transform:uppercase;}
+  .op-sub{color:#7db3d9;font-size:10px;margin:0 0 8px 0;}
+  .op-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+  .op-row{margin-bottom:6px;}
+  .op-row label{display:block;color:#e8f0f8;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:0.2px;margin-bottom:2px;}
+  .op-row input,.op-row select{width:100%;background:#0f2433;border:1px solid #2f5876;color:#e8f0f8;border-radius:2px;padding:4px 6px;font-size:10px;}
+  .op-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px;}
+  .op-btn{padding:4px 10px;border-radius:2px;border:1px solid #3d6a8b;background:#163247;color:#e8f0f8;font-size:10px;font-weight:900;cursor:pointer;}
+  .op-btn.primary{background:#3da5d9;border-color:#3da5d9;color:#fff;}
+  .op-btn:hover{filter:brightness(1.08);}
+  .op-error{color:#ffbdbd;font-size:10px;margin:6px 0;}
+</style>
+
+<div class="op-card">
+  <div class="op-title">{{ title }}</div>
+  <div class="op-sub">Device: <strong>{{ dev.name }}</strong> (ID #{{ dev.id }})</div>
+
+  {% if error %}<div class="op-error">{{ error }}</div>{% endif %}
+
+  <form method="post" data-modal-form="1">
+    {% csrf_token %}
+
+    {% if op == 'change-ip' %}
+      <div class="op-grid">
+        <div class="op-row">
+          <label>IP Address</label>
+          <input name="ip_address" type="text" value="{{ dev.ip_address|default:'' }}" placeholder="192.168.1.10" />
+        </div>
+        <div class="op-row">
+          <label>Port</label>
+          <input name="port" type="number" value="{{ dev.port|default:4370 }}" min="1" max="65535" />
+        </div>
+      </div>
+
+    {% elif op == 'toggle-enabled' %}
+      <div class="op-row">
+        <label>Enabled</label>
+        <select name="enabled">
+          <option value="1" {% if dev.enabled %}selected{% endif %}>Enabled</option>
+          <option value="0" {% if not dev.enabled %}selected{% endif %}>Disabled</option>
+        </select>
+      </div>
+
+    {% elif op == 'comm-password' %}
+      <div class="op-row">
+        <label>Communication Password</label>
+        <input name="comm_password" type="password" value="{{ dev.comm_password|default:'' }}" autocomplete="off" />
+      </div>
+
+    {% elif op == 'upgrade-firmware' %}
+      <div class="op-row">
+        <label>Firmware (path/url)</label>
+        <input name="firmware" type="text" value="" placeholder="firmware.bin or http(s)://..." />
+      </div>
+      <div class="op-sub">This queues a command for CommCenter.</div>
+
+    {% else %}
+      <div class="op-sub">This will enqueue a command for CommCenter.</div>
+      <div class="op-row">
+        <label>Command</label>
+        <input name="command_preview" type="text" value="{{ command_preview }}" readonly />
+      </div>
+    {% endif %}
+
+    <div class="op-actions">
+      <button type="button" class="op-btn" data-modal-close="1">Cancel</button>
+      <button type="submit" class="op-btn primary">OK</button>
+    </div>
+  </form>
+</div>

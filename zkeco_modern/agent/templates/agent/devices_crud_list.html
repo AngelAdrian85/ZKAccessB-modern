@@ -79,6 +79,18 @@
     {% elif device.is_controller %}
       <span class="type-badge type-controller">{{ device.type_badge }}</span>
     {% endif %}
+    {% if device.is_controller %}
+      <div style="margin-top:4px; font-size:11px; color:#a8c5d8; max-width:420px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="Uși: {% if device.prefetched_doors %}{% for d in device.prefetched_doors %}{{ d.door_number }}: {{ d.name }}{% if not forloop.last %} | {% endif %}{% endfor %}{% else %}—{% endif %}">
+        Uși:
+        {% if device.prefetched_doors %}
+          {% for d in device.prefetched_doors %}
+            <span style="display:inline-block; padding:1px 6px; border-radius:999px; background:rgba(61,165,217,0.20); border:1px solid rgba(61,165,217,0.35); color:#e8f1f8; font-size:10px; font-weight:800; margin-right:4px;">{{ d.door_number }}</span>
+          {% endfor %}
+        {% else %}
+          —
+        {% endif %}
+      </div>
+    {% endif %}
   </td>
   <td><code>{{ device.serial_number|default:"—" }}</code></td>
   <td>{{ device.ip_address|default:"—" }}</td>

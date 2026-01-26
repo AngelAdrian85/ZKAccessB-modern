@@ -82,6 +82,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "agent.middleware.SystemTimeZoneMiddleware",  # System Options time zone
     "agent.middleware.AuditMiddleware",  # Track user for audit logging
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",

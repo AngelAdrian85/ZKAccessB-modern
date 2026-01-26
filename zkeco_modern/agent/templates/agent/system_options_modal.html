@@ -1,0 +1,52 @@
+<form method="post" action="/agent/system/options/modal/">
+  {% csrf_token %}
+
+  <div style="margin-bottom:6px;padding:6px 8px;border:1px solid rgba(61,165,217,0.55);background:rgba(15,36,51,0.75);border-radius:3px;color:#e8f0f8;font-weight:900;">
+    ID (DB): <span style="color:#7db3d9;">{{ settings_id|default:'1' }}</span>
+  </div>
+
+  <div class="form-row">
+    <div class="form-col">
+      <label>Time Zone (sistem)</label>
+      <select class="form-control" name="time_zone" required>
+        <option value="">-- Alege fus orar --</option>
+        {% for tz in tz_choices %}
+          <option value="{{ tz.0 }}" {% if current_tz == tz.0 %}selected{% endif %}>{{ tz.1 }}</option>
+        {% endfor %}
+      </select>
+      <div class="helptext">Afectează aplicația (ora sistemului afișată, calcule, rapoarte). Nu schimbă automat TZ-ul echipamentelor.</div>
+      <div class="helptext" style="margin-top:4px;color:#ffd6d3;">Atenție: zona "Etc/GMT" are semnul invers (ex: Etc/GMT+2 = UTC-02:00). Pentru UTC+02:00 folosește Europe/Bucharest sau Etc/GMT-2.</div>
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-col">
+      <label>Format dată</label>
+      <select class="form-control" name="date_format">
+        {% for opt in date_format_choices %}
+          <option value="{{ opt.0 }}" {% if current_date_format == opt.0 %}selected{% endif %}>{{ opt.1 }}</option>
+        {% endfor %}
+      </select>
+      <div class="helptext">Controlează afișarea datei în interfață (ex: colț dreapta sus).</div>
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-col">
+      <label>Prima zi a săptămânii</label>
+      <select class="form-control" name="week_start">
+        {% for opt in week_start_choices %}
+          <option value="{{ opt.0 }}" {% if current_week_start == opt.0 %}selected{% endif %}>{{ opt.1 }}</option>
+        {% endfor %}
+      </select>
+      <div class="helptext">Pentru multe browsere, aceasta influențează calendarul implicit prin setarea limbii paginii (RO = Luni).</div>
+    </div>
+  </div>
+
+  <div class="helptext" style="margin:6px 0;">Active TZ (runtime): <strong>{{ active_tz|default:'' }}</strong></div>
+
+  <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:8px;">
+    <button type="button" class="btn btn-secondary" onclick="SystemUI.closeModal()">Renunță</button>
+    <button type="submit" class="btn">Salvează</button>
+  </div>
+</form>

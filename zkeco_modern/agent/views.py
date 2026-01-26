@@ -1,18 +1,19 @@
 import os
 from django.http import JsonResponse, HttpRequest, HttpResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.shortcuts import render
 from django.utils import timezone
 from django.db.models import Max
+from django.db import transaction
 
 from .models import DeviceRealtimeLog, DeviceEventLog, DeviceStatus, Device, DSTime
-from .models import Door, TimeSegment, Holiday, AccessLevel, Employee
+from .models import Door, DoorFirstCardRule, DoorMultiCardRule, TimeSegment, Holiday, AccessLevel, Employee
 from .models import CommandLog, EmployeeAccessCache, EmployeeCard
 try:
     from .models import AuditLog
 except ImportError:
     AuditLog = None
-from .forms import (DoorForm, TimeSegmentFormWithDays, HolidayForm, AccessLevelForm,
+from .forms import (DoorForm, DoorFirstCardRuleForm, DoorMultiCardRuleForm, TimeSegmentFormWithDays, HolidayForm, AccessLevelForm,
                     EmployeeForm, EmployeeExtendedForm, DeptForm, AreaForm,
                     AccessLogFilterForm, DeviceExtendedForm, DSTimeForm)
 try:
@@ -564,10 +565,12 @@ def devices_crud_list(request: HttpRequest):
     from django.db.models import OuterRef, Subquery
     from .models import DeviceStatus as _DS
     latest = _DS.objects.filter(device=OuterRef('pk')).order_by('-updated_at')
+    from django.db.models import Prefetch
+    door_qs = Door.objects.exclude(door_number__isnull=True).order_by('door_number', 'name')
     qs = Device.objects.order_by('name').annotate(
         latest_online=Subquery(latest.values('online')[:1]),
         latest_updated_at=Subquery(latest.values('updated_at')[:1])
-    )
+    ).prefetch_related(Prefetch('door_set', queryset=door_qs, to_attr='prefetched_doors'))
     # Filter: all (default) | controllers | new | readers
     flt = (request.GET.get('filter') or 'all').strip().lower()
     if flt == 'controllers':
@@ -577,6 +580,9 @@ def devices_crud_list(request: HttpRequest):
     elif flt == 'new':
         qs = qs.filter(scanner_linked=False).exclude(device_type__in=['access_panel','door_controller','two_door_panel','multi_door_panel'])
     page = _paginate(qs, request)
+
+    # Backfill: ensure displayed controllers have their doors (and refresh preview).
+    _ensure_controller_doors_for_devices(getattr(page, 'object_list', []) or [])
     template = 'agent/devices_crud_list.html'
     if request.GET.get('embedded') == '1':
         template = 'agent/devices_crud_embed.html'
@@ -890,6 +896,34 @@ def device_discover_apply(request: HttpRequest):
             dev.enabled = True
             dev.save(update_fields=['name','serial_number','port','enabled'])
 
+        # Time zone policy:
+        # - Controllers: keep their configured TZ; default to system TZ only if empty.
+        # - Reader devices (scanner-linked): always inherit system TZ.
+        try:
+            from agent.models import SystemSettings
+
+            tz_name = (SystemSettings.get_solo().time_zone or '').strip()
+            if tz_name:
+                if getattr(dev, 'scanner_linked', False):
+                    if (dev.time_zone or '').strip() != tz_name:
+                        dev.time_zone = tz_name
+                        dev.save(update_fields=['time_zone'])
+                else:
+                    if not (dev.time_zone or '').strip():
+                        dev.time_zone = tz_name
+                        dev.save(update_fields=['time_zone'])
+        except Exception:
+            pass
+
+        # Auto-provision doors for controllers (1..N) based on type/model.
+        prov = None
+        try:
+            from agent.door_provisioning import ensure_controller_doors
+
+            prov = ensure_controller_doors(dev)
+        except Exception:
+            prov = None
+
         _audit_log(
             request,
             module='device',
@@ -920,7 +954,11 @@ def device_discover_apply(request: HttpRequest):
         except Exception:
             pass
 
-        return JsonResponse({'ok': True, 'id': dev.id, 'ip': dev.ip_address, 'created': created})
+        resp = {'ok': True, 'id': dev.id, 'ip': dev.ip_address, 'created': created}
+        if prov is not None:
+            resp['door_capacity'] = getattr(prov, 'capacity', None)
+            resp['doors_created'] = getattr(prov, 'created', None)
+        return JsonResponse(resp)
     except Exception as e:
         return JsonResponse({'ok': False, 'error': str(e)}, status=400)
 
@@ -949,10 +987,55 @@ def device_create(request: HttpRequest):
             return candidate
         return default_url
 
+    # System time zone (used as default + enforced for reader devices).
+    system_tz = ''
+    system_now_local_str = ''
+    try:
+        from agent.models import SystemSettings
+        from django.utils import timezone
+
+        system_tz = (SystemSettings.get_solo().time_zone or '').strip()
+        try:
+            system_now_local_str = timezone.localtime(timezone.now()).strftime('%Y-%m-%d %H:%M:%S')
+        except Exception:
+            system_now_local_str = ''
+    except Exception:
+        system_tz = ''
+        system_now_local_str = ''
+
     if request.method == 'POST':
-        form = DeviceExtendedForm(request.POST)
+        post_data = request.POST
+        # For reader devices (ELATEC/APC), force device TZ to system TZ.
+        try:
+            is_reader = (request.POST.get('scanner_linked') or '').strip().lower() in ('1', 'true', 'yes', 'on')
+            if is_reader and system_tz:
+                post_data = request.POST.copy()
+                post_data['time_zone'] = system_tz
+        except Exception:
+            post_data = request.POST
+
+        form = DeviceExtendedForm(post_data)
+        try:
+            dt = (post_data.get('device_type') or '').strip()
+            sl = (post_data.get('scanner_linked') or '').strip().lower() in ('1', 'true', 'yes', 'on')
+            show_derived_doors = (dt in ('access_panel', 'door_controller', 'two_door_panel', 'multi_door_panel')) and (not sl)
+        except Exception:
+            show_derived_doors = True
         if form.is_valid():
             obj = form.save()
+            # Safety: enforce system TZ for scanners even if the form allowed values.
+            try:
+                if getattr(obj, 'scanner_linked', False) and system_tz and (obj.time_zone or '').strip() != system_tz:
+                    obj.time_zone = system_tz
+                    obj.save(update_fields=['time_zone'])
+            except Exception:
+                pass
+            try:
+                from agent.door_provisioning import ensure_controller_doors
+
+                ensure_controller_doors(obj)
+            except Exception:
+                pass
             _audit_log(
                 request,
                 module='device',
@@ -987,6 +1070,11 @@ def device_create(request: HttpRequest):
                         'action_url': request.path,
                         'next_url': _safe_return_url(),
                         'mode': 'create',
+                        'system_time_zone': system_tz,
+                        'system_time_now_local': system_now_local_str,
+                        'access_modal': True,
+                        'controller_doors': [],
+                        'show_derived_doors': show_derived_doors,
                     },
                     request=request,
                 )
@@ -999,9 +1087,10 @@ def device_create(request: HttpRequest):
                     },
                     status=400,
                 )
-            return render(request,'agent/device_form.html',{'form': form})
+            return render(request,'agent/device_form.html',{'form': form, 'system_time_zone': system_tz, 'system_time_now_local': system_now_local_str})
     else:
-        form = DeviceExtendedForm()
+        form = DeviceExtendedForm(initial=({'time_zone': system_tz} if system_tz else {}))
+        show_derived_doors = True
         # ✅ ADAUGĂ SUPORT AJAX PENTRU MODAL
         is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
         if is_ajax:
@@ -1013,9 +1102,14 @@ def device_create(request: HttpRequest):
                     'action_url': request.path,
                     'next_url': _safe_return_url(),
                     'mode': 'create',
+                    'system_time_zone': system_tz,
+                    'system_time_now_local': system_now_local_str,
+                    'access_modal': True,
+                    'controller_doors': [],
+                    'show_derived_doors': show_derived_doors,
                 },
             )
-    return render(request,'agent/device_form.html',{'form': form, 'next_url': _safe_return_url()})
+    return render(request,'agent/device_form.html',{'form': form, 'next_url': _safe_return_url(), 'system_time_zone': system_tz, 'system_time_now_local': system_now_local_str})
 
 def device_edit(request: HttpRequest, pk: int):
     if not request.user.is_authenticated or not request.user.is_staff:
@@ -1044,6 +1138,29 @@ def device_edit(request: HttpRequest, pk: int):
 
     from agent.models import Device
     obj = Device.objects.get(pk=pk)
+
+    show_derived_doors = False
+    try:
+        show_derived_doors = bool(obj.is_controller())
+    except Exception:
+        show_derived_doors = False
+
+    # System time zone (enforced for reader devices).
+    system_tz = ''
+    system_now_local_str = ''
+    try:
+        from agent.models import SystemSettings
+        from django.utils import timezone
+
+        system_tz = (SystemSettings.get_solo().time_zone or '').strip()
+        try:
+            system_now_local_str = timezone.localtime(timezone.now()).strftime('%Y-%m-%d %H:%M:%S')
+        except Exception:
+            system_now_local_str = ''
+    except Exception:
+        system_tz = ''
+        system_now_local_str = ''
+
     if request.method == 'POST':
         before = {
             'name': obj.name,
@@ -1060,9 +1177,32 @@ def device_edit(request: HttpRequest, pk: int):
             'scanner_linked': obj.scanner_linked,
             'scanner_type': obj.scanner_type,
         }
-        form = DeviceExtendedForm(request.POST, instance=obj)
+        post_data = request.POST
+        # For reader devices (ELATEC/APC), force device TZ to system TZ.
+        try:
+            is_reader = (request.POST.get('scanner_linked') or '').strip().lower() in ('1', 'true', 'yes', 'on')
+            if is_reader and system_tz:
+                post_data = request.POST.copy()
+                post_data['time_zone'] = system_tz
+        except Exception:
+            post_data = request.POST
+
+        form = DeviceExtendedForm(post_data, instance=obj)
         if form.is_valid():
             saved = form.save()
+            # Safety: enforce system TZ for scanners even if the form allowed values.
+            try:
+                if getattr(saved, 'scanner_linked', False) and system_tz and (saved.time_zone or '').strip() != system_tz:
+                    saved.time_zone = system_tz
+                    saved.save(update_fields=['time_zone'])
+            except Exception:
+                pass
+            try:
+                from agent.door_provisioning import ensure_controller_doors
+
+                ensure_controller_doors(saved)
+            except Exception:
+                pass
             try:
                 after = {
                     'name': saved.name,
@@ -1113,6 +1253,23 @@ def device_edit(request: HttpRequest, pk: int):
             if is_ajax:
                 from django.template.loader import render_to_string
 
+                controller_doors = []
+                try:
+                    from agent.door_provisioning import ensure_controller_doors
+
+                    ensure_controller_doors(obj)
+                    try:
+                        from django.db.models import F
+
+                        _door_order = [F('door_number').asc(nulls_last=True), 'name']
+                    except Exception:
+                        _door_order = ['door_number', 'name']
+                    from agent.models import Door
+
+                    controller_doors = list(Door.objects.filter(device=obj).order_by(*_door_order))
+                except Exception:
+                    controller_doors = []
+
                 errors = {k: v[0] if v else '' for k, v in form.errors.items()}
                 html = render_to_string(
                     'agent/device_form_modal.html',
@@ -1122,6 +1279,11 @@ def device_edit(request: HttpRequest, pk: int):
                         'action_url': request.path,
                         'next_url': _safe_return_url(),
                         'mode': 'edit',
+                        'system_time_zone': system_tz,
+                        'system_time_now_local': system_now_local_str,
+                        'access_modal': True,
+                        'controller_doors': controller_doors,
+                        'show_derived_doors': show_derived_doors,
                     },
                     request=request,
                 )
@@ -1138,6 +1300,22 @@ def device_edit(request: HttpRequest, pk: int):
         form = DeviceExtendedForm(instance=obj)
         is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
         if is_ajax:
+            controller_doors = []
+            try:
+                from agent.door_provisioning import ensure_controller_doors
+
+                ensure_controller_doors(obj)
+                try:
+                    from django.db.models import F
+
+                    _door_order = [F('door_number').asc(nulls_last=True), 'name']
+                except Exception:
+                    _door_order = ['door_number', 'name']
+                from agent.models import Door
+
+                controller_doors = list(Door.objects.filter(device=obj).order_by(*_door_order))
+            except Exception:
+                controller_doors = []
             return render(
                 request,
                 'agent/device_form_modal.html',
@@ -1147,9 +1325,38 @@ def device_edit(request: HttpRequest, pk: int):
                     'action_url': request.path,
                     'next_url': _safe_return_url(),
                     'mode': 'edit',
+                    'system_time_zone': system_tz,
+                    'system_time_now_local': system_now_local_str,
+                    'access_modal': True,
+                    'controller_doors': controller_doors,
+                    'show_derived_doors': show_derived_doors,
                 },
             )
-    return render(request,'agent/device_form.html',{'form': form, 'obj': obj, 'next_url': _safe_return_url()})
+    # For controller devices, show the derived/provisioned doors in the form UI.
+    controller_doors = []
+    try:
+        from agent.door_provisioning import ensure_controller_doors
+
+        ensure_controller_doors(obj)
+        from agent.models import Door
+
+        controller_doors = list(Door.objects.filter(device=obj).exclude(door_number__isnull=True).order_by('door_number'))
+    except Exception:
+        controller_doors = []
+
+    return render(
+        request,
+        'agent/device_form.html',
+        {
+            'form': form,
+            'obj': obj,
+            'next_url': _safe_return_url(),
+            'controller_doors': controller_doors,
+            'system_time_zone': system_tz,
+            'system_time_now_local': system_now_local_str,
+            'show_derived_doors': show_derived_doors,
+        },
+    )
 
 def device_delete(request: HttpRequest, pk: int):
     if not request.user.is_authenticated or not request.user.is_staff or request.method != 'POST':
@@ -1396,6 +1603,12 @@ def menu_device(request: HttpRequest):
 
     devices_page = _paginate(qs, request)
 
+    # Backfill: ensure displayed controllers have Door rows and attach a fresh preview.
+    try:
+        _ensure_controller_doors_for_devices(getattr(devices_page, 'object_list', []) or [])
+    except Exception:
+        pass
+
     # Preload status summary for Monitorizare dispozitive tab
     status_rows = []
     for ds in DeviceStatus.objects.select_related('device').all():
@@ -1429,6 +1642,1058 @@ def menu_access_control(request: HttpRequest):
         resp['X-Frame-Options'] = 'SAMEORIGIN'
         return resp
     return render(request, 'agent/menu_access.html')
+
+
+def system_options(request: HttpRequest):
+    """Legacy-like System Options (global settings).
+
+    Currently exposes the system-wide time zone.
+    """
+    if not request.user.is_authenticated or not request.user.is_staff:
+        from django.contrib.auth.views import redirect_to_login
+
+        return redirect_to_login(request.get_full_path())
+
+    from django.utils import timezone
+
+    msg = ''
+    error = ''
+    try:
+        from agent.models import SystemSettings
+
+        settings_obj = SystemSettings.get_solo()
+    except Exception as ex:
+        settings_obj = None
+        error = f"Settings unavailable: {ex}"
+
+    tz_choices = []
+    try:
+        from agent.tz_utils import build_time_zone_choice_tuples
+
+        tz_choices = build_time_zone_choice_tuples()
+    except Exception:
+        tz_choices = []
+
+    if request.method == 'POST' and settings_obj is not None:
+        tz_name = (request.POST.get('time_zone') or '').strip()
+        if not tz_name:
+            error = 'Time zone is required.'
+        else:
+            try:
+                from zoneinfo import ZoneInfo
+
+                ZoneInfo(tz_name)
+            except Exception:
+                error = 'Invalid time zone. Example: Europe/Bucharest'
+            if not error:
+                settings_obj.time_zone = tz_name
+                try:
+                    settings_obj.save(update_fields=['time_zone', 'updated_at'])
+                    msg = 'Saved.'
+                except Exception as ex:
+                    error = str(ex)
+
+    try:
+        now_utc = timezone.now()
+        now_local = timezone.localtime(now_utc)
+    except Exception:
+        now_utc = None
+        now_local = None
+
+    return render(
+        request,
+        'agent/system_options.html',
+        {
+            'settings': settings_obj,
+            'msg': msg,
+            'error': error,
+            'now_utc': now_utc,
+            'now_local': now_local,
+            'active_tz': getattr(timezone.get_current_timezone(), 'key', None) or str(timezone.get_current_timezone()),
+            'tz_choices': tz_choices,
+        },
+    )
+
+
+def system_set_time_modal(request: HttpRequest):
+    """Modal: queue a SYNC_TIME command to all enabled devices.
+
+    Note: This does not change the server/OS clock; it synchronizes equipment time.
+    """
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+
+    from django.utils import timezone
+    from django.utils.dateparse import parse_datetime
+
+    def _coerce_to_utc(dt_any):
+        try:
+            if timezone.is_naive(dt_any):
+                dt_any = timezone.make_aware(dt_any, timezone.get_current_timezone())
+            return dt_any.astimezone(timezone.utc)
+        except Exception:
+            try:
+                return dt_any
+            except Exception:
+                return None
+
+    def _sync_time_cmd_for_device(dev, dt_utc):
+        try:
+            from zoneinfo import ZoneInfo
+
+            tz_name = (getattr(dev, 'time_zone', '') or '').strip()
+            if tz_name:
+                tz = ZoneInfo(tz_name)
+                dt_local = dt_utc.astimezone(tz)
+            else:
+                dt_local = timezone.localtime(dt_utc)
+        except Exception:
+            dt_local = timezone.localtime(dt_utc)
+        try:
+            ts_local = dt_local.strftime('%Y-%m-%d %H:%M:%S')
+        except Exception:
+            ts_local = ''
+        return (f"SYNC_TIME:{ts_local}" if ts_local else "SYNC_TIME")[:240]
+
+    if request.method == 'POST':
+        dt_str = (request.POST.get('local_datetime') or '').strip()
+        if not dt_str:
+            return JsonResponse({'ok': False, 'error': 'validation', 'errors': {'local_datetime': ['required']}}, status=400)
+
+        dt = parse_datetime(dt_str)
+        if dt is None:
+            try:
+                from datetime import datetime
+
+                dt = datetime.fromisoformat(dt_str)
+            except Exception:
+                dt = None
+
+        if dt is None:
+            return JsonResponse({'ok': False, 'error': 'validation', 'errors': {'local_datetime': ['invalid']}}, status=400)
+
+        dt_utc = _coerce_to_utc(dt)
+        if dt_utc is None:
+            return JsonResponse({'ok': False, 'error': 'validation', 'errors': {'local_datetime': ['invalid']}}, status=400)
+
+        from agent.models import CommandLog, Device
+
+        queued = 0
+        for dev in Device.objects.filter(enabled=True).order_by('id'):
+            try:
+                cmd = _sync_time_cmd_for_device(dev, dt_utc)
+                log = CommandLog.objects.create(device=dev, command=cmd, status='PENDING')
+                _broadcast_command(log)
+                queued += 1
+            except Exception:
+                continue
+
+        _audit_log(
+            request,
+            module='system-time',
+            action='sync_time',
+            entity_id=0,
+            entity_name='SYNC_TIME',
+            details=f"local_input={dt_str} devices={queued}",
+        )
+
+        return JsonResponse({'ok': True, 'queued': queued})
+
+    # GET
+    now_local = timezone.localtime(timezone.now())
+    try:
+        now_local_input = now_local.strftime('%Y-%m-%dT%H:%M')
+    except Exception:
+        now_local_input = ''
+
+    tz_key = ''
+    try:
+        tz_key = getattr(timezone.get_current_timezone(), 'key', None) or str(timezone.get_current_timezone())
+    except Exception:
+        tz_key = ''
+
+    return render(
+        request,
+        'agent/system_set_time_modal.html',
+        {
+            'now_local_input': now_local_input,
+            'tz_key': tz_key,
+        },
+    )
+
+
+def system_devices_sync_now(request: HttpRequest):
+    """Quick sync: queue SYNC_TIME using NOW for each device's configured TZ."""
+    # Allow GET to avoid CSRF issues for simple actions in legacy-style UI.
+    if not request.user.is_authenticated or not request.user.is_staff or request.method not in ('POST', 'GET'):
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+
+    from django.utils import timezone
+    from agent.models import CommandLog, Device
+
+    dt_utc = timezone.now().astimezone(timezone.utc)
+
+    def _cmd_for_dev(dev):
+        try:
+            from zoneinfo import ZoneInfo
+
+            tz_name = (getattr(dev, 'time_zone', '') or '').strip()
+            if tz_name:
+                dt_local = dt_utc.astimezone(ZoneInfo(tz_name))
+            else:
+                dt_local = timezone.localtime(dt_utc)
+        except Exception:
+            dt_local = timezone.localtime(dt_utc)
+        try:
+            ts_local = dt_local.strftime('%Y-%m-%d %H:%M:%S')
+        except Exception:
+            ts_local = ''
+        return (f"SYNC_TIME:{ts_local}" if ts_local else "SYNC_TIME")[:240]
+
+    queued = 0
+    for dev in Device.objects.filter(enabled=True).order_by('id'):
+        try:
+            log = CommandLog.objects.create(device=dev, command=_cmd_for_dev(dev), status='PENDING')
+            _broadcast_command(log)
+            queued += 1
+        except Exception:
+            continue
+
+    _audit_log(
+        request,
+        module='system-time',
+        action='sync_now',
+        entity_id=0,
+        entity_name='SYNC_TIME',
+        details=f"devices={queued}",
+    )
+    return JsonResponse({'ok': True, 'queued': queued})
+
+
+def system_device_sync_now(request: HttpRequest, pk: int):
+    """Sync a single device now, using its configured TZ."""
+    # Allow GET to avoid CSRF issues for simple actions in legacy-style UI.
+    if not request.user.is_authenticated or not request.user.is_staff or request.method not in ('POST', 'GET'):
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+
+    from django.utils import timezone
+    from agent.models import CommandLog, Device
+
+    dev = Device.objects.filter(pk=pk).first()
+    if not dev:
+        return JsonResponse({'ok': False, 'error': 'not-found'}, status=404)
+
+    dt_utc = timezone.now().astimezone(timezone.utc)
+    try:
+        from zoneinfo import ZoneInfo
+
+        tz_name = (getattr(dev, 'time_zone', '') or '').strip()
+        if tz_name:
+            dt_local = dt_utc.astimezone(ZoneInfo(tz_name))
+        else:
+            dt_local = timezone.localtime(dt_utc)
+    except Exception:
+        dt_local = timezone.localtime(dt_utc)
+
+    try:
+        ts_local = dt_local.strftime('%Y-%m-%d %H:%M:%S')
+    except Exception:
+        ts_local = ''
+
+    cmd = (f"SYNC_TIME:{ts_local}" if ts_local else "SYNC_TIME")[:240]
+    try:
+        log = CommandLog.objects.create(device=dev, command=cmd, status='PENDING')
+        _broadcast_command(log)
+    except Exception as ex:
+        return JsonResponse({'ok': False, 'error': str(ex)}, status=400)
+
+    _audit_log(
+        request,
+        module='system-time',
+        action='sync_device_now',
+        entity_id=int(dev.id),
+        entity_name=getattr(dev, 'name', '') or dev.serial_number or str(dev.id),
+        details=f"tz={(getattr(dev, 'time_zone', '') or '').strip()} cmd={cmd}",
+    )
+    return JsonResponse({'ok': True})
+
+
+@ensure_csrf_cookie
+def menu_system(request: HttpRequest):
+    """System module: Administrare / Grupuri / Fus Orar / Loguri."""
+    if not request.user.is_authenticated or not request.user.is_staff:
+        from django.contrib.auth.views import redirect_to_login
+
+        return redirect_to_login(request.get_full_path())
+
+    from django.contrib.auth.models import Group, User
+    from django.utils import timezone
+
+    from agent.forms import (
+        ROLE_ADMIN,
+        ROLE_SUPER_ADMIN,
+        ROLE_USER,
+        ROLE_VISITOR,
+        ROLE_GROUP_PREFIX,
+        SystemGroupForm,
+        SystemUserForm,
+        TimeZoneSettingForm,
+    )
+
+    from agent.models import AuditLog, Device, SystemSettings
+    try:
+        from agent.models import TimeZoneSetting
+    except Exception:
+        TimeZoneSetting = None  # type: ignore
+
+    # UI prefs (stored in SystemSettings)
+    ui_date_format = 'ro_short'
+    ui_week_start = 'monday'
+    try:
+        ss = SystemSettings.get_solo()
+        ui_date_format = (getattr(ss, 'date_format', '') or '').strip() or 'ro_short'
+        ui_week_start = (getattr(ss, 'week_start', '') or '').strip() or 'monday'
+    except Exception:
+        ui_date_format = 'ro_short'
+        ui_week_start = 'monday'
+
+    def _fmt_date_ui(dt, fmt: str) -> str:
+        try:
+            if fmt == 'ro_long':
+                months = [
+                    'ianuarie', 'februarie', 'martie', 'aprilie', 'mai', 'iunie',
+                    'iulie', 'august', 'septembrie', 'octombrie', 'noiembrie', 'decembrie'
+                ]
+                return f"{dt.day:02d} {months[dt.month-1]} {dt.year:04d}"
+            if fmt == 'iso':
+                return dt.strftime('%Y-%m-%d')
+            # ro_short default
+            return dt.strftime('%d.%m.%Y')
+        except Exception:
+            return ''
+
+    # Current system time (already activated by middleware)
+    now_local = None
+    now_local_str = ''
+    now_date_str = ''
+    now_time_str = ''
+    active_tz = ''
+    try:
+        now_local = timezone.localtime(timezone.now())
+        now_local_str = now_local.strftime('%Y-%m-%d %H:%M:%S')
+        now_date_str = _fmt_date_ui(now_local, ui_date_format)
+        now_time_str = now_local.strftime('%H:%M:%S')
+        active_tz = getattr(timezone.get_current_timezone(), 'key', None) or str(timezone.get_current_timezone())
+    except Exception:
+        now_local = None
+        now_local_str = ''
+        now_date_str = ''
+        now_time_str = ''
+        active_tz = ''
+
+    # Global system tz name
+    system_tz = ''
+    try:
+        system_tz = (SystemSettings.get_solo().time_zone or '').strip()
+    except Exception:
+        system_tz = ''
+
+    # USERS
+    role_groups = {ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_USER, ROLE_VISITOR}
+    users_rows = []
+    try:
+        for u in User.objects.all().prefetch_related('groups').order_by('username'):
+            gnames = set(u.groups.values_list('name', flat=True))
+            role = None
+            for cand in (ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_USER, ROLE_VISITOR):
+                if cand in gnames:
+                    role = cand
+                    break
+            if not role:
+                if u.is_superuser:
+                    role = ROLE_SUPER_ADMIN
+                elif u.is_staff:
+                    role = ROLE_ADMIN
+                else:
+                    role = ROLE_USER
+            role_label = {
+                ROLE_SUPER_ADMIN: 'Super Admin',
+                ROLE_ADMIN: 'Admin',
+                ROLE_USER: 'Utilizator',
+                ROLE_VISITOR: 'Vizitator',
+            }.get(role, role or '')
+
+            extra_groups = [g for g in sorted(gnames) if g not in role_groups]
+            users_rows.append(
+                {
+                    'id': u.id,
+                    'username': u.username,
+                    'name': (f"{u.first_name} {u.last_name}").strip(),
+                    'email': u.email or '',
+                    'role': role,
+                    'role_label': role_label,
+                    'is_active': bool(u.is_active),
+                    'groups': extra_groups,
+                    'is_staff': bool(u.is_staff),
+                    'is_superuser': bool(u.is_superuser),
+                    'last_login': u.last_login,
+                }
+            )
+    except Exception:
+        users_rows = []
+
+    # GROUPS
+    groups_rows = []
+    try:
+        for g in Group.objects.all().prefetch_related('permissions').order_by('name'):
+            is_role = g.name in role_groups or (g.name or '').startswith(ROLE_GROUP_PREFIX)
+            groups_rows.append(
+                {
+                    'id': g.id,
+                    'name': g.name,
+                    'perm_count': g.permissions.count(),
+                    'user_count': g.user_set.count(),
+                    'is_role_group': bool(is_role),
+                }
+            )
+    except Exception:
+        groups_rows = []
+
+    # Helper: compute a short GMT label for a tz name at the current moment
+    def _fmt_gmt_short(offset_seconds: int) -> str:
+        sign = '+' if offset_seconds >= 0 else '-'
+        s = abs(int(offset_seconds))
+        hh = s // 3600
+        mm = (s % 3600) // 60
+        if mm:
+            return f"GMT{sign}{hh}:{mm:02d}"
+        return f"GMT{sign}{hh}"
+
+    def _gmt_for_tz(tz_name: str) -> str:
+        try:
+            from zoneinfo import ZoneInfo
+
+            tz_name = (tz_name or '').strip()
+            if not tz_name:
+                return ''
+            dt_utc = timezone.now().astimezone(timezone.utc)
+            local = dt_utc.astimezone(ZoneInfo(tz_name))
+            off = local.utcoffset()
+            seconds = int(off.total_seconds()) if off else 0
+            return _fmt_gmt_short(seconds)
+        except Exception:
+            return ''
+
+    # TIME ZONE SETTINGS + device usage
+    tz_settings_rows = []
+    if TimeZoneSetting is not None:
+        try:
+            tz_settings_rows = []
+            for tz in TimeZoneSetting.objects.all().order_by('-is_active', 'name'):
+                tz_name = (getattr(tz, 'time_zone', '') or '').strip()
+                tz_settings_rows.append(
+                    {
+                        'id': tz.id,
+                        'is_active': bool(getattr(tz, 'is_active', False)),
+                        'name': getattr(tz, 'name', '') or '',
+                        'region': getattr(tz, 'region', '') or '',
+                        'time_zone': tz_name,
+                        'gmt': _gmt_for_tz(tz_name),
+                    }
+                )
+        except Exception:
+            tz_settings_rows = []
+
+    devices_rows = []
+    try:
+        for d in Device.objects.all().order_by('name'):
+            tz_name = (d.time_zone or system_tz or '').strip()
+            devices_rows.append(
+                {
+                    'id': d.id,
+                    'name': d.name,
+                    'ip': getattr(d, 'ip_address', None) or '',
+                    'serial': getattr(d, 'serial_number', '') or '',
+                    'time_zone': tz_name,
+                    'gmt': _gmt_for_tz(tz_name),
+                    'system_time': now_local_str,
+                }
+            )
+    except Exception:
+        devices_rows = []
+
+    # LOGS
+    system_modules = ['system-user', 'system-group', 'system-tz', 'system-time']
+    logs_all = []
+    logs_users = []
+    logs_groups = []
+    logs_tz = []
+    try:
+        logs_all = list(AuditLog.objects.filter(module__in=system_modules).order_by('-timestamp')[:200])
+        logs_users = list(AuditLog.objects.filter(module='system-user').order_by('-timestamp')[:50])
+        logs_groups = list(AuditLog.objects.filter(module='system-group').order_by('-timestamp')[:50])
+        logs_tz = list(AuditLog.objects.filter(module='system-tz').order_by('-timestamp')[:50])
+    except Exception:
+        logs_all = []
+        logs_users = []
+        logs_groups = []
+        logs_tz = []
+
+    return render(
+        request,
+        'agent/menu_system_modern.html',
+        {
+            'users_rows': users_rows,
+            'groups_rows': groups_rows,
+            'system_time_zone': system_tz,
+            'active_tz': active_tz,
+            'system_now_local': now_local_str,
+            'system_now_date': now_date_str,
+            'system_now_time': now_time_str,
+            'tz_settings_rows': tz_settings_rows,
+            'devices_rows': devices_rows,
+            'ui_date_format': ui_date_format,
+            'ui_week_start': ui_week_start,
+            'logs_all': logs_all,
+            'logs_users': logs_users,
+            'logs_groups': logs_groups,
+            'logs_tz': logs_tz,
+            'user_create_form': SystemUserForm(),
+            'group_create_form': SystemGroupForm(),
+            'tz_create_form': TimeZoneSettingForm(),
+        },
+    )
+
+
+def api_system_now(request: HttpRequest):
+    """Return server clock in currently active (system) time zone.
+
+    We return UTC epoch + tz offset so the browser can render correct system time
+    independent of the browser's own local time zone.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+
+    from django.utils import timezone
+
+    now_utc = timezone.now()
+    try:
+        now_local = timezone.localtime(now_utc)
+    except Exception:
+        now_local = now_utc
+
+    try:
+        offset_td = now_local.utcoffset()
+        offset_seconds = int(offset_td.total_seconds()) if offset_td else 0
+    except Exception:
+        offset_seconds = 0
+
+    tz_key = ''
+    try:
+        tz_key = getattr(timezone.get_current_timezone(), 'key', None) or str(timezone.get_current_timezone())
+    except Exception:
+        tz_key = ''
+
+    try:
+        formatted = now_local.strftime('%Y-%m-%d %H:%M:%S')
+    except Exception:
+        formatted = ''
+
+    return JsonResponse(
+        {
+            'ok': True,
+            'epoch_ms_utc': int(now_utc.timestamp() * 1000),
+            'offset_seconds': offset_seconds,
+            'tz_label': f"{tz_key} (UTC{_fmt_offset_for_api(offset_seconds)})" if tz_key else f"UTC{_fmt_offset_for_api(offset_seconds)}",
+            'formatted': formatted,
+        }
+    )
+
+
+def _fmt_offset_for_api(offset_seconds: int) -> str:
+    sign = '+' if offset_seconds >= 0 else '-'
+    s = abs(int(offset_seconds))
+    hh = s // 3600
+    mm = (s % 3600) // 60
+    return f"{sign}{hh:02d}:{mm:02d}"
+
+
+def system_device_tz_edit(request: HttpRequest, pk: int):
+    """Modal to edit a device's time zone."""
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+
+    from agent.forms import DeviceTimeZoneForm
+    from agent.models import Device
+
+    dev = Device.objects.get(pk=pk)
+    if request.method == 'POST':
+        form = DeviceTimeZoneForm(request.POST, instance=dev)
+        if form.is_valid():
+            tz_name = (form.cleaned_data.get('time_zone') or '').strip()
+            dev.time_zone = tz_name
+            dev.save(update_fields=['time_zone'])
+            _audit_log(
+                request,
+                module='system-tz',
+                action='device_tz_update',
+                entity_id=int(dev.id),
+                entity_name=getattr(dev, 'name', '') or dev.serial_number or str(dev.id),
+                details=f"device_tz={tz_name}",
+            )
+            return JsonResponse({'ok': True})
+        return JsonResponse({'ok': False, 'error': 'validation', 'errors': form.errors}, status=400)
+
+    form = DeviceTimeZoneForm(instance=dev)
+    return render(request, 'agent/system_device_tz_modal.html', {'form': form, 'dev': dev})
+
+
+def system_options_modal(request: HttpRequest):
+    """Modal version of System Options (time zone only)."""
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+
+    from django.utils import timezone
+
+    from agent.models import SystemSettings
+
+    settings_obj = SystemSettings.get_solo()
+
+    date_format_choices = [
+        ('ro_short', 'Zi.Lună.An (22.01.2026)'),
+        ('ro_long', 'Zi Luna An (22 ianuarie 2026)'),
+        ('iso', 'YYYY-MM-DD (2026-01-22)'),
+    ]
+    week_start_choices = [
+        ('monday', 'Luni (RO)'),
+        ('sunday', 'Duminică (US)'),
+    ]
+
+    tz_choices = []
+    try:
+        from agent.tz_utils import build_time_zone_choice_tuples
+
+        tz_choices = build_time_zone_choice_tuples()
+    except Exception:
+        tz_choices = []
+
+    if request.method == 'POST':
+        tz_name = (request.POST.get('time_zone') or '').strip()
+        date_format = (request.POST.get('date_format') or '').strip() or (getattr(settings_obj, 'date_format', '') or '').strip() or 'ro_short'
+        week_start = (request.POST.get('week_start') or '').strip() or (getattr(settings_obj, 'week_start', '') or '').strip() or 'monday'
+        if not tz_name:
+            return JsonResponse({'ok': False, 'error': 'validation', 'errors': {'time_zone': ['required']}}, status=400)
+        if date_format not in {c[0] for c in date_format_choices}:
+            return JsonResponse({'ok': False, 'error': 'validation', 'errors': {'date_format': ['invalid']}}, status=400)
+        if week_start not in {c[0] for c in week_start_choices}:
+            return JsonResponse({'ok': False, 'error': 'validation', 'errors': {'week_start': ['invalid']}}, status=400)
+        try:
+            from zoneinfo import ZoneInfo
+
+            ZoneInfo(tz_name)
+        except Exception:
+            return JsonResponse({'ok': False, 'error': 'validation', 'errors': {'time_zone': ['invalid']}}, status=400)
+
+        settings_obj.time_zone = tz_name
+        settings_obj.date_format = date_format
+        settings_obj.week_start = week_start
+        try:
+            settings_obj.save(update_fields=['time_zone', 'date_format', 'week_start', 'updated_at'])
+        except Exception as ex:
+            return JsonResponse({'ok': False, 'error': str(ex)}, status=400)
+
+        _audit_log(
+            request,
+            module='system-tz',
+            action='system_tz_update',
+            entity_id=int(getattr(settings_obj, 'id', 1) or 1),
+            entity_name='SystemSettings',
+            details=f"time_zone={tz_name} date_format={date_format} week_start={week_start}",
+        )
+        return JsonResponse({'ok': True})
+
+    active_tz = ''
+    try:
+        active_tz = getattr(timezone.get_current_timezone(), 'key', None) or str(timezone.get_current_timezone())
+    except Exception:
+        active_tz = ''
+
+    return render(
+        request,
+        'agent/system_options_modal.html',
+        {
+            'settings_id': getattr(settings_obj, 'id', 1) or 1,
+            'current_tz': (settings_obj.time_zone or '').strip(),
+            'tz_choices': tz_choices,
+            'active_tz': active_tz,
+            'date_format_choices': date_format_choices,
+            'week_start_choices': week_start_choices,
+            'current_date_format': (getattr(settings_obj, 'date_format', '') or '').strip() or 'ro_short',
+            'current_week_start': (getattr(settings_obj, 'week_start', '') or '').strip() or 'monday',
+        },
+    )
+
+
+def system_user_new(request: HttpRequest):
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    from agent.forms import SystemUserForm
+
+    if request.method == 'POST':
+        form = SystemUserForm(request.POST)
+        if form.is_valid():
+            u = form.save()
+            _audit_log(request, module='system-user', action='create', entity_id=int(u.id), entity_name=u.username)
+            return JsonResponse({'ok': True})
+        return JsonResponse({'ok': False, 'error': 'validation', 'errors': form.errors}, status=400)
+    form = SystemUserForm()
+    return render(request, 'agent/system_user_form_modal.html', {'form': form, 'mode': 'create'})
+
+
+def system_user_edit(request: HttpRequest, pk: int):
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    from django.contrib.auth.models import User
+    from agent.forms import SystemUserForm
+
+    u = User.objects.get(pk=pk)
+    if request.method == 'POST':
+        before = {
+            'username': u.username,
+            'first_name': u.first_name,
+            'last_name': u.last_name,
+            'email': u.email,
+            'is_active': u.is_active,
+            'is_staff': u.is_staff,
+            'is_superuser': u.is_superuser,
+        }
+        form = SystemUserForm(request.POST, instance=u)
+        if form.is_valid():
+            saved = form.save()
+            after = {
+                'username': saved.username,
+                'first_name': saved.first_name,
+                'last_name': saved.last_name,
+                'email': saved.email,
+                'is_active': saved.is_active,
+                'is_staff': saved.is_staff,
+                'is_superuser': saved.is_superuser,
+            }
+            changes = []
+            for k, v in before.items():
+                if after.get(k) != v:
+                    changes.append(f"{k}: {v} -> {after.get(k)}")
+            _audit_log(
+                request,
+                module='system-user',
+                action='update',
+                entity_id=int(saved.id),
+                entity_name=saved.username,
+                details='; '.join(changes)[:2000],
+            )
+            return JsonResponse({'ok': True})
+        return JsonResponse({'ok': False, 'error': 'validation', 'errors': form.errors}, status=400)
+    form = SystemUserForm(instance=u)
+    return render(request, 'agent/system_user_form_modal.html', {'form': form, 'mode': 'edit', 'obj': u})
+
+
+def system_user_delete(request: HttpRequest, pk: int):
+    if not request.user.is_authenticated or not request.user.is_staff or request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    from django.contrib.auth.models import User
+
+    u = User.objects.filter(pk=pk).first()
+    if not u:
+        return JsonResponse({'ok': False, 'error': 'not-found'}, status=404)
+    # Prevent deleting self
+    try:
+        if request.user.id == u.id:
+            return JsonResponse({'ok': False, 'error': 'cannot-delete-self'}, status=400)
+    except Exception:
+        pass
+    name = u.username
+    u.delete()
+    _audit_log(request, module='system-user', action='delete', entity_id=int(pk), entity_name=name)
+    return JsonResponse({'ok': True})
+
+
+def system_group_new(request: HttpRequest):
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    from agent.forms import SystemGroupForm
+
+    if request.method == 'POST':
+        form = SystemGroupForm(request.POST)
+        if form.is_valid():
+            g = form.save()
+            _audit_log(request, module='system-group', action='create', entity_id=int(g.id), entity_name=g.name)
+            return JsonResponse({'ok': True})
+        return JsonResponse({'ok': False, 'error': 'validation', 'errors': form.errors}, status=400)
+    form = SystemGroupForm()
+    return render(request, 'agent/system_group_form_modal.html', {'form': form, 'mode': 'create'})
+
+
+def system_group_edit(request: HttpRequest, pk: int):
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    from django.contrib.auth.models import Group
+    from agent.forms import ROLE_GROUP_PREFIX, SystemGroupForm
+
+    g = Group.objects.get(pk=pk)
+    # Protect role groups
+    if (g.name or '').startswith(ROLE_GROUP_PREFIX):
+        return JsonResponse({'ok': False, 'error': 'role-group-protected'}, status=400)
+
+    if request.method == 'POST':
+        before = {
+            'name': g.name,
+            'perm_count': g.permissions.count(),
+        }
+        form = SystemGroupForm(request.POST, instance=g)
+        if form.is_valid():
+            saved = form.save()
+            after = {
+                'name': saved.name,
+                'perm_count': saved.permissions.count(),
+            }
+            changes = []
+            for k, v in before.items():
+                if after.get(k) != v:
+                    changes.append(f"{k}: {v} -> {after.get(k)}")
+            _audit_log(
+                request,
+                module='system-group',
+                action='update',
+                entity_id=int(saved.id),
+                entity_name=saved.name,
+                details='; '.join(changes)[:2000],
+            )
+            return JsonResponse({'ok': True})
+        return JsonResponse({'ok': False, 'error': 'validation', 'errors': form.errors}, status=400)
+    form = SystemGroupForm(instance=g)
+    return render(request, 'agent/system_group_form_modal.html', {'form': form, 'mode': 'edit', 'obj': g})
+
+
+def system_group_delete(request: HttpRequest, pk: int):
+    if not request.user.is_authenticated or not request.user.is_staff or request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    from django.contrib.auth.models import Group
+    from agent.forms import ROLE_GROUP_PREFIX
+
+    g = Group.objects.filter(pk=pk).first()
+    if not g:
+        return JsonResponse({'ok': False, 'error': 'not-found'}, status=404)
+    if (g.name or '').startswith(ROLE_GROUP_PREFIX):
+        return JsonResponse({'ok': False, 'error': 'role-group-protected'}, status=400)
+    name = g.name
+    g.delete()
+    _audit_log(request, module='system-group', action='delete', entity_id=int(pk), entity_name=name)
+    return JsonResponse({'ok': True})
+
+
+def system_tz_new(request: HttpRequest):
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    from agent.forms import TimeZoneSettingForm
+    from agent.models import SystemSettings
+    from agent.models import TimeZoneSetting
+
+    date_format_choices = [
+        ('ro_short', 'Zi.Lună.An (22.01.2026)'),
+        ('ro_long', 'Zi Luna An (22 ianuarie 2026)'),
+        ('iso', 'YYYY-MM-DD (2026-01-22)'),
+    ]
+    week_start_choices = [
+        ('monday', 'Luni (RO)'),
+        ('sunday', 'Duminică (US)'),
+    ]
+    ss = None
+    try:
+        ss = SystemSettings.get_solo()
+    except Exception:
+        ss = None
+
+    if request.method == 'POST':
+        form = TimeZoneSettingForm(request.POST)
+        if form.is_valid():
+            data = form.cleaned_data
+            date_format = (request.POST.get('date_format') or '').strip() or ((getattr(ss, 'date_format', '') or '').strip() if ss else 'ro_short')
+            week_start = (request.POST.get('week_start') or '').strip() or ((getattr(ss, 'week_start', '') or '').strip() if ss else 'monday')
+            if date_format not in {c[0] for c in date_format_choices}:
+                return JsonResponse({'ok': False, 'error': 'validation', 'errors': {'date_format': ['invalid']}}, status=400)
+            if week_start not in {c[0] for c in week_start_choices}:
+                return JsonResponse({'ok': False, 'error': 'validation', 'errors': {'week_start': ['invalid']}}, status=400)
+            obj = TimeZoneSetting.objects.create(
+                name=data.get('name') or 'Time Zone',
+                region=(data.get('region') or ''),
+                time_zone=data.get('time_zone'),
+                is_active=bool(data.get('is_active')),
+            )
+            if obj.is_active:
+                TimeZoneSetting.objects.exclude(pk=obj.pk).update(is_active=False)
+                tz_name = (obj.time_zone or '').strip()
+                try:
+                    ss = SystemSettings.get_solo()
+                    ss.time_zone = tz_name
+                    ss.date_format = date_format
+                    ss.week_start = week_start
+                    ss.save(update_fields=['time_zone', 'date_format', 'week_start', 'updated_at'])
+                except Exception:
+                    pass
+            else:
+                # Even if preset isn't active, allow updating UI prefs.
+                try:
+                    if ss is None:
+                        ss = SystemSettings.get_solo()
+                    ss.date_format = date_format
+                    ss.week_start = week_start
+                    ss.save(update_fields=['date_format', 'week_start', 'updated_at'])
+                except Exception:
+                    pass
+            _audit_log(request, module='system-tz', action='create', entity_id=int(obj.id), entity_name=obj.name, details=f"region={obj.region} tz={obj.time_zone}")
+            return JsonResponse({'ok': True})
+        return JsonResponse({'ok': False, 'error': 'validation', 'errors': form.errors}, status=400)
+    form = TimeZoneSettingForm()
+    return render(
+        request,
+        'agent/system_tz_form_modal.html',
+        {
+            'form': form,
+            'mode': 'create',
+            'date_format_choices': date_format_choices,
+            'week_start_choices': week_start_choices,
+            'current_date_format': ((getattr(ss, 'date_format', '') or '').strip() if ss else 'ro_short') or 'ro_short',
+            'current_week_start': ((getattr(ss, 'week_start', '') or '').strip() if ss else 'monday') or 'monday',
+        },
+    )
+
+
+def system_tz_edit(request: HttpRequest, pk: int):
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    from agent.forms import TimeZoneSettingForm
+    from agent.models import SystemSettings
+    from agent.models import TimeZoneSetting
+
+    date_format_choices = [
+        ('ro_short', 'Zi.Lună.An (22.01.2026)'),
+        ('ro_long', 'Zi Luna An (22 ianuarie 2026)'),
+        ('iso', 'YYYY-MM-DD (2026-01-22)'),
+    ]
+    week_start_choices = [
+        ('monday', 'Luni (RO)'),
+        ('sunday', 'Duminică (US)'),
+    ]
+    ss = None
+    try:
+        ss = SystemSettings.get_solo()
+    except Exception:
+        ss = None
+
+    obj = TimeZoneSetting.objects.get(pk=pk)
+    if request.method == 'POST':
+        before = {'name': obj.name, 'region': getattr(obj, 'region', ''), 'time_zone': obj.time_zone, 'is_active': obj.is_active}
+        form = TimeZoneSettingForm(request.POST, instance=obj)
+        if form.is_valid():
+            data = form.cleaned_data
+            date_format = (request.POST.get('date_format') or '').strip() or ((getattr(ss, 'date_format', '') or '').strip() if ss else 'ro_short')
+            week_start = (request.POST.get('week_start') or '').strip() or ((getattr(ss, 'week_start', '') or '').strip() if ss else 'monday')
+            if date_format not in {c[0] for c in date_format_choices}:
+                return JsonResponse({'ok': False, 'error': 'validation', 'errors': {'date_format': ['invalid']}}, status=400)
+            if week_start not in {c[0] for c in week_start_choices}:
+                return JsonResponse({'ok': False, 'error': 'validation', 'errors': {'week_start': ['invalid']}}, status=400)
+            obj.name = data.get('name') or obj.name
+            obj.region = (data.get('region') or '').strip()
+            obj.time_zone = data.get('time_zone') or obj.time_zone
+            obj.is_active = bool(data.get('is_active'))
+            obj.save(update_fields=['name', 'region', 'time_zone', 'is_active', 'updated_at'])
+            if obj.is_active:
+                TimeZoneSetting.objects.exclude(pk=obj.pk).update(is_active=False)
+                tz_name = (obj.time_zone or '').strip()
+                try:
+                    ss = SystemSettings.get_solo()
+                    ss.time_zone = tz_name
+                    ss.date_format = date_format
+                    ss.week_start = week_start
+                    ss.save(update_fields=['time_zone', 'date_format', 'week_start', 'updated_at'])
+                except Exception:
+                    pass
+            else:
+                try:
+                    if ss is None:
+                        ss = SystemSettings.get_solo()
+                    ss.date_format = date_format
+                    ss.week_start = week_start
+                    ss.save(update_fields=['date_format', 'week_start', 'updated_at'])
+                except Exception:
+                    pass
+            after = {'name': obj.name, 'region': getattr(obj, 'region', ''), 'time_zone': obj.time_zone, 'is_active': obj.is_active}
+            changes = []
+            for k, v in before.items():
+                if after.get(k) != v:
+                    changes.append(f"{k}: {v} -> {after.get(k)}")
+            _audit_log(
+                request,
+                module='system-tz',
+                action='update',
+                entity_id=int(obj.id),
+                entity_name=obj.name,
+                details='; '.join(changes)[:2000],
+            )
+            return JsonResponse({'ok': True})
+        return JsonResponse({'ok': False, 'error': 'validation', 'errors': form.errors}, status=400)
+    form = TimeZoneSettingForm(instance=obj)
+    return render(
+        request,
+        'agent/system_tz_form_modal.html',
+        {
+            'form': form,
+            'mode': 'edit',
+            'obj': obj,
+            'date_format_choices': date_format_choices,
+            'week_start_choices': week_start_choices,
+            'current_date_format': ((getattr(ss, 'date_format', '') or '').strip() if ss else 'ro_short') or 'ro_short',
+            'current_week_start': ((getattr(ss, 'week_start', '') or '').strip() if ss else 'monday') or 'monday',
+        },
+    )
+
+
+def system_tz_activate(request: HttpRequest, pk: int):
+    if not request.user.is_authenticated or not request.user.is_staff or request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    from agent.models import SystemSettings
+    from agent.models import TimeZoneSetting
+
+    obj = TimeZoneSetting.objects.filter(pk=pk).first()
+    if not obj:
+        return JsonResponse({'ok': False, 'error': 'not-found'}, status=404)
+    TimeZoneSetting.objects.exclude(pk=obj.pk).update(is_active=False)
+    TimeZoneSetting.objects.filter(pk=obj.pk).update(is_active=True)
+    tz_name = (obj.time_zone or '').strip()
+    try:
+        ss = SystemSettings.get_solo()
+        ss.time_zone = tz_name
+        ss.save(update_fields=['time_zone', 'updated_at'])
+    except Exception:
+        pass
+    _audit_log(request, module='system-tz', action='activate', entity_id=int(obj.id), entity_name=obj.name, details=tz_name)
+    return JsonResponse({'ok': True})
+
+
+def system_tz_delete(request: HttpRequest, pk: int):
+    if not request.user.is_authenticated or not request.user.is_staff or request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    from agent.models import TimeZoneSetting
+
+    obj = TimeZoneSetting.objects.filter(pk=pk).first()
+    if not obj:
+        return JsonResponse({'ok': False, 'error': 'not-found'}, status=404)
+    if obj.is_active:
+        return JsonResponse({'ok': False, 'error': 'cannot-delete-active'}, status=400)
+    name = obj.name
+    obj.delete()
+    _audit_log(request, module='system-tz', action='delete', entity_id=int(pk), entity_name=name)
+    return JsonResponse({'ok': True})
 
 
 def menu_reports(request: HttpRequest):
@@ -1867,8 +3132,25 @@ def menu_reports(request: HttpRequest):
             if door_keys:
                 dids = sorted({k[0] for k in door_keys})
                 names = sorted({k[1] for k in door_keys})
-                for d in _Door.objects.filter(device_id__in=dids, name__in=names).select_related('device'):
-                    door_map[(d.device_id, str(getattr(d, 'name', '') or ''))] = d
+                door_numbers = []
+                for n in names:
+                    try:
+                        if str(n).strip().isdigit():
+                            door_numbers.append(int(str(n).strip()))
+                    except Exception:
+                        pass
+                q = Q(name__in=names)
+                if door_numbers:
+                    q |= Q(door_number__in=sorted(set(door_numbers)))
+                for d in _Door.objects.filter(device_id__in=dids).filter(q).select_related('device'):
+                    key = str(getattr(d, 'door_number', None) or getattr(d, 'name', '') or '')
+                    if key:
+                        door_map[(d.device_id, key)] = d
+                    try:
+                        if getattr(d, 'name', None) and str(getattr(d, 'name')) != key:
+                            door_map[(d.device_id, str(getattr(d, 'name')))] = d
+                    except Exception:
+                        pass
 
             emp_by_card = {}
             emp_by_pin = {}
@@ -2219,8 +3501,25 @@ def menu_reports(request: HttpRequest):
                     if door_keys:
                         dids = sorted({k[0] for k in door_keys})
                         names = sorted({k[1] for k in door_keys})
-                        for d in _Door.objects.filter(device_id__in=dids, name__in=names).select_related('device'):
-                            door_map[(d.device_id, str(getattr(d, 'name', '') or ''))] = d
+                        door_numbers = []
+                        for n in names:
+                            try:
+                                if str(n).strip().isdigit():
+                                    door_numbers.append(int(str(n).strip()))
+                            except Exception:
+                                pass
+                        q = Q(name__in=names)
+                        if door_numbers:
+                            q |= Q(door_number__in=sorted(set(door_numbers)))
+                        for d in _Door.objects.filter(device_id__in=dids).filter(q).select_related('device'):
+                            key = str(getattr(d, 'door_number', None) or getattr(d, 'name', '') or '')
+                            if key:
+                                door_map[(d.device_id, key)] = d
+                            try:
+                                if getattr(d, 'name', None) and str(getattr(d, 'name')) != key:
+                                    door_map[(d.device_id, str(getattr(d, 'name')))] = d
+                            except Exception:
+                                pass
 
                     emp_by_card = {}
                     emp_by_pin = {}
@@ -2528,17 +3827,546 @@ def _paginate(queryset, request, per_page=25):
     page_number = request.GET.get('page') or 1
     return paginator.get_page(page_number)
 
+
+def _ensure_controller_doors_for_devices(devices):
+    """Ensure controllers have Door rows and attach a fresh `prefetched_doors`.
+
+    This is used to backfill doors for existing devices that were created
+    before door provisioning ran (or after device_type/model fields changed).
+    """
+    try:
+        from agent.door_provisioning import ensure_controller_doors
+    except Exception:
+        ensure_controller_doors = None
+
+    if not devices:
+        return
+
+    # Avoid importing Door at module import time for legacy startup paths.
+    from .models import Door as _Door
+    try:
+        from django.db.models import F
+        _door_order = [F('door_number').asc(nulls_last=True), 'name']
+    except Exception:
+        _door_order = ['door_number', 'name']
+
+    for dev in devices:
+        if ensure_controller_doors is not None:
+            try:
+                ensure_controller_doors(dev)
+            except Exception:
+                pass
+
+        try:
+            dev.prefetched_doors = list(
+                _Door.objects.filter(device=dev)
+                .order_by(*_door_order)
+            )
+        except Exception:
+            dev.prefetched_doors = []
+
 def doors_list(request: HttpRequest):
     if not request.user.is_authenticated:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
+    mode = (request.GET.get('mode') or 'monitor').strip().lower()
+    if mode in ('doorconfiguration', 'door-configuration', 'door_configuration'):
+        mode = 'config'
     is_embed = (request.GET.get('embed') == '1')
     if not is_embed:
         from django.shortcuts import redirect
-        return redirect('/agent/menu/access/?tab=doors')
-    qs = Door.objects.order_by('name')
-    page = _paginate(qs, request)
-    return render(request, 'agent/access_doors_embed.html', {'page': page, 'can_edit': bool(getattr(request.user, 'is_staff', False))})
+        tab = 'doorconfig' if mode == 'config' else 'doors'
+        return redirect(f'/agent/menu/access/?tab={tab}')
+    from django.db.models import Prefetch
+    # Device-centric view: each controller is one row, with its doors expandable.
+    # IMPORTANT: do not over-filter device_type, because existing DB rows may
+    # have older/unknown type strings; we still want them visible and
+    # auto-provisioned.
+    try:
+        from django.db.models import F
+        _door_order = [F('door_number').asc(nulls_last=True), 'name']
+    except Exception:
+        _door_order = ['door_number', 'name']
+
+    device_name = (request.GET.get('device_name') or '').strip()
+    door_name = (request.GET.get('door_name') or '').strip()
+
+    # IMPORTANT: include doors even if door_number is missing, so we can
+    # show already-registered but not fully configured doors.
+    door_qs = (
+        Door.objects.select_related('device', 'door_active_time_zone', 'door_passage_mode_time_zone')
+        .prefetch_related('first_card_rules', 'multi_card_rules')
+        .order_by(*_door_order)
+    )
+    if door_name:
+        door_qs = door_qs.filter(name__icontains=door_name)
+
+    # IMPORTANT (legacy parity): Door Configuration must list ONLY controllers (centrale),
+    # never standalone readers (e.g. ACP Demo). Readers are typically either
+    # scanner_linked=True or device_type='biometric_reader'.
+    dev_qs = Device.objects.filter(scanner_linked=False).exclude(device_type='biometric_reader')
+    if device_name:
+        dev_qs = dev_qs.filter(name__icontains=device_name)
+    if door_name:
+        try:
+            dev_ids = list(door_qs.values_list('device_id', flat=True).distinct())
+            dev_qs = dev_qs.filter(id__in=[i for i in dev_ids if i])
+        except Exception:
+            pass
+
+    dev_qs = dev_qs.order_by('ip_address', 'name').prefetch_related(
+        Prefetch('door_set', queryset=door_qs, to_attr='prefetched_doors')
+    )
+    page = _paginate(dev_qs, request)
+
+    # Backfill: ensure each controller has its doors, then refresh the list.
+    devices = list(getattr(page, 'object_list', []) or [])
+    _ensure_controller_doors_for_devices(devices)
+
+    # Attach quick stats used by the template (configured vs unconfigured doors).
+    for dev in devices:
+        doors = list(getattr(dev, 'prefetched_doors', []) or [])
+        dev.doors_total = len(doors)
+        dev.doors_configured = sum(1 for d in doors if getattr(d, 'door_number', None))
+        dev.doors_unconfigured = max(0, dev.doors_total - dev.doors_configured)
+        if mode == 'config':
+            try:
+                from agent.door_provisioning import infer_controller_door_capacity
+
+                dev.doors_capacity = infer_controller_door_capacity(dev)
+            except Exception:
+                dev.doors_capacity = None
+
+    # Also show doors not assigned to any controller (imported/legacy leftovers).
+    try:
+        unassigned_doors = list(Door.objects.filter(device__isnull=True).order_by('name', 'id')[:50])
+    except Exception:
+        unassigned_doors = []
+
+    next_tab = 'doorconfig' if mode == 'config' else 'doors'
+    tpl = 'agent/access_door_configuration_embed.html' if mode == 'config' else 'agent/access_doors_by_device_embed.html'
+    ctx = {
+        'page': page,
+        'can_edit': bool(getattr(request.user, 'is_staff', False)),
+        'unassigned_doors': unassigned_doors,
+        'mode': mode,
+        'next_tab': next_tab,
+        'device_name': device_name,
+        'door_name': door_name,
+    }
+    return render(request, tpl, ctx)
+
+
+def device_doors_auto_assign(request: HttpRequest, device_id: int):
+    """Auto-assign door_number (1..capacity) for doors linked to a device but missing door_number.
+
+    This repairs imported/legacy doors so they appear as proper 1..N doors and can derive readers.
+    """
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'method-not-allowed'}, status=405)
+
+    dev = Device.objects.filter(pk=device_id).first()
+    if dev is None:
+        return JsonResponse({'ok': False, 'error': 'device-not-found'}, status=404)
+
+    try:
+        from agent.door_provisioning import infer_controller_door_capacity
+
+        capacity = int(infer_controller_door_capacity(dev) or 4)
+    except Exception:
+        capacity = 4
+
+    try:
+        existing = set(
+            Door.objects.filter(device=dev)
+            .exclude(door_number__isnull=True)
+            .values_list('door_number', flat=True)
+        )
+    except Exception:
+        existing = set()
+
+    available = [n for n in range(1, max(1, capacity) + 1) if n not in existing]
+    to_fix = list(Door.objects.filter(device=dev, door_number__isnull=True).order_by('id'))
+    if not to_fix:
+        return JsonResponse({'ok': True, 'assigned': 0, 'capacity': capacity, 'remaining': 0})
+
+    assigned_ids: list[int] = []
+    with transaction.atomic():
+        for door, num in zip(to_fix, available):
+            door.door_number = num
+            door.save(update_fields=['door_number'])
+            assigned_ids.append(int(door.id))
+
+    _audit_log(
+        request,
+        module='door',
+        action='auto_assign',
+        entity_id=int(dev.id),
+        entity_name=getattr(dev, 'name', '') or '',
+        details=f'assigned={len(assigned_ids)} capacity={capacity} remaining={max(0, len(to_fix)-len(assigned_ids))}',
+    )
+    return JsonResponse(
+        {
+            'ok': True,
+            'assigned': len(assigned_ids),
+            'capacity': capacity,
+            'door_ids': assigned_ids,
+            'remaining': max(0, len(to_fix) - len(assigned_ids)),
+        }
+    )
+
+
+def device_edit_access(request: HttpRequest, pk: int):
+    """Device edit endpoint that returns HTML (not JSON) for the Access module modal."""
+    if not request.user.is_authenticated or not request.user.is_staff:
+        from django.contrib.auth.views import redirect_to_login
+        return redirect_to_login(request.get_full_path())
+
+    obj = Device.objects.get(pk=pk)
+    # System time zone (used as reference + enforced for reader devices)
+    system_settings = None
+    system_tz = ''
+    system_now_local_str = ''
+    try:
+        from agent.models import SystemSettings
+        from django.utils import timezone
+
+        system_settings = SystemSettings.get_solo()
+        system_tz = (system_settings.time_zone or '').strip()
+        try:
+            system_now_local_str = timezone.localtime(timezone.now()).strftime('%Y-%m-%d %H:%M:%S')
+        except Exception:
+            system_now_local_str = ''
+    except Exception:
+        system_settings = None
+        system_tz = ''
+        system_now_local_str = ''
+
+    if request.method == 'POST':
+        post_data = request.POST
+        # For reader devices (ELATEC/APC), force device TZ to system TZ.
+        try:
+            is_reader = (request.POST.get('scanner_linked') or '').strip().lower() in ('1', 'true', 'yes', 'on')
+            if is_reader and system_tz:
+                post_data = request.POST.copy()
+                post_data['time_zone'] = system_tz
+        except Exception:
+            post_data = request.POST
+
+        form = DeviceExtendedForm(post_data, instance=obj)
+
+        if form.is_valid():
+            saved = form.save()
+            # Safety: enforce system TZ for scanners.
+            try:
+                if getattr(saved, 'scanner_linked', False) and system_tz and (saved.time_zone or '').strip() != system_tz:
+                    saved.time_zone = system_tz
+                    saved.save(update_fields=['time_zone'])
+            except Exception:
+                pass
+            try:
+                from agent.door_provisioning import ensure_controller_doors
+
+                ensure_controller_doors(saved)
+            except Exception:
+                pass
+            _audit_log(
+                request,
+                module='device',
+                action='update',
+                entity_id=saved.id,
+                entity_name=getattr(saved, 'name', '') or '',
+            )
+            return render(request, 'agent/device_access_saved_inner.html', {'obj': saved})
+    else:
+        form = DeviceExtendedForm(instance=obj)
+
+    controller_doors = []
+    try:
+        from agent.door_provisioning import ensure_controller_doors
+
+        ensure_controller_doors(obj)
+        try:
+            from django.db.models import F
+
+            _door_order = [F('door_number').asc(nulls_last=True), 'name']
+        except Exception:
+            _door_order = ['door_number', 'name']
+        controller_doors = list(Door.objects.filter(device=obj).order_by(*_door_order))
+    except Exception:
+        controller_doors = []
+
+    next_tab = (request.GET.get('next_tab') or 'doors').strip().lower()
+    if next_tab not in ('doors', 'doorconfig'):
+        next_tab = 'doors'
+
+    return render(
+        request,
+        'agent/device_access_form_inner.html',
+        {
+            'form': form,
+            'obj': obj,
+            'action_url': request.path,
+            'next_url': f'/agent/menu/access/?tab={next_tab}',
+            'controller_doors': controller_doors,
+            'system_time_zone': system_tz,
+            'system_time_now_local': system_now_local_str,
+            'show_derived_doors': True,
+        },
+    )
+
+
+def device_create_access(request: HttpRequest):
+    """Device create endpoint that returns HTML (not JSON) for legacy-like modals.
+
+    Used by Access-style modal wiring (same behavior as door forms).
+    """
+    if not request.user.is_authenticated or not request.user.is_staff:
+        from django.contrib.auth.views import redirect_to_login
+        return redirect_to_login(request.get_full_path())
+
+    # System time zone (used as reference + enforced for reader devices)
+    system_tz = ''
+    system_now_local_str = ''
+    try:
+        from agent.models import SystemSettings
+        from django.utils import timezone
+
+        system_settings = SystemSettings.get_solo()
+        system_tz = (system_settings.time_zone or '').strip()
+        try:
+            system_now_local_str = timezone.localtime(timezone.now()).strftime('%Y-%m-%d %H:%M:%S')
+        except Exception:
+            system_now_local_str = ''
+    except Exception:
+        system_tz = ''
+        system_now_local_str = ''
+
+    obj = None
+    if request.method == 'POST':
+        post_data = request.POST
+        # For reader devices (ELATEC/APC), force device TZ to system TZ.
+        try:
+            is_reader = (request.POST.get('scanner_linked') or '').strip().lower() in ('1', 'true', 'yes', 'on')
+            if is_reader and system_tz:
+                post_data = request.POST.copy()
+                post_data['time_zone'] = system_tz
+        except Exception:
+            post_data = request.POST
+
+        form = DeviceExtendedForm(post_data)
+        if form.is_valid():
+            saved = form.save()
+            # Safety: enforce system TZ for scanners.
+            try:
+                if getattr(saved, 'scanner_linked', False) and system_tz and (saved.time_zone or '').strip() != system_tz:
+                    saved.time_zone = system_tz
+                    saved.save(update_fields=['time_zone'])
+            except Exception:
+                pass
+            try:
+                from agent.door_provisioning import ensure_controller_doors
+
+                ensure_controller_doors(saved)
+            except Exception:
+                pass
+            _audit_log(
+                request,
+                module='device',
+                action='create',
+                entity_id=saved.id,
+                entity_name=getattr(saved, 'name', '') or '',
+            )
+            return render(request, 'agent/device_access_saved_inner.html', {'obj': saved})
+    else:
+        form = DeviceExtendedForm()
+
+    # In create mode, server-side derived doors list is not available yet.
+    controller_doors = []
+
+    return render(
+        request,
+        'agent/device_access_form_inner.html',
+        {
+            'form': form,
+            'obj': obj,
+            'action_url': request.path,
+            # In a modal, cancel is handled via data-modal-close; next_url is a fallback.
+            'next_url': '/agent/menu/device/?tab=devices',
+            'controller_doors': controller_doors,
+            'system_time_zone': system_tz,
+            'system_time_now_local': system_now_local_str,
+            'show_derived_doors': True,
+        },
+    )
+
+
+def device_operation_access(request: HttpRequest, pk: int, op: str):
+    """Ultra-compact legacy-like device operation modals (Door Configuration -> More...)."""
+    if not request.user.is_authenticated or not request.user.is_staff:
+        from django.contrib.auth.views import redirect_to_login
+        return redirect_to_login(request.get_full_path())
+
+    dev = Device.objects.get(pk=pk)
+    op = (op or '').strip().lower()
+
+    OP_META = {
+        'change-ip': {'title': 'Modify IP address'},
+        'toggle-enabled': {'title': 'Enable / Disable device'},
+        'comm-password': {'title': 'Modify communication password'},
+        'sync-time': {'title': 'Synchronize time', 'command': 'SYNC_TIME'},
+        'get-events': {'title': 'Get events', 'command': 'GET_EVENTS'},
+        'get-personnel': {'title': 'Get information of personnel', 'command': 'GET_PERSONNEL'},
+        'upgrade-firmware': {'title': 'Upgrade firmware'},
+        'disable-dst': {'title': 'Disable daylight saving time', 'command': 'DISABLE_DST'},
+        'fp-ident': {'title': 'Change fingerprint identification', 'command': 'CHANGE_FP_IDENT'},
+    }
+
+    meta = OP_META.get(op)
+    if not meta:
+        return render(request, 'agent/device_operation_form_inner.html', {
+            'dev': dev,
+            'op': op,
+            'title': 'Operation',
+            'error': 'Unknown operation',
+            'command_preview': '',
+        })
+
+    if request.method == 'POST':
+        error = None
+        message = None
+        try:
+            if op == 'change-ip':
+                ip_address = (request.POST.get('ip_address') or '').strip()
+                port = int(request.POST.get('port') or dev.port or 4370)
+                if not ip_address:
+                    raise ValueError('missing-ip')
+                if port < 1 or port > 65535:
+                    raise ValueError('invalid-port')
+                old_ip = dev.ip_address
+                dev.ip_address = ip_address
+                dev.port = port
+                dev.save(update_fields=['ip_address', 'port'])
+                _audit_log(
+                    request,
+                    module='device',
+                    action='update',
+                    entity_id=int(dev.id),
+                    entity_name=getattr(dev, 'name', '') or '',
+                    details=f"change_ip {old_ip} -> {ip_address} port={port}",
+                )
+                # Best-effort legacy sync
+                try:
+                    from legacy_models.models import Device as LegacyDevice  # type: ignore
+                    legacy = LegacyDevice.objects.filter(sn=dev.serial_number or dev.name).first()
+                    if legacy:
+                        legacy.com_address = ip_address
+                        legacy.save(update_fields=['com_address'])
+                except Exception:
+                    pass
+                message = f"IP updated to {ip_address}:{port}"
+
+            elif op == 'toggle-enabled':
+                enabled_val = (request.POST.get('enabled') or '').strip()
+                dev.enabled = bool(enabled_val in ('1', 'true', 'yes', 'on'))
+                dev.save(update_fields=['enabled'])
+                _audit_log(
+                    request,
+                    module='device',
+                    action='toggle_enabled',
+                    entity_id=int(dev.id),
+                    entity_name=getattr(dev, 'name', '') or '',
+                    details=f"enabled={bool(dev.enabled)}",
+                )
+                message = 'Device enabled.' if dev.enabled else 'Device disabled.'
+
+            elif op == 'comm-password':
+                comm_password = (request.POST.get('comm_password') or '').strip()
+                dev.comm_password = comm_password
+                dev.save(update_fields=['comm_password'])
+                _audit_log(
+                    request,
+                    module='device',
+                    action='update',
+                    entity_id=int(dev.id),
+                    entity_name=getattr(dev, 'name', '') or '',
+                    details='comm_password updated',
+                )
+                message = 'Communication password saved.'
+
+            elif op == 'upgrade-firmware':
+                fw = (request.POST.get('firmware') or '').strip()
+                cmd = 'UPGRADE_FIRMWARE'
+                if fw:
+                    cmd = f"UPGRADE_FIRMWARE:{fw}"[:240]
+                log = CommandLog.objects.create(device=dev, command=cmd, status='PENDING')
+                _broadcast_command(log)
+                _audit_log(
+                    request,
+                    module='command',
+                    action='create',
+                    entity_id=int(log.id),
+                    entity_name=cmd,
+                    details=f"device_id={dev.id}",
+                )
+                message = 'Firmware upgrade command queued.'
+
+            else:
+                cmd = (meta.get('command') or '').strip()
+                if not cmd:
+                    raise ValueError('missing-command')
+                # Legacy behavior: sync time uses the system time zone + system time.
+                # We encode the timestamp into the command so CommCenter can apply it.
+                if cmd == 'SYNC_TIME':
+                    try:
+                        from django.utils import timezone as _tz
+                        from zoneinfo import ZoneInfo
+
+                        now_utc = _tz.now().astimezone(_tz.utc)
+                        tz_name = (getattr(dev, 'time_zone', '') or '').strip()
+                        if tz_name:
+                            now_local = now_utc.astimezone(ZoneInfo(tz_name))
+                        else:
+                            now_local = _tz.localtime(now_utc)
+                        cmd = f"SYNC_TIME:{now_local.strftime('%Y-%m-%d %H:%M:%S')}"
+                    except Exception:
+                        cmd = 'SYNC_TIME'
+                log = CommandLog.objects.create(device=dev, command=cmd[:240], status='PENDING')
+                _broadcast_command(log)
+                _audit_log(
+                    request,
+                    module='command',
+                    action='create',
+                    entity_id=int(log.id),
+                    entity_name=(cmd or '')[:120],
+                    details=f"device_id={dev.id}",
+                )
+                message = f"Command queued: {cmd}"
+        except Exception as ex:
+            error = str(ex)
+
+        if error:
+            return render(request, 'agent/device_operation_form_inner.html', {
+                'dev': dev,
+                'op': op,
+                'title': meta.get('title') or 'Operation',
+                'error': error,
+                'command_preview': (meta.get('command') or ''),
+            })
+
+        return render(request, 'agent/device_operation_saved_inner.html', {
+            'message': message or 'OK',
+        })
+
+    return render(request, 'agent/device_operation_form_inner.html', {
+        'dev': dev,
+        'op': op,
+        'title': meta.get('title') or 'Operation',
+        'error': None,
+        'command_preview': (meta.get('command') or ''),
+    })
 
 def door_create(request: HttpRequest):
     if not request.user.is_authenticated or not request.user.is_staff:
@@ -2604,6 +4432,92 @@ def door_delete(request: HttpRequest, pk: int):
         return JsonResponse({'ok': True})
     except Exception as e:
         return JsonResponse({'ok': False, 'error': str(e)}, status=400)
+
+
+def door_first_card_settings(request: HttpRequest, pk: int):
+    """First-Card Normal Open settings (legacy-like) for a single door."""
+    if not request.user.is_authenticated or not request.user.is_staff:
+        from django.contrib.auth.views import redirect_to_login
+        return redirect_to_login(request.get_full_path())
+
+    door = Door.objects.select_related('device').filter(pk=pk).first()
+    if door is None:
+        return HttpResponse('Door not found', status=404)
+
+    msg = ''
+    edit_id = (request.GET.get('rule') or '').strip()
+    edit_rule = DoorFirstCardRule.objects.filter(pk=edit_id, door=door).first() if edit_id else None
+
+    if request.method == 'POST':
+        action = (request.POST.get('_action') or '').strip().lower()
+        rid = (request.POST.get('rule_id') or '').strip()
+        if action == 'delete' and rid:
+            try:
+                DoorFirstCardRule.objects.filter(pk=rid, door=door).delete()
+                msg = 'Deleted.'
+            except Exception as e:
+                msg = f'Error: {e}'
+            edit_rule = None
+        else:
+            inst = DoorFirstCardRule.objects.filter(pk=rid, door=door).first() if rid else DoorFirstCardRule(door=door)
+            form = DoorFirstCardRuleForm(request.POST, instance=inst)
+            if form.is_valid():
+                saved = form.save(commit=False)
+                saved.door = door
+                saved.save()
+                form.save_m2m()
+                msg = 'Saved.'
+                edit_rule = None
+            else:
+                rules = list(DoorFirstCardRule.objects.filter(door=door).select_related('time_segment').prefetch_related('employees').order_by('-created_at'))
+                return render(request, 'agent/door_first_card_modal.html', {'door': door, 'rules': rules, 'form': form, 'msg': msg, 'edit_rule': inst})
+
+    rules = list(DoorFirstCardRule.objects.filter(door=door).select_related('time_segment').prefetch_related('employees').order_by('-created_at'))
+    form = DoorFirstCardRuleForm(instance=edit_rule)
+    return render(request, 'agent/door_first_card_modal.html', {'door': door, 'rules': rules, 'form': form, 'msg': msg, 'edit_rule': edit_rule})
+
+
+def door_multi_card_settings(request: HttpRequest, pk: int):
+    """Multi-Card Open settings (legacy-like) for a single door."""
+    if not request.user.is_authenticated or not request.user.is_staff:
+        from django.contrib.auth.views import redirect_to_login
+        return redirect_to_login(request.get_full_path())
+
+    door = Door.objects.select_related('device').filter(pk=pk).first()
+    if door is None:
+        return HttpResponse('Door not found', status=404)
+
+    msg = ''
+    edit_id = (request.GET.get('rule') or '').strip()
+    edit_rule = DoorMultiCardRule.objects.filter(pk=edit_id, door=door).first() if edit_id else None
+
+    if request.method == 'POST':
+        action = (request.POST.get('_action') or '').strip().lower()
+        rid = (request.POST.get('rule_id') or '').strip()
+        if action == 'delete' and rid:
+            try:
+                DoorMultiCardRule.objects.filter(pk=rid, door=door).delete()
+                msg = 'Deleted.'
+            except Exception as e:
+                msg = f'Error: {e}'
+            edit_rule = None
+        else:
+            inst = DoorMultiCardRule.objects.filter(pk=rid, door=door).first() if rid else DoorMultiCardRule(door=door)
+            form = DoorMultiCardRuleForm(request.POST, instance=inst)
+            if form.is_valid():
+                saved = form.save(commit=False)
+                saved.door = door
+                saved.save()
+                form.save_m2m()
+                msg = 'Saved.'
+                edit_rule = None
+            else:
+                rules = list(DoorMultiCardRule.objects.filter(door=door).prefetch_related('employees').order_by('-created_at'))
+                return render(request, 'agent/door_multi_card_modal.html', {'door': door, 'rules': rules, 'form': form, 'msg': msg, 'edit_rule': inst})
+
+    rules = list(DoorMultiCardRule.objects.filter(door=door).prefetch_related('employees').order_by('-created_at'))
+    form = DoorMultiCardRuleForm(instance=edit_rule)
+    return render(request, 'agent/door_multi_card_modal.html', {'door': door, 'rules': rules, 'form': form, 'msg': msg, 'edit_rule': edit_rule})
 
 def segments_list(request: HttpRequest):
     if not request.user.is_authenticated:
@@ -2768,6 +4682,207 @@ def access_levels_list(request: HttpRequest):
     qs = AccessLevel.objects.order_by('name')
     page = _paginate(qs, request)
     return render(request, 'agent/access_levels_embed.html', {'page': page, 'can_edit': bool(getattr(request.user, 'is_staff', False))})
+
+
+def access_levels_personnel_embed(request: HttpRequest):
+    """ACCES -> Nivel Acces personal (legacy-like, ultra-compact).
+
+    Shows access levels on the left and assigned personnel on the right.
+    Used ONLY in embedded Access module (menu_access_inner.html) via ?embed=1.
+    """
+    if not request.user.is_authenticated:
+        from django.contrib.auth.views import redirect_to_login
+        return redirect_to_login(request.get_full_path())
+
+    is_embed = (request.GET.get('embed') == '1')
+    if not is_embed:
+        from django.shortcuts import redirect
+        return redirect('/agent/menu/access/?tab=personal_levels')
+
+    can_edit = bool(getattr(request.user, 'is_staff', False))
+
+    q = (request.GET.get('q') or '').strip()
+    level_id = (request.GET.get('level_id') or '').strip()
+
+    levels_qs = AccessLevel.objects.order_by('name')
+    try:
+        from django.db.models import Count
+
+        levels_qs = levels_qs.annotate(emp_count=Count('employee'))
+    except Exception:
+        pass
+    if q:
+        try:
+            from django.db.models import Q
+            levels_qs = levels_qs.filter(Q(name__icontains=q) | Q(description__icontains=q))
+        except Exception:
+            levels_qs = levels_qs.filter(name__icontains=q)
+
+    levels = list(levels_qs)
+    selected_level = None
+    if level_id:
+        try:
+            selected_level = AccessLevel.objects.filter(pk=int(level_id)).first()
+        except Exception:
+            selected_level = None
+    if selected_level is None and levels:
+        selected_level = levels[0]
+
+    assigned = []
+    if selected_level is not None:
+        try:
+            assigned = list(
+                Employee.objects.filter(access_levels=selected_level)
+                .order_by('last_name', 'first_name')
+                .only('id', 'first_name', 'last_name', 'card_number', 'legacy_userid')
+            )
+        except Exception:
+            assigned = []
+
+    return render(
+        request,
+        'agent/access_levels_personnel_embed.html',
+        {
+            'levels': levels,
+            'selected_level': selected_level,
+            'assigned': assigned,
+            'can_edit': can_edit,
+            'q': q,
+        },
+    )
+
+
+def access_levels_personnel_add(request: HttpRequest, level_id: int):
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'method-not-allowed'}, status=405)
+
+    level = AccessLevel.objects.filter(pk=level_id).first()
+    if level is None:
+        return JsonResponse({'ok': False, 'error': 'level-not-found'}, status=404)
+
+    emp_id_raw = (request.POST.get('employee_id') or '').strip()
+    if not emp_id_raw:
+        return JsonResponse({'ok': False, 'error': 'validation', 'message': 'employee_id required'}, status=400)
+    try:
+        emp_id = int(emp_id_raw)
+    except Exception:
+        return JsonResponse({'ok': False, 'error': 'validation', 'message': 'employee_id invalid'}, status=400)
+
+    emp = Employee.objects.filter(pk=emp_id).first()
+    if emp is None:
+        return JsonResponse({'ok': False, 'error': 'employee-not-found'}, status=404)
+
+    try:
+        emp.access_levels.add(level)
+    except Exception as ex:
+        return JsonResponse({'ok': False, 'error': str(ex)}, status=400)
+
+    try:
+        _audit_log(
+            request,
+            module='access-level-personnel',
+            action='add',
+            entity_id=int(level.id),
+            entity_name=getattr(level, 'name', '') or '',
+            details=f"employee_id={emp.id} card={getattr(emp, 'card_number', '')}",
+        )
+    except Exception:
+        pass
+
+    return JsonResponse({'ok': True})
+
+
+def access_levels_personnel_remove(request: HttpRequest, level_id: int):
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'method-not-allowed'}, status=405)
+
+    level = AccessLevel.objects.filter(pk=level_id).first()
+    if level is None:
+        return JsonResponse({'ok': False, 'error': 'level-not-found'}, status=404)
+
+    emp_ids_raw = request.POST.getlist('employee_ids')
+    emp_ids: list[int] = []
+    for v in emp_ids_raw:
+        try:
+            emp_ids.append(int(v))
+        except Exception:
+            continue
+    emp_ids = [i for i in emp_ids if i > 0]
+    if not emp_ids:
+        return JsonResponse({'ok': False, 'error': 'validation', 'message': 'No employee_ids provided'}, status=400)
+
+    try:
+        qs = Employee.objects.filter(pk__in=emp_ids)
+        removed = 0
+        for emp in qs:
+            try:
+                emp.access_levels.remove(level)
+                removed += 1
+            except Exception:
+                pass
+    except Exception as ex:
+        return JsonResponse({'ok': False, 'error': str(ex)}, status=400)
+
+    try:
+        _audit_log(
+            request,
+            module='access-level-personnel',
+            action='remove',
+            entity_id=int(level.id),
+            entity_name=getattr(level, 'name', '') or '',
+            details=f"removed={removed}",
+        )
+    except Exception:
+        pass
+
+    return JsonResponse({'ok': True, 'removed': removed})
+
+
+def employees_search_json(request: HttpRequest):
+    """Small JSON endpoint used by ACCES -> Nivel Acces personal for quick searches."""
+    if not request.user.is_authenticated:
+        return JsonResponse({'items': []}, status=403)
+
+    q = (request.GET.get('q') or '').strip()
+    limit_raw = (request.GET.get('limit') or '').strip()
+    try:
+        limit = max(1, min(50, int(limit_raw or 25)))
+    except Exception:
+        limit = 25
+
+    qs = Employee.objects.order_by('last_name', 'first_name')
+    if q:
+        try:
+            from django.db.models import Q
+            qs = qs.filter(
+                Q(first_name__icontains=q)
+                | Q(last_name__icontains=q)
+                | Q(card_number__icontains=q)
+                | Q(secondary_card_number__icontains=q)
+            )
+        except Exception:
+            qs = qs.filter(last_name__icontains=q)
+
+    items = []
+    try:
+        for e in qs.only('id', 'first_name', 'last_name', 'card_number', 'legacy_userid')[:limit]:
+            name = f"{getattr(e, 'last_name', '')} {getattr(e, 'first_name', '')}".strip()
+            card = getattr(e, 'card_number', '') or ''
+            legacy_uid = getattr(e, 'legacy_userid', None)
+            label = name
+            if card:
+                label = f"{label} — {card}" if label else card
+            if legacy_uid is not None:
+                label = f"{label} (ID:{legacy_uid})" if label else f"ID:{legacy_uid}"
+            items.append({'id': int(e.id), 'label': label, 'card_number': card})
+    except Exception as ex:
+        return JsonResponse({'items': [], 'error': str(ex)}, status=500)
+
+    return JsonResponse({'items': items})
 
 # ================= Additional Legacy CRUD Modules =================
 
@@ -3834,7 +5949,13 @@ def access_evaluate_and_open(request: HttpRequest):
                 door = None
         elif device_id and door_id:
             try:
-                door = Door.objects.filter(device_id=int(device_id), name__iexact=str(door_id)).first()
+                door_id_s = str(door_id)
+                if door_id_s.isdigit():
+                    door = Door.objects.filter(device_id=int(device_id), door_number=int(door_id_s)).first()
+                    if door is None:
+                        door = Door.objects.filter(device_id=int(device_id), name__iexact=door_id_s).first()
+                else:
+                    door = Door.objects.filter(device_id=int(device_id), name__iexact=door_id_s).first()
             except Exception:
                 door = None
 
@@ -4409,6 +6530,9 @@ def access_logs_view_module(request: HttpRequest):
         elif module in ('access', 'acces'):
             # CONTROL ACCES tabs: doors + access configuration entities
             qs = qs.filter(module__in=['door', 'access-level', 'time-segment', 'holiday'])
+        elif module in ('system', 'sistem'):
+            # SYSTEM tabs: users + groups + timezone presets
+            qs = qs.filter(module__in=['system-user', 'system-group', 'system-tz'])
         elif module in ('reports', 'rapoarte'):
             # Report-backed audit sources (best-effort)
             qs = qs.filter(module__in=['accesslog'])
@@ -4951,25 +7075,33 @@ def _persist_and_broadcast_status(device_id: int, door_state: str, online: bool 
 def door_open(request: HttpRequest, device_id: int, door_id: str):
     if not request.user.is_authenticated or not request.user.is_staff:
         return JsonResponse({"ok": False, "error": "unauthorized"}, status=403)
-    ok = _enqueue(device_id, f"DOOR_OPEN:{door_id}")
+    door_obj = None
+    try:
+        if str(door_id).isdigit():
+            door_obj = Door.objects.filter(pk=int(door_id)).first()
+            if door_obj is None:
+                door_obj = Door.objects.filter(device_id=int(device_id), door_number=int(door_id)).first()
+    except Exception:
+        door_obj = None
+    cmd_door_arg = str(getattr(door_obj, 'door_number', None) or door_id)
+    ok = _enqueue(device_id, f"DOOR_OPEN:{cmd_door_arg}", door=door_obj)
     if not ok:
         return JsonResponse({"ok": False, "error": "device_unavailable"}, status=409)
     # Update door.is_open state in database
     try:
-        door = Door.objects.get(id=door_id)
-        door.is_open = True
-        door.save(update_fields=['is_open', 'last_state_change'])
-        _set_lock_state(door.id, None)
-    except Door.DoesNotExist:
+        if door_obj is not None:
+            door_obj.is_open = True
+            door_obj.save(update_fields=['is_open', 'last_state_change'])
+            _set_lock_state(door_obj.id, None)
+    except Exception:
         pass
     _persist_and_broadcast_status(device_id, "OPEN")
     try:
         import json as _json
         from .event_codes import describe_door_event_type as _door_desc
-        door_obj = Door.objects.filter(id=door_id).select_related('device').first()
         dev = getattr(door_obj, 'device', None) if door_obj else None
         details = _json.dumps({
-            'door_id': int(door_id) if str(door_id).isdigit() else door_id,
+            'door_id': int(getattr(door_obj, 'id', 0) or 0) if door_obj else (int(door_id) if str(door_id).isdigit() else door_id),
             'door_name': getattr(door_obj, 'name', '') if door_obj else '',
             'device_id': device_id,
             'device_name': getattr(dev, 'name', '') if dev else '',
@@ -4994,25 +7126,33 @@ def door_open(request: HttpRequest, device_id: int, door_id: str):
 def door_close(request: HttpRequest, device_id: int, door_id: str):
     if not request.user.is_authenticated or not request.user.is_staff:
         return JsonResponse({"ok": False, "error": "unauthorized"}, status=403)
-    ok = _enqueue(device_id, f"DOOR_CLOSE:{door_id}")
+    door_obj = None
+    try:
+        if str(door_id).isdigit():
+            door_obj = Door.objects.filter(pk=int(door_id)).first()
+            if door_obj is None:
+                door_obj = Door.objects.filter(device_id=int(device_id), door_number=int(door_id)).first()
+    except Exception:
+        door_obj = None
+    cmd_door_arg = str(getattr(door_obj, 'door_number', None) or door_id)
+    ok = _enqueue(device_id, f"DOOR_CLOSE:{cmd_door_arg}", door=door_obj)
     if not ok:
         return JsonResponse({"ok": False, "error": "device_unavailable"}, status=409)
     # Update door.is_open state in database
     try:
-        door = Door.objects.get(id=door_id)
-        door.is_open = False
-        door.save(update_fields=['is_open', 'last_state_change'])
-        _set_lock_state(door.id, None)
-    except Door.DoesNotExist:
+        if door_obj is not None:
+            door_obj.is_open = False
+            door_obj.save(update_fields=['is_open', 'last_state_change'])
+            _set_lock_state(door_obj.id, None)
+    except Exception:
         pass
     _persist_and_broadcast_status(device_id, "CLOSED")
     try:
         import json as _json
         from .event_codes import describe_door_event_type as _door_desc
-        door_obj = Door.objects.filter(id=door_id).select_related('device').first()
         dev = getattr(door_obj, 'device', None) if door_obj else None
         details = _json.dumps({
-            'door_id': int(door_id) if str(door_id).isdigit() else door_id,
+            'door_id': int(getattr(door_obj, 'id', 0) or 0) if door_obj else (int(door_id) if str(door_id).isdigit() else door_id),
             'door_name': getattr(door_obj, 'name', '') if door_obj else '',
             'device_id': device_id,
             'device_name': getattr(dev, 'name', '') if dev else '',
@@ -5037,18 +7177,32 @@ def door_close(request: HttpRequest, device_id: int, door_id: str):
 def door_normal_open(request: HttpRequest, device_id: int, door_id: str):
     if not request.user.is_authenticated or not request.user.is_staff:
         return JsonResponse({"ok": False, "error": "unauthorized"}, status=403)
-    ok = _enqueue(device_id, f"DOOR_NORMAL_OPEN:{door_id}")
+    door_obj = None
+    try:
+        if str(door_id).isdigit():
+            door_obj = Door.objects.filter(pk=int(door_id)).first()
+            if door_obj is None:
+                door_obj = Door.objects.filter(device_id=int(device_id), door_number=int(door_id)).first()
+    except Exception:
+        door_obj = None
+    cmd_door_arg = str(getattr(door_obj, 'door_number', None) or door_id)
+    ok = _enqueue(device_id, f"DOOR_NORMAL_OPEN:{cmd_door_arg}", door=door_obj)
     if not ok:
         return JsonResponse({"ok": False, "error": "device_unavailable"}, status=409)
-    _set_lock_state(door_id, None)
+    try:
+        if door_obj is not None:
+            _set_lock_state(door_obj.id, None)
+        else:
+            _set_lock_state(door_id, None)
+    except Exception:
+        pass
     _persist_and_broadcast_status(device_id, "NORMAL_OPEN")
     try:
         import json as _json
         from .event_codes import describe_door_event_type as _door_desc
-        door_obj = Door.objects.filter(id=door_id).select_related('device').first()
         dev = getattr(door_obj, 'device', None) if door_obj else None
         details = _json.dumps({
-            'door_id': int(door_id) if str(door_id).isdigit() else door_id,
+            'door_id': int(getattr(door_obj, 'id', 0) or 0) if door_obj else (int(door_id) if str(door_id).isdigit() else door_id),
             'door_name': getattr(door_obj, 'name', '') if door_obj else '',
             'device_id': device_id,
             'device_name': getattr(dev, 'name', '') if dev else '',
@@ -5872,13 +8026,14 @@ def csv_export(request: HttpRequest, module: str):
     w = csv.writer(buf, delimiter=';')
 
     if mod in ('door', 'doors'):
-        w.writerow(['id', 'name', 'device_serial', 'device_name', 'location', 'normally_open', 'enabled'])
-        for d in Door.objects.select_related('device').order_by('name'):
+        w.writerow(['id', 'name', 'device_serial', 'device_name', 'door_number', 'location', 'normally_open', 'enabled'])
+        for d in Door.objects.select_related('device').order_by('device__ip_address', 'device__name', 'door_number', 'name'):
             w.writerow([
                 d.id,
                 d.name,
                 getattr(d.device, 'serial_number', '') if d.device_id else '',
                 getattr(d.device, 'name', '') if d.device_id else '',
+                getattr(d, 'door_number', '') or '',
                 d.location or '',
                 int(bool(d.normally_open)),
                 int(bool(d.enabled)),
@@ -6097,6 +8252,10 @@ def csv_import(request: HttpRequest, module: str):
                 if not name:
                     _fail(i, 'missing-name');
                     continue
+                door_number = _parse_int(r.get('door_number'))
+                if door_number is not None and door_number not in (1, 2, 3, 4):
+                    _fail(i, 'invalid-door_number (allowed: 1..4)')
+                    continue
                 pk = _parse_int(r.get('id'))
                 obj = Door.objects.filter(pk=pk).first() if pk else Door.objects.filter(name=name).first()
                 is_new = obj is None
@@ -6115,6 +8274,7 @@ def csv_import(request: HttpRequest, module: str):
                 if dev is None and dev_name:
                     dev = Device.objects.filter(name=dev_name).first()
                 obj.device = dev
+                obj.door_number = door_number
                 obj.save()
                 if is_new:
                     created += 1
@@ -6438,7 +8598,14 @@ def csv_import(request: HttpRequest, module: str):
                 obj.rs485_baudrate = _parse_int(r.get('rs485_baudrate'), obj.rs485_baudrate or 9600) or (obj.rs485_baudrate or 9600)
                 obj.rs485_address = _parse_int(r.get('rs485_address'), obj.rs485_address)
                 obj.area_name = (r.get('area_name') or obj.area_name or '').strip()
-                obj.time_zone = (r.get('time_zone') or obj.time_zone or '').strip()
+                # Universal policy: ignore imported device TZ; inherit system.
+                try:
+                    from agent.models import SystemSettings
+
+                    tz_name = (SystemSettings.get_solo().time_zone or '').strip()
+                    obj.time_zone = tz_name or (obj.time_zone or '').strip()
+                except Exception:
+                    obj.time_zone = (obj.time_zone or '').strip()
                 obj.save()
 
                 if is_new:

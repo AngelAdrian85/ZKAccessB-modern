@@ -13,16 +13,21 @@
   .embed-device-wrap .compact-table th:last-child { border-right:none; }
   .embed-device-wrap .compact-table td { padding:2px 4px; border-right:1px solid rgba(61,106,139,0.80); border-bottom:1px solid rgba(61,106,139,0.60); color:#e8f1f8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .embed-device-wrap .compact-table td:last-child { border-right:none; }
+  /* Parent page applies tbody tr borders inside .table-shell; remove them for this embedded table. */
+  .embed-device-wrap .compact-table tbody tr { border-bottom: none !important; }
+  /* Fix: avoid stray separator lines next to Edit/Șterge (actions column only) */
+  .embed-device-wrap .compact-table td.actions { border-bottom: none !important; }
   .embed-device-wrap .compact-table tbody tr:nth-child(even) { background:#0f2433; }
   .embed-device-wrap .compact-table tbody tr:hover { background:#1e4a6b; }
   .type-controller { background: rgba(50,255,126,0.15); color:#8ef3b7; border:1px solid rgba(50,255,126,0.45); padding:2px 6px; border-radius:10px; font-size:10px; margin-left:6px; }
   .type-reader { background: rgba(160,32,240,0.15); color:#d0a2ff; border:1px solid rgba(160,32,240,0.45); padding:2px 6px; border-radius:10px; font-size:10px; margin-left:6px; }
+  .door-count { background: rgba(61,165,217,0.18); color:#cfe9ff; border:1px solid rgba(61,165,217,0.45); padding:2px 6px; border-radius:10px; font-size:10px; margin-left:6px; font-weight:800; }
   .status { padding:3px 8px; border-radius:10px; font-weight:700; font-size:10px; }
   .status.on { background:#2da44e; color:#fff; }
   .status.off { background:#d97e4a; color:#fff; }
-  .actions { display:flex; gap:4px; align-items:center; }
-  .action-link { color:#3da5d9; text-decoration:none; font-size:9px; padding:2px 4px; border-radius:2px; transition: all 0.2s; border: 1px solid transparent; }
-  .action-link:hover { background:#3da5d9; color:#fff; border-color: rgba(255,255,255,0.12); }
+  .actions { display:flex; gap:6px; align-items:center; justify-content:center; }
+  .action-link { color:#3da5d9; text-decoration:none; font-size:9px; padding:2px 4px; border-radius:2px; transition: all 0.2s; border:none; outline:none; }
+  .action-link:hover { background:#3da5d9; color:#fff; }
   .action-link.delete { color:#d94a3d; }
   .action-link.delete:hover { background:#d94a3d; color:#fff; }
 </style>
@@ -91,7 +96,15 @@
         {% for device in page.object_list %}
         <tr>
           <td><strong>#{{ device.id }}</strong></td>
-          <td><strong>{{ device.name }}</strong>{% if device.scanner_linked %}<span class="type-reader">Reader</span>{% elif device.device_type %}<span class="type-controller">{{ device.device_type }}</span>{% endif %}</td>
+          <td>
+            <strong>{{ device.name }}</strong>
+            {% if device.is_controller %}
+              <span class="type-controller">Centrală</span>
+              <span class="door-count" title="Număr uși (în timp real)">{{ device.prefetched_doors|length }} uși</span>
+            {% elif device.is_reader or device.device_type == 'biometric_reader' %}
+              <span class="type-reader">Cititor</span>
+            {% endif %}
+          </td>
           <td>{{ device.serial_number|default:"—" }}</td>
           <td>{{ device.ip_address|default:"—" }}</td>
           <td>{{ device.port|default:"4370" }}</td>
@@ -101,7 +114,7 @@
           <td>{% if device.latest_online %}<span class="status on">ONLINE</span>{% else %}<span class="status off">OFFLINE</span>{% endif %}</td>
           <td>{% if device.latest_updated_at %}<small class="ts" data-ts="{{ device.latest_updated_at|date:'c' }}">{{ device.latest_updated_at|date:"d.m H:i" }}</small>{% elif device.last_contact %}<small class="ts" data-ts="{{ device.last_contact|date:'c' }}">{{ device.last_contact|date:"d.m H:i" }}</small>{% else %}<small>—</small>{% endif %}</td>
           <td class="actions">
-            <a href="{% url 'crud-device-edit' device.id %}?next={{ request.get_full_path|urlencode }}" target="_blank" class="action-link" title="Editează dispozitivul" onclick="if(window.openDeviceModal){ openDeviceModal(this.href, '✏️ Editează Dispozitiv #{{ device.id }}'); return false; }">Edit</a>
+            <a href="{% url 'crud-device-edit-access' device.id %}" class="action-link" title="Editează dispozitivul" onclick="if(window.openDeviceModal){ openDeviceModal(this.href, '✏️ Editează Dispozitiv #{{ device.id }}'); return false; }">Edit</a>
             <a href="#" class="action-link delete" title="Șterge dispozitivul" onclick="deleteEmbeddedDevice({{ device.id }}); return false;">Șterge</a>
           </td>
         </tr>

@@ -1,5 +1,5 @@
 {% load static %}
-<!DOCTYPE html><html lang="en">
+<!DOCTYPE html><html lang="{{ request.ui_lang|default:'ro' }}">
 <head>
   <meta charset="utf-8" />
   <title>{% block title %}Access Control{% endblock %}</title>
@@ -480,6 +480,7 @@
     <div class="nav-section">
       <h2 data-href="/agent/menu/access/" role="link" tabindex="0">Acces</h2>
       <a href="/agent/menu/access/?tab=doors" data-tip="Configurare uși (modal)">Uși</a>
+      <a href="/agent/menu/access/?tab=doorconfig" data-tip="Configurare uși: alocare numere + modale centrală/ușă (ca în vechi)">Configurare uși</a>
       <a href="/agent/menu/access/?tab=segments" data-tip="Intervale orare pentru permisiuni (modal)">Intervale orare</a>
       <a href="/agent/menu/access/?tab=holidays" data-tip="Zile libere / sărbători pentru excepții (modal)">Sărbători</a>
       <a href="/agent/menu/access/?tab=levels" data-tip="Niveluri de acces și asignare (modal)">Niveluri acces</a>
@@ -495,7 +496,7 @@
     <div class="nav-section">
       <h2>Admin</h2>
       <a href="/admin/" data-tip="Interfața completă de administrare Django">Django Admin</a>
-      <a href="#" data-tip="Opțiuni sistem (în curs de migrare)">System Options</a>
+      <a href="/agent/menu/system/" data-tip="Administrare sistem: utilizatori, grupuri, fus orar, loguri">Administrare sistem</a>
     </div>
   </aside>
   <div class="content">

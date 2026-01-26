@@ -1,0 +1,285 @@
+<div class="access-pane" data-tab="doorconfig">
+  <style>
+    .dc-table{width:100%;border-collapse:collapse;font-size:10px;background:#163247;color:#e8f0f8;table-layout:fixed;}
+    .dc-table thead{background:linear-gradient(to bottom,#3da5d9 0%,#2d7ba5 100%);color:#fff;}
+    .dc-table th,.dc-table td{padding:4px 6px;border-bottom:1px solid rgba(61,106,139,0.65);border-right:1px solid rgba(61,106,139,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:top;}
+    .dc-table th:last-child,.dc-table td:last-child{border-right:none;}
+    .dc-table tbody tr:nth-child(even){background:#0f2433;}
+    .dc-table tbody tr:hover{background:#1e4a6b;}
+
+    .dc-actions{display:flex;gap:6px;align-items:center;}
+    .dc-link{color:#9fd2f1;text-decoration:none;font-weight:800;border:1px solid rgba(61,165,217,0.35);background:rgba(61,165,217,0.12);padding:2px 6px;border-radius:2px;}
+    .dc-link:hover{background:rgba(61,165,217,0.22);}
+
+    .dc-search{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+    .dc-search label{color:#cfe9f8;font-size:10px;font-weight:800;}
+    .dc-search input{background:#0f2433;border:1px solid #3d6a8b;color:#e8f0f8;border-radius:2px;padding:3px 6px;font-size:10px;min-width:220px;}
+
+    .dc-detail{padding:6px;background:#0f2433;border:1px solid rgba(61,106,139,0.55);border-radius:2px;}
+    .dc-subtable{width:100%;border-collapse:collapse;font-size:10px;background:#0a1a27;color:#e8f0f8;}
+    .dc-subtable th,.dc-subtable td{padding:3px 5px;border-bottom:1px solid rgba(61,106,139,0.45);border-right:1px solid rgba(61,106,139,0.35);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .dc-subtable th:last-child,.dc-subtable td:last-child{border-right:none;}
+
+    .pill{display:inline-block;padding:1px 6px;border-radius:999px;font-size:10px;font-weight:900;background:rgba(61,165,217,0.20);border:1px solid rgba(61,165,217,0.35);color:#e8f1f8;}
+    .pill.bad{background:rgba(255,107,107,0.14);border-color:rgba(255,107,107,0.35);}
+
+    .dc-op{padding:2px 6px;border-radius:2px;border:1px solid rgba(61,106,139,0.85);background:#163247;color:#e8f0f8;font-size:9px;font-weight:800;cursor:pointer;}
+    .dc-op:hover{background:#1e4a6b;}
+    .dc-op.warn{border-color:rgba(217,126,74,0.8);}
+
+    /* More... dropdown */
+    .dc-more{position:relative;display:inline-block;}
+    .dc-more-menu{display:none;position:absolute;right:0;top:100%;margin-top:4px;min-width:230px;background:#0f2433;border:1px solid #3d6a8b;border-radius:2px;box-shadow:0 12px 26px rgba(0,0,0,0.45);z-index:20;padding:4px;}
+    .dc-more-item{display:block;width:100%;text-align:left;padding:4px 6px;border:1px solid rgba(61,106,139,0.55);background:#163247;color:#e8f0f8;border-radius:2px;font-size:9px;font-weight:800;cursor:pointer;}
+    .dc-more-item:hover{background:#1e4a6b;}
+  </style>
+
+  <div class="action-bar">
+    <div class="action-left">
+      <span class="access-badge">Door Configuration</span>
+      <span class="hint">Ca în aplicația veche: centrală → extinde → configurare ușă + First-Card + Multi-Card.</span>
+    </div>
+    <div class="action-right">
+      <button class="btn-secondary btn-small" type="button" data-access-ui="reload" title="Reîncarcă">🔄 Reîncarcă</button>
+      <button class="btn-secondary btn-small" type="button" data-access-ui="export" data-access-module="door" data-access-title="Door Configuration" title="Exportă CSV">📥 Export</button>
+      <button class="btn-secondary btn-small" type="button" data-access-ui="import" data-access-module="door" data-access-title="Door Configuration" title="Importă CSV">📤 Import</button>
+      <button class="btn-secondary btn-small" type="button" data-access-ui="logs" data-access-module="door" data-access-title="Door Configuration" title="Loguri">📋 Loguri</button>
+    </div>
+  </div>
+
+  <div class="action-bar" style="margin-top:6px;">
+    <div class="dc-search">
+      <label>Device Name:</label>
+      <input id="dcDeviceName" type="text" value="{{ device_name|default:'' }}" />
+      <label>Door Name:</label>
+      <input id="dcDoorName" type="text" value="{{ door_name|default:'' }}" />
+      <a id="dcSearchLink" class="btn-secondary btn-small" data-access-page="1" href="{{ request.path }}?embed=1&mode=config">Search</a>
+      <a id="dcClearLink" class="btn-secondary btn-small" data-access-page="1" href="{{ request.path }}?embed=1&mode=config">Clear</a>
+    </div>
+    <div class="hint">Tip: folosește Search (nu Enter) ca să rămâi în tab.</div>
+  </div>
+
+  <div class="table-shell">
+    <table class="dc-table" aria-label="Door Configuration">
+      <colgroup>
+        <col style="width:60px;" />
+        <col style="width:34px;" />
+        <col style="width:240px;" />
+        <col style="width:110px;" />
+        <col style="width:130px;" />
+        <col style="width:60px;" />
+        <col style="width:140px;" />
+        <col style="width:120px;" />
+        <col style="width:240px;" />
+      </colgroup>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th></th>
+          <th>Device Name</th>
+          <th>Communication Mode</th>
+          <th>IP Address</th>
+          <th>Enable</th>
+          <th>Device Type</th>
+          <th>Device Model</th>
+          <th>Related operation</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for dev in page.object_list %}
+          <tr>
+            <td><strong>#{{ dev.id }}</strong></td>
+            <td>
+              <button type="button" class="dc-op" data-doors-toggle="1" data-device-id="{{ dev.id }}">+</button>
+            </td>
+            <td><strong>{{ dev.name }}</strong></td>
+            <td>{{ dev.get_comm_mode_display|default:'TCP/IP' }}</td>
+            <td>{{ dev.ip_address|default:'—' }}</td>
+            <td>{% if dev.enabled %}<span class="pill" style="background:rgba(45,164,78,0.18);border-color:rgba(45,164,78,0.35);">✓</span>{% else %}<span class="pill bad">✕</span>{% endif %}</td>
+            <td>{{ dev.get_device_type_display|default:dev.device_type|default:'—' }}</td>
+            <td>{{ dev.hardware_version|default:'—' }}</td>
+            <td>
+              <div class="dc-actions">
+                {% if can_edit %}
+                  <button type="button" class="btn-success btn-small" data-access-open="1" data-title="Edit device #{{ dev.id }}" data-url="{% url 'crud-device-edit-access' dev.id %}?next_tab=doorconfig">Edit</button>
+                  {% if dev.doors_unconfigured %}
+                    <button type="button" class="dc-op warn" data-auto-assign="1" data-device-id="{{ dev.id }}">Auto-map doors</button>
+                  {% endif %}
+                {% endif %}
+                <div class="dc-more">
+                  <button type="button" class="dc-link" data-more-toggle="1" data-device-id="{{ dev.id }}">More...</button>
+                  <div class="dc-more-menu" data-more-menu="1" data-device-id="{{ dev.id }}">
+                    <button type="button" class="dc-more-item" data-access-open="1" data-title="Change IP – {{ dev.name }}" data-url="{% url 'crud-device-op-access' dev.id 'change-ip' %}?modal=1">Modify IP address</button>
+                    <button type="button" class="dc-more-item" data-access-open="1" data-title="Enable/Disable – {{ dev.name }}" data-url="{% url 'crud-device-op-access' dev.id 'toggle-enabled' %}?modal=1">Enable / Disable device</button>
+                    <button type="button" class="dc-more-item" data-access-open="1" data-title="Communication password – {{ dev.name }}" data-url="{% url 'crud-device-op-access' dev.id 'comm-password' %}?modal=1">Modify communication password</button>
+                    <button type="button" class="dc-more-item" data-access-open="1" data-title="Synchronize time – {{ dev.name }}" data-url="{% url 'crud-device-op-access' dev.id 'sync-time' %}?modal=1">Synchronize time</button>
+                    <button type="button" class="dc-more-item" data-access-open="1" data-title="Get events – {{ dev.name }}" data-url="{% url 'crud-device-op-access' dev.id 'get-events' %}?modal=1">Get events</button>
+                    <button type="button" class="dc-more-item" data-access-open="1" data-title="Get personnel – {{ dev.name }}" data-url="{% url 'crud-device-op-access' dev.id 'get-personnel' %}?modal=1">Get information of personnel</button>
+                    <button type="button" class="dc-more-item" data-access-open="1" data-title="Upgrade firmware – {{ dev.name }}" data-url="{% url 'crud-device-op-access' dev.id 'upgrade-firmware' %}?modal=1">Upgrade firmware</button>
+                    <button type="button" class="dc-more-item" data-access-open="1" data-title="Disable DST – {{ dev.name }}" data-url="{% url 'crud-device-op-access' dev.id 'disable-dst' %}?modal=1">Disable daylight saving time</button>
+                    <button type="button" class="dc-more-item" data-access-open="1" data-title="Fingerprint identification – {{ dev.name }}" data-url="{% url 'crud-device-op-access' dev.id 'fp-ident' %}?modal=1">Change fingerprint identification</button>
+                    <a class="dc-more-item" style="text-decoration:none;display:block;" href="/agent/crud/devices/{{ dev.id }}/edit/?next=/agent/menu/access/?tab=doorconfig" target="_blank">Open full device page…</a>
+                  </div>
+                </div>
+              </div>
+            </td>
+          </tr>
+          <tr data-doors-detail-row="1" data-device-id="{{ dev.id }}" style="display:none;">
+            <td colspan="9">
+              <div class="dc-detail">
+                <table class="dc-subtable" aria-label="Doors">
+                  <thead>
+                    <tr>
+                      <th style="width:90px;">Door Number</th>
+                      <th>Door Name</th>
+                      <th style="width:220px;">Door Active Time Zone</th>
+                      <th style="width:190px;">First-Card Normal Open</th>
+                      <th style="width:170px;">Multi-Card Open</th>
+                      <th style="width:160px;">Related operation</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for d in dev.prefetched_doors %}
+                      <tr>
+                        <td>
+                          {% if d.door_number %}<span class="pill">{{ d.door_number }}</span>{% else %}<span class="pill bad">NECONFIG</span>{% endif %}
+                        </td>
+                        <td title="Door ID {{ d.id }}">
+                          {{ d.name }}
+                          <div class="hint" style="margin-top:2px;">Reader1: {{ d.reader_in_name|default:'—' }} | Reader2: {{ d.reader_out_name|default:'—' }}</div>
+                        </td>
+                        <td>{% if d.door_active_time_zone %}{{ d.door_active_time_zone.name }}{% else %}<span class="hint">—</span>{% endif %}</td>
+                        <td>
+                          Quantity Set: {{ d.first_card_rules.all|length }} |
+                          {% if can_edit %}
+                            <a class="dc-link" href="{% url 'crud-door-first-card' d.id %}?modal=1" data-access-open="1" data-title="First-Card Normal Open – {{ d.name }}" data-url="{% url 'crud-door-first-card' d.id %}?modal=1">Set</a>
+                          {% else %}Set{% endif %}
+                        </td>
+                        <td>
+                          Quantity Set: {{ d.multi_card_rules.all|length }} |
+                          {% if can_edit %}
+                            <a class="dc-link" href="{% url 'crud-door-multi-card' d.id %}?modal=1" data-access-open="1" data-title="Multi-Card Open – {{ d.name }}" data-url="{% url 'crud-door-multi-card' d.id %}?modal=1">Set</a>
+                          {% else %}Set{% endif %}
+                        </td>
+                        <td>
+                          {% if can_edit %}
+                            <a class="dc-link" href="{% url 'crud-door-edit' d.id %}?modal=1" data-access-open="1" data-title="Door Details – {{ d.name }}" data-url="{% url 'crud-door-edit' d.id %}?modal=1">Edit</a>
+                          {% else %}—{% endif %}
+                        </td>
+                      </tr>
+                    {% empty %}
+                      <tr><td colspan="6" class="td-center-muted">No doors</td></tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="9" class="td-center-muted">No devices</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="access-pager">
+    <span>{{ page.number }}/{{ page.paginator.num_pages }}</span>
+    {% if page.has_previous %}<a class="btn-secondary btn-small" data-access-page="1" href="{{ request.path }}?embed=1&mode=config&page={{ page.previous_page_number }}&device_name={{ device_name|urlencode }}&door_name={{ door_name|urlencode }}">«</a>{% endif %}
+    {% if page.has_next %}<a class="btn-secondary btn-small" data-access-page="1" href="{{ request.path }}?embed=1&mode=config&page={{ page.next_page_number }}&device_name={{ device_name|urlencode }}&door_name={{ door_name|urlencode }}">»</a>{% endif %}
+  </div>
+
+  <script>
+  (function(){
+    function getCookie(name){
+      let v=null;
+      if(document.cookie&&document.cookie!==''){
+        document.cookie.split(';').forEach(c=>{
+          c=c.trim();
+          if(c.substring(0,name.length+1)===(name+'=')) v=decodeURIComponent(c.substring(name.length+1));
+        });
+      }
+      return v;
+    }
+
+    function buildHref(page){
+      const dev = (document.getElementById('dcDeviceName')||{}).value || '';
+      const door = (document.getElementById('dcDoorName')||{}).value || '';
+      const params = new URLSearchParams();
+      params.set('embed','1');
+      params.set('mode','config');
+      if(page) params.set('page', String(page));
+      if(dev.trim()) params.set('device_name', dev.trim());
+      if(door.trim()) params.set('door_name', door.trim());
+      return '{{ request.path }}' + '?' + params.toString();
+    }
+
+    const search = document.getElementById('dcSearchLink');
+    const clear = document.getElementById('dcClearLink');
+    if(search){
+      search.addEventListener('click', function(){
+        try{ search.setAttribute('href', buildHref(1)); }catch(e){}
+      });
+    }
+    if(clear){
+      clear.addEventListener('click', function(){
+        try{
+          const d1 = document.getElementById('dcDeviceName');
+          const d2 = document.getElementById('dcDoorName');
+          if(d1) d1.value='';
+          if(d2) d2.value='';
+          clear.setAttribute('href', buildHref(1));
+        }catch(e){}
+      });
+    }
+
+    document.addEventListener('click', function(e){
+      const tgl = e.target && e.target.closest ? e.target.closest('[data-doors-toggle="1"]') : null;
+      if(tgl){
+        const id = tgl.getAttribute('data-device-id');
+        const row = document.querySelector('[data-doors-detail-row="1"][data-device-id="'+id+'"]');
+        if(row){
+          const open = (row.style.display === 'none' || !row.style.display);
+          row.style.display = open ? '' : 'none';
+          tgl.textContent = open ? '−' : '+';
+        }
+        return;
+      }
+
+      const autoAssign = e.target && e.target.closest ? e.target.closest('[data-auto-assign="1"]') : null;
+      if(autoAssign){
+        const id = autoAssign.getAttribute('data-device-id');
+        if(!id) return;
+
+        const hasActionModal = window.zkActionModal && typeof window.zkActionModal.open === 'function' && typeof window.zkActionModal.setState === 'function';
+        if(hasActionModal){
+          try{ window.zkActionModal.open({mode:'', module:'door', title:'DOOR CONFIGURATION', subtitle:'Auto-map'}); window.zkActionModal.setState('loading', 'IN PROGRESS', 'Auto-mapping doors...'); }catch(_e){}
+        }
+
+        fetch('/agent/api/devices/' + encodeURIComponent(String(id)) + '/doors/auto-assign/', {
+          method:'POST',
+          headers:{'X-CSRFToken': getCookie('csrftoken') || ''}
+        })
+        .then(r=>r.json())
+        .then(d=>{
+          if(d && d.ok){
+            if(hasActionModal){
+              try{ window.zkActionModal.setState('success', 'OK', 'Doors mapped.'); setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 900);}catch(_e){}
+            }
+            try{ const btn = document.querySelector('[data-access-ui="reload"]'); if(btn) btn.click(); }catch(_e){}
+          } else {
+            const msg = (d && d.error) ? String(d.error) : 'Error';
+            if(hasActionModal){ try{ window.zkActionModal.setState('error', 'FAILED', msg); }catch(_e){} }
+            else { alert(msg); }
+          }
+        })
+        .catch(err=>{
+          const msg = err && err.message ? err.message : String(err);
+          if(hasActionModal){ try{ window.zkActionModal.setState('error', 'FAILED', msg); }catch(_e){} }
+          else { alert(msg); }
+        });
+        return;
+      }
+    });
+  })();
+  </script>
+</div>

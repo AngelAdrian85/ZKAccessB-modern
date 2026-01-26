@@ -465,6 +465,17 @@ class ModernCommCenter(object):
                 session.poll_rtlog()
             elif cmd.startswith("DOWN_NEWLOG"):
                 session.down_new_logs()
+            elif cmd.startswith("SYNC_TIME"):
+                # Best-effort: encode time as "SYNC_TIME:YYYY-mm-dd HH:MM:SS".
+                # Real drivers can implement a dedicated set-time operation later.
+                ts = cmd.split(':', 1)[1].strip() if ':' in cmd else ''
+                try:
+                    if ts:
+                        session.driver.set_options(f"time={ts}")
+                    else:
+                        session.driver.set_options("time=now")
+                except Exception:
+                    pass
             # Extend with more mappings as needed.
             elif cmd.startswith("DOOR_OPEN"):
                 door = cmd.split(":", 1)[1] if ":" in cmd else "0"

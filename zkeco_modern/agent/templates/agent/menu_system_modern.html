@@ -1,0 +1,994 @@
+{% extends "agent/base_legacy.html" %}
+{% load static %}
+
+{% block title %}Sistem – Administrare{% endblock %}
+
+{% block content %}
+<style>
+/* Match Personnel module look */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #1a3a52;
+  color: #e8f0f8;
+  font-family: Tahoma, Arial, sans-serif;
+  font-size: 10px;
+}
+
+.system-container {
+  max-width: 98%;
+  margin: 6px auto;
+  background: #1e4a6b;
+  padding: 6px;
+  border-radius: 2px;
+  border: 2px solid #3da5d9;
+}
+
+.system-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.system-container h2 {
+  color: #7db3d9;
+  border-bottom: 1px solid #3da5d9;
+  padding-bottom: 4px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+/* Clock (top-right) */
+.system-clock {
+  min-width: 210px;
+  background: linear-gradient(135deg, rgba(61,165,217,0.9) 0%, rgba(45,90,123,0.95) 55%, rgba(30,74,107,0.95) 100%);
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 4px;
+  padding: 6px 10px;
+  box-shadow: 0 0 12px rgba(61,165,217,0.35);
+  position: relative;
+  overflow: hidden;
+}
+.system-clock:before {
+  content: '';
+  position: absolute;
+  left: -40px;
+  top: -40px;
+  width: 120px;
+  height: 120px;
+  background: radial-gradient(circle, rgba(255,255,255,0.20) 0%, rgba(255,255,255,0.0) 60%);
+  transform: rotate(15deg);
+}
+.system-clock .tz {
+  font-size: 9px;
+  color: rgba(255,255,255,0.85);
+  letter-spacing: 0.2px;
+  text-transform: uppercase;
+}
+.system-clock .time {
+  font-size: 22px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.4px;
+}
+.system-clock .date {
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(255,255,255,0.88);
+  margin-top: 1px;
+}
+.system-clock.pulse {
+  animation: sysPulse 1s ease-in-out;
+}
+@keyframes sysPulse {
+  0% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.01); filter: brightness(1.15); }
+  100% { transform: scale(1); filter: brightness(1); }
+}
+
+/* Tabs */
+.tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid #3d6a8b;
+}
+.tab {
+  padding: 4px 12px;
+  background: #163247;
+  border: 1px solid #3d6a8b;
+  border-bottom: none;
+  color: #9fd2f1;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  border-radius: 2px 2px 0 0;
+  transition: all 0.2s;
+}
+.tab:hover { color: #7db3d9; }
+.tab.active {
+  background: #3da5d9;
+  color: #fff;
+  border-color: #3da5d9;
+}
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* Section headers + buttons */
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 6px;
+  background: #163247;
+  border: 1px solid #3d6a8b;
+  margin-bottom: 4px;
+  border-radius: 2px;
+}
+.section-title {
+  font-size: 10px;
+  font-weight: bold;
+  color: #7db3d9;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.section-subtitle {
+  font-size: 9px;
+  color: #cfe9f8;
+  opacity: 0.9;
+}
+.section-actions { display: flex; gap: 4px; }
+.btn {
+  padding: 3px 8px;
+  background: #3da5d9;
+  color: #fff;
+  border: 1px solid #2c8ec0;
+  border-radius: 2px;
+  font-size: 9px;
+  cursor: pointer;
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  transition: all 0.2s;
+}
+.btn:hover { background: #2c8ec0; transform: translateY(-1px); }
+.btn-secondary { background: #2d5a7b; border-color: #3d6a8b; }
+.btn-secondary:hover { background: #3d6a8b; }
+.btn-danger { background: #d94a3d; border-color: #b03a2e; }
+.btn-danger:hover { background: #b03a2e; }
+
+/* Table */
+.compact-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 9px;
+  background: #163247;
+}
+.compact-table thead {
+  background: linear-gradient(to bottom, #3da5d9 0%, #2d7ba5 100%);
+  color: #fff;
+}
+.compact-table thead th {
+  padding: 3px 4px;
+  text-align: left;
+  font-weight: 600;
+  border-right: 1px solid #2d7ba5;
+  white-space: nowrap;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.2px;
+}
+.compact-table thead th:last-child { border-right: none; }
+.compact-table tbody tr { border-bottom: 1px solid #3d6a8b; transition: background 0.1s; }
+.compact-table tbody tr:hover { background: #1e4a6b; }
+.compact-table tbody tr:nth-child(even) { background: #0f2433; }
+.compact-table tbody tr:nth-child(even):hover { background: #1e4a6b; }
+.compact-table tbody td {
+  padding: 2px 4px;
+  border-right: 1px solid #3d6a8b;
+  color: #e8f0f8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+.compact-table tbody td:last-child { border-right: none; }
+
+.action-cell { display: flex; gap: 6px; align-items: center; }
+.action-link {
+  color: #3da5d9;
+  text-decoration: none;
+  font-size: 9px;
+  padding: 2px 4px;
+  border-radius: 2px;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+.action-link:hover { background: #3da5d9; color: #fff; }
+.action-link.delete { color: #d94a3d; }
+.action-link.delete:hover { background: #d94a3d; color: #fff; }
+
+/* Modal */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 9999;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  align-items: center;
+  justify-content: center;
+}
+.modal.show { display: flex; }
+.modal-content {
+  background: linear-gradient(135deg, #1e4a6b 0%, #2d5a7b 50%, #1e4a6b 100%);
+  padding: 3px;
+  border-radius: 6px;
+  max-width: 560px;
+  width: 94%;
+}
+.modal-inner {
+  background: #1e4a6b;
+  border: 1px solid #7db3d9;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.modal-header {
+  background: #163247;
+  padding: 6px 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #3d6a8b;
+}
+.modal-title { color: #7db3d9; font-size: 11px; font-weight: bold; text-transform: uppercase; }
+.modal-close {
+  background: none;
+  border: none;
+  color: #9fd2f1;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+.modal-body { padding: 8px; }
+.modal-error {
+  display: none;
+  margin-bottom: 6px;
+  background: rgba(217,74,61,0.15);
+  border: 1px solid rgba(217,74,61,0.45);
+  color: #ffd6d3;
+  padding: 6px;
+  border-radius: 3px;
+}
+
+.form-row { display: flex; gap: 8px; margin-bottom: 6px; }
+.form-col { flex: 1; }
+label { display: block; font-size: 9px; color: #cfe9f8; margin-bottom: 2px; }
+.form-control {
+  width: 100%;
+  padding: 4px 6px;
+  background: #0f2433;
+  border: 1px solid #3d6a8b;
+  border-radius: 2px;
+  color: #e8f0f8;
+  font-size: 10px;
+}
+.helptext { font-size: 9px; opacity: 0.85; }
+</style>
+
+<div class="system-container">
+  <div class="system-header">
+    <h2>Sistem</h2>
+    <div id="systemClock" class="system-clock" title="Ora sistemului">
+      <div class="tz">TZ: {{ active_tz|default:"" }}{% if system_time_zone %} (set: {{ system_time_zone }}){% endif %}</div>
+      <div class="time" id="systemClockTime">{{ system_now_time|default:"" }}</div>
+      <div class="date" id="systemClockDate">{{ system_now_date|default:"" }}</div>
+      <div style="margin-top:4px;display:flex;justify-content:flex-end;gap:6px;">
+        <button class="btn" style="padding:2px 6px;font-size:9px;" type="button" onclick="SystemUI.syncAppTime()">Sync</button>
+        <button class="btn btn-secondary" type="button" onclick="SystemUI.openModal('/agent/system/set-time/', 'Setează ora echipamentelor')">Setează ora</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabs" id="systemTabs">
+    <div class="tab active" data-tab="administrare">ADMINISTRARE</div>
+    <div class="tab" data-tab="grupuri">GRUPURI</div>
+    <div class="tab" data-tab="fusorar">FUS ORAR</div>
+    <div class="tab" data-tab="loguri">LOGURI</div>
+  </div>
+
+  <div id="tab-administrare" class="tab-content active">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Conturi utilizator</div>
+        <div class="section-subtitle">4 niveluri: Super Admin / Admin / Utilizator / Vizitator</div>
+      </div>
+      <div class="section-actions">
+        <button class="btn" type="button" onclick="SystemUI.openModal('/agent/system/users/new/', 'Adaugă utilizator')">Adaugă</button>
+      </div>
+    </div>
+
+    <table class="compact-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Username</th>
+          <th>Nume</th>
+          <th>Email</th>
+          <th>Rol</th>
+          <th>Activ</th>
+          <th>Ultima autent.</th>
+          <th>Acțiuni</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users_rows %}
+        <tr>
+          <td title="ID: {{ u.id }}">{{ u.id }}</td>
+          <td title="ID: {{ u.id }}">{{ u.username }}</td>
+          <td>{{ u.name }}</td>
+          <td>{{ u.email }}</td>
+          <td>{{ u.role_label }}</td>
+          <td>{% if u.is_active %}DA{% else %}NU{% endif %}</td>
+          <td>{% if u.last_login %}{{ u.last_login|date:"Y-m-d H:i" }}{% else %}-{% endif %}</td>
+          <td>
+            <div class="action-cell">
+              <span class="action-link" onclick="SystemUI.openModal('/agent/system/users/{{ u.id }}/edit/', 'Modifică utilizator')">Modifică</span>
+              <span class="action-link delete" onclick="SystemUI.deleteUser({{ u.id }}, '{{ u.username|escapejs }}')">Șterge</span>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8">Nu există utilizatori.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div id="tab-grupuri" class="tab-content">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Grupuri & permisiuni</div>
+        <div class="section-subtitle">Grupurile ROLE_* sunt protejate (folosite pentru roluri)</div>
+      </div>
+      <div class="section-actions">
+        <button class="btn" type="button" onclick="SystemUI.openModal('/agent/system/groups/new/', 'Adaugă grup')">Adaugă</button>
+      </div>
+    </div>
+
+    <table class="compact-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Nume</th>
+          <th>Utilizatori</th>
+          <th>Permisiuni</th>
+          <th>Acțiuni</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for g in groups_rows %}
+        <tr>
+          <td>{{ g.id }}</td>
+          <td>{% if g.is_role_group %}<span title="Grup de rol (protejat)">{{ g.name }}</span>{% else %}{{ g.name }}{% endif %}</td>
+          <td>{{ g.user_count }}</td>
+          <td>{{ g.perm_count }}</td>
+          <td>
+            <div class="action-cell">
+              {% if g.is_role_group %}
+                <span class="action-link" style="opacity:0.5;cursor:not-allowed;" title="Protejat">Modifică</span>
+                <span class="action-link delete" style="opacity:0.5;cursor:not-allowed;" title="Protejat">Șterge</span>
+              {% else %}
+                <span class="action-link" onclick="SystemUI.openModal('/agent/system/groups/{{ g.id }}/edit/', 'Modifică grup')">Modifică</span>
+                <span class="action-link delete" onclick="SystemUI.deleteGroup({{ g.id }}, '{{ g.name|escapejs }}')">Șterge</span>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5">Nu există grupuri.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div id="tab-fusorar" class="tab-content">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Fus orar (global + echipamente)</div>
+        <div class="section-subtitle">Fusul orar activ se aplică sistemului; echipamentele pot avea fus orar separat</div>
+      </div>
+      <div class="section-actions">
+        <button class="btn" type="button" onclick="SystemUI.openModal('/agent/system/timezones/new/', 'Adaugă fus orar')">Adaugă</button>
+      </div>
+    </div>
+
+    <table class="compact-table" style="margin-bottom: 8px;">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Activ</th>
+          <th>Denumire</th>
+          <th>Regiune</th>
+          <th>Time Zone</th>
+          <th>Acțiuni</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for tz in tz_settings_rows %}
+        <tr>
+          <td>{{ tz.id }}</td>
+          <td>{% if tz.is_active %}DA{% else %}NU{% endif %}</td>
+          <td>{{ tz.name }}</td>
+          <td>{{ tz.region|default:"" }}</td>
+          <td>{{ tz.time_zone }}{% if tz.gmt %} ({{ tz.gmt }}){% endif %}</td>
+          <td>
+            <div class="action-cell">
+              <span class="action-link" onclick="SystemUI.openModal('/agent/system/timezones/{{ tz.id }}/edit/', 'Modifică fus orar')">Modifică</span>
+              {% if tz.is_active %}
+                <span class="action-link" style="opacity:0.5;cursor:not-allowed;" title="Deja activ">Activează</span>
+              {% else %}
+                <span class="action-link" onclick="SystemUI.activateTimeZone({{ tz.id }}, '{{ tz.name|escapejs }}', '{{ tz.time_zone|escapejs }}')">Activează</span>
+              {% endif %}
+              {% if tz.is_active %}
+                <span class="action-link delete" style="opacity:0.5;cursor:not-allowed;" title="Nu poți șterge un fus orar activ">Șterge</span>
+              {% else %}
+                <span class="action-link delete" onclick="SystemUI.deleteTimeZone({{ tz.id }}, '{{ tz.name|escapejs }}')">Șterge</span>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6">Nu există setări de fus orar.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="section-header">
+      <div>
+        <div class="section-title">Time-zone utilizate în sistem</div>
+        <div class="section-subtitle">Echipament + fus orar + ora sistemului</div>
+      </div>
+      <div class="section-actions">
+        <button class="btn btn-secondary" type="button" onclick="SystemUI.openModal('/agent/system/options/modal/', 'System Options')">System Options</button>
+        <button class="btn" style="padding:2px 6px;font-size:9px;" type="button" onclick="SystemUI.syncDevicesNow()">Sync echipamente</button>
+      </div>
+    </div>
+
+    <table class="compact-table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Echipament</th>
+          <th>IP</th>
+          <th>Serie</th>
+          <th>Time Zone</th>
+          <th>Ora sistem</th>
+          <th>Acțiuni</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in devices_rows %}
+        <tr>
+          <td>{{ d.id }}</td>
+          <td>{{ d.name }}</td>
+          <td>{{ d.ip }}</td>
+          <td>{{ d.serial }}</td>
+          <td>{{ d.time_zone }}{% if d.gmt %} ({{ d.gmt }}){% endif %}</td>
+          <td>{{ d.system_time }}</td>
+          <td>
+            <div class="action-cell">
+              <span class="action-link" onclick="SystemUI.openModal('/agent/system/devices/{{ d.id }}/timezone/', 'Fus orar echipament')">Modifică</span>
+              <span class="action-link" onclick="SystemUI.syncDeviceNow({{ d.id }}, '{{ d.name|escapejs }}')">Sync</span>
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7">Nu există echipamente.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div id="tab-loguri" class="tab-content">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Loguri sistem (global)</div>
+        <div class="section-subtitle">Administrare + Grupuri + Fus orar</div>
+      </div>
+      <div class="section-actions">
+        <a class="btn btn-secondary" href="/agent/menu/reports/?tab=system">Rapoarte: Log Events</a>
+      </div>
+    </div>
+
+    <table class="compact-table" style="margin-bottom: 8px;">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Data/Ora</th>
+          <th>User</th>
+          <th>Modul</th>
+          <th>Acțiune</th>
+          <th>Entitate</th>
+          <th>Detalii</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in logs_all %}
+        <tr>
+          <td>{{ l.id }}</td>
+          <td>{{ l.timestamp|date:"Y-m-d H:i:s" }}</td>
+          <td>{{ l.user|default:"" }}</td>
+          <td>{{ l.module }}</td>
+          <td>{{ l.action }}</td>
+          <td>{{ l.entity_name|default:l.entity_id }}</td>
+          <td title="{{ l.details|default:'' }}">{{ l.details|default:""|truncatechars:80 }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7">Nu există loguri.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <div class="section-header">
+      <div class="section-title">Loguri pe module</div>
+      <div class="section-actions">
+        <button class="btn btn-secondary" type="button" onclick="SystemUI.showModuleLogs('users')">Administrare</button>
+        <button class="btn btn-secondary" type="button" onclick="SystemUI.showModuleLogs('groups')">Grupuri</button>
+        <button class="btn btn-secondary" type="button" onclick="SystemUI.showModuleLogs('tz')">Fus orar</button>
+      </div>
+    </div>
+
+    <div id="systemModuleLogs-users" style="display:block;">
+      <table class="compact-table" style="margin-bottom: 8px;">
+        <thead>
+          <tr><th>ID</th><th>Data/Ora</th><th>User</th><th>Acțiune</th><th>Entitate</th><th>Detalii</th></tr>
+        </thead>
+        <tbody>
+          {% for l in logs_users %}
+          <tr>
+            <td>{{ l.id }}</td>
+            <td>{{ l.timestamp|date:"Y-m-d H:i:s" }}</td>
+            <td>{{ l.user|default:"" }}</td>
+            <td>{{ l.action }}</td>
+            <td>{{ l.entity_name|default:l.entity_id }}</td>
+            <td title="{{ l.details|default:'' }}">{{ l.details|default:""|truncatechars:100 }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6">Nu există loguri.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div id="systemModuleLogs-groups" style="display:none;">
+      <table class="compact-table" style="margin-bottom: 8px;">
+        <thead>
+          <tr><th>ID</th><th>Data/Ora</th><th>User</th><th>Acțiune</th><th>Entitate</th><th>Detalii</th></tr>
+        </thead>
+        <tbody>
+          {% for l in logs_groups %}
+          <tr>
+            <td>{{ l.id }}</td>
+            <td>{{ l.timestamp|date:"Y-m-d H:i:s" }}</td>
+            <td>{{ l.user|default:"" }}</td>
+            <td>{{ l.action }}</td>
+            <td>{{ l.entity_name|default:l.entity_id }}</td>
+            <td title="{{ l.details|default:'' }}">{{ l.details|default:""|truncatechars:100 }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6">Nu există loguri.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div id="systemModuleLogs-tz" style="display:none;">
+      <table class="compact-table">
+        <thead>
+          <tr><th>ID</th><th>Data/Ora</th><th>User</th><th>Acțiune</th><th>Entitate</th><th>Detalii</th></tr>
+        </thead>
+        <tbody>
+          {% for l in logs_tz %}
+          <tr>
+            <td>{{ l.id }}</td>
+            <td>{{ l.timestamp|date:"Y-m-d H:i:s" }}</td>
+            <td>{{ l.user|default:"" }}</td>
+            <td>{{ l.action }}</td>
+            <td>{{ l.entity_name|default:l.entity_id }}</td>
+            <td title="{{ l.details|default:'' }}">{{ l.details|default:""|truncatechars:100 }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6">Nu există loguri.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Generic Modal -->
+<div id="systemModal" class="modal" aria-hidden="true">
+  <div class="modal-content">
+    <div class="modal-inner">
+      <div class="modal-header">
+        <div id="systemModalTitle" class="modal-title">Modal</div>
+        <button class="modal-close" type="button" onclick="SystemUI.closeModal()">×</button>
+      </div>
+      <div class="modal-body">
+        <div id="systemModalError" class="modal-error"></div>
+        <div id="systemModalBody"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  function getCookie(name){
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if(parts.length === 2) return parts.pop().split(';').shift();
+    return '';
+  }
+
+  function setActiveTab(tabKey){
+    const tabs = document.querySelectorAll('#systemTabs .tab');
+    const contents = {
+      administrare: document.getElementById('tab-administrare'),
+      grupuri: document.getElementById('tab-grupuri'),
+      fusorar: document.getElementById('tab-fusorar'),
+      loguri: document.getElementById('tab-loguri'),
+    };
+    tabs.forEach(t => {
+      const isActive = t.getAttribute('data-tab') === tabKey;
+      t.classList.toggle('active', isActive);
+    });
+    Object.keys(contents).forEach(k => {
+      const el = contents[k];
+      if(!el) return;
+      el.classList.toggle('active', k === tabKey);
+    });
+    try{ window.location.hash = tabKey; }catch(e){}
+  }
+
+  function initTabs(){
+    const tabs = document.querySelectorAll('#systemTabs .tab');
+    tabs.forEach(t => t.addEventListener('click', () => setActiveTab(t.getAttribute('data-tab'))));
+    const hash = (window.location.hash || '').replace('#','');
+    if(hash && document.querySelector(`#systemTabs .tab[data-tab="${hash}"]`)){
+      setActiveTab(hash);
+    }
+  }
+
+  function openModal(url, title){
+    const modal = document.getElementById('systemModal');
+    const body = document.getElementById('systemModalBody');
+    const titleEl = document.getElementById('systemModalTitle');
+    const errEl = document.getElementById('systemModalError');
+
+    titleEl.textContent = title || 'Modal';
+    errEl.style.display = 'none';
+    errEl.textContent = '';
+    body.innerHTML = '<div style="padding:6px;">Se încarcă...</div>';
+
+    modal.classList.add('show');
+    modal.setAttribute('aria-hidden', 'false');
+
+    fetch(url, { credentials: 'same-origin' })
+      .then(r => r.text())
+      .then(html => {
+        body.innerHTML = html;
+        const form = body.querySelector('form');
+        if(form){
+          form.addEventListener('submit', (e)=>{
+            e.preventDefault();
+            submitModalForm(form);
+          });
+        }
+      })
+      .catch(err => {
+        body.innerHTML = '';
+        errEl.textContent = 'Eroare la încărcarea formularului.';
+        errEl.style.display = 'block';
+      });
+  }
+
+  function closeModal(){
+    const modal = document.getElementById('systemModal');
+    modal.classList.remove('show');
+    modal.setAttribute('aria-hidden', 'true');
+  }
+
+  function showError(msg){
+    const errEl = document.getElementById('systemModalError');
+    errEl.textContent = msg || 'Eroare.';
+    errEl.style.display = 'block';
+  }
+
+  function submitModalForm(form){
+    const url = form.getAttribute('action') || window.location.href;
+    const fd = new FormData(form);
+    const csrftoken = getCookie('csrftoken');
+
+    fetch(url, {
+      method: 'POST',
+      body: fd,
+      credentials: 'same-origin',
+      headers: { 'X-CSRFToken': csrftoken },
+    })
+      .then(async (r)=>{
+        const data = await r.json().catch(()=>({}));
+        if(!r.ok || !data.ok){
+          const err = (data && data.error) ? String(data.error) : 'Eroare';
+          const details = (data && data.errors) ? JSON.stringify(data.errors) : '';
+          throw new Error(details ? (err + ': ' + details) : err);
+        }
+        return data;
+      })
+      .then(()=>{
+        closeModal();
+        window.location.reload();
+      })
+      .catch(e=>{
+        showError(e.message);
+      });
+  }
+
+  function postJson(url, payload){
+    const csrftoken = getCookie('csrftoken');
+    const fd = new FormData();
+    if(payload){
+      Object.keys(payload).forEach(k => fd.append(k, payload[k]));
+    }
+    return fetch(url, {
+      method: 'POST',
+      body: fd,
+      credentials: 'same-origin',
+      headers: { 'X-CSRFToken': csrftoken },
+    }).then(async (r)=>{
+      // Some errors (e.g., CSRF 403) return HTML, not JSON.
+      const text = await r.text().catch(()=> '');
+      let data = null;
+      try{ data = text ? JSON.parse(text) : null; }catch(e){ data = null; }
+
+      if(!r.ok){
+        const msg = (data && data.error) ? String(data.error) : `HTTP ${r.status}`;
+        throw new Error(msg);
+      }
+      if(!data || !data.ok){
+        const msg = (data && data.error) ? String(data.error) : 'Eroare';
+        throw new Error(msg);
+      }
+      return data;
+    });
+  }
+
+  function deleteUser(id, username){
+    const msg = `Ștergi utilizatorul "${username}"?`; 
+    if(window.zkConfirmDialog){
+      window.zkConfirmDialog({ title: 'Confirmare', message: msg }).then(ok=>{
+        if(!ok) return;
+        postJson(`/agent/system/users/${id}/delete/`).then(()=>window.location.reload()).catch(e=>alert(e.message));
+      });
+    } else {
+      if(confirm(msg)){
+        postJson(`/agent/system/users/${id}/delete/`).then(()=>window.location.reload()).catch(e=>alert(e.message));
+      }
+    }
+  }
+
+  function deleteGroup(id, name){
+    const msg = `Ștergi grupul "${name}"?`;
+    if(window.zkConfirmDialog){
+      window.zkConfirmDialog({ title: 'Confirmare', message: msg }).then(ok=>{
+        if(!ok) return;
+        postJson(`/agent/system/groups/${id}/delete/`).then(()=>window.location.reload()).catch(e=>alert(e.message));
+      });
+    } else {
+      if(confirm(msg)){
+        postJson(`/agent/system/groups/${id}/delete/`).then(()=>window.location.reload()).catch(e=>alert(e.message));
+      }
+    }
+  }
+
+  function syncDevicesNow(){
+    const msg = 'Sincronizezi ora pe TOATE echipamentele active (după fusul orar al fiecăruia)?';
+    if(window.zkConfirmDialog){
+      window.zkConfirmDialog({ title: 'Confirmare', message: msg }).then(ok=>{
+        if(!ok) return;
+        fetch('/agent/system/devices/sync-time-now/', { method: 'GET', credentials: 'same-origin' })
+          .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP '+r.status)))
+          .then(d => {
+            if(!d || !d.ok) throw new Error((d && d.error) ? String(d.error) : 'Eroare');
+            alert('Comandă SYNC_TIME trimisă. Echipamente: ' + (d.queued||0));
+          })
+          .catch(e=>alert(e.message));
+      });
+    } else {
+      if(confirm(msg)){
+        fetch('/agent/system/devices/sync-time-now/', { method: 'GET', credentials: 'same-origin' })
+          .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP '+r.status)))
+          .then(d => {
+            if(!d || !d.ok) throw new Error((d && d.error) ? String(d.error) : 'Eroare');
+            alert('Comandă SYNC_TIME trimisă. Echipamente: ' + (d.queued||0));
+          })
+          .catch(e=>alert(e.message));
+      }
+    }
+  }
+
+  function syncDeviceNow(id, name){
+    const msg = `Sincronizezi ora pentru "${name}" (după TZ-ul echipamentului)?`;
+    if(window.zkConfirmDialog){
+      window.zkConfirmDialog({ title: 'Confirmare', message: msg }).then(ok=>{
+        if(!ok) return;
+        fetch(`/agent/system/devices/${id}/sync-time-now/`, { method: 'GET', credentials: 'same-origin' })
+          .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP '+r.status)))
+          .then(d => {
+            if(!d || !d.ok) throw new Error((d && d.error) ? String(d.error) : 'Eroare');
+            alert('Comandă SYNC_TIME trimisă.');
+          })
+          .catch(e=>alert(e.message));
+      });
+    } else {
+      if(confirm(msg)){
+        fetch(`/agent/system/devices/${id}/sync-time-now/`, { method: 'GET', credentials: 'same-origin' })
+          .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP '+r.status)))
+          .then(d => {
+            if(!d || !d.ok) throw new Error((d && d.error) ? String(d.error) : 'Eroare');
+            alert('Comandă SYNC_TIME trimisă.');
+          })
+          .catch(e=>alert(e.message));
+      }
+    }
+  }
+
+  function syncAppTime(){
+    fetchServerTime().finally(()=>{ try{ tickClock(); }catch(e){} });
+  }
+
+  function activateTimeZone(id, name, tz){
+    const msg = `Activezi fusul orar "${name}" (${tz}) pentru tot sistemul?`;
+    if(window.zkConfirmDialog){
+      window.zkConfirmDialog({ title: 'Confirmare', message: msg }).then(ok=>{
+        if(!ok) return;
+        postJson(`/agent/system/timezones/${id}/activate/`).then(()=>window.location.reload()).catch(e=>alert(e.message));
+      });
+    } else {
+      if(confirm(msg)){
+        postJson(`/agent/system/timezones/${id}/activate/`).then(()=>window.location.reload()).catch(e=>alert(e.message));
+      }
+    }
+  }
+
+  function deleteTimeZone(id, name){
+    const msg = `Ștergi setarea de fus orar "${name}"?`;
+    if(window.zkConfirmDialog){
+      window.zkConfirmDialog({ title: 'Confirmare', message: msg }).then(ok=>{
+        if(!ok) return;
+        postJson(`/agent/system/timezones/${id}/delete/`).then(()=>window.location.reload()).catch(e=>alert(e.message));
+      });
+    } else {
+      if(confirm(msg)){
+        postJson(`/agent/system/timezones/${id}/delete/`).then(()=>window.location.reload()).catch(e=>alert(e.message));
+      }
+    }
+  }
+
+  function showModuleLogs(which){
+    const ids = ['users','groups','tz'];
+    ids.forEach(k => {
+      const el = document.getElementById(`systemModuleLogs-${k}`);
+      if(!el) return;
+      el.style.display = (k === which) ? 'block' : 'none';
+    });
+  }
+
+  // Use server epoch UTC + system TZ offset, format via UTC getters.
+  let serverEpochMsUtc = null;
+  let serverOffsetSeconds = 0;
+  let basePerf = null;
+
+  function pad(n){ return String(n).padStart(2,'0'); }
+  const UI_DATE_FORMAT = '{{ ui_date_format|default:"ro_short" }}';
+
+  function formatDateUi(d){
+    const yyyy = d.getUTCFullYear();
+    const mm = d.getUTCMonth() + 1;
+    const dd = d.getUTCDate();
+    if(UI_DATE_FORMAT === 'iso'){
+      return `${yyyy}-${pad(mm)}-${pad(dd)}`;
+    }
+    if(UI_DATE_FORMAT === 'ro_long'){
+      const months = ['ianuarie','februarie','martie','aprilie','mai','iunie','iulie','august','septembrie','octombrie','noiembrie','decembrie'];
+      return `${pad(dd)} ${months[mm-1]} ${yyyy}`;
+    }
+    // ro_short default
+    return `${pad(dd)}.${pad(mm)}.${yyyy}`;
+  }
+
+  function partsFromEpoch(epochMsUtc, offsetSeconds){
+    const d = new Date(epochMsUtc + (offsetSeconds * 1000));
+    const date = formatDateUi(d);
+    const time = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+    return { date, time };
+  }
+
+  function fetchServerTime(){
+    return fetch('/agent/api/system/now/', { credentials: 'same-origin' })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP '+r.status)))
+      .then(d => {
+        if(!d || !d.ok) throw new Error('bad-response');
+        serverEpochMsUtc = Number(d.epoch_ms_utc);
+        serverOffsetSeconds = Number(d.offset_seconds || 0);
+        basePerf = performance.now();
+        const tzEl = document.querySelector('#systemClock .tz');
+        if(tzEl && d.tz_label){
+          tzEl.textContent = `TZ: ${d.tz_label}`;
+        }
+        pulseClock();
+      })
+      .catch(()=>{});
+  }
+
+  function pulseClock(){
+    const clock = document.getElementById('systemClock');
+    if(!clock) return;
+    try{
+      clock.classList.remove('pulse');
+      void clock.offsetWidth;
+      clock.classList.add('pulse');
+    }catch(e){}
+  }
+
+  function tickClock(){
+    const timeEl = document.getElementById('systemClockTime');
+    const dateEl = document.getElementById('systemClockDate');
+    if(!timeEl) return;
+    try{
+      if(serverEpochMsUtc == null || basePerf == null){
+        // fallback to initial render (server formatted)
+        return;
+      }
+      const deltaMs = performance.now() - basePerf;
+      const epochNow = serverEpochMsUtc + Math.floor(deltaMs);
+      const p = partsFromEpoch(epochNow, serverOffsetSeconds);
+      timeEl.textContent = p.time;
+      if(dateEl) dateEl.textContent = p.date;
+    }catch(e){}
+  }
+
+  window.SystemUI = {
+    openModal,
+    closeModal,
+    deleteUser,
+    deleteGroup,
+    syncAppTime,
+    syncDevicesNow,
+    syncDeviceNow,
+    activateTimeZone,
+    deleteTimeZone,
+    showModuleLogs,
+  };
+
+  document.addEventListener('DOMContentLoaded', function(){
+    initTabs();
+    fetchServerTime().finally(()=>{
+      tickClock();
+      setInterval(tickClock, 1000);
+      setInterval(fetchServerTime, 15000); // re-sync drift + DST changes
+    });
+  });
+})();
+</script>
+{% endblock %}

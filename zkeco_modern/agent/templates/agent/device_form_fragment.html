@@ -358,8 +358,20 @@
         {% if form.area_name.errors %}<span class="form-errors">{{ form.area_name.errors|join:", " }}</span>{% endif %}
       </div>
       <div class="form-group">
-        <label for="{{ form.time_zone.id_for_label }}">Fus Orar</label>
-        {{ form.time_zone }}
+        {% with sl=form.scanner_linked.value %}
+        {% if sl == True or sl == 'True' or sl == 'true' or sl == 'on' or sl == '1' or sl == 1 %}
+          <label>Fus Orar</label>
+          <div style="background:#0f2433;border:1px solid #3d6a8b;border-radius:2px;padding:6px 8px;font-size:10px;color:#e8f0f8;">
+            {{ system_time_zone|default:'—' }} <span style="color:#7db3d9;">(moștenit din Sistem - GLOBAL)</span>
+          </div>
+          <input type="hidden" name="time_zone" value="{{ system_time_zone|default:'' }}" />
+          {% if system_time_now_local %}<div class="helptext">Ora folosită (Sistem): {{ system_time_now_local }}</div>{% endif %}
+        {% else %}
+          <label for="{{ form.time_zone.id_for_label }}">Fus Orar</label>
+          {{ form.time_zone }}
+          <div class="helptext" style="color:#7db3d9;">Notă: Etc/GMT are semnul invers (ex: Etc/GMT+2 == UTC-2).</div>
+        {% endif %}
+        {% endwith %}
       </div>
       <div class="form-group">
         <label for="{{ form.firmware_version.id_for_label }}">Versiune Firmware</label>

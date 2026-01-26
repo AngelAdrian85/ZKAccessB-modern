@@ -1,4 +1,5 @@
 from django.db import models
+from django.db.models import Q
 
 
 class DeviceRealtimeLog(models.Model):
@@ -200,18 +201,97 @@ class DeviceStatus(models.Model):
 class Door(models.Model):
     name = models.CharField(max_length=128)
     device = models.ForeignKey(Device, null=True, blank=True, on_delete=models.SET_NULL)
+    door_number = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+        choices=[(i, str(i)) for i in range(1, 33)],
+        help_text="Door index on controller (1-32)",
+    )
     location = models.CharField(max_length=128, blank=True, default='')
     normally_open = models.BooleanField(default=False)
     enabled = models.BooleanField(default=True)
+    SENSOR_TYPE_CHOICES = [
+        ('none', 'Niciunul'),
+        ('normal_close', 'Normal închis'),
+        ('normal_open', 'Normal deschis'),
+    ]
+    VERIFY_MODE_CHOICES = [
+        ('only_card', 'Doar card'),
+        ('card_pin', 'Card + PIN'),
+        ('card_fingerprint', 'Card + Amprentă'),
+        ('fingerprint', 'Amprentă'),
+        ('face', 'Față'),
+        ('multi', 'Multi-verificare'),
+    ]
+
+    # ---- Legacy-like Door Configuration fields (Door Details page)
+    door_active_time_zone = models.ForeignKey(
+        'TimeSegment',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='doors_active_tz',
+        help_text='Door Active Time Zone (legacy Door Details)'
+    )
+    door_passage_mode_time_zone = models.ForeignKey(
+        'TimeSegment',
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name='doors_passage_tz',
+        help_text='Door Passage Mode Time Zone (legacy Door Details)'
+    )
+    lock_open_duration = models.PositiveSmallIntegerField(default=5, help_text='Lock Open Duration (0-254 seconds)')
+    punch_interval = models.PositiveSmallIntegerField(default=2, help_text='Punch Interval (0-254 seconds)')
+    door_sensor_type = models.CharField(max_length=20, choices=SENSOR_TYPE_CHOICES, default='normal_close')
+    door_status_delay = models.PositiveSmallIntegerField(default=15, help_text='Door Status Delay (1-254 seconds)')
+    close_and_reverse_state = models.BooleanField(default=False)
+    verify_mode = models.CharField(max_length=32, choices=VERIFY_MODE_CHOICES, default='only_card')
+    duress_password = models.CharField(max_length=16, blank=True, default='')
+    emergency_password = models.CharField(max_length=16, blank=True, default='')
+
+    # User-defined reader names (legacy Door Details: Reader In/Out).
+    # If empty, UI derives defaults from controller IP + door number.
+    reader_in_custom_name = models.CharField(max_length=128, blank=True, default='')
+    reader_out_custom_name = models.CharField(max_length=128, blank=True, default='')
     is_open = models.BooleanField(default=False)  # persisted simulated state
     last_state_change = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        indexes = [models.Index(fields=["name"])]
+        indexes = [
+            models.Index(fields=["name"]),
+            models.Index(fields=["device", "door_number"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["device", "door_number"],
+                condition=Q(door_number__isnull=False),
+                name="uniq_door_per_device_number",
+            )
+        ]
+
+    @property
+    def reader_in_name(self) -> str:
+        if self.reader_in_custom_name:
+            return self.reader_in_custom_name
+        ip = getattr(getattr(self, 'device', None), 'ip_address', None)
+        if ip and self.door_number:
+            return f"{ip}-{self.door_number} In"
+        return ""
+
+    @property
+    def reader_out_name(self) -> str:
+        if self.reader_out_custom_name:
+            return self.reader_out_custom_name
+        ip = getattr(getattr(self, 'device', None), 'ip_address', None)
+        if ip and self.door_number:
+            return f"{ip}-{self.door_number} Out"
+        return ""
 
     def __str__(self):  # pragma: no cover
-        return f"Door {self.name}"[:80]
+        dn = f" #{self.door_number}" if self.door_number else ""
+        return f"Door{dn} {self.name}"[:80]
 
 
 class TimeSegment(models.Model):
@@ -252,6 +332,44 @@ class TimeSegment(models.Model):
             if self.days_mask & (1 << i):
                 active.append(n)
         return ",".join(active)
+
+
+class DoorFirstCardRule(models.Model):
+    """Legacy-like First-Card Normal Open rules per door.
+
+    In old ZKAccess UI this is configured under Door Configuration -> First-Card Normal Open Setting.
+    """
+
+    door = models.ForeignKey(Door, on_delete=models.CASCADE, related_name='first_card_rules')
+    time_segment = models.ForeignKey(TimeSegment, null=True, blank=True, on_delete=models.SET_NULL, related_name='first_card_rules')
+    employees = models.ManyToManyField('Employee', blank=True, related_name='first_card_rules')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['door', 'created_at']),
+        ]
+
+    def __str__(self):  # pragma: no cover
+        return f"FirstCard door={self.door_id} tz={getattr(self.time_segment, 'name', '')}"[:80]
+
+
+class DoorMultiCardRule(models.Model):
+    """Legacy-like Multi-Card Open combinations per door."""
+
+    door = models.ForeignKey(Door, on_delete=models.CASCADE, related_name='multi_card_rules')
+    name = models.CharField(max_length=128, default='', blank=True)
+    required_count = models.PositiveSmallIntegerField(default=2)
+    employees = models.ManyToManyField('Employee', blank=True, related_name='multi_card_rules')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['door', 'created_at']),
+        ]
+
+    def __str__(self):  # pragma: no cover
+        return f"MultiCard door={self.door_id} name={self.name}"[:80]
 
 
 class Holiday(models.Model):
@@ -409,6 +527,50 @@ class CommandLog(models.Model):
 
     def __str__(self):  # pragma: no cover
         return f"Cmd {self.command} {self.status}"[:80]
+
+
+class SystemSettings(models.Model):
+    """Singleton-like system configuration (legacy 'System Options')."""
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    time_zone = models.CharField(max_length=64, blank=True, default='Etc/GMT+2')
+    # UI preferences
+    date_format = models.CharField(max_length=16, blank=True, default='ro_short')
+    week_start = models.CharField(max_length=8, blank=True, default='monday')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    @classmethod
+    def get_solo(cls) -> "SystemSettings":
+        obj, _ = cls.objects.get_or_create(id=1)
+        return obj
+
+    def __str__(self):  # pragma: no cover
+        return f"SystemSettings tz={self.time_zone or ''}"[:80]
+
+
+class TimeZoneSetting(models.Model):
+    """Named time zone presets managed from System module.
+
+    Exactly one row should be active at a time. The active row is mirrored into
+    SystemSettings.time_zone.
+    """
+
+    name = models.CharField(max_length=64, unique=True)
+    region = models.CharField(max_length=64, blank=True, default='')
+    time_zone = models.CharField(max_length=64)
+    is_active = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["is_active"], name='tzs_active_idx'),
+            models.Index(fields=["time_zone"], name='tzs_tz_idx'),
+        ]
+
+    def __str__(self):  # pragma: no cover
+        flag = '*' if self.is_active else ''
+        return f"TZSetting{flag} {self.name} {self.time_zone}"[:80]
 
 
 class EmployeeAccessCache(models.Model):

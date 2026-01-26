@@ -17,15 +17,22 @@
 
   <div class="table-shell">
     <table>
-      <thead><tr><th>Nume</th><th>Device</th><th>Locație</th><th>Activă</th><th>Stare</th><th class="col-w-150">Acțiuni</th></tr></thead>
+      <thead><tr><th>Centrală</th><th class="col-w-70">Ușă</th><th>Nume</th><th>Cititoare</th><th>Locație</th><th class="col-w-70">Activă</th><th class="col-w-90">Stare</th><th class="col-w-150">Acțiuni</th></tr></thead>
       <tbody>
         {% for d in page.object_list %}
         <tr>
+          <td>{% if d.device %}{{ d.device.name }} (SN:{{ d.device.serial_number }}){% else %}-{% endif %}</td>
+          <td>{% if d.door_number %}{{ d.door_number }}{% else %}-{% endif %}</td>
           <td>{{ d.name }}</td>
-          <td>{% if d.device %}{{ d.device.device_name }} (SN:{{ d.device.serial_number }}){% else %}-{% endif %}</td>
+          <td>
+            {% if d.reader_in_name or d.reader_out_name %}
+              <div title="Reader 1 (In)">R1: {{ d.reader_in_name|default:'-' }}</div>
+              <div title="Reader 2 (Out)">R2: {{ d.reader_out_name|default:'-' }}</div>
+            {% else %}-{% endif %}
+          </td>
           <td>{{ d.location|default:'-' }}</td>
           <td>{% if d.enabled %}DA{% else %}NU{% endif %}</td>
-          <td>{{ d.state|default:'-' }}</td>
+          <td>{% if d.is_open %}OPEN{% else %}CLOSED{% endif %}</td>
           <td>
             {% if can_edit %}
             <button type="button" class="btn-success btn-small" data-access-open="1" data-title="Editează ușă" data-url="{% url 'crud-door-edit' d.id %}?modal=1" title="Editează ușa">Editează</button>
@@ -34,7 +41,7 @@
           </td>
         </tr>
         {% empty %}
-          <tr><td colspan="6" class="td-center-muted">Nu există uși</td></tr>
+          <tr><td colspan="8" class="td-center-muted">Nu există uși</td></tr>
         {% endfor %}
       </tbody>
     </table>

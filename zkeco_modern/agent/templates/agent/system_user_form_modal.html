@@ -1,0 +1,75 @@
+{% if mode == 'edit' %}
+<form method="post" action="/agent/system/users/{{ obj.id }}/edit/">
+{% else %}
+<form method="post" action="/agent/system/users/new/">
+{% endif %}
+  {% csrf_token %}
+
+  {% if mode == 'edit' %}
+    <div style="margin-bottom:6px;padding:6px 8px;border:1px solid rgba(61,165,217,0.55);background:rgba(15,36,51,0.75);border-radius:3px;color:#e8f0f8;font-weight:900;">
+      ID (DB): <span style="color:#7db3d9;">{{ obj.id }}</span>
+    </div>
+  {% endif %}
+
+  <div class="form-row">
+    <div class="form-col">
+      <label>Username</label>
+      {{ form.username }}
+      {% if form.username.errors %}<div class="helptext" style="color:#ffd6d3;">{{ form.username.errors|striptags }}</div>{% endif %}
+    </div>
+    <div class="form-col">
+      <label>Email</label>
+      {{ form.email }}
+      {% if form.email.errors %}<div class="helptext" style="color:#ffd6d3;">{{ form.email.errors|striptags }}</div>{% endif %}
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-col">
+      <label>Prenume</label>
+      {{ form.first_name }}
+    </div>
+    <div class="form-col">
+      <label>Nume</label>
+      {{ form.last_name }}
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-col">
+      <label>Rol</label>
+      {{ form.role }}
+      {% if form.role.errors %}<div class="helptext" style="color:#ffd6d3;">{{ form.role.errors|striptags }}</div>{% endif %}
+    </div>
+    <div class="form-col" style="display:flex;flex-direction:column;justify-content:flex-end;">
+      <label>Activ</label>
+      <div style="display:flex;align-items:center;gap:6px;">
+        {{ form.is_active }}
+        <span class="helptext">(permite autentificare)</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-col">
+      <label>Parolă</label>
+      {{ form.password1 }}
+      {% if form.password1.errors %}<div class="helptext" style="color:#ffd6d3;">{{ form.password1.errors|striptags }}</div>{% endif %}
+      <div class="helptext">{% if mode == 'edit' %}Lasă gol pentru a păstra parola existentă.{% else %}Obligatoriu la creare.{% endif %}</div>
+    </div>
+    <div class="form-col">
+      <label>Confirmare parolă</label>
+      {{ form.password2 }}
+      {% if form.password2.errors %}<div class="helptext" style="color:#ffd6d3;">{{ form.password2.errors|striptags }}</div>{% endif %}
+    </div>
+  </div>
+
+  {% if form.non_field_errors %}
+    <div class="helptext" style="color:#ffd6d3;margin-bottom:6px;">{{ form.non_field_errors|striptags }}</div>
+  {% endif %}
+
+  <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:8px;">
+    <button type="button" class="btn btn-secondary" onclick="SystemUI.closeModal()">Renunță</button>
+    <button type="submit" class="btn">Salvează</button>
+  </div>
+</form>

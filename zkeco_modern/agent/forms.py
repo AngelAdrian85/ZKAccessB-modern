@@ -1,5 +1,8 @@
 from django import forms
+from django.contrib.auth.models import Group, Permission, User
+from django.contrib.auth.password_validation import validate_password
 from .models import Door, TimeSegment, Holiday, AccessLevel, Employee, EmployeeCard, Device, DSTime
+from .models import DoorFirstCardRule, DoorMultiCardRule
 try:
     from legacy_models.models import (
         Area as LegacyArea,
@@ -13,13 +16,139 @@ except Exception:  # pragma: no cover
 
 
 class DoorForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        try:
+            self.fields['device'].queryset = Device.objects.filter(scanner_linked=False).order_by('name')
+        except Exception:
+            pass
+
+        # Reader names (editable): prefill with derived default to match legacy UX.
+        try:
+            if 'reader_in_custom_name' in self.fields:
+                self.fields['reader_in_custom_name'].required = False
+                self.fields['reader_in_custom_name'].widget = forms.TextInput(attrs={
+                    "class": "txt",
+                    "placeholder": "ex: 192.168.1.201-1 In",
+                })
+            if 'reader_out_custom_name' in self.fields:
+                self.fields['reader_out_custom_name'].required = False
+                self.fields['reader_out_custom_name'].widget = forms.TextInput(attrs={
+                    "class": "txt",
+                    "placeholder": "ex: 192.168.1.201-1 Out",
+                })
+            if getattr(self, 'instance', None) and getattr(self.instance, 'pk', None):
+                # If custom is empty, show derived value for quick edit.
+                if not getattr(self.instance, 'reader_in_custom_name', ''):
+                    self.initial.setdefault('reader_in_custom_name', getattr(self.instance, 'reader_in_name', '') or '')
+                if not getattr(self.instance, 'reader_out_custom_name', ''):
+                    self.initial.setdefault('reader_out_custom_name', getattr(self.instance, 'reader_out_name', '') or '')
+        except Exception:
+            pass
+
+    def clean(self):
+        cleaned = super().clean()
+        device = cleaned.get('device')
+        door_number = cleaned.get('door_number')
+        # When mapping to a controller, require a door index (1-32)
+        if device is not None:
+            try:
+                is_controller = bool(getattr(device, 'is_controller', None) and device.is_controller())
+            except Exception:
+                is_controller = False
+            if is_controller and not door_number:
+                raise forms.ValidationError('Selectează numărul ușii (1-32) pentru această centrală.')
+
+        # If user leaves reader names equal to the derived default, don't store redundant custom values.
+        try:
+            ip = getattr(device, 'ip_address', None) if device else None
+            dn = door_number
+            derived_in = f"{ip}-{dn} In" if (ip and dn) else ""
+            derived_out = f"{ip}-{dn} Out" if (ip and dn) else ""
+            rin = (cleaned.get('reader_in_custom_name') or '').strip()
+            rout = (cleaned.get('reader_out_custom_name') or '').strip()
+            if derived_in and rin == derived_in:
+                cleaned['reader_in_custom_name'] = ''
+            if derived_out and rout == derived_out:
+                cleaned['reader_out_custom_name'] = ''
+        except Exception:
+            pass
+        return cleaned
+
     class Meta:
         model = Door
-        fields = ["name", "device", "location", "normally_open", "enabled"]
+        fields = [
+            "device",
+            "door_number",
+            "name",
+            "reader_in_custom_name",
+            "reader_out_custom_name",
+            "door_active_time_zone",
+            "door_passage_mode_time_zone",
+            "lock_open_duration",
+            "punch_interval",
+            "door_sensor_type",
+            "door_status_delay",
+            "close_and_reverse_state",
+            "verify_mode",
+            "duress_password",
+            "emergency_password",
+            "location",
+            "normally_open",
+            "enabled",
+        ]
+        labels = {
+            "device": "Centrală",
+            "door_number": "Număr ușă (1-32)",
+            "name": "Denumire ușă",
+            "reader_in_custom_name": "Cititor 1 (IN)",
+            "reader_out_custom_name": "Cititor 2 (OUT)",
+            "door_active_time_zone": "Interval activ ușă",
+            "door_passage_mode_time_zone": "Interval mod pasaj",
+            "lock_open_duration": "Durată deschidere yală (sec)",
+            "punch_interval": "Interval Punch (sec)",
+            "door_sensor_type": "Tip senzor ușă",
+            "door_status_delay": "Întârziere status (sec)",
+            "close_and_reverse_state": "Închidere și stare inversă",
+            "verify_mode": "Mod verificare",
+            "duress_password": "Parolă duress",
+            "emergency_password": "Parolă urgență",
+            "location": "Zonă / Locație",
+            "normally_open": "Normal deschis",
+            "enabled": "Activ",
+        }
         widgets = {
             "name": forms.TextInput(attrs={"class": "txt"}),
             "location": forms.TextInput(attrs={"class": "txt"}),
+            "duress_password": forms.PasswordInput(render_value=True, attrs={"autocomplete": "off"}),
+            "emergency_password": forms.PasswordInput(render_value=True, attrs={"autocomplete": "off"}),
         }
+
+
+class DoorFirstCardRuleForm(forms.ModelForm):
+    employees = forms.ModelMultipleChoiceField(
+        queryset=Employee.objects.all().order_by('last_name', 'first_name'),
+        required=False,
+        widget=forms.SelectMultiple,
+        label='Opening Personnel',
+    )
+
+    class Meta:
+        model = DoorFirstCardRule
+        fields = ["time_segment", "employees"]
+
+
+class DoorMultiCardRuleForm(forms.ModelForm):
+    employees = forms.ModelMultipleChoiceField(
+        queryset=Employee.objects.all().order_by('last_name', 'first_name'),
+        required=False,
+        widget=forms.SelectMultiple,
+        label='Personnel',
+    )
+
+    class Meta:
+        model = DoorMultiCardRule
+        fields = ["name", "required_count", "employees"]
 
 
 class TimeSegmentForm(forms.ModelForm):
@@ -469,9 +598,11 @@ class DeviceExtendedForm(forms.ModelForm):
             'rs485_baudrate': forms.NumberInput(attrs={'class': 'form-control', 'value': '9600'}),
             'rs485_address': forms.NumberInput(attrs={'class': 'form-control'}),
             'area_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Physical location'}),
-            'time_zone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'UTC+2'}),
+            'time_zone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Europe/Bucharest'}),
             'firmware_version': forms.TextInput(attrs={'class': 'form-control', 'readonly': True}),
-            'hardware_version': forms.TextInput(attrs={'class': 'form-control', 'readonly': True}),
+            # Hardware/model string is often needed to infer door capacity (ACP-100/200/400).
+            # Keep it editable as a fallback when auto-detection isn't available.
+            'hardware_version': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'ex: ACP-200'}),
             'enabled': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'auto_sync_time': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
             'clear_on_add': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
@@ -486,6 +617,42 @@ class DeviceExtendedForm(forms.ModelForm):
         self.fields['rs485_baudrate'].initial = 9600
         self.fields['scanner_linked'] = forms.BooleanField(required=False, label='Scanner Linked', widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}))
         self.fields['scanner_type'] = forms.ChoiceField(required=False, label='Scanner Type', choices=[('', 'Select'), ('acp', 'ACP TCP'), ('elatec', 'Elatec Serial')], widget=forms.Select(attrs={'class': 'form-control'}))
+
+        # Time zone: legacy-like dropdown list (Etc/GMT offsets + a few defaults).
+        # NOTE: A CharField with a Select widget won't render <option> tags unless the
+        # widget has choices; use a real ChoiceField for consistent rendering.
+        try:
+            from agent.tz_utils import build_device_time_zone_choice_tuples
+
+            tz_choices = build_device_time_zone_choice_tuples()
+
+            # Preserve current value (instance / bound data) even if it's not in our preset list.
+            current_val = ''
+            try:
+                if self.is_bound:
+                    current_val = (self.data.get('time_zone') or '').strip()
+                else:
+                    current_val = (self.initial.get('time_zone') or getattr(self.instance, 'time_zone', '') or '').strip()
+            except Exception:
+                current_val = ''
+
+            base_choices: list[tuple[str, str]] = [('', '— Selectează fus orar —')]
+            if current_val and all(v != current_val for v, _ in tz_choices):
+                base_choices.append((current_val, f"(curent) {current_val}"))
+            base_choices.extend(tz_choices)
+
+            self.fields['time_zone'] = forms.ChoiceField(
+                required=False,
+                choices=base_choices,
+                widget=forms.Select(attrs={'class': 'form-control'}),
+                label=self.fields['time_zone'].label or 'Fus Orar',
+            )
+
+            if current_val:
+                self.fields['time_zone'].initial = current_val
+        except Exception:
+            # Best-effort only; keep the default field/widget.
+            pass
 
         # Populate Zone/Area dropdown from legacy Areas.
         # Keep the field as a CharField to avoid rejecting values not yet present in legacy,
@@ -546,13 +713,33 @@ class DeviceExtendedForm(forms.ModelForm):
             md = self.instance
         else:
             md = ModernDevice()
-        md.name = data.get('name') or md.name
-        md.device_type = data.get('device_type') or md.device_type
+        md.name = (data.get('name') or md.name)
+        md.serial_number = (data.get('serial_number') or md.serial_number)
+
+        md.device_type = (data.get('device_type') or md.device_type)
+        md.comm_mode = (data.get('comm_mode') or md.comm_mode)
+
         md.ip_address = data.get('ip_address') or md.ip_address
-        md.area_name = data.get('area_name') or md.area_name
+        md.port = data.get('port') if data.get('port') is not None else md.port
+        md.comm_password = (data.get('comm_password') or md.comm_password)
+
+        md.rs485_port = (data.get('rs485_port') or md.rs485_port)
+        md.rs485_baudrate = data.get('rs485_baudrate') if data.get('rs485_baudrate') is not None else md.rs485_baudrate
+        md.rs485_address = data.get('rs485_address') if data.get('rs485_address') is not None else md.rs485_address
+
+        md.area_name = (data.get('area_name') or md.area_name)
+        md.time_zone = (data.get('time_zone') or md.time_zone)
+
+        md.firmware_version = (data.get('firmware_version') or md.firmware_version)
+        md.hardware_version = (data.get('hardware_version') or md.hardware_version)
+
         md.enabled = data.get('enabled') if data.get('enabled') is not None else md.enabled
-        md.serial_number = data.get('serial_number') or md.serial_number
-        md.firmware_version = data.get('firmware_version') or md.firmware_version
+        md.auto_sync_time = data.get('auto_sync_time') if data.get('auto_sync_time') is not None else md.auto_sync_time
+        md.clear_on_add = data.get('clear_on_add') if data.get('clear_on_add') is not None else md.clear_on_add
+
+        md.scanner_linked = data.get('scanner_linked') if data.get('scanner_linked') is not None else md.scanner_linked
+        md.scanner_type = (data.get('scanner_type') or md.scanner_type)
+
         md.save()
         # Legacy sync
         try:
@@ -566,12 +753,7 @@ class DeviceExtendedForm(forms.ModelForm):
                     fw_version=md.firmware_version,
                     device_type=0,
                 )
-            legacy.comm_type = data.get('comm_type') or legacy.comm_type
-            legacy.com_port = data.get('com_port') or legacy.com_port
-            legacy.com_address = data.get('com_address') or legacy.com_address
-            legacy.acpanel_type = data.get('acpanel_type') or legacy.acpanel_type
-            legacy.fp_count = data.get('fp_count') or legacy.fp_count
-            legacy.transaction_count = data.get('transaction_count') or legacy.transaction_count
+            # Legacy fields are best-effort only; modern app remains source of truth.
             legacy.fw_version = data.get('firmware_version') or legacy.fw_version
             # area assign
             an = data.get('area_name')
@@ -588,4 +770,266 @@ class DeviceExtendedForm(forms.ModelForm):
         except Exception:
             pass
         return md
+
+
+# ---- System Module Forms ----
+
+
+ROLE_GROUP_PREFIX = 'ROLE_'
+ROLE_SUPER_ADMIN = 'ROLE_SUPER_ADMIN'
+ROLE_ADMIN = 'ROLE_ADMIN'
+ROLE_USER = 'ROLE_USER'
+ROLE_VISITOR = 'ROLE_VISITOR'
+
+
+def _ensure_role_groups_exist() -> None:
+    try:
+        for name in (ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_USER, ROLE_VISITOR):
+            Group.objects.get_or_create(name=name)
+    except Exception:
+        # Best-effort only; avoid hard failure during migrations/startup.
+        pass
+
+
+def _all_time_zone_choices():
+    try:
+        from agent.tz_utils import build_time_zone_choice_tuples
+
+        return build_time_zone_choice_tuples()
+    except Exception:
+        zones = [
+            'Europe/Bucharest',
+            'UTC',
+            'Etc/UTC',
+            'Etc/GMT-2',
+            'Etc/GMT+2',
+        ]
+        return [(z, z) for z in zones]
+
+
+class SystemUserForm(forms.Form):
+    username = forms.CharField(max_length=150, widget=forms.TextInput(attrs={'class': 'form-control'}))
+    first_name = forms.CharField(max_length=150, required=False, widget=forms.TextInput(attrs={'class': 'form-control'}))
+    last_name = forms.CharField(max_length=150, required=False, widget=forms.TextInput(attrs={'class': 'form-control'}))
+    email = forms.EmailField(required=False, widget=forms.EmailInput(attrs={'class': 'form-control'}))
+    role = forms.ChoiceField(
+        choices=[
+            (ROLE_SUPER_ADMIN, 'Super Admin'),
+            (ROLE_ADMIN, 'Admin'),
+            (ROLE_USER, 'Utilizator'),
+            (ROLE_VISITOR, 'Vizitator'),
+        ],
+        widget=forms.Select(attrs={'class': 'form-control'}),
+    )
+    is_active = forms.BooleanField(required=False, initial=True)
+    password1 = forms.CharField(required=False, widget=forms.PasswordInput(attrs={'class': 'form-control'}))
+    password2 = forms.CharField(required=False, widget=forms.PasswordInput(attrs={'class': 'form-control'}))
+
+    def __init__(self, *args, instance: User | None = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.instance = instance
+        _ensure_role_groups_exist()
+
+        if instance is not None and not self.is_bound:
+            self.initial.update(
+                {
+                    'username': instance.username,
+                    'first_name': instance.first_name,
+                    'last_name': instance.last_name,
+                    'email': instance.email,
+                    'is_active': instance.is_active,
+                }
+            )
+            # Infer current role from groups / flags
+            role = ROLE_USER
+            try:
+                group_names = set(instance.groups.values_list('name', flat=True))
+                for candidate in (ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_USER, ROLE_VISITOR):
+                    if candidate in group_names:
+                        role = candidate
+                        break
+                # Fallback to flags
+                if instance.is_superuser:
+                    role = ROLE_SUPER_ADMIN
+                elif instance.is_staff:
+                    role = ROLE_ADMIN
+            except Exception:
+                pass
+            self.initial['role'] = role
+
+    def clean_username(self):
+        username = (self.cleaned_data.get('username') or '').strip()
+        if not username:
+            raise forms.ValidationError('Username este obligatoriu.')
+        qs = User.objects.filter(username=username)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError('Username deja existent.')
+        return username
+
+    def clean(self):
+        cleaned = super().clean()
+        p1 = (cleaned.get('password1') or '').strip()
+        p2 = (cleaned.get('password2') or '').strip()
+
+        # Create: password required; Edit: optional.
+        if self.instance is None and not p1:
+            self.add_error('password1', 'Parola este obligatorie.')
+        if (p1 or p2) and p1 != p2:
+            self.add_error('password2', 'Parolele nu coincid.')
+        if p1:
+            try:
+                validate_password(p1)
+            except Exception as ex:
+                self.add_error('password1', str(ex))
+        return cleaned
+
+    def save(self) -> User:
+        data = self.cleaned_data
+        if self.instance is None:
+            user = User()
+        else:
+            user = self.instance
+
+        user.username = data.get('username')
+        user.first_name = data.get('first_name') or ''
+        user.last_name = data.get('last_name') or ''
+        user.email = data.get('email') or ''
+        user.is_active = bool(data.get('is_active'))
+
+        role = data.get('role')
+        user.is_superuser = (role == ROLE_SUPER_ADMIN)
+        user.is_staff = role in (ROLE_SUPER_ADMIN, ROLE_ADMIN)
+
+        user.save()
+
+        # Enforce exactly one role group.
+        _ensure_role_groups_exist()
+        try:
+            role_groups = list(Group.objects.filter(name__in=[ROLE_SUPER_ADMIN, ROLE_ADMIN, ROLE_USER, ROLE_VISITOR]))
+            user.groups.remove(*role_groups)
+            if role:
+                g = Group.objects.filter(name=role).first()
+                if g:
+                    user.groups.add(g)
+        except Exception:
+            pass
+
+        p1 = (data.get('password1') or '').strip()
+        if p1:
+            user.set_password(p1)
+            user.save(update_fields=['password'])
+        return user
+
+
+class SystemGroupForm(forms.Form):
+    name = forms.CharField(max_length=150, widget=forms.TextInput(attrs={'class': 'form-control'}))
+    permissions = forms.ModelMultipleChoiceField(
+        queryset=Permission.objects.all().order_by('content_type__app_label', 'codename'),
+        required=False,
+        widget=forms.SelectMultiple(attrs={'class': 'form-control', 'size': '10'}),
+    )
+
+    def __init__(self, *args, instance: Group | None = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.instance = instance
+        if instance is not None and not self.is_bound:
+            self.initial['name'] = instance.name
+            try:
+                self.initial['permissions'] = list(instance.permissions.all())
+            except Exception:
+                self.initial['permissions'] = []
+
+    def clean_name(self):
+        name = (self.cleaned_data.get('name') or '').strip()
+        if not name:
+            raise forms.ValidationError('Numele grupului este obligatoriu.')
+        qs = Group.objects.filter(name=name)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError('Grup deja existent.')
+        return name
+
+    def save(self) -> Group:
+        data = self.cleaned_data
+        if self.instance is None:
+            grp = Group()
+        else:
+            grp = self.instance
+        grp.name = data.get('name')
+        grp.save()
+        try:
+            grp.permissions.set(data.get('permissions') or [])
+        except Exception:
+            pass
+        return grp
+
+
+class TimeZoneSettingForm(forms.Form):
+    name = forms.CharField(max_length=64, widget=forms.TextInput(attrs={'class': 'form-control'}))
+    region = forms.CharField(
+        max_length=64,
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'ex: Europe'}),
+    )
+    time_zone = forms.ChoiceField(choices=_all_time_zone_choices(), widget=forms.Select(attrs={'class': 'form-control'}))
+    is_active = forms.BooleanField(required=False)
+
+    def __init__(self, *args, instance=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.instance = instance
+        if instance is not None and not self.is_bound:
+            self.initial['name'] = getattr(instance, 'name', '')
+            self.initial['region'] = getattr(instance, 'region', '')
+            self.initial['time_zone'] = getattr(instance, 'time_zone', '')
+            self.initial['is_active'] = bool(getattr(instance, 'is_active', False))
+
+    def clean_name(self):
+        name = (self.cleaned_data.get('name') or '').strip()
+        if not name:
+            raise forms.ValidationError('Denumirea este obligatorie.')
+        try:
+            from agent.models import TimeZoneSetting
+
+            qs = TimeZoneSetting.objects.filter(name=name)
+            if getattr(self, 'instance', None) is not None:
+                try:
+                    qs = qs.exclude(pk=self.instance.pk)
+                except Exception:
+                    pass
+            if qs.exists():
+                raise forms.ValidationError('Denumire deja existentă.')
+        except forms.ValidationError:
+            raise
+        except Exception:
+            pass
+        return name
+
+    def clean_region(self):
+        region = (self.cleaned_data.get('region') or '').strip()
+        if region:
+            return region
+        tz_name = (self.cleaned_data.get('time_zone') or '').strip()
+        if tz_name and '/' in tz_name:
+            return tz_name.split('/', 1)[0].strip()
+        return ''
+
+
+class DeviceTimeZoneForm(forms.Form):
+    time_zone = forms.ChoiceField(
+        choices=_all_time_zone_choices(),
+        widget=forms.Select(attrs={'class': 'form-control'}),
+    )
+
+    def __init__(self, *args, instance=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.instance = instance
+        if instance is not None and not self.is_bound:
+            try:
+                self.initial['time_zone'] = getattr(instance, 'time_zone', '') or ''
+            except Exception:
+                pass
+
 

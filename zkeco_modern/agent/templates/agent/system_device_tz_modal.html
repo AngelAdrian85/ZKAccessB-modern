@@ -1,0 +1,29 @@
+<form method="post" action="/agent/system/devices/{{ dev.id }}/timezone/">
+  {% csrf_token %}
+
+  <div style="margin-bottom:6px;padding:6px 8px;border:1px solid rgba(61,165,217,0.55);background:rgba(15,36,51,0.75);border-radius:3px;color:#e8f0f8;font-weight:900;">
+    ID (DB): <span style="color:#7db3d9;">{{ dev.id }}</span>
+  </div>
+
+  <div class="form-row">
+    <div class="form-col">
+      <label>Echipament</label>
+      <input class="form-control" value="{{ dev.name }}" readonly />
+      <div class="helptext">SN: {{ dev.serial_number|default:"-" }}{% if dev.ip_address %} • IP: {{ dev.ip_address }}{% endif %}</div>
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="form-col">
+      <label>Fus orar (echipament)</label>
+      {{ form.time_zone }}
+      {% if form.time_zone.errors %}<div class="helptext" style="color:#ffd6d3;">{{ form.time_zone.errors|striptags }}</div>{% endif %}
+      <div class="helptext">Selectează un fus orar din lista globală (include UTC/GMT + țări).</div>
+    </div>
+  </div>
+
+  <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:8px;">
+    <button type="button" class="btn btn-secondary" onclick="(window.SystemUI&&SystemUI.closeModal?SystemUI.closeModal():(window.SysOptUI&&SysOptUI.closeModal?SysOptUI.closeModal():null))">Renunță</button>
+    <button type="submit" class="btn">Salvează</button>
+  </div>
+</form>

@@ -1,0 +1,96 @@
+<style>
+  .dc-modal{background:#0a1a27;border:1px solid #2f5876;border-radius:6px;padding:12px;}
+  .dc-modal h3{margin:0 0 10px 0;color:#9fd2f1;font-size:13px;}
+  .dc-grid{display:grid;grid-template-columns:1.2fr 0.8fr;gap:10px;}
+  .dc-box{background:#0f2433;border:1px solid #2f5876;border-radius:4px;padding:10px;}
+  .dc-box h4{margin:0 0 8px 0;color:#cfe9f8;font-size:11px;text-transform:uppercase;letter-spacing:0.3px;}
+  .dc-table{width:100%;border-collapse:collapse;font-size:10px;}
+  .dc-table th,.dc-table td{border-bottom:1px solid rgba(61,106,139,0.45);padding:4px 6px;vertical-align:top;}
+  .dc-table th{color:#9fd2f1;text-transform:uppercase;font-size:9px;letter-spacing:0.2px;}
+  .dc-muted{color:#7db3d9;font-size:10px;}
+  .dc-msg{margin:6px 0;color:#a6d189;font-weight:800;font-size:10px;}
+  .dc-err{margin:6px 0;color:#ffbdbd;font-weight:800;font-size:10px;}
+  .dc-field{margin-bottom:8px;}
+  .dc-field label{display:block;color:#e8f0f8;font-weight:700;font-size:10px;margin-bottom:3px;}
+  .dc-field select,.dc-field input{width:100%;background:#0a1a27;border:1px solid #2f5876;color:#e8f0f8;border-radius:4px;padding:6px;font-size:10px;}
+  .dc-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:8px;}
+  .dc-btn{padding:6px 10px;border-radius:4px;border:1px solid #3d6a8b;background:#163247;color:#e8f0f8;font-weight:900;font-size:10px;cursor:pointer;}
+  .dc-btn.primary{background:#3da5d9;border-color:#3da5d9;color:#fff;}
+  .dc-btn.danger{border-color:rgba(255,107,107,0.8);}
+  .dc-btn:hover{background:#1e4a6b;}
+</style>
+
+<div class="dc-modal">
+  <h3>Multi-Card Open Setting – {{ door.name }}</h3>
+  <div class="dc-muted">Device: {% if door.device %}{{ door.device.name }}{% else %}—{% endif %} | Door: {% if door.door_number %}{{ door.door_number }}{% else %}NECONFIG{% endif %}</div>
+  {% if msg %}<div class="dc-msg">{{ msg }}</div>{% endif %}
+
+  <div class="dc-grid" style="margin-top:10px;">
+    <div class="dc-box">
+      <h4>Multi-Card opening combination</h4>
+      <table class="dc-table" aria-label="Multi-Card rules">
+        <thead>
+          <tr>
+            <th>Combination Name</th>
+            <th style="width:120px;">Required</th>
+            <th style="width:120px;">Personnel</th>
+            <th style="width:180px;">Related operation</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rules %}
+            <tr>
+              <td>{{ r.name|default:'(unnamed)' }}</td>
+              <td>{{ r.required_count }}</td>
+              <td>{{ r.employees.all|length }}</td>
+              <td>
+                <a class="dc-btn" style="text-decoration:none;" href="?modal=1&rule={{ r.id }}">Edit</a>
+                <form method="post" data-modal-form="1" style="display:inline-block;margin-left:6px;">
+                  {% csrf_token %}
+                  <input type="hidden" name="_action" value="delete" />
+                  <input type="hidden" name="rule_id" value="{{ r.id }}" />
+                  <button type="submit" class="dc-btn danger">Delete</button>
+                </form>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="4" class="dc-muted">No entries.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="dc-box">
+      <h4>{% if edit_rule %}Edit{% else %}Add{% endif %}</h4>
+      <form method="post" data-modal-form="1">
+        {% csrf_token %}
+        <input type="hidden" name="rule_id" value="{% if edit_rule %}{{ edit_rule.id }}{% endif %}" />
+        {% if form.non_field_errors %}<div class="dc-err">{{ form.non_field_errors }}</div>{% endif %}
+
+        <div class="dc-field">
+          <label for="{{ form.name.id_for_label }}">Combination Name</label>
+          {{ form.name }}
+          {% if form.name.errors %}<div class="dc-err">{{ form.name.errors|striptags }}</div>{% endif %}
+        </div>
+
+        <div class="dc-field">
+          <label for="{{ form.required_count.id_for_label }}">Required Count</label>
+          {{ form.required_count }}
+          {% if form.required_count.errors %}<div class="dc-err">{{ form.required_count.errors|striptags }}</div>{% endif %}
+        </div>
+
+        <div class="dc-field">
+          <label for="{{ form.employees.id_for_label }}">Browse Opening Personnel</label>
+          {{ form.employees }}
+          <div class="dc-muted" style="margin-top:4px;">Selectează personalul din combinație. (Ctrl/Shift pentru multi-select)</div>
+          {% if form.employees.errors %}<div class="dc-err">{{ form.employees.errors|striptags }}</div>{% endif %}
+        </div>
+
+        <div class="dc-actions">
+          <button type="button" class="dc-btn" data-modal-close="1">Close</button>
+          <button type="submit" class="dc-btn primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

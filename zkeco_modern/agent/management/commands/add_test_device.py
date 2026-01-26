@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from agent.models import Device
+from agent.models import Device, SystemSettings
 from django.utils import timezone
 
 
@@ -13,6 +13,11 @@ class Command(BaseCommand):
             return
 
         # Create test device
+        tz_name = ''
+        try:
+            tz_name = (SystemSettings.get_solo().time_zone or '').strip()
+        except Exception:
+            tz_name = ''
         device = Device.objects.create(
             name='Test Access Panel',
             serial_number='TEST_DEVICE_001',
@@ -22,7 +27,7 @@ class Command(BaseCommand):
             port=4370,
             comm_password='',
             area_name='Test Area',
-            time_zone='UTC+2',
+            time_zone=tz_name,
             enabled=True,
             auto_sync_time=True,
             clear_on_add=False,
