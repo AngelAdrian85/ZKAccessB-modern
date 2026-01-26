@@ -277,6 +277,8 @@
     opacity: 0;
     transition: opacity 160ms ease;
   }
+  /* Device edit/create modal must match Access/Uși modal chrome exactly */
+  #modalDeviceCreate.modal-backdrop{ z-index: 2500; }
   #modalDiscovery.modal-backdrop.is-open,
   #modalDeviceCreate.modal-backdrop.is-open, #modalScannerCreate.modal-backdrop.is-open, #modalPrompt.modal-backdrop.is-open,
   #modalAreaEdit.modal-backdrop.is-open, #modalDstEdit.modal-backdrop.is-open,
@@ -290,7 +292,7 @@
     background: #1e4a6b;
     border: 2px solid #3da5d9;
     border-radius: 2px;
-    width: min(980px, 96vw);
+    width: min(980px, calc(100vw - 28px));
     max-height: 92vh;
     display: flex;
     flex-direction: column;
@@ -443,6 +445,26 @@
     transform: translateY(0);
   }
 
+  /* Exact parity with Access modal chrome (no hover translate / no shadow jump) */
+  #modalDeviceCreate.modal-backdrop.is-open .modal{ box-shadow: 0 20px 50px rgba(0,0,0,0.55); }
+  #modalDeviceCreate .modal-close{
+    background:#163247;
+    border:1px solid #3d6a8b;
+    color:#9fd2f1;
+    width:22px;
+    height:22px;
+    border-radius:2px;
+    cursor:pointer;
+    font-weight:700;
+    font-size:14px;
+    transition:none;
+    transform:none;
+  }
+  #modalDeviceCreate .modal-close:hover{ background:#3da5d9;border-color:#3da5d9;color:#fff;transform:none; }
+  #modalDeviceCreate .modal-close:active{ transform:none; }
+  #modalDeviceCreate .modal-title{ text-align:left; flex:1; }
+  #modalDeviceCreate .modal-header .modal-title{ position:static; z-index:auto; }
+
   #modalDeviceCreate .modal-body, #modalScannerCreate .modal-body { padding: 6px; overflow: auto; color: #e8f0f8; }
   #modalDiscovery .modal-body { padding: 6px; overflow: auto; color: #e8f0f8; }
   #modalDeviceCreate .section, #modalScannerCreate .section { border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; background: var(--bg-primary); margin-bottom: 10px; }
@@ -483,6 +505,9 @@
   #modalDeviceCreate .modal-footer button.primary, #modalScannerCreate .modal-footer button.primary { background: #3da5d9; border-color: #2c8ec0; }
   #modalScannerCreate .modal-footer.split { justify-content: space-between; }
   #modalDeviceCreate .status, #modalScannerCreate .status { padding: 0 16px 14px 16px; min-height: 16px; font-size: 12px; font-weight: 700; }
+  /* Access modal has no persistent status bar; keep it only when we actually show text */
+  #modalDeviceCreate .status{ padding: 0; min-height: 0; }
+  #modalDeviceCreate .status:empty{ display:none; }
 
   /* Prompt/Confirm/Result modals */
   #modalPrompt .modal-body, #modalConfirm .modal-body, #modalAreaResult .modal-body { padding: 12px 14px; color: var(--text-light); }
@@ -757,17 +782,16 @@
 </div>
 
 <!-- Modal: Dispozitiv Nou (fara navigare) -->
-<div class="modal-backdrop" id="modalDeviceCreate">
-  <div class="modal">
-    <div class="modal-header compact">
-      <span class="modal-spacer" aria-hidden="true"></span>
-      <span id="deviceCreateTitle" class="modal-title">Dispozitiv</span>
-      <button type="button" id="deviceCreateClose" aria-label="Închide">✕</button>
+<div class="modal-backdrop" id="modalDeviceCreate" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <div style="width:30px;"></div>
+      <div class="modal-title" id="deviceCreateTitle">Dispozitiv</div>
+      <button type="button" class="modal-close" id="deviceCreateClose" aria-label="Închide" title="Închide">✕</button>
     </div>
     <div class="modal-body">
       <div id="deviceCreateContent"></div>
     </div>
-    <div class="status" id="deviceCreateStatus"></div>
   </div>
 </div>
 
@@ -1501,6 +1525,8 @@
   const btnDeviceNew = document.getElementById('btnDeviceNew');
   const btnDeviceScanner = document.getElementById('btnDeviceScanner');
 
+  let currentDeviceModalUrl = null;
+
   function showMenuActionOverlay(message, ok){
     const el = document.getElementById('menuActionOverlay');
     if(!el) return;
@@ -1538,22 +1564,167 @@
     el.classList.remove('success','error','loading');
   }
 
-  function _executeInlineScripts(container){
-    const scripts = Array.from(container.querySelectorAll('script'));
-    for(const oldScript of scripts){
-      const newScript = document.createElement('script');
-      if(oldScript.src){ newScript.src = oldScript.src; newScript.async = false; }
-      newScript.text = oldScript.textContent || '';
-      document.head.appendChild(newScript);
-      oldScript.remove();
+  function deviceModalHasActionModal(){
+    return Boolean(window.zkActionModal && typeof window.zkActionModal.open === 'function' && typeof window.zkActionModal.setState === 'function');
+  }
+
+  function isDeviceModalSavedContent(){
+    const content = document.getElementById('deviceCreateContent');
+    if(!content) return false;
+    return Boolean(content.querySelector('[data-access-saved="1"], [data-segment-saved="1"]'));
+  }
+
+  function wireDeviceModalBody(){
+    const content = document.getElementById('deviceCreateContent');
+    if(!content) return;
+
+    // Close buttons
+    content.querySelectorAll('[data-modal-close="1"]').forEach(btn => {
+      btn.addEventListener('click', (e)=>{ e.preventDefault(); closeDeviceModal(); });
+    });
+
+    // Open nested forms (doors etc.) inside the same modal
+    content.querySelectorAll('[data-device-open="1"], [data-access-open="1"]').forEach(btn => {
+      btn.addEventListener('click', (e)=>{
+        e.preventDefault();
+        const url = (btn.getAttribute('data-url') || btn.getAttribute('href') || '').trim();
+        const title = (btn.getAttribute('data-title') || '').trim();
+        if(url) openDeviceModal(url, title || 'Formular');
+      });
+    });
+
+    const form = content.querySelector('form[data-modal-form="1"]');
+    if(form){
+      form.addEventListener('submit', async (e)=>{
+        e.preventDefault();
+        const url = currentDeviceModalUrl || form.getAttribute('action') || window.location.href;
+
+        if(deviceModalHasActionModal()){
+          try{
+            window.zkActionModal.open({mode:'', module:'', title:'UPDATE', subtitle:'Salvare date'});
+            window.zkActionModal.setState('loading', 'UPDATE ÎN CURS', 'Se salvează datele...');
+          }catch(_e){}
+        }
+
+        try{
+          const resp = await fetch(url, {
+            method: 'POST',
+            headers: {'X-Requested-With':'XMLHttpRequest','X-CSRFToken': getCSRF() || ''},
+            body: new FormData(form)
+          });
+          const html = await resp.text();
+          window.replaceDeviceModalContent(html);
+
+          if(isDeviceModalSavedContent()){
+            window.setTimeout(()=>{
+              closeDeviceModal();
+              if(deviceModalHasActionModal()){
+                try{
+                  window.zkActionModal.setState('success', 'UPDATE REALIZAT CU SUCCES', 'Datele au fost salvate.');
+                  window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1200);
+                }catch(_e){}
+              } else {
+                if(typeof showMenuActionOverlay === 'function') showMenuActionOverlay('Datele au fost salvate.', true);
+              }
+              // refresh list to reflect changes
+              window.setTimeout(()=>{ try{ window.location.reload(); }catch(_e){} }, 1250);
+            }, 250);
+          } else {
+            if(deviceModalHasActionModal()){
+              try{
+                window.zkActionModal.setState('error', 'UPDATE NEREUȘIT', 'Verifică câmpurile din formular.');
+                window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1400);
+              }catch(_e){}
+            } else {
+              if(typeof showMenuActionOverlay === 'function') showMenuActionOverlay('Verifică câmpurile din formular.', false);
+            }
+          }
+        }catch(err){
+          if(deviceModalHasActionModal()){
+            try{
+              window.zkActionModal.setState('error', 'UPDATE NEREUȘIT', String(err && err.message ? err.message : err));
+              window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1600);
+            }catch(_e){}
+          } else {
+            if(typeof showMenuActionOverlay === 'function') showMenuActionOverlay(String(err), false);
+          }
+        }
+      });
     }
+
+    // Initialize lightweight widgets inside modal content (injected scripts don't run)
+    try{
+      const doorForm = content.querySelector('form[data-door-form="1"]');
+      if(doorForm){
+        const ip = (doorForm.getAttribute('data-device-ip') || '').trim();
+        const doorNoEl = doorForm.querySelector('select[name="door_number"], input[name="door_number"]');
+        const inEl = doorForm.querySelector('input[name="reader_in_custom_name"]');
+        const outEl = doorForm.querySelector('input[name="reader_out_custom_name"]');
+        const prevDoorNo = doorNoEl ? String(doorNoEl.value || '').trim() : '';
+
+        function renderReaders(){
+          const dn = doorNoEl ? String(doorNoEl.value || '').trim() : '';
+          const derivedIn = (ip && dn) ? `${ip}-${dn} In` : '';
+          const derivedOut = (ip && dn) ? `${ip}-${dn} Out` : '';
+          const placeholderIn = ip ? (dn ? `${ip}-${dn} In` : `${ip}-<Nr> In`) : '';
+          const placeholderOut = ip ? (dn ? `${ip}-${dn} Out` : `${ip}-<Nr> Out`) : '';
+
+          let oldDn = '';
+          try{ oldDn = doorForm.getAttribute('data-prev-door-no') || ''; }catch(_e){}
+          if(!oldDn){ oldDn = prevDoorNo; }
+          const derivedInOld = (ip && oldDn) ? `${ip}-${oldDn} In` : '';
+          const derivedOutOld = (ip && oldDn) ? `${ip}-${oldDn} Out` : '';
+
+          if(inEl){
+            try{ inEl.setAttribute('placeholder', placeholderIn || ''); }catch(_e){}
+            const cur = String(inEl.value || '').trim();
+            if((!cur && derivedIn) || (derivedInOld && cur === derivedInOld)){
+              if(derivedIn) inEl.value = derivedIn;
+            }
+          }
+          if(outEl){
+            try{ outEl.setAttribute('placeholder', placeholderOut || ''); }catch(_e){}
+            const cur = String(outEl.value || '').trim();
+            if((!cur && derivedOut) || (derivedOutOld && cur === derivedOutOld)){
+              if(derivedOut) outEl.value = derivedOut;
+            }
+          }
+
+          try{ doorForm.setAttribute('data-prev-door-no', dn); }catch(_e){}
+        }
+
+        if(doorNoEl){
+          doorNoEl.addEventListener('change', renderReaders);
+          doorNoEl.addEventListener('keyup', renderReaders);
+        }
+        renderReaders();
+      }
+    }catch(_e){}
+
+    try{
+      const devScope = content.querySelector('.device-form-scope');
+      if(devScope){
+        const tcp = devScope.querySelector('#tcp-group');
+        const rs = devScope.querySelector('#rs485-group');
+        function applyCommMode(){
+          const modeEl = devScope.querySelector('input[name="comm_mode"]:checked');
+          const mode = modeEl ? String(modeEl.value || 'tcp') : 'tcp';
+          if(tcp) tcp.style.display = (mode === 'tcp') ? 'block' : 'none';
+          if(rs) rs.style.display = (mode === 'rs485') ? 'block' : 'none';
+        }
+        devScope.querySelectorAll('input[name="comm_mode"]').forEach(r=>{
+          r.addEventListener('change', applyCommMode);
+        });
+        applyCommMode();
+      }
+    }catch(_e){}
   }
 
   window.replaceDeviceModalContent = function(html){
     const content = document.getElementById('deviceCreateContent');
     if(!content) return;
     content.innerHTML = html;
-    _executeInlineScripts(content);
+    wireDeviceModalBody();
     try { content.scrollTop = 0; } catch(e) {}
   };
 
@@ -1579,6 +1750,8 @@
       const formEl = e.target;
       if(!(formEl instanceof HTMLFormElement)) return;
       if(formEl.getAttribute('data-ajax') !== '1') return;
+      // Access-style modal forms are HTML-based (data-modal-form="1") and are handled by wireDeviceModalBody().
+      if(formEl.getAttribute('data-modal-form') === '1') return;
       e.preventDefault();
       e.stopImmediatePropagation();
 
@@ -1621,6 +1794,7 @@
 
   async function openDeviceModal(url, title){
     if(!deviceCreateModal) return;
+    currentDeviceModalUrl = url;
     const header = document.getElementById('deviceCreateTitle');
     const content = document.getElementById('deviceCreateContent');
     if(header) header.textContent = title || 'Dispozitiv';
@@ -1637,7 +1811,7 @@
   window.openDeviceModal = openDeviceModal;
 
   function openDeviceCreate(){
-    const url = '{% url "crud-device-create" %}?next={{ request.get_full_path|urlencode }}';
+    const url = '{% url "crud-device-create-access" %}';
     openDeviceModal(url, '✚ Dispozitiv Nou');
   }
   function closeDeviceCreate(){ closeDeviceModal(); }
