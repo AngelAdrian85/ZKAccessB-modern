@@ -1,32 +1,116 @@
-<style>
-  .access-modal-card{background:#0a1a27;border:1px solid #2f5876;border-radius:6px;padding:14px;}
-  .access-modal-card h3{margin:0 0 12px 0;color:#9fd2f1;font-size:14px;}
-  .access-modal-field{margin-bottom:10px;}
-  .access-modal-card label{color:#e8f0f8;font-weight:600;font-size:11px;display:block;margin-bottom:4px;}
-  .access-modal-card input,.access-modal-card select,.access-modal-card textarea{width:100%;background:#0f2433;border:1px solid #2f5876;color:#e8f0f8;border-radius:4px;padding:7px;font-size:11px;}
-  .access-modal-card select[multiple]{min-height:140px;}
-  .access-modal-actions{display:flex;gap:10px;margin-top:12px;justify-content:flex-end;}
-  .access-btn{padding:7px 13px;border:none;border-radius:4px;font-size:11px;font-weight:900;cursor:pointer;color:#fff;text-decoration:none;display:inline-block;}
-  .access-btn-primary{background:#3da5d9;}
-  .access-btn-secondary{background:#2f5876;}
-  .access-error{color:#ffbdbd;font-size:11px;margin-top:4px;}
-</style>
-
-<div class="access-modal-card">
-  <h3>{% if obj %}Editează nivel{% else %}Creează nivel{% endif %}</h3>
-  <form method="post" data-modal-form="1">
+<div class="section">
+  <style>
+    /* Match Access/DoorConfig compact table feel inside modal */
+    .al-sub{width:100%;border-collapse:collapse;font-size:10px;background:#0a1a27;color:#e8f0f8;}
+    .al-sub th,.al-sub td{padding:3px 5px;border-bottom:1px solid rgba(61,106,139,0.45);border-right:1px solid rgba(61,106,139,0.35);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:top;}
+    .al-sub th:last-child,.al-sub td:last-child{border-right:none;}
+    .al-sub thead{background:#163247;}
+    .al-pill{display:inline-block;padding:1px 6px;border-radius:999px;font-size:10px;font-weight:900;background:rgba(61,165,217,0.20);border:1px solid rgba(61,165,217,0.35);color:#e8f1f8;}
+    .al-sub select{max-width:100%;}
+  </style>
+    <form method="post" data-modal-form="1"
+      data-action-modal-title="ACCES"
+      data-action-modal-subtitle="Niveluri de acces"
+      data-action-loading-big="ÎNCĂRCARE ACCES"
+      data-action-loading-msg="Se salvează nivelul și se planifică sincronizarea către centrale...">
     {% csrf_token %}
-    {% if form.non_field_errors %}<div class="access-error">{{ form.non_field_errors }}</div>{% endif %}
-    {% for f in form %}
-      <div class="access-modal-field">
-        {{ f.label_tag }}
-        {{ f }}
-        {% if f.errors %}<div class="access-error">{{ f.errors|striptags }}</div>{% endif %}
+    {% if form.non_field_errors %}<div class="inline-msg error">{{ form.non_field_errors|striptags }}</div>{% endif %}
+
+    <div class="field">
+      {{ form.name.label_tag }}
+      {{ form.name }}
+      {% if form.name.errors %}<div class="inline-msg error">{{ form.name.errors|striptags }}</div>{% endif %}
+    </div>
+
+    <div class="field" style="margin-top:8px;">
+      <label>Centrale</label>
+      <div class="hint">Adaugă/șterge centrale. Ușile se includ automat din centralele selectate.</div>
+
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px;">
+        <select data-al-device-picker="1" class="txt" style="min-width:280px;">
+          <option value="">— alege centrală —</option>
+          {% for d in devices_available %}
+            <option value="{{ d.id }}" data-device-name="{{ d.name|escape }}">{{ d.name }}</option>
+          {% endfor %}
+        </select>
+        <button type="button" class="btn-secondary btn-small" data-al-device-add="1">Adaugă</button>
       </div>
-    {% endfor %}
-    <div class="access-modal-actions">
-      <button type="button" class="access-btn access-btn-secondary" data-modal-close="1">Renunță</button>
-      <button type="submit" class="access-btn access-btn-primary">Salvează</button>
+
+      {% if form.devices.errors %}<div class="inline-msg error">{{ form.devices.errors|striptags }}</div>{% endif %}
+
+      <div class="dc-detail" style="margin-top:6px;">
+        <table class="al-sub" aria-label="Centrale selectate">
+          <thead>
+            <tr>
+              <th style="width:70px;">ID</th>
+              <th>Centrală</th>
+              <th style="width:220px;">Interval orar</th>
+              <th style="width:160px;">Vizitator</th>
+              <th style="width:110px;">Acțiuni</th>
+            </tr>
+          </thead>
+          <tbody data-al-device-table-body="1">
+            {% if devices_selected %}
+              {% for d in devices_selected %}
+                <tr data-al-device-row="1" data-device-id="{{ d.id }}" data-device-name="{{ d.name|escape }}">
+                  <td><span class="al-pill">#{{ d.id }}</span></td>
+                  <td><strong>{{ d.name }}</strong></td>
+
+                  {% if forloop.first %}
+                    <td rowspan="{{ devices_selected|length }}" style="white-space:normal;" data-al-time-td="1">
+                      <div data-al-shared-time="1">
+                        {{ form.time_segment }}
+                        {% if form.time_segment.errors %}<div class="inline-msg error" style="margin-top:4px;">{{ form.time_segment.errors|striptags }}</div>{% endif %}
+                        <div class="hint" style="margin-top:4px;">Intervalul orar se aplică întregului nivel.</div>
+                      </div>
+                    </td>
+                    <td rowspan="{{ devices_selected|length }}" style="white-space:normal;" data-al-visitor-td="1">
+                      <div data-al-shared-visitor="1">
+                        {{ form.is_visitor }}
+                        {% if form.is_visitor.errors %}<div class="inline-msg error" style="margin-top:4px;">{{ form.is_visitor.errors|striptags }}</div>{% endif %}
+                        <div class="hint" style="margin-top:4px;">Afectează personalul marcat ca vizitator.</div>
+                      </div>
+                    </td>
+                  {% endif %}
+
+                  <td>
+                    <input type="hidden" name="devices" value="{{ d.id }}" data-al-device-input="1" />
+                    <button type="button" class="btn-danger btn-small" data-al-device-remove="1">Șterge</button>
+                  </td>
+                </tr>
+              {% endfor %}
+            {% else %}
+              <tr data-al-device-empty="1">
+                <td colspan="2" class="td-center-muted">Nu ai selectat nicio centrală.</td>
+                <td style="white-space:normal;">
+                  <div data-al-shared-time="1">
+                    {{ form.time_segment }}
+                    {% if form.time_segment.errors %}<div class="inline-msg error" style="margin-top:4px;">{{ form.time_segment.errors|striptags }}</div>{% endif %}
+                  </div>
+                </td>
+                <td style="white-space:normal;">
+                  <div data-al-shared-visitor="1">
+                    {{ form.is_visitor }}
+                    {% if form.is_visitor.errors %}<div class="inline-msg error" style="margin-top:4px;">{{ form.is_visitor.errors|striptags }}</div>{% endif %}
+                  </div>
+                </td>
+                <td class="td-center-muted">—</td>
+              </tr>
+            {% endif %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="field" style="margin-top:8px;">
+      {{ form.description.label_tag }}
+      {{ form.description }}
+      {% if form.description.errors %}<div class="inline-msg error">{{ form.description.errors|striptags }}</div>{% endif %}
+    </div>
+
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" data-modal-close="1">Renunță</button>
+      <button type="submit" class="btn-primary">Salvează</button>
     </div>
   </form>
 </div>

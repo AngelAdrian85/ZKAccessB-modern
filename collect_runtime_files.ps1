@@ -64,7 +64,7 @@ foreach ($rel in $paths) {
             $copied += $rel
             Write-Output "Copied: $rel"
         } catch {
-            Write-Output "Failed to copy $src: $_"
+            Write-Output "Failed to copy ${src}: $_"
         }
     } else {
         Write-Output "Not found: $rel"

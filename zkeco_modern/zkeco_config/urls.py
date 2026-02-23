@@ -11,7 +11,25 @@ import sys
 from pathlib import Path
 from django.conf.urls.static import static
 
+try:
+    from agent import iclock_views as _iclock_views
+except Exception:  # pragma: no cover
+    _iclock_views = None
+
 urlpatterns = [
+    # ZKTeco ADMS / iClock push-mode endpoints (unauthenticated device callbacks)
+    # NOTE: Devices often call these without trailing slash.
+    *(
+        [
+            path("iclock/cdata", _iclock_views.iclock_cdata, name="iclock-cdata"),
+            path("iclock/cdata/", _iclock_views.iclock_cdata, name="iclock-cdata-slash"),
+            path("iclock/getrequest", _iclock_views.iclock_getrequest, name="iclock-getrequest"),
+            path("iclock/getrequest/", _iclock_views.iclock_getrequest, name="iclock-getrequest-slash"),
+        ]
+        if _iclock_views
+        else []
+    ),
+
     path("admin/", admin.site.urls),
     # Redirect root to the modern dashboard instead of legacy/admin
     path("", RedirectView.as_view(url="/agent/dashboard/", permanent=False)),

@@ -175,6 +175,11 @@
   text-transform: uppercase;
   letter-spacing: 0.2px;
 }
+.device-form-scope .required-star{
+  color: #ff9999;
+  font-weight: 900;
+  margin-left: 2px;
+}
 .device-form-scope .form-group .helptext { 
   font-size: 8px; 
   color: #7db3d9; 
@@ -451,7 +456,17 @@
 </style>
 
 <div class="device-form-container">
-<h2>{% if obj %}✏️ Editează Dispozitiv{% else %}➕ Dispozitiv Nou{% endif %}</h2>
+<h2>
+  {% if obj %}
+    ✏️ Editează Dispozitiv
+  {% elif wizard and wizard_step == 'identify' %}
+    ➕ Identificare centrală
+  {% elif wizard and wizard_step == 'config' %}
+    ⚙️ Configurare centrală
+  {% else %}
+    ➕ Dispozitiv Nou
+  {% endif %}
+</h2>
 
 {% if form.non_field_errors %}
 <div class="form-errors">
@@ -466,10 +481,13 @@
 
 <form method="post" novalidate {% if action_url %}action="{{ action_url }}"{% endif %} data-ajax="{% if is_modal %}1{% else %}0{% endif %}" {% if access_modal %}data-modal-form="1"{% endif %}>{% csrf_token %}
 {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}" />{% endif %}
+{% if wizard and wizard_token %}<input type="hidden" name="wizard_token" value="{{ wizard_token }}" />{% endif %}
+{% if wizard and wizard_step %}<input type="hidden" name="wizard_step" value="{{ wizard_step }}" />{% endif %}
+{% if wizard and wizard_doors_capacity %}<input type="hidden" name="doors_capacity" value="{{ wizard_doors_capacity }}" />{% endif %}
 
 {% if access_modal %}
 <div class="access-device-topbar">
-  <button type="button" class="btn-scan" data-access-device-discovery="1" style="background:#2da44e;border-color:#2da44e;color:#fff;">🔍 Descoperire / Testare dispozitive</button>
+  <button type="button" class="btn-scan" data-zk-device-discovery="1" style="background:#2da44e;border-color:#2da44e;color:#fff;">🔍 Descoperire / Testare dispozitive</button>
   <div class="helptext">Mini-modal → poate completa IP/Port automat.</div>
 </div>
 <div class="access-two-col">
@@ -590,12 +608,29 @@
 </div>
 
 <!-- SECTION 3: LOCATION & CONFIGURATION -->
+{% if wizard and wizard_step == 'identify' %}
+<div class="form-section">
+  <h3>3. Ștergere (opțional)</h3>
+  <div class="form-row full">
+    <div class="form-group">
+      <label>Opțiuni</label>
+      <div class="checkbox-options">
+        <label>
+          {{ form.clear_on_add }}
+          <span>Șterge Datele din Dispozitiv la Adăugare (fără event log)</span>
+        </label>
+      </div>
+      <div class="helptext">Dacă bifezi, vei vedea un progres blocant și va trebui să apeși „Continuă”.</div>
+    </div>
+  </div>
+</div>
+{% else %}
 <div class="form-section">
   <h3>3. Locație și Configurare</h3>
   
   <div class="form-row">
     <div class="form-group">
-      <label for="{{ form.area_name.id_for_label }}">Zonă / Locație</label>
+      <label for="{{ form.area_name.id_for_label }}">Zonă / Locație{% if wizard and wizard_step == 'config' %}<span class="required-star">*</span>{% endif %}</label>
       {{ form.area_name }}
       {% if form.area_name.errors %}<span class="form-errors">{{ form.area_name.errors|join:", " }}</span>{% endif %}
       <div class="helptext">Exemplu: Intrare Principală, Birou Director, etc.</div>
@@ -635,16 +670,20 @@
           {{ form.auto_sync_time }}
           <span>Sincronizare Automată a Orei</span>
         </label>
-        <label>
-          {{ form.clear_on_add }}
-          <span>Șterge Datele din Dispozitiv la Adăugare</span>
-        </label>
       </div>
+
+      {% if obj and obj.is_physical_controller %}
+        <div class="helptext" style="margin-top:6px;">
+          <button type="button" class="btn-secondary btn-small" title="Sincronizează personalul (server → centrală)" onclick="if(window.syncDevicePersonnelMenu){ window.syncDevicePersonnelMenu({{ obj.id }}, '{{ obj.name|escapejs }}'); return false; } if(window.syncDevicePersonnel){ window.syncDevicePersonnel({{ obj.id }}, '{{ obj.name|escapejs }}'); return false; }">SYNC SERVER → CENTRALĂ</button>
+        </div>
+      {% endif %}
     </div>
   </div>
 </div>
+{% endif %}
 
 <!-- SECTION 4: TECHNICAL INFORMATION -->
+{% if not wizard or wizard_step != 'identify' %}
 <div class="form-section">
   <h3>4. Informații Tehnice</h3>
   
@@ -655,18 +694,22 @@
       <div class="helptext">Auto-detectată din descoperire</div>
     </div>
     <div class="form-group">
-      <label for="{{ form.hardware_version.id_for_label }}">Versiune Hardware</label>
+      <label for="{{ form.hardware_version.id_for_label }}">Model / Tip centrală</label>
       {{ form.hardware_version }}
+      <div class="helptext">Auto-detectată din descoperire (poți corecta manual).</div>
     </div>
   </div>
 </div>
+{% endif %}
 
 {% if access_modal %}
 </div>
 {% endif %}
 
 <!-- SECTION 4b: DERIVED DOORS (Controller) -->
+{# In the wizard, door editing belongs to the config step only. #}
 {% if show_derived_doors|default:True %}
+{% if not wizard or wizard_step != 'identify' %}
 <div class="form-section" id="derivedDoorsSection">
   <h3>4b. Uși (derivate din centrală)</h3>
   <div class="helptext">Fiecare ușă are 2 cititoare: Reader1 (In) și Reader2 (Out). Denumire: <span class="derived-pill">&lt;IP&gt;-&lt;Nr&gt; In/Out</span></div>
@@ -696,12 +739,24 @@
             <td>{{ d.reader_in_name|default:'—' }}</td>
             <td>{{ d.reader_out_name|default:'—' }}</td>
             <td>
-              {% if access_shell %}
-                <button type="button" class="btn-secondary btn-small" data-access-open="1" data-title="Editează ușă #{{ d.id }}" data-url="{% url 'crud-door-edit' d.id %}?modal=1">Editează</button>
-              {% elif is_modal %}
-                <button type="button" class="btn-secondary btn-small" data-device-open="1" data-title="Editează ușă #{{ d.id }}" data-url="{% url 'crud-door-edit' d.id %}?modal=1">Editează</button>
+              {% if is_modal %}
+                {% if wizard and wizard_token and not obj %}
+                  <button type="button" class="btn-secondary btn-small" data-device-open="1" data-title="Editează ușă #{{ d.door_number }}" data-url="{% url 'wizard-door-draft-edit' d.door_number %}?modal=1&wizard_token={{ wizard_token|urlencode }}&return_url={{ '/agent/crud/devices/new-access/?wizard=1&wizard_token='|add:wizard_token|add:'&wizard_step=config'|urlencode }}">Editează</button>
+                {% else %}
+                  <button type="button" class="btn-secondary btn-small" data-device-open="1" data-title="Editează ușă #{{ d.id }}" data-url="{% url 'crud-door-edit' d.id %}?modal=1">Editează</button>
+                {% endif %}
+              {% elif access_shell %}
+                {% if wizard and wizard_token and not obj %}
+                  <button type="button" class="btn-secondary btn-small" data-access-open="1" data-title="Editează ușă #{{ d.door_number }}" data-url="{% url 'wizard-door-draft-edit' d.door_number %}?modal=1&wizard_token={{ wizard_token|urlencode }}&return_url={{ '/agent/crud/devices/new-access/?wizard=1&wizard_token='|add:wizard_token|add:'&wizard_step=config'|urlencode }}">Editează</button>
+                {% else %}
+                  <button type="button" class="btn-secondary btn-small" data-access-open="1" data-title="Editează ușă #{{ d.id }}" data-url="{% url 'crud-door-edit' d.id %}?modal=1">Editează</button>
+                {% endif %}
               {% else %}
-                <a class="btn-secondary btn-small" href="{% url 'crud-door-edit' d.id %}">Editează</a>
+                {% if wizard and wizard_token and not obj %}
+                  <a class="btn-secondary btn-small" href="{% url 'wizard-door-draft-edit' d.door_number %}?wizard_token={{ wizard_token|urlencode }}&return_url={{ '/agent/crud/devices/new-access/?wizard=1&wizard_token='|add:wizard_token|add:'&wizard_step=config'|urlencode }}">Editează</a>
+                {% else %}
+                  <a class="btn-secondary btn-small" href="{% url 'crud-door-edit' d.id %}">Editează</a>
+                {% endif %}
               {% endif %}
             </td>
           </tr>
@@ -717,52 +772,75 @@
 </div>
 {% endif %}
 
+{% endif %}
+
 <!-- SECTION 5: DISCOVERY & TESTING -->
 {% if not access_modal %}
-  <div class="discovery-section">
-    <strong>🔍 Descoperire și Testare Dispozitiv</strong>
-    
-    <div class="discovery-row">
-      <div>
-        <label for="netBase">Prefix Rețea (ex. 100.51.101, 110.51.101, 192.168.1):</label>
-        <input type="text" id="netBase" value="100.51.101" placeholder="100.51.101 sau 192.168.1" />
-        <small style="color: #7db3d9; font-size: 8px; margin-top: 2px; display: block;">
-          📌 Primele 3 octeti: Scannează XXX.XXX.XXX.1-254<br/>
-          Exemplu: Dispozitivul la 110.51.101.95? Introdu: 110.51.101
-        </small>
+  {% if is_modal %}
+    <div class="discovery-section">
+      <strong>🔍 Descoperire și Testare Dispozitiv</strong>
+      <div class="discovery-row" style="justify-content:flex-start;">
+        <button type="button" class="btn-scan" data-zk-device-discovery="1" style="background:#2da44e;border-color:#2da44e;color:#fff;">🔍 Descoperire / Testare dispozitive</button>
       </div>
-      <button type="button" class="btn-scan" onclick="discoverDevices()">🔎 Scanează Rețea</button>
+      <small style="color: #7db3d9; font-size: 8px; margin-top: 2px; display: block;">
+        Funcționează și în modalele încărcate dinamic (Dashboard / Echipamente).
+      </small>
     </div>
-    
-    <div class="discovery-row">
-      <div>
-        <label for="pingIp">Test IP (ping):</label>
-        <input type="text" id="pingIp" placeholder="100.51.101.95" />
+  {% else %}
+    <div class="discovery-section">
+      <strong>🔍 Descoperire și Testare Dispozitiv</strong>
+      
+      <div class="discovery-row">
+        <div>
+          <label for="netBase">Prefix Rețea (ex. 100.51.101, 110.51.101, 192.168.1):</label>
+          <input type="text" id="netBase" value="100.51.101" placeholder="100.51.101 sau 192.168.1" />
+          <small style="color: #7db3d9; font-size: 8px; margin-top: 2px; display: block;">
+            📌 Primele 3 octeti: Scannează XXX.XXX.XXX.1-254<br/>
+            Exemplu: Dispozitivul la 110.51.101.95? Introdu: 110.51.101
+          </small>
+        </div>
+        <button type="button" class="btn-scan" onclick="discoverDevices()">🔎 Scanează Rețea</button>
       </div>
-      <button type="button" class="btn-scan" onclick="pingDevice()">📡 Ping</button>
-    </div>
+      
+      <div class="discovery-row">
+        <div>
+          <label for="pingIp">Test IP (ping):</label>
+          <input type="text" id="pingIp" placeholder="100.51.101.95" />
+        </div>
+        <button type="button" class="btn-scan" onclick="pingDevice()">📡 Ping</button>
+      </div>
 
-    <div class="discovery-row">
-      <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 4px;">
-        <div>
-          <label for="portTestIp">Test Port TCP:</label>
-          <input type="text" id="portTestIp" placeholder="100.51.101.95" />
+      <div class="discovery-row">
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 4px;">
+          <div>
+            <label for="portTestIp">Test Port TCP:</label>
+            <input type="text" id="portTestIp" placeholder="100.51.101.95" />
+          </div>
+          <div>
+            <label for="portTestPort">Port:</label>
+            <input type="number" id="portTestPort" value="4370" placeholder="4370" min="1" max="65535" />
+          </div>
         </div>
-        <div>
-          <label for="portTestPort">Port:</label>
-          <input type="number" id="portTestPort" value="4370" placeholder="4370" min="1" max="65535" />
-        </div>
+        <button type="button" class="btn-scan" onclick="testPort()">🔌 Test Port</button>
       </div>
-      <button type="button" class="btn-scan" onclick="testPort()">🔌 Test Port</button>
+      
+      <div id="netResults" class="results-box" style="display: none;"></div>
     </div>
-    
-    <div id="netResults" class="results-box" style="display: none;"></div>
-  </div>
+  {% endif %}
 {% endif %}
 
 <!-- BUTTONS -->
 <div class="button-group">
-  <button type="submit" class="btn-save">💾 Salvează Dispozitiv</button>
+  <button type="submit" class="btn-save">
+    💾
+    {% if wizard and wizard_step == 'identify' %}
+      Salvează și continuă
+    {% elif wizard %}
+      Salvează noua centrală
+    {% else %}
+      Salvează Dispozitiv
+    {% endif %}
+  </button>
   {% if is_modal %}
     <button type="button" class="btn-cancel" data-modal-close="1">❌ Anulează</button>
   {% else %}
@@ -1047,6 +1125,10 @@ function _getCookie(name) {
       });
       const data = await resp.json();
       if(data && data.ok){
+        if(data.html && typeof window.replaceDeviceModalContent === 'function'){
+          window.replaceDeviceModalContent(data.html);
+          return;
+        }
         showDeviceActionOverlay(data.message || 'Succes!', true);
         setTimeout(()=>{
           if(data.redirect_url){ window.location.href = data.redirect_url; }

@@ -1,155 +1,252 @@
 <style>
-  /* Ultra-compact door modal (legacy-like) */
-  .access-modal-card{background:#0a1a27;border:1px solid #2f5876;border-radius:2px;padding:8px;max-height:calc(100vh - 160px);overflow:auto;}
-  .access-modal-card h3{margin:0 0 6px 0;color:#9fd2f1;font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:0.2px;}
-  .access-modal-field{margin-bottom:6px;}
-  .access-modal-card label{color:#e8f0f8;font-weight:800;font-size:9px;display:block;margin-bottom:2px;text-transform:uppercase;letter-spacing:0.2px;}
-  .access-modal-card input,.access-modal-card select,.access-modal-card textarea{width:100%;background:#0f2433;border:1px solid #2f5876;color:#e8f0f8;border-radius:2px;padding:4px 6px;font-size:10px;}
-  .access-modal-actions{display:flex;gap:8px;margin-top:8px;justify-content:flex-end;}
-  .access-btn{padding:4px 10px;border:1px solid #3d6a8b;border-radius:2px;font-size:10px;font-weight:900;cursor:pointer;color:#e8f0f8;background:#163247;text-decoration:none;display:inline-block;}
-  .access-btn-primary{background:#3da5d9;border-color:#3da5d9;color:#fff;}
-  .access-btn-secondary{background:#163247;}
-  .access-error{color:#ffbdbd;font-size:10px;margin-top:4px;}
-  .access-grid-2{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
-  .access-grid-2 > div{min-width:0;}
-  .access-hint{font-size:10px;color:#7db3d9;line-height:1.25;}
+  /* Match the compact dark-blue device modal (single-window feel) */
+  .door-form-scope *{box-sizing:border-box;}
+  .door-form-scope{background:transparent;color:#e8f0f8;font-family:Tahoma,Arial,sans-serif;font-size:10px;}
+
+  .door-form-scope .door-hintbar{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:8px;
+    padding:6px 8px;
+    border:1px solid #3d6a8b;
+    background:#0f2433;
+    border-radius:2px;
+    margin:0 0 6px 0;
+    color:#7db3d9;
+    font-size:9px;
+    line-height:1.2;
+  }
+  .door-form-scope .door-hintbar strong{color:#9fd2f1;}
+
+  .door-form-scope .form-section{
+    background:transparent;
+    border:none;
+    border-bottom:1px solid #3d6a8b;
+    padding:4px 0;
+    margin:0;
+  }
+  .door-form-scope .form-section:first-of-type{border-top:1px solid #3d6a8b;padding-top:4px;}
+  .door-form-scope .form-section:last-of-type{border-bottom:none;}
+  .door-form-scope .form-section h3{
+    font-size:9px;
+    font-weight:900;
+    border:none;
+    text-transform:uppercase;
+    letter-spacing:0.3px;
+    padding:3px 0;
+    margin:0 0 3px 0;
+    color:#7db3d9;
+  }
+
+  .door-form-scope .form-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:3px;}
+  .door-form-scope .form-row.double{grid-template-columns:1fr 1fr;}
+  .door-form-scope .form-row.full{grid-template-columns:1fr;}
+  .door-form-scope .form-group{display:flex;flex-direction:column;gap:2px;min-width:0;}
+  .door-form-scope .form-group label{
+    font-weight:700;
+    font-size:8px;
+    margin:0;
+    color:#9fd2f1;
+    text-transform:uppercase;
+    letter-spacing:0.2px;
+  }
+  .door-form-scope .required-star{color:#ff9999;font-weight:900;margin-left:2px;}
+  .door-form-scope .helptext{font-size:8px;color:#7db3d9;line-height:1.15;margin-top:1px;font-style:italic;}
+
+  .door-form-scope input[type="text"],
+  .door-form-scope input[type="number"],
+  .door-form-scope input[type="password"],
+  .door-form-scope select,
+  .door-form-scope textarea{
+    width:100%;
+    padding:2px 4px;
+    border:1px solid #3d6a8b;
+    border-radius:1px;
+    font-size:9px;
+    background:#163247;
+    color:#e8f0f8;
+    font-family:Tahoma,Arial,sans-serif;
+    margin:0;
+    min-width:0;
+  }
+  .door-form-scope input[type="text"]:focus,
+  .door-form-scope input[type="number"]:focus,
+  .door-form-scope input[type="password"]:focus,
+  .door-form-scope select:focus,
+  .door-form-scope textarea:focus{outline:none;border-color:#3da5d9;box-shadow:0 0 2px #3da5d9;}
+
+  .door-form-scope .radio-row{margin-top:1px;}
+  .door-form-scope .radio-row label{font-size:9px;color:#e8f0f8;text-transform:none;letter-spacing:0;}
+  .door-form-scope .radio-row input{transform: translateY(1px);}
+
+  .door-form-scope .button-group{
+    display:flex;
+    gap:6px;
+    margin-top:6px;
+    padding:6px 0 0 0;
+    border-top:1px solid #3d6a8b;
+  }
+  .door-form-scope .btn-save{
+    background:#3da5d9;
+    color:#fff;
+    border:1px solid #2c8ec0;
+    padding:4px 10px;
+    border-radius:1px;
+    cursor:pointer;
+    font-weight:900;
+    font-size:10px;
+    transition:background 120ms ease,border-color 120ms ease;
+    flex:1;
+  }
+  .door-form-scope .btn-save:hover{background:#2c8ec0;border-color:#1a5a8f;}
+  .door-form-scope .btn-cancel{
+    background:#2d5a7b;
+    color:#e8f0f8;
+    border:1px solid #3d6a8b;
+    padding:4px 10px;
+    border-radius:1px;
+    cursor:pointer;
+    font-weight:900;
+    font-size:10px;
+    transition:background 120ms ease,border-color 120ms ease;
+    flex:1;
+    text-align:center;
+  }
+  .door-form-scope .btn-cancel:hover{background:#3d7a9b;border-color:#4d8aab;}
 </style>
 
-<div class="access-modal-card">
-  <h3>{% if obj %}Editează ușă{% else %}Creează ușă{% endif %}</h3>
-  <div class="access-modal-field" style="margin:0 0 8px 0;">
-    <div class="access-hint">
-      Cititoare per ușă: <strong style="color:#9fd2f1;">Cititor 1 (IN)</strong> + <strong style="color:#9fd2f1;">Cititor 2 (OUT)</strong>.
-      Implicit: <span style="color:#9fd2f1;">&lt;IP&gt;-&lt;Nr&gt; In/Out</span> (poți edita).
+<form method="post" class="door-form-scope" data-modal-form="1" data-door-form="1" data-device-ip="{% if obj and obj.device %}{{ obj.device.ip_address|default:'' }}{% endif %}">
+  {% csrf_token %}
+  {% if form.non_field_errors %}<div class="inline-msg error" style="white-space:pre-wrap;">{{ form.non_field_errors }}</div>{% endif %}
+
+  <div class="door-hintbar">
+    <span>Cititoare: <strong>IN</strong> + <strong>OUT</strong></span>
+    <span>• implicit: <strong>&lt;IP&gt;-&lt;Nr&gt; In/Out</strong></span>
+  </div>
+
+  <div class="form-section">
+    <h3>1. Identificare</h3>
+
+    <div class="form-row double">
+      <div class="form-group">
+        {{ form.reader_in_custom_name.label_tag }}
+        {{ form.reader_in_custom_name }}
+        {% if form.reader_in_custom_name.errors %}<div class="inline-msg error">{{ form.reader_in_custom_name.errors|striptags }}</div>{% endif %}
+      </div>
+      <div class="form-group">
+        {{ form.reader_out_custom_name.label_tag }}
+        {{ form.reader_out_custom_name }}
+        {% if form.reader_out_custom_name.errors %}<div class="inline-msg error">{{ form.reader_out_custom_name.errors|striptags }}</div>{% endif %}
+      </div>
+    </div>
+
+    <div class="form-row double">
+      <div class="form-group">
+        <label for="{{ form.device.id_for_label }}">Centrală<span class="required-star">*</span></label>
+        {{ form.device }}
+        {% if form.device.errors %}<div class="inline-msg error">{{ form.device.errors|striptags }}</div>{% endif %}
+      </div>
+      <div class="form-group">
+        <label for="{{ form.door_number.id_for_label }}">Număr ușă (1-32)<span class="required-star">*</span></label>
+        {{ form.door_number }}
+        {% if form.door_number.errors %}<div class="inline-msg error">{{ form.door_number.errors|striptags }}</div>{% endif %}
+      </div>
+    </div>
+
+    <div class="form-row full">
+      <div class="form-group">
+        <label for="{{ form.name.id_for_label }}">Denumire ușă<span class="required-star">*</span></label>
+        {{ form.name }}
+        {% if form.name.errors %}<div class="inline-msg error">{{ form.name.errors|striptags }}</div>{% endif %}
+      </div>
+    </div>
+
+    <div class="form-row double">
+      <div class="form-group">
+        {{ form.normally_open.label_tag }}
+        <div class="radio-row">{{ form.normally_open }}</div>
+        {% if form.normally_open.errors %}<div class="inline-msg error">{{ form.normally_open.errors|striptags }}</div>{% endif %}
+      </div>
+      <div class="form-group">
+        {{ form.enabled.label_tag }}
+        <div class="radio-row">{{ form.enabled }}</div>
+        {% if form.enabled.errors %}<div class="inline-msg error">{{ form.enabled.errors|striptags }}</div>{% endif %}
+      </div>
     </div>
   </div>
 
-  <form method="post" data-modal-form="1" data-door-form="1" data-device-ip="{% if obj and obj.device %}{{ obj.device.ip_address|default:'' }}{% endif %}">
-    {% csrf_token %}
-    {% if form.non_field_errors %}<div class="access-error">{{ form.non_field_errors }}</div>{% endif %}
+  <div class="form-section">
+    <h3>2. Detalii ușă (ZKAccess)</h3>
 
-    <div class="access-grid-2" style="margin-bottom:6px;">
-      <div class="access-modal-field">
-        {{ form.reader_in_custom_name.label_tag }}
-        {{ form.reader_in_custom_name }}
-        <div class="access-hint" style="margin-top:2px;">Dacă lași gol sau implicit, se derivă din IP + număr ușă.</div>
-        {% if form.reader_in_custom_name.errors %}<div class="access-error">{{ form.reader_in_custom_name.errors|striptags }}</div>{% endif %}
-      </div>
-      <div class="access-modal-field">
-        {{ form.reader_out_custom_name.label_tag }}
-        {{ form.reader_out_custom_name }}
-        <div class="access-hint" style="margin-top:2px;">Dacă lași gol sau implicit, se derivă din IP + număr ușă.</div>
-        {% if form.reader_out_custom_name.errors %}<div class="access-error">{{ form.reader_out_custom_name.errors|striptags }}</div>{% endif %}
-      </div>
-    </div>
-
-    <div class="access-grid-2">
-      <div class="access-modal-field">
-        <label for="{{ form.device.id_for_label }}">Centrală <span style="color:#ffbdbd; font-weight:900;">*</span></label>
-        {{ form.device }}
-        {% if form.device.errors %}<div class="access-error">{{ form.device.errors|striptags }}</div>{% endif %}
-      </div>
-
-      <div class="access-modal-field">
-        <label for="{{ form.door_number.id_for_label }}">Număr ușă (1-4) <span style="color:#ffbdbd; font-weight:900;">*</span></label>
-        {{ form.door_number }}
-        {% if form.door_number.errors %}<div class="access-error">{{ form.door_number.errors|striptags }}</div>{% endif %}
-      </div>
-    </div>
-
-    <div class="access-modal-field">
-      <label for="{{ form.name.id_for_label }}">Denumire ușă <span style="color:#ffbdbd; font-weight:900;">*</span></label>
-      {{ form.name }}
-      {% if form.name.errors %}<div class="access-error">{{ form.name.errors|striptags }}</div>{% endif %}
-    </div>
-
-    <div class="access-modal-field">
-      {{ form.location.label_tag }}
-      {{ form.location }}
-      {% if form.location.errors %}<div class="access-error">{{ form.location.errors|striptags }}</div>{% endif %}
-    </div>
-
-    <div class="access-modal-field">
-      {{ form.normally_open.label_tag }}
-      {{ form.normally_open }}
-      {% if form.normally_open.errors %}<div class="access-error">{{ form.normally_open.errors|striptags }}</div>{% endif %}
-    </div>
-
-    <div class="access-modal-field">
-      {{ form.enabled.label_tag }}
-      {{ form.enabled }}
-      {% if form.enabled.errors %}<div class="access-error">{{ form.enabled.errors|striptags }}</div>{% endif %}
-    </div>
-
-    <div style="margin:8px 0 6px 0;border-top:1px solid rgba(47,88,118,0.85);"></div>
-    <div style="color:#9fd2f1;font-weight:900;font-size:11px;margin-bottom:8px;">Detalii ușă (ZKAccess)</div>
-
-    <div class="access-grid-2">
-      <div class="access-modal-field">
+    <div class="form-row double">
+      <div class="form-group">
         {{ form.door_active_time_zone.label_tag }}
         {{ form.door_active_time_zone }}
-        {% if form.door_active_time_zone.errors %}<div class="access-error">{{ form.door_active_time_zone.errors|striptags }}</div>{% endif %}
+        {% if form.door_active_time_zone.errors %}<div class="inline-msg error">{{ form.door_active_time_zone.errors|striptags }}</div>{% endif %}
       </div>
-
-      <div class="access-modal-field">
+      <div class="form-group">
         {{ form.door_passage_mode_time_zone.label_tag }}
         {{ form.door_passage_mode_time_zone }}
-        {% if form.door_passage_mode_time_zone.errors %}<div class="access-error">{{ form.door_passage_mode_time_zone.errors|striptags }}</div>{% endif %}
+        {% if form.door_passage_mode_time_zone.errors %}<div class="inline-msg error">{{ form.door_passage_mode_time_zone.errors|striptags }}</div>{% endif %}
       </div>
+    </div>
 
-      <div class="access-modal-field">
+    <div class="form-row double">
+      <div class="form-group">
         {{ form.lock_open_duration.label_tag }}
         {{ form.lock_open_duration }}
-        {% if form.lock_open_duration.errors %}<div class="access-error">{{ form.lock_open_duration.errors|striptags }}</div>{% endif %}
+        {% if form.lock_open_duration.errors %}<div class="inline-msg error">{{ form.lock_open_duration.errors|striptags }}</div>{% endif %}
       </div>
-
-      <div class="access-modal-field">
+      <div class="form-group">
         {{ form.punch_interval.label_tag }}
         {{ form.punch_interval }}
-        {% if form.punch_interval.errors %}<div class="access-error">{{ form.punch_interval.errors|striptags }}</div>{% endif %}
+        {% if form.punch_interval.errors %}<div class="inline-msg error">{{ form.punch_interval.errors|striptags }}</div>{% endif %}
       </div>
+    </div>
 
-      <div class="access-modal-field">
+    <div class="form-row double">
+      <div class="form-group">
         {{ form.door_sensor_type.label_tag }}
         {{ form.door_sensor_type }}
-        {% if form.door_sensor_type.errors %}<div class="access-error">{{ form.door_sensor_type.errors|striptags }}</div>{% endif %}
+        {% if form.door_sensor_type.errors %}<div class="inline-msg error">{{ form.door_sensor_type.errors|striptags }}</div>{% endif %}
       </div>
-
-      <div class="access-modal-field">
+      <div class="form-group">
         {{ form.door_status_delay.label_tag }}
         {{ form.door_status_delay }}
-        {% if form.door_status_delay.errors %}<div class="access-error">{{ form.door_status_delay.errors|striptags }}</div>{% endif %}
+        {% if form.door_status_delay.errors %}<div class="inline-msg error">{{ form.door_status_delay.errors|striptags }}</div>{% endif %}
       </div>
+    </div>
 
-      <div class="access-modal-field">
+    <div class="form-row double">
+      <div class="form-group">
         {{ form.close_and_reverse_state.label_tag }}
-        {{ form.close_and_reverse_state }}
-        {% if form.close_and_reverse_state.errors %}<div class="access-error">{{ form.close_and_reverse_state.errors|striptags }}</div>{% endif %}
+        <div class="radio-row">{{ form.close_and_reverse_state }}</div>
+        {% if form.close_and_reverse_state.errors %}<div class="inline-msg error">{{ form.close_and_reverse_state.errors|striptags }}</div>{% endif %}
       </div>
-
-      <div class="access-modal-field">
+      <div class="form-group">
         {{ form.verify_mode.label_tag }}
         {{ form.verify_mode }}
-        {% if form.verify_mode.errors %}<div class="access-error">{{ form.verify_mode.errors|striptags }}</div>{% endif %}
+        {% if form.verify_mode.errors %}<div class="inline-msg error">{{ form.verify_mode.errors|striptags }}</div>{% endif %}
       </div>
     </div>
 
-    <div class="access-grid-2">
-      <div class="access-modal-field">
+    <div class="form-row double">
+      <div class="form-group">
         {{ form.duress_password.label_tag }}
         {{ form.duress_password }}
-        {% if form.duress_password.errors %}<div class="access-error">{{ form.duress_password.errors|striptags }}</div>{% endif %}
+        {% if form.duress_password.errors %}<div class="inline-msg error">{{ form.duress_password.errors|striptags }}</div>{% endif %}
       </div>
-      <div class="access-modal-field">
+      <div class="form-group">
         {{ form.emergency_password.label_tag }}
         {{ form.emergency_password }}
-        {% if form.emergency_password.errors %}<div class="access-error">{{ form.emergency_password.errors|striptags }}</div>{% endif %}
+        {% if form.emergency_password.errors %}<div class="inline-msg error">{{ form.emergency_password.errors|striptags }}</div>{% endif %}
       </div>
     </div>
+  </div>
 
-    <div class="access-modal-actions">
-      <button type="button" class="access-btn access-btn-secondary" data-modal-close="1">Renunță</button>
-      <button type="submit" class="access-btn access-btn-primary">Salvează</button>
-    </div>
-  </form>
-</div>
+  <div class="button-group">
+    <button type="button" class="btn-cancel" data-modal-close="1">Renunță</button>
+    <button type="submit" class="btn-save">Salvează</button>
+  </div>
+</form>

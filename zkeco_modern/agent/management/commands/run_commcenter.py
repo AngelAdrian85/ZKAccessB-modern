@@ -21,7 +21,13 @@ class Command(BaseCommand):
         parser.add_argument("--json-logs", action="store_true", help="Emit JSON structured logs to stdout")
         parser.add_argument("--metrics", action="store_true", help="Print metrics counters periodically")
         parser.add_argument("--once", action="store_true", help="Run a single polling cycle and exit")
-        parser.add_argument("--driver", type=str, choices=["auto", "stub", "socket", "sdk"], default="auto", help="Select driver backend")
+        parser.add_argument(
+            "--driver",
+            type=str,
+            choices=["auto", "stub", "socket", "sdk", "zk", "plcommpro"],
+            default="auto",
+            help="Driver backend: auto (best effort), stub, socket (pure python), sdk (plcommpro via ctypes)",
+        )
         parser.add_argument("--discover-subnet", type=str, default=None, help="Optional CIDR subnet scan for controllers (e.g. 192.168.1.0/24)")
         parser.add_argument("--ports", type=str, default=None, help="Comma-separated ports for discovery override (default 4370,80)")
 
@@ -60,11 +66,14 @@ class Command(BaseCommand):
             except Exception:
                 self.stderr.write("Failed enabling JSON logs; continuing with default format")
 
-        center = build_and_run_stub(poll_interval=interval,
-                                    use_redis=use_redis,
-                                    redis_url=redis_url,
-                        download_hours=download_hours,
-                        driver=options["driver"]) 
+        center = build_and_run_stub(
+            poll_interval=interval,
+            use_redis=use_redis,
+            redis_url=redis_url,
+            download_hours=download_hours,
+            driver=options["driver"],
+            start_thread=(not bool(options.get("once"))),
+        )
         import agent.modern_comm_center as mcc
         mcc.ACTIVE_CENTER = center  # expose global reference for API actions
 

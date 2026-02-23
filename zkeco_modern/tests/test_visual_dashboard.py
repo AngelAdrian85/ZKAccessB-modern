@@ -8,7 +8,10 @@ from urllib.parse import urlparse
 from django.contrib.auth import get_user_model
 from django.contrib.staticfiles.testing import StaticLiveServerTestCase
 from PIL import Image, ImageChops, ImageStat
-from playwright.sync_api import sync_playwright
+try:
+    from playwright.sync_api import sync_playwright
+except Exception:  # pragma: no cover
+    sync_playwright = None
 
 BASELINE_DIR = Path(__file__).resolve().parent / "visual_baselines"
 BASELINE_PATH = BASELINE_DIR / "dashboard.png"
@@ -23,6 +26,8 @@ class DashboardVisualTest(StaticLiveServerTestCase):
     def setUpClass(cls):
         if os.environ.get("RUN_VISUAL_TESTS") != "1":
             raise unittest.SkipTest("Visual tests are opt-in; set RUN_VISUAL_TESTS=1")
+        if sync_playwright is None:
+            raise unittest.SkipTest("Playwright not installed; install 'playwright' to run visual tests")
         super().setUpClass()
         User = get_user_model()
         cls.visual_user = User.objects.create_user(

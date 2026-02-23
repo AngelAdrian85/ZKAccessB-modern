@@ -65,6 +65,7 @@
   .status-embed col.col-status { width: 110px; }
   .status-embed col.col-door { width: 160px; }
   .status-embed col.col-updated { width: 170px; }
+  .status-embed col.col-actions { width: 120px; }
 
   .status-badge { display:inline-flex; align-items:center; gap:6px; font-weight:900; }
   .dot { display:inline-block; width:8px; height:8px; border-radius:50%; box-shadow:0 0 8px rgba(0,0,0,0.25); }
@@ -72,6 +73,10 @@
   .offline .dot { background:#cf222e; box-shadow:0 0 8px rgba(207,34,46,0.24); }
   .online .txt { color:#2da44e; }
   .offline .txt { color:#cf222e; }
+
+  .status-actions{display:flex;align-items:center;justify-content:center;gap:6px;}
+  .status-actions .row-action{font-size:9px;padding:2px 6px;border-radius:2px;border:1px solid rgba(61,106,139,0.55);background:rgba(15,36,51,0.55);color:#e8f0f8;cursor:pointer;}
+  .status-actions .row-action:hover{background:#2da44e;border-color:#2da44e;color:#fff;}
 </style>
 <div class="status-embed">
   <div class="status-panels">
@@ -88,8 +93,9 @@
         <col class="col-status" />
         <col class="col-door" />
         <col class="col-updated" />
+        <col class="col-actions" />
       </colgroup>
-      <thead><tr><th>ID</th><th>Nume</th><th>Serial</th><th>Status</th><th>Ușă</th><th>Actualizat</th></tr></thead>
+      <thead><tr><th>ID</th><th>Nume</th><th>Serial</th><th>Status</th><th>Ușă</th><th>Actualizat</th><th>Acțiuni</th></tr></thead>
       <tbody>
         {% for r in rows %}
         <tr data-device-id="{{ r.id }}">
@@ -99,9 +105,18 @@
           <td class="{% if r.online %}online{% else %}offline{% endif %}"><span class="status-badge"><span class="dot"></span><span class="txt">{% if r.online %}ONLINE{% else %}OFFLINE{% endif %}</span></span></td>
           <td>{{ r.door_state|default:"" }}</td>
           <td>{% if r.updated_at %}{{ r.updated_at|localtime|date:"Y-m-d H:i:s" }}{% else %}-{% endif %}</td>
+          <td>
+            <div class="status-actions">
+              {% if r.is_physical %}
+                <button type="button" class="row-action" title="Sincronizează server → centrală" onclick="if(window.syncDevicePersonnelMenu){ window.syncDevicePersonnelMenu({{ r.id }}, '{{ r.name|escapejs }}'); }">SYNC</button>
+              {% else %}
+                <span style="color:#7db3d9;">—</span>
+              {% endif %}
+            </div>
+          </td>
         </tr>
         {% empty %}
-        <tr><td colspan="6" class="td-center-muted">Nu există înregistrări de status.</td></tr>
+        <tr><td colspan="7" class="td-center-muted">Nu există înregistrări de status.</td></tr>
         {% endfor %}
       </tbody>
     </table>

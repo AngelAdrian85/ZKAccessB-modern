@@ -61,6 +61,10 @@ class Device(models.Model):
     ip_address = models.GenericIPAddressField(null=True, blank=True, help_text="IP address for TCP/IP devices")
     port = models.IntegerField(default=4370, help_text="Communication port (default 4370 for ZK)")
     comm_password = models.CharField(max_length=128, blank=True, default='', help_text="Device communication password")
+
+    # Network settings (legacy parity)
+    subnet_mask = models.CharField(max_length=32, blank=True, default='', help_text="Subnet mask (e.g., 255.255.255.0)")
+    gateway = models.GenericIPAddressField(null=True, blank=True, help_text="Gateway address")
     
     # RS485 parameters (if applicable)
     rs485_port = models.CharField(max_length=20, blank=True, default='COM1', help_text="Serial port for RS485 (e.g., COM1, /dev/ttyUSB0)")
@@ -118,6 +122,27 @@ class Device(models.Model):
         if self.is_controller():
             return 'Centrală'
         return 'Dispozitiv'
+
+    def is_physical_controller(self) -> bool:
+        """Best-effort: True only for real (non-test) controllers.
+
+        Kept migration-free; used only for UI/UX gating.
+        """
+        try:
+            if not self.is_controller():
+                return False
+            if not (self.ip_address or ''):
+                return False
+            ip = str(self.ip_address).strip()
+            if not ip or ip in ('0.0.0.0',) or ip.startswith('127.'):
+                return False
+            name_u = (self.name or '').upper()
+            sn_u = (self.serial_number or '').upper()
+            if 'TEST' in name_u or 'TEST' in sn_u:
+                return False
+            return True
+        except Exception:
+            return False
 
 
 class DSTime(models.Model):
@@ -309,18 +334,9 @@ class TimeSegment(models.Model):
         if self.start_time >= self.end_time:
             from django.core.exceptions import ValidationError
             raise ValidationError("Start time must be before end time")
-        # Basic overlap validation: any other segment whose range intersects ours
-        # (Global scope; could be scoped per door/access level later.)
-        if self.pk is None:
-            existing = TimeSegment.objects.all()
-        else:
-            existing = TimeSegment.objects.exclude(pk=self.pk)
-        for other in existing:
-            if other.start_time < self.end_time and other.end_time > self.start_time:
-                # Only consider overlap if days intersect
-                if other.days_mask & self.days_mask:
-                    from django.core.exceptions import ValidationError
-                    raise ValidationError(f"Time segment '{other.name}' overlaps with this range on shared days")
+        # NOTE: Overlap validation intentionally disabled.
+        # Real deployments frequently need overlapping intervals (e.g. an 'ALWAYS' segment
+        # plus narrower segments). Enforcement is done at door/access-level selection time.
 
     def __str__(self):  # pragma: no cover
         return f"Segment {self.name} {self.start_time}-{self.end_time}"[:80]
@@ -388,6 +404,10 @@ class Holiday(models.Model):
 
 class AccessLevel(models.Model):
     name = models.CharField(max_length=64, unique=True)
+    is_visitor = models.BooleanField(default=False, help_text="Nivel vizitatori (Da/Nu)")
+    # Stable fingerprint for business rule: unique by (time segment + door combination).
+    # Nullable to allow safe backfill during migrations; enforced in forms and DB when present.
+    signature = models.CharField(max_length=64, unique=True, null=True, blank=True)
     doors = models.ManyToManyField(Door, blank=True)
     time_segments = models.ManyToManyField(TimeSegment, blank=True)
     description = models.CharField(max_length=256, blank=True, default='')
@@ -516,7 +536,7 @@ class EmployeeCard(models.Model):
 class CommandLog(models.Model):
     device = models.ForeignKey(Device, null=True, blank=True, on_delete=models.SET_NULL)
     door = models.ForeignKey(Door, null=True, blank=True, on_delete=models.SET_NULL)
-    command = models.CharField(max_length=64)
+    command = models.CharField(max_length=240)
     status = models.CharField(max_length=16, default='PENDING')  # PENDING/OK/ERR
     result = models.CharField(max_length=128, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -537,6 +557,17 @@ class SystemSettings(models.Model):
     # UI preferences
     date_format = models.CharField(max_length=16, blank=True, default='ro_short')
     week_start = models.CharField(max_length=8, blank=True, default='monday')
+
+    # Default device communication password (used as fallback for probes/wizard)
+    default_comm_password = models.CharField(max_length=64, blank=True, default='')
+
+    # SYNC_PERSONNEL controls (anti-DoS / performance)
+    sync_personnel_enabled = models.BooleanField(default=True)
+    sync_personnel_dedupe_seconds = models.PositiveSmallIntegerField(default=60)
+    sync_personnel_reassert_seconds = models.PositiveIntegerField(default=21600)  # 6h
+    sync_personnel_batch_size = models.PositiveIntegerField(default=200)
+    sync_personnel_inter_batch_sleep = models.FloatField(default=0.02)
+    sync_personnel_max_per_minute = models.PositiveSmallIntegerField(default=0)  # 0 = disabled
     updated_at = models.DateTimeField(auto_now=True)
 
     @classmethod

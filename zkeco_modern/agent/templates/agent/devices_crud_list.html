@@ -32,6 +32,8 @@
 .action-buttons { display: flex; gap: 6px; }
 .btn-edit { color: #3da5d9; text-decoration: none; font-weight: 600; font-size: 12px; padding: 4px 8px; }
 .btn-edit:hover { text-decoration: underline; }
+.btn-sync { background: #3da5d9; color: #fff; border: none; padding: 4px 10px; border-radius: 3px; cursor: pointer; font-weight: 800; font-size: 11px; }
+.btn-sync:hover { background: #2d95c9; }
 .btn-delete { background: #d97e4a; color: #fff; border: none; padding: 4px 10px; border-radius: 3px; cursor: pointer; font-weight: 600; font-size: 11px; }
 .btn-delete:hover { background: #c96940; }
 .pagination { max-width: 1200px; margin: 20px auto; text-align: center; font-size: 12px; }
@@ -45,6 +47,7 @@
 <div class="device-page-header">
   <h2>🖥️ Dispozitive</h2>
   <div style="display:flex; gap:8px;">
+    <button onclick="openControllerDiscoveryModal()" class="btn-new" title="Caută centrale în rețea">🔍 Cautare centrale</button>
     <button onclick="openDeviceModal('{% url 'crud-device-create' %}?next={{ request.get_full_path|urlencode }}', '✚ Adaugă Dispozitiv')" class="btn-new" title="Adaugă dispozitiv nou">+ Dispozitiv Nou</button>
     <button onclick="openScannerDeviceModal()" class="btn-new" title="Adaugă dispozitiv pentru scanere">+ Dispozitiv Scanner</button>
   </div>
@@ -66,7 +69,7 @@
 <table class="devices-table">
 <thead>
   <tr>
-    <th>ID</th><th>Nume</th><th>Serial (SN)</th><th>IP</th><th>Port</th><th>Mod</th><th>Firmware</th><th>Zonă</th><th>Status</th><th>Actualizat</th><th>Acțiuni</th>
+    <th>ID</th><th>Nume</th><th>Serial (SN)</th><th>Model</th><th>IP</th><th>Port</th><th>Mod</th><th>Firmware</th><th>Zonă</th><th>Status</th><th>Actualizat</th><th>Acțiuni</th>
   </tr>
 </thead>
 <tbody>
@@ -93,6 +96,7 @@
     {% endif %}
   </td>
   <td><code>{{ device.serial_number|default:"—" }}</code></td>
+  <td>{{ device.hardware_version|default:"—" }}</td>
   <td>{{ device.ip_address|default:"—" }}</td>
   <td>{{ device.port|default:"4370" }}</td>
   <td><span style="background: #cce5ff; padding: 2px 6px; border-radius: 3px; font-size: 11px;">{{ device.get_comm_mode_display }}</span></td>
@@ -115,7 +119,13 @@
         <small>—</small>
       {% endif %}
     </td>
-  <td><div class="action-buttons"><a href="{% url 'crud-device-edit' device.id %}?next={{ request.get_full_path|urlencode }}" class="btn-edit" onclick="openDeviceModal(this.href, '✏️ Editează Dispozitiv #{{ device.id }}'); return false;">✏️ Edit</a><button class="btn-delete" onclick="(window.zkConfirmDialog ? zkConfirmDialog({title:'Confirmare',message:'Ștergi dispozitivul?',okText:'Șterge',cancelText:'Renunță',variant:'danger'}).then(ok=>{ if(ok) deleteDevice({{ device.id }}); }) : (confirm('Ești sigur?') && deleteDevice({{ device.id }})));">🗑️ Șterge</button></div></td>
+  <td><div class="action-buttons">
+    {% if device.is_physical_controller %}
+      <button class="btn-sync" title="Sincronizează personalul din server către centrală" onclick="syncDevicePersonnel({{ device.id }}, '{{ device.name|escapejs }}');">🔄 Sync</button>
+    {% endif %}
+    <a href="{% url 'crud-device-edit' device.id %}?next={{ request.get_full_path|urlencode }}" class="btn-edit" onclick="openDeviceModal(this.href, '✏️ Editează Dispozitiv #{{ device.id }}'); return false;">✏️ Edit</a>
+    <button class="btn-delete" onclick="(window.zkConfirmDialog ? zkConfirmDialog({title:'Confirmare',message:'Ștergi dispozitivul?',okText:'Șterge',cancelText:'Renunță',variant:'danger'}).then(ok=>{ if(ok) deleteDevice({{ device.id }}); }) : (confirm('Ești sigur?') && deleteDevice({{ device.id }})));">🗑️ Șterge</button>
+  </div></td>
 </tr>
 {% endfor %}
 </tbody>
@@ -177,6 +187,60 @@ function deleteDevice(id) {
       }
     }).catch(e => showPageActionOverlay('Eroare: ' + e, false));
 }
+
+let _syncPollTimer = null;
+function syncDevicePersonnel(deviceId, deviceName){
+  try{ if(_syncPollTimer) { clearInterval(_syncPollTimer); _syncPollTimer = null; } }catch(e){}
+  const dn = (deviceName || ('#'+deviceId));
+  showPageActionLoading('Sincronizare', `Se sincronizează server → centrală (${dn})...`);
+  fetch(`/agent/api/devices/${deviceId}/sync-personnel/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': getCookie('csrftoken')
+    },
+    body: '{}'
+  })
+  .then(async r => {
+    let data = {};
+    try{ data = await r.json(); }catch(e){ data = {}; }
+    if(!r.ok || !data.ok){
+      const err = (data && (data.error || data.detail || data.message)) ? (data.error || data.detail || data.message) : (`HTTP ${r.status}`);
+      throw new Error(String(err));
+    }
+    const cmdId = parseInt(data.command_id || 0, 10);
+    if(!cmdId) throw new Error('missing-command-id');
+    _syncPollTimer = setInterval(()=>{
+      fetch(`/agent/api/commands/${cmdId}/status/`)
+        .then(rr=>rr.json())
+        .then(res=>{
+          const st = String(res.status || '').toUpperCase();
+          const result = String(res.result || '').trim();
+          if(st === 'OK'){
+            try{ clearInterval(_syncPollTimer); }catch(e){}
+            _syncPollTimer = null;
+            showPageActionOverlay('Sincronizare: finalizată cu succes.', true, 1100);
+            return;
+          }
+          if(st === 'ERR' || st === 'ERROR' || st === 'FAILED'){
+            try{ clearInterval(_syncPollTimer); }catch(e){}
+            _syncPollTimer = null;
+            showPageActionOverlay('Sincronizare eșuată: ' + (result || 'ERR'), false, 2600);
+            return;
+          }
+          if(st === 'RUNNING'){
+            showPageActionLoading('Sincronizare', 'Sincronizare: în curs...');
+            return;
+          }
+          showPageActionLoading('Sincronizare', 'Sincronizare: în așteptare (pusă în coadă)...');
+        })
+        .catch(_e=>{ /* transient */ });
+    }, 1000);
+  })
+  .catch(e=>{
+    showPageActionOverlay('Sincronizare: nu a pornit (' + String(e) + ')', false, 2600);
+  });
+}
 function getCookie(name) {
   let v = null;
   if (document.cookie && document.cookie !== '') {
@@ -193,18 +257,22 @@ function getCookie(name) {
 /* Center action overlay (success/fail) */
 .page-action-overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:9999;background:rgba(0,0,0,0.45);}
 .page-action-overlay .panel{width:min(520px,92vw);padding:18px 16px;border-radius:8px;border:1px solid #3d6a8b;background:#163247;box-shadow:0 20px 40px rgba(0,0,0,0.6);text-align:center;transform:scale(.94);opacity:0;animation:overlayIn 180ms ease-out forwards;}
+.page-action-overlay.loading .panel{border-color: rgba(61,165,217,0.75);}
 .page-action-overlay.success .panel{border-color:#2da44e;}
 .page-action-overlay.error .panel{border-color:#ff6b6b;}
 .page-action-overlay .title{font-weight:800;font-size:12px;margin-bottom:6px;color:#e8f0f8;}
+.page-action-overlay.loading .title{color:#9fd2f1;}
 .page-action-overlay.success .title{color:#9fd2f1;}
 .page-action-overlay.error .title{color:#ff9999;}
 .page-action-overlay .msg{font-size:11px;color:#e8f0f8;line-height:1.35;}
 .page-action-overlay .bar{height:6px;border-radius:6px;background:#0f2433;border:1px solid #3d6a8b;margin-top:12px;overflow:hidden;}
 .page-action-overlay .bar>div{height:100%;width:0%;background:#3da5d9;animation:barRun 900ms linear forwards;}
+.page-action-overlay.loading .bar>div{width:35%;animation:barIndeterminate 900ms ease-in-out infinite;}
 .page-action-overlay.success .bar>div{background:#2da44e;}
 .page-action-overlay.error .bar>div{background:#ff6b6b;}
 @keyframes overlayIn{to{transform:scale(1);opacity:1;}}
 @keyframes barRun{to{width:100%;}}
+@keyframes barIndeterminate{0%{transform:translateX(-120%);}50%{transform:translateX(20%);}100%{transform:translateX(240%);}}
 </style>
 
 <div id="pageActionOverlay" class="page-action-overlay" aria-hidden="true">
@@ -223,10 +291,29 @@ function showPageActionOverlay(message, ok){
   const m = document.getElementById('pageActionMsg');
   if(t) t.textContent = ok ? 'Succes' : 'Eroare';
   if(m) m.textContent = message || '';
-  el.classList.remove('success','error');
+  el.classList.remove('success','error','loading');
   el.classList.add(ok ? 'success' : 'error');
   el.style.display = 'flex';
-  setTimeout(()=>{ el.style.display = 'none'; }, 1100);
+  const holdMs = arguments.length >= 3 ? arguments[2] : null;
+  const ms = (typeof holdMs === 'number' && holdMs > 0) ? holdMs : 1100;
+  setTimeout(()=>{ el.style.display = 'none'; }, ms);
+}
+
+function showPageActionLoading(title, message){
+  const el = document.getElementById('pageActionOverlay');
+  if(!el) return;
+  const t = document.getElementById('pageActionTitle');
+  const m = document.getElementById('pageActionMsg');
+  if(t) t.textContent = title || 'Se procesează';
+  if(m) m.textContent = message || '';
+  // restart bar animation
+  try{
+    const bar = el.querySelector('.bar');
+    if(bar) bar.innerHTML = '<div></div>';
+  }catch(e){}
+  el.classList.remove('success','error','loading');
+  el.classList.add('loading');
+  el.style.display = 'flex';
 }
 </script>
 
@@ -375,6 +462,80 @@ window.replaceDeviceModalContent = function(html) {
   content.innerHTML = html;
   _executeInlineScripts(content);
   content.scrollTop = 0;
+
+  // Device form: open discovery/tester from within the modal
+  try{
+    const discBtn = content.querySelector('[data-zk-device-discovery="1"]');
+    if(discBtn && !discBtn.__zkBound){
+      discBtn.__zkBound = true;
+      discBtn.addEventListener('click', (e)=>{
+        try{ e.preventDefault(); e.stopPropagation(); }catch(_e){}
+        try{
+          const form = discBtn.closest('form');
+          if(window.zkDeviceDiscovery && typeof window.zkDeviceDiscovery.open === 'function'){
+            window.zkDeviceDiscovery.open({targetForm: form});
+          }
+        }catch(_e2){}
+      });
+    }
+  }catch(_e){}
+
+  // Wizard: door draft saved -> return to controller config
+  try{
+    const savedDoor = content.querySelector('[data-wizard-door-saved="1"]');
+    if(savedDoor){
+      const returnUrl = savedDoor.getAttribute('data-return-url') || '';
+      if(returnUrl){
+        setTimeout(()=>{
+          if(typeof window.openDeviceModal === 'function') window.openDeviceModal(returnUrl, '⚙️ Configurare centrală');
+        }, 650);
+      }
+    }
+  }catch(_e){}
+
+  // Wizard/device access save -> show success and refresh list
+  try{
+    const saved = content.querySelector('[data-access-saved="1"][data-device-id]');
+    if(saved){
+      showPageActionOverlay('Centrala a fost creată cu succes!', true);
+      setTimeout(()=>{ try{ closeDeviceModal(); }catch(_e){}; location.reload(); }, 900);
+    }
+  }catch(_e){}
+
+  // Handle generic modal close buttons
+  try{
+    content.querySelectorAll('[data-modal-close="1"]').forEach(btn=>{
+      if(btn.__zkBound) return;
+      btn.__zkBound = true;
+      btn.addEventListener('click', (e)=>{ e.preventDefault(); closeDeviceModal(); });
+    });
+  }catch(_e){}
+
+  // Handle non-JSON modal forms (HTML responses)
+  try{
+    content.querySelectorAll('form[data-modal-form="1"]').forEach(form=>{
+      if(form.__zkBound) return;
+      // Skip forms that already have a JSON handler (device form)
+      if(form.getAttribute('data-ajax') === '1') return;
+      form.__zkBound = true;
+      form.addEventListener('submit', async (e)=>{
+        e.preventDefault();
+        const fd = new FormData(form);
+        const action = form.getAttribute('action') || window.location.pathname;
+        try{
+          const resp = await fetch(action, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') || '', 'X-Requested-With': 'XMLHttpRequest' },
+            body: fd,
+          });
+          const html2 = await resp.text();
+          window.replaceDeviceModalContent(html2);
+        }catch(err){
+          window.replaceDeviceModalContent('<div style="color:#ff9999; font-weight:600;">⚠ Eroare: ' + (err && err.message ? err.message : err) + '</div>');
+        }
+      });
+    });
+  }catch(_e){}
 };
 
 async function openDeviceModal(url, title) {
@@ -618,7 +779,7 @@ function scannerDiscover(){
   const range = `${pref}.0/24`;
   const div = document.getElementById('scannerDiscoveryResults');
   div.textContent = `⏳ Scanare: ${range} ...`;
-  fetch(`/agent/devices/discover/?range=${encodeURIComponent(range)}`)
+  fetch(`/agent/devices/discover/?base=${encodeURIComponent(range)}`)
     .then(r=>r.json()).then(d=>{
       if(d.ok && d.devices && d.devices.length){
         div.innerHTML = `<strong>✓ Găsite ${d.devices.length} dispozitive (clic pentru auto-completare):</strong><ul style="margin:6px 0; padding-left: 18px;">` +
@@ -668,6 +829,162 @@ function applyDiscovery(ip){
     // For Elatec (serial), we still set helper test fields
     document.getElementById('scanner_ping_ip').value = ip;
     document.getElementById('scanner_port_ip').value = ip;
+  }
+}
+</script>
+
+<!-- Controller Discovery Modal (Cautare centrale) -->
+<style>
+.ctrl-disc-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.60);z-index:652;align-items:center;justify-content:center;padding:12px;opacity:0;transition:opacity 160ms ease;backdrop-filter:blur(2px);}
+.ctrl-disc-overlay.is-open{opacity:1;}
+.ctrl-disc-panel{background:#2d5a7b;border:1px solid #3d6a8b;border-radius:10px;box-shadow:0 28px 70px rgba(0,0,0,0.65);width:min(980px,98vw);max-height:90vh;display:flex;flex-direction:column;overflow:hidden;transform:translateY(10px) scale(0.985);opacity:0;transition:transform 180ms ease, opacity 180ms ease;}
+.ctrl-disc-overlay.is-open .ctrl-disc-panel{transform:translateY(0) scale(1);opacity:1;}
+.ctrl-disc-header{position:relative;background:linear-gradient(90deg, rgba(15,42,71,0.96) 0%, rgba(61,165,217,0.95) 100%);padding:6px 10px;display:flex;align-items:center;justify-content:space-between;color:#fff;font-size:12px;font-weight:900;}
+.ctrl-disc-header::before{content:"";position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg, rgba(46,191,150,0.0) 0%, rgba(46,191,150,0.55) 35%, rgba(255,255,255,0.22) 65%, rgba(61,165,217,0.0) 100%);}
+.ctrl-disc-body{padding:10px 12px;color:#e8f0f8;overflow:auto;flex:1;display:flex;flex-direction:column;gap:10px;}
+.ctrl-disc-row{display:flex;gap:10px;align-items:end;flex-wrap:wrap;}
+.ctrl-disc-field{display:flex;flex-direction:column;gap:4px;min-width:240px;}
+.ctrl-disc-field label{font-size:12px;color:#3da5d9;font-weight:700;}
+.ctrl-disc-field input{background:#1a3a52;border:1px solid #3d6a8b;color:#e8f0f8;padding:8px;border-radius:4px;font-size:12px;}
+.ctrl-disc-actions{display:flex;gap:8px;align-items:center;}
+.ctrl-disc-btn{background:#2da44e;color:#fff;border:none;padding:6px 12px;border-radius:6px;font-size:12px;font-weight:800;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.3);}
+.ctrl-disc-btn.secondary{background:#1e90ff;}
+.ctrl-disc-btn:disabled{opacity:0.6;cursor:not-allowed;}
+.ctrl-disc-table{width:100%;border-collapse:collapse;font-size:12px;background:#1a3a52;border:1px solid #3d6a8b;border-radius:8px;overflow:hidden;}
+.ctrl-disc-table th,.ctrl-disc-table td{padding:8px 8px;border-bottom:1px solid #2d5a7b;text-align:left;}
+.ctrl-disc-table th{font-size:11px;text-transform:uppercase;letter-spacing:0.3px;color:#9fd2f1;background:#0f2433;}
+.ctrl-disc-badge{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid #3d6a8b;background:rgba(61,165,217,0.10);color:#e8f0f8;font-size:11px;font-weight:800;}
+</style>
+
+<div id="controllerDiscoveryModal" class="ctrl-disc-overlay">
+  <div class="ctrl-disc-panel">
+    <div class="ctrl-disc-header">
+      <span>🔍 Cautare centrale</span>
+      <button onclick="closeControllerDiscoveryModal()" style="width:30px;height:30px;border-radius:9px;background:rgba(15,42,71,0.55);border:1px solid rgba(255,255,255,0.22);color:#fff;font-size:18px;cursor:pointer;">✕</button>
+    </div>
+    <div class="ctrl-disc-body">
+      <div class="ctrl-disc-row">
+        <div class="ctrl-disc-field">
+          <label>Prefix rețea (opțional, ex: 192.168.1)</label>
+          <input id="ctrlDiscBase" placeholder="192.168.1">
+        </div>
+        <div class="ctrl-disc-actions">
+          <button class="ctrl-disc-btn" id="ctrlDiscBtn" onclick="controllerDiscover()">Caută</button>
+          <button class="ctrl-disc-btn secondary" onclick="closeControllerDiscoveryModal()">Închide</button>
+        </div>
+        <div style="margin-left:auto;color:#7db3d9;font-size:11px;">Rezultate: <span id="ctrlDiscCount">—</span></div>
+      </div>
+
+      <div id="ctrlDiscHint" style="color:#7db3d9;font-size:11px;">Apasă <strong>Caută</strong> pentru a porni scanarea (UDP broadcast).</div>
+      <div id="ctrlDiscResults"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+function openControllerDiscoveryModal(){
+  const m = document.getElementById('controllerDiscoveryModal');
+  if(!m) return;
+  m.style.display='flex';
+  requestAnimationFrame(()=> m.classList.add('is-open'));
+  const out = document.getElementById('ctrlDiscResults');
+  if(out) out.innerHTML = '';
+  const c = document.getElementById('ctrlDiscCount');
+  if(c) c.textContent = '—';
+}
+function closeControllerDiscoveryModal(){
+  const m = document.getElementById('controllerDiscoveryModal');
+  if(!m) return;
+  m.classList.remove('is-open');
+  window.setTimeout(()=>{ m.style.display='none'; }, 180);
+}
+document.getElementById('controllerDiscoveryModal')?.addEventListener('click', (e)=>{
+  if(e && e.target === document.getElementById('controllerDiscoveryModal')) closeControllerDiscoveryModal();
+});
+
+function _wizToken(){
+  return 'wiz_' + Date.now() + '_' + Math.random().toString(16).slice(2);
+}
+
+function startWizardFromDiscovery(dev){
+  const t = _wizToken();
+  const ip = (dev && (dev.ip || dev.IPAddress || dev.ip_address)) ? String(dev.ip || dev.IPAddress || dev.ip_address) : '';
+  const port = parseInt(dev && dev.port ? dev.port : (dev.commport || 4370), 10) || 4370;
+  const sn = dev && (dev.serial_number || dev.sn) ? String(dev.serial_number || dev.sn) : '';
+  const model = dev && (dev.model || dev.product || dev.device_name) ? String(dev.model || dev.product || dev.device_name) : '';
+  const doorsCap = (dev && (dev.doors_capacity != null ? dev.doors_capacity : dev.doorsCapacity)) ? parseInt(dev.doors_capacity != null ? dev.doors_capacity : dev.doorsCapacity, 10) : 0;
+
+  const params = new URLSearchParams();
+  params.set('wizard','1');
+  params.set('wizard_token', t);
+  params.set('wizard_step', 'identify');
+  if(ip) params.set('ip_address', ip);
+  if(port) params.set('port', String(port));
+  if(sn) params.set('serial_number', sn);
+  if(model) params.set('hardware_version', model);
+  if(doorsCap > 0) params.set('doors_capacity', String(doorsCap));
+
+  closeControllerDiscoveryModal();
+  openDeviceModal('/agent/crud/devices/new-access/?' + params.toString(), '➕ Identificare centrală');
+}
+
+async function controllerDiscover(){
+  const btn = document.getElementById('ctrlDiscBtn');
+  const out = document.getElementById('ctrlDiscResults');
+  const hint = document.getElementById('ctrlDiscHint');
+  const countEl = document.getElementById('ctrlDiscCount');
+  const base = (document.getElementById('ctrlDiscBase')?.value || '').trim();
+  if(btn) btn.disabled = true;
+  if(hint) hint.textContent = '⏳ Scanare în curs...';
+  if(out) out.innerHTML = '';
+  try{
+    const url = '/agent/devices/discover/?mode=udp' + (base ? ('&base=' + encodeURIComponent(base)) : '');
+    const resp = await fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+    const data = await resp.json();
+    if(!data || !data.ok){
+      const msg = (data && (data.hint || data.error || data.result)) || 'Eroare descoperire';
+      if(hint) hint.textContent = '✗ ' + msg;
+      if(out) out.innerHTML = '';
+      return;
+    }
+    const devices = Array.isArray(data.devices) ? data.devices : [];
+    if(countEl) countEl.textContent = String(devices.length);
+    if(!devices.length){
+      if(hint) hint.textContent = '⚠ Nu s-a găsit nicio centrală.';
+      return;
+    }
+    if(hint) hint.textContent = '✓ Selectează: ADAUGĂ sau EDITEAZĂ';
+    const next = encodeURIComponent(location.pathname + location.search);
+    let html = '<table class="ctrl-disc-table"><thead><tr>' +
+      '<th>IP</th><th>SN</th><th>Model</th><th>Uși</th><th>Acțiune</th>' +
+      '</tr></thead><tbody>';
+    for(const d of devices){
+      const ip = (d && d.ip) ? String(d.ip) : '—';
+      const sn = (d && d.serial_number) ? String(d.serial_number) : '—';
+      const model = (d && (d.model || d.product || d.device_name)) ? String(d.model || d.product || d.device_name) : '—';
+      const cap = (d && d.doors_capacity != null) ? String(d.doors_capacity) : '—';
+      const inSystem = Boolean(d && d.in_system);
+      const did = d && d.device_id ? parseInt(d.device_id, 10) : 0;
+      let act = '';
+      if(inSystem && did){
+        act = `<button class="ctrl-disc-btn secondary" onclick="openDeviceModal('/agent/crud/devices/${did}/edit/?next=${next}','✏️ Editează centrală #${did}'); closeControllerDiscoveryModal();">Editează</button>`;
+      } else {
+        act = `<button class="ctrl-disc-btn" onclick='startWizardFromDiscovery(${JSON.stringify(d).replace(/'/g, "\\'")})'>ADAUGĂ</button>`;
+      }
+      html += '<tr>' +
+        `<td><span class="ctrl-disc-badge">${ip}</span></td>` +
+        `<td>${sn}</td>` +
+        `<td>${model}</td>` +
+        `<td>${cap}</td>` +
+        `<td>${act}</td>` +
+      '</tr>';
+    }
+    html += '</tbody></table>';
+    if(out) out.innerHTML = html;
+  }catch(e){
+    if(hint) hint.textContent = '✗ Eroare: ' + (e && e.message ? e.message : e);
+  }finally{
+    if(btn) btn.disabled = false;
   }
 }
 </script>

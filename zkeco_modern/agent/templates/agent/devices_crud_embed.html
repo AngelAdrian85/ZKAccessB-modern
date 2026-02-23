@@ -28,13 +28,20 @@
   .actions { display:flex; gap:6px; align-items:center; justify-content:center; }
   .action-link { color:#3da5d9; text-decoration:none; font-size:9px; padding:2px 4px; border-radius:2px; transition: all 0.2s; border:none; outline:none; }
   .action-link:hover { background:#3da5d9; color:#fff; }
+  .action-link.sync { color:#2da44e; }
+  .action-link.sync:hover { background:#2da44e; color:#fff; }
   .action-link.delete { color:#d94a3d; }
   .action-link.delete:hover { background:#d94a3d; color:#fff; }
+  /* Requested: show full device name; allow wrapping only in the Name column */
+  .embed-device-wrap .compact-table td.name-cell,
+  .embed-device-wrap .compact-table th.name-cell { white-space: normal; overflow: visible; text-overflow: clip; }
+  .embed-device-wrap .compact-table td.name-cell strong { display:inline; }
 </style>
 <div class="embed-device-wrap">
   <style>
     .embed-action-overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:9999;background:rgba(0,0,0,0.45);} 
     .embed-action-overlay .panel{width:min(520px,92vw);padding:18px 16px;border-radius:8px;border:1px solid #3d6a8b;background:#163247;box-shadow:0 20px 40px rgba(0,0,0,0.6);text-align:center;transform:scale(.94);opacity:0;animation:overlayIn 180ms ease-out forwards;}
+    .embed-action-overlay.loading .panel{border-color: rgba(61,165,217,0.75);}
     .embed-action-overlay.success .panel{border-color:#2da44e;}
     .embed-action-overlay.error .panel{border-color:#ff6b6b;}
     .embed-action-overlay .title{font-weight:800;font-size:12px;margin-bottom:6px;color:#e8f0f8;}
@@ -79,10 +86,11 @@
     {% if page.object_list %}
     <table class="compact-table">
       <colgroup>
-        <col style="width:44px;" />
-        <col style="width:240px;" />
-        <col style="width:160px;" />
-        <col style="width:120px;" />
+        <col style="width:34px;" />
+        <col style="width:260px;" />
+        <col style="width:150px;" />
+        <col style="width:140px;" />
+        <col style="width:96px;" />
         <col style="width:56px;" />
         <col style="width:72px;" />
         <col style="width:90px;" />
@@ -91,12 +99,12 @@
         <col style="width:116px;" />
         <col style="width:120px;" />
       </colgroup>
-      <thead><tr><th>ID</th><th>Nume</th><th>Serial</th><th>IP</th><th>Port</th><th>Mod</th><th>Firmware</th><th>Zonă</th><th>Status</th><th>Actualizat</th><th>Acțiuni</th></tr></thead>
+      <thead><tr><th>ID</th><th>Nume</th><th>Serial</th><th>Model</th><th>IP</th><th>Port</th><th>Mod</th><th>Firmware</th><th>Zonă</th><th>Status</th><th>Actualizat</th><th>Acțiuni</th></tr></thead>
       <tbody>
         {% for device in page.object_list %}
         <tr>
           <td><strong>#{{ device.id }}</strong></td>
-          <td>
+          <td class="name-cell">
             <strong>{{ device.name }}</strong>
             {% if device.is_controller %}
               <span class="type-controller">Centrală</span>
@@ -106,6 +114,7 @@
             {% endif %}
           </td>
           <td>{{ device.serial_number|default:"—" }}</td>
+          <td>{{ device.hardware_version|default:device.get_device_type_display|default:"—" }}</td>
           <td>{{ device.ip_address|default:"—" }}</td>
           <td>{{ device.port|default:"4370" }}</td>
           <td>{{ device.get_comm_mode_display }}</td>
@@ -115,6 +124,9 @@
           <td>{% if device.latest_updated_at %}<small class="ts" data-ts="{{ device.latest_updated_at|date:'c' }}">{{ device.latest_updated_at|date:"d.m H:i" }}</small>{% elif device.last_contact %}<small class="ts" data-ts="{{ device.last_contact|date:'c' }}">{{ device.last_contact|date:"d.m H:i" }}</small>{% else %}<small>—</small>{% endif %}</td>
           <td class="actions">
             <a href="{% url 'crud-device-edit-access' device.id %}" class="action-link" title="Editează dispozitivul" onclick="if(window.openDeviceModal){ openDeviceModal(this.href, '✏️ Editează Dispozitiv #{{ device.id }}'); return false; }">Edit</a>
+            {% if device.is_physical_controller %}
+              <a href="#" class="action-link sync" title="Sincronizează server → centrală" onclick="syncEmbeddedDevicePersonnel({{ device.id }}, '{{ device.name|escapejs }}'); return false;">SYNC</a>
+            {% endif %}
             <a href="#" class="action-link delete" title="Șterge dispozitivul" onclick="deleteEmbeddedDevice({{ device.id }}); return false;">Șterge</a>
           </td>
         </tr>
@@ -135,10 +147,82 @@ function showEmbedActionOverlay(message, ok){
   const m = document.getElementById('embedActionMsg');
   if(t) t.textContent = ok ? 'Succes' : 'Eroare';
   if(m) m.textContent = message || '';
-  el.classList.remove('success','error');
+  el.classList.remove('success','error','loading');
   el.classList.add(ok ? 'success' : 'error');
   el.style.display = 'flex';
   setTimeout(()=>{ el.style.display = 'none'; }, 1100);
+}
+
+function showEmbedActionLoading(title, message){
+  const el = document.getElementById('embedActionOverlay');
+  if(!el) return;
+  const t = document.getElementById('embedActionTitle');
+  const m = document.getElementById('embedActionMsg');
+  if(t) t.textContent = title || 'Se procesează';
+  if(m) m.textContent = message || '';
+  try{
+    const bar = el.querySelector('.bar');
+    if(bar) bar.innerHTML = '<div></div>';
+  }catch(e){}
+  el.classList.remove('success','error');
+  el.classList.add('loading');
+  el.style.display = 'flex';
+}
+
+let _embedSyncPollTimer = null;
+function syncEmbeddedDevicePersonnel(deviceId, deviceName){
+  try{ if(_embedSyncPollTimer){ clearInterval(_embedSyncPollTimer); _embedSyncPollTimer = null; } }catch(e){}
+  const dn = deviceName || ('#' + String(deviceId || ''));
+  showEmbedActionLoading('Sincronizare', `Se sincronizează server → centrală (${dn})...`);
+  fetch(`/agent/api/devices/${encodeURIComponent(String(deviceId))}/sync-personnel/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': getCookie('csrftoken')
+    },
+    body: '{}'
+  })
+  .then(async (r)=>{
+    let data = {};
+    try{ data = await r.json(); }catch(e){ data = {}; }
+    if(!r.ok || !data || !data.ok){
+      const err = (data && (data.error || data.detail || data.message)) ? (data.error || data.detail || data.message) : (`HTTP ${r.status}`);
+      throw new Error(String(err));
+    }
+    const cmdId = parseInt(String(data.command_id || 0), 10) || 0;
+    if(!(cmdId > 0)) throw new Error('missing-command-id');
+
+    _embedSyncPollTimer = setInterval(()=>{
+      fetch(`/agent/api/commands/${encodeURIComponent(String(cmdId))}/status/`)
+        .then(rr=>rr.json())
+        .then(res=>{
+          const st = String(res.status || '').toUpperCase();
+          const result = String(res.result || '').trim();
+          if(st === 'OK'){
+            try{ clearInterval(_embedSyncPollTimer); }catch(e){}
+            _embedSyncPollTimer = null;
+            showEmbedActionOverlay('Sincronizare: finalizată cu succes.', true);
+            return;
+          }
+          if(st === 'ERR' || st === 'ERROR' || st === 'FAILED'){
+            try{ clearInterval(_embedSyncPollTimer); }catch(e){}
+            _embedSyncPollTimer = null;
+            showEmbedActionOverlay('Sincronizare eșuată: ' + (result || 'ERR'), false);
+            return;
+          }
+          if(st === 'RUNNING'){
+            showEmbedActionLoading('Sincronizare', 'Sincronizare: în curs...');
+            return;
+          }
+          showEmbedActionLoading('Sincronizare', 'Sincronizare: în așteptare (pusă în coadă)...');
+        })
+        .catch(_e=>{ /* transient */ });
+    }, 1000);
+  })
+  .catch((e)=>{
+    const msg = String(e && e.message ? e.message : e);
+    showEmbedActionOverlay('Sincronizare: nu a pornit (' + msg + ')', false);
+  });
 }
 
 function deleteEmbeddedDevice(id){

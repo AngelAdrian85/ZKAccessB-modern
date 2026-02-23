@@ -151,6 +151,7 @@ table tbody td:last-child { border-right: none; }
 .badge.warn { background:#3c2a14; color:#f2b94b; border:1px solid rgba(242,185,75,0.4); }
 .badge.err { background:#3a1d1f; color:#ff8c99; border:1px solid rgba(255,140,153,0.45); }
 .badge .pulse-dot { width:6px; height:6px; border-radius:50%; background: currentColor; display:inline-block; animation: heartbeat 1.1s ease-in-out infinite; box-shadow: 0 0 4px currentColor; }
+.badge.err .pulse-dot { animation: none; box-shadow: none; opacity: 0.85; }
 .health-list { display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:3px; font-size:8px; }
 .health-row { min-width: 0; display:flex; justify-content:space-between; align-items:center; background:rgba(18,42,63,0.6); border:1px solid rgba(61,165,217,0.18); padding:3px 4px; border-radius:5px; overflow:hidden; gap:6px; }
 .health-row > span:first-child { white-space: nowrap; }
@@ -598,6 +599,59 @@ let currentDeviceMode = 'central';
 let dashLastCard = '';
 const dashOverrides = {}; // deviceId -> expiry ms since epoch (local override after user toggle)
 
+// Server clock baseline (UTC epoch + system TZ key) to avoid browser clock/TZ discordances.
+let dashServerEpochMsUtc = null;
+let dashServerOffsetSeconds = 0;
+let dashServerTzKey = '';
+let dashBasePerf = null;
+
+function dashSyncServerClock(){
+  return fetch('/agent/api/system/now/', { credentials: 'same-origin' })
+    .then(r => r.ok ? r.json() : null)
+    .then(d => {
+      if(!d || !d.ok) return;
+      dashServerEpochMsUtc = Number(d.epoch_ms_utc);
+      dashServerOffsetSeconds = Number(d.offset_seconds || 0);
+      dashServerTzKey = String(d.tz_key || '');
+      dashBasePerf = performance.now();
+    })
+    .catch(()=>{});
+}
+
+function dashNowMsUtc(){
+  try{
+    if(dashServerEpochMsUtc == null || dashBasePerf == null) return Date.now();
+    const deltaMs = performance.now() - dashBasePerf;
+    return dashServerEpochMsUtc + Math.floor(deltaMs);
+  }catch(e){
+    return Date.now();
+  }
+}
+
+function _pad2(n){ return String(n).padStart(2,'0'); }
+
+function formatSystemTimeFromIso(iso){
+  if(!iso) return '-';
+  const dt = new Date(iso);
+  if(Number.isNaN(dt.getTime())) return '-';
+  // Best: DST-aware formatting using the server/system time zone key.
+  if(dashServerTzKey && typeof Intl !== 'undefined' && Intl.DateTimeFormat){
+    try{
+      return new Intl.DateTimeFormat(undefined, {
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false,
+        timeZone: dashServerTzKey,
+      }).format(dt);
+    }catch(e){ /* fallback below */ }
+  }
+  // Fallback: apply current server offset (good enough for recent timestamps).
+  if(dashServerEpochMsUtc != null){
+    const shifted = new Date(dt.getTime() + (dashServerOffsetSeconds * 1000));
+    return `${_pad2(shifted.getUTCHours())}:${_pad2(shifted.getUTCMinutes())}:${_pad2(shifted.getUTCSeconds())}`;
+  }
+  return dt.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+}
+
 function badge(text, kind){
   const cls = kind==='err' ? 'badge err' : (kind==='warn' ? 'badge warn' : 'badge ok');
   return `<span class="${cls}">${text}</span>`;
@@ -618,7 +672,7 @@ function renderDeviceTable(mode){
     const rows = filtered.map(d=>{
     const icon = d.online ? '🟢' : '🔴';
     const stat = d.online ? '<span style="color:#2da44e;">ONLINE</span>' : '<span style="color:#d97e4a;">OFFLINE</span>';
-    const updated = d.updated_at ? new Date(d.updated_at).toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit',second:'2-digit'}) : '-';
+    const updated = d.updated_at ? formatSystemTimeFromIso(d.updated_at) : '-';
     const type = d.type_badge || d.device_type || '';
     const btnId = 'devToggle_'+(d.device__id||'');
     const btnStateClass = d.online ? 'device-toggle-btn active pulse' : 'device-toggle-btn';
@@ -761,6 +815,8 @@ function setBadge(elId, text, kind){
   el.innerHTML = `<span class="pulse-dot"></span>${text}`;
 }
 
+let __healthFailCount = 0;
+
 async function refreshHealth(){
   let ccSet = false; let hbSet = false;
   try{
@@ -769,11 +825,12 @@ async function refreshHealth(){
     // If /agent/health/ answered, Django is running; and DB is reachable (this endpoint queries DB).
     setBadge('djangoStatus','✓ Running','ok');
     setBadge('dbStatus','✓ Connected','ok');
+    __healthFailCount = 0;
     if(hbData.heartbeat){
       const last = hbData.heartbeat.last_cycle; const backend = hbData.heartbeat.backend;
       if(last){
         const lastDt = new Date(last*1000 || last);
-        const ageMin = Math.max(0, Math.round((Date.now()-lastDt.getTime())/60000));
+        const ageMin = Math.max(0, Math.round((dashNowMsUtc()-lastDt.getTime())/60000));
         const label = `${backend||'hb'} · ${ageMin}m`;
         const kind = ageMin > 15 ? 'err' : (ageMin > 5 ? 'warn' : 'ok');
         setBadge('hbStatus', label, kind);
@@ -792,9 +849,16 @@ async function refreshHealth(){
       if(backupRow){ backupRow.style.cursor = 'pointer'; backupRow.title = 'Click pentru a porni backup (dacă este configurat)'; backupRow.onclick = triggerBackup; }
     }
   }catch(err){
-    setBadge('djangoStatus','✗ Offline','err');
-    setBadge('dbStatus','✗ Offline','err');
-    setBadge('hbStatus','offline','err');
+    __healthFailCount = (__healthFailCount || 0) + 1;
+    if(__healthFailCount < 3){
+      setBadge('djangoStatus','… Checking','warn');
+      setBadge('dbStatus','… Checking','warn');
+      setBadge('hbStatus','… Checking','warn');
+    } else {
+      setBadge('djangoStatus','✗ Offline','err');
+      setBadge('dbStatus','✗ Offline','err');
+      setBadge('hbStatus','offline','err');
+    }
   }
   try{
     const rs = await fetch('{% url "agent-readers-status" %}');
@@ -804,9 +868,27 @@ async function refreshHealth(){
       const comm = extra.commcenter || (rj.status && rj.status.commcenter) || 'CommCenter';
       const color = String(extra.color || '').toLowerCase();
       const server = extra.server || (rj.status && rj.status.server) || '';
-      const label = server ? `${server}` : comm;
-      const kind = color === 'green' ? 'ok' : (color === 'yellow' ? 'warn' : 'err');
-      setBadge('ccStatus', label, kind);
+      const ccDriver = extra.commcenter_driver || (rj.status && rj.status.commcenter_driver) || '';
+      const ccBackend = extra.commcenter_backend || (rj.status && rj.status.commcenter_backend) || '';
+      // CommCenter badge should reflect CommCenter state, not the server state.
+      const commUp = String(comm||'').toUpperCase();
+      let kind = null;
+      if(commUp === 'ON' || commUp === 'PORNIT') kind = 'ok';
+      else if(commUp === 'PORNESTE') kind = 'warn';
+      else if(commUp === 'OPRIT') kind = 'err';
+      // Fallback to overall tray color when commcenter string is unknown
+      if(!kind){ kind = color === 'green' ? 'ok' : (color === 'yellow' ? 'warn' : 'err'); }
+      const ccLabel = ccBackend ? `${comm} · ${ccBackend}` : comm;
+      setBadge('ccStatus', ccLabel, kind);
+      try{
+        const el = document.getElementById('ccStatus');
+        if(el){
+          const t = [];
+          if(ccDriver) t.push('driver: ' + ccDriver);
+          if(ccBackend) t.push('backend: ' + ccBackend);
+          el.title = t.join(' | ');
+        }
+      }catch(_e){}
       ccSet = true;
       if(!hbSet && (color === 'green' || color === 'yellow')){
         setBadge('hbStatus', color === 'green' ? 'CommCenter · 0m' : 'CommCenter · în lucru', color === 'green' ? 'ok' : 'warn');
@@ -999,9 +1081,10 @@ document.addEventListener('DOMContentLoaded', function() {
   renderDoorsTable();
   refreshDoorsLive();
   setInterval(refreshDoorsLive, 7000);
-  refreshHealth();
-  setInterval(refreshHealth, 20000);
-  setBadge('wsConnStatus','✓ Connected','ok');
+  // Sync server clock baseline first, then compute ages/timestamps.
+  dashSyncServerClock().finally(()=>{ refreshHealth(); });
+  setInterval(dashSyncServerClock, 15000);
+  setInterval(refreshHealth, 5000);
   startRecentCommandsPolling();
   // live switch binding
   const btns = [document.getElementById('liveToggleCentral'), document.getElementById('liveToggleDevices'), document.getElementById('liveToggleReaders')];
@@ -1065,9 +1148,10 @@ function escapeHtml(str){
   }
 
   function connect(){
+    setBadge('wsConnStatus','… Connecting','warn');
     try{ ws = new WebSocket(url); } catch(e){ setTimeout(connect,2000); return; }
     ws.onopen = ()=>{ console.log('Dashboard WS connected'); setBadge('wsConnStatus','✓ Connected','ok'); };
-    ws.onclose = ()=>{ console.log('Dashboard WS closed, reconnecting'); setBadge('wsConnStatus','✗ Disconnected','err'); setTimeout(connect,2000); };
+    ws.onclose = ()=>{ console.log('Dashboard WS closed, reconnecting'); setBadge('wsConnStatus','… Reconnecting','warn'); setTimeout(connect,2000); };
     ws.onerror = (e)=>{ console.warn('Dashboard WS error', e); ws.close(); };
     ws.onmessage = (e)=>{
       let msg;
@@ -1111,15 +1195,17 @@ function startRecentCommandsPolling(){
 }
 </script>
 
-<!-- DIAGNOSTIC: auto-report WS messages received by this page to server for debugging -->
+<!-- DIAGNOSTIC: optional WS logging (enable with ?ws_diag=1) -->
 <script>
 (function(){
   try{
+    const qs = new URLSearchParams(location.search||'');
+    if(qs.get('ws_diag') !== '1') return;
     const proto = (location.protocol === 'https:') ? 'wss' : 'ws';
     const url = proto + '://' + location.host + '/ws/monitor/';
     const postTo = '/agent/diag/ws-log/';
     const ws = new WebSocket(url);
-    ws.addEventListener('open', ()=>{ console.log('WS diag connected ->', url); document.getElementById('wsConnStatus').className='badge ok'; document.getElementById('wsConnStatus').textContent='Connected'; });
+    ws.addEventListener('open', ()=>{ console.log('WS diag connected ->', url); });
     ws.addEventListener('message', ev=>{
       try{
         const data = JSON.parse(ev.data);
@@ -1128,7 +1214,6 @@ function startRecentCommandsPolling(){
         fetch(postTo, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({page: 'dashboard', raw: ev.data}) }).catch(()=>{});
       }
     });
-    ws.addEventListener('error', e=>{ console.log('WS diag error', e); document.getElementById('wsConnStatus').className='badge err'; document.getElementById('wsConnStatus').textContent='Error'; });
     window.__WS_DIAG_PAGE = window.__WS_DIAG_PAGE || {};
     window.__WS_DIAG_PAGE.dashboard = ws;
   }catch(e){ console.log('WS diag init failed', e); }

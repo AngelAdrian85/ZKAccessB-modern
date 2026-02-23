@@ -104,6 +104,18 @@ Alternative with background job execution (for advanced users).
 
 ## ❓ Troubleshooting
 
+### "Port is OPEN but no controller response"
+This usually means the TCP port is reachable, but the SDK/plcommpro `Connect` cannot complete (wrong COMM/SDK port, wrong communication password/key, device in push/ADMS mode, or SDK blocked).
+
+If your controller requires a communication password/key for plcommpro (the `passwd=` field), you can set a workspace default used as a fallback by admin/probe/clear operations:
+
+```powershell
+$env:ZKACCESS_DEFAULT_COMM_PASSWORD = "0"   # common default (numeric)
+# or: $env:ZKACCESS_DEFAULT_COMM_PASSWORD = "Zk@123"  # if your controller uses this
+```
+
+This does not overwrite any Device record in the DB; it’s only used when no password is explicitly provided.
+
 ### "Python not found"
 **Solution:**
 1. Download Python 3.10+ from https://www.python.org/

@@ -33,11 +33,15 @@ urlpatterns = [
     path("system/devices/sync-time-now/", views.system_devices_sync_now, name="system-devices-sync-now"),
     path("system/devices/<int:pk>/sync-time-now/", views.system_device_sync_now, name="system-device-sync-now"),
     path("system/options/modal/", views.system_options_modal, name="system-options-modal"),
+    path("system/sync-limits/save/", views.system_sync_limits_save, name="system-sync-limits-save"),
+    path("system/comm-password/save/", views.system_comm_password_save, name="system-comm-password-save"),
 
     # System clock API
     path("api/system/now/", views.api_system_now, name="api-system-now"),
+    path("api/system/time-check/", views.api_system_time_check, name="api-system-time-check"),
     path("access/doors/", views.access_doors, name="agent-access-doors"),
     path("access/time-segments/", views.access_time_segments, name="agent-access-time-segments"),
+    path("system/api/audit-latest/", views.api_system_audit_latest, name="api_system_audit_latest"),
     path("access/holidays/", views.access_holidays, name="agent-access-holidays"),
     path("access/levels/", views.access_levels, name="agent-access-levels"),
     path("reports/alarms/", views.report_alarm, name="agent-report-alarms"),
@@ -67,6 +71,7 @@ urlpatterns = [
     path("crud/employees/", views.employees_list, name="crud-employees-list"),
     path("crud/employees/json/", views.employees_json_list, name="crud-employees-json"),
     path("api/employees/search/", views.employees_search_json, name="api-employees-search"),
+    path("api/access-levels/options/", views.api_access_level_options, name="api-access-level-options"),
     path("api/doors/list", views.doors_json_list, name="doors-json-list"),
     path("crud/employees/new/", views.employee_create, name="crud-employee-create"),
     path("crud/employees/check-personnel-no/", views.check_personnel_no, name="crud-employee-check-personnel"),
@@ -89,6 +94,8 @@ urlpatterns = [
     path("devices/discover/", views.device_discover, name="device-discover"),
     path("devices/discover/apply/", views.device_discover_apply, name="device-discover-apply"),
     path("devices/port-test/", views.device_port_test, name="device-port-test"),
+    path("devices/admin-test/", views.device_admin_test, name="device-admin-test"),
+    path("devices/firewall-allow/", views.device_firewall_allow, name="device-firewall-allow"),
     # New legacy bridge CRUD routes
     path("crud/depts/", views.depts_list, name="crud-depts-list"),
     path("crud/depts/new/", views.dept_create, name="crud-dept-create"),
@@ -136,11 +143,19 @@ urlpatterns = [
     path("api/access/evaluate-open/", views.access_evaluate_and_open, name="access-evaluate-open"),
     path("api/test-read-card", views.test_read_card, name="api-test-read-card"),
     path("api/check-card-owner/", views.check_card_owner, name="api-check-card-owner"),
+    path("api/monitor/rtlog/", views.monitor_rtlog_json, name="api-monitor-rtlog"),
+    path("api/devices/<int:device_id>/sync-personnel/", views.device_sync_personnel, name="device-sync-personnel"),
     path("api/commands/recent/", views.command_recent, name="command-recent"),
+    path("api/commands/<int:command_id>/status/", views.command_status, name="command-status"),
     path("api/commands/full/", views.commands_full_list, name="commands-full"),
     path("api/commands/export/", views.commands_export_csv, name="commands-export"),
     path("api/commands/clear/", views.commands_clear, name="commands-clear"),
     path("api/commands/manual/", views.command_manual_create, name="command-manual-create"),
+
+    # Wizard (discovery) draft workflow: clear + draft door edits before DB create
+    path("api/wizard/clear-device/", views.wizard_clear_device, name="wizard-clear-device"),
+    path("crud/wizard/doors/<int:door_no>/edit/", views.wizard_door_draft_edit, name="wizard-door-draft-edit"),
+
     path("api/devices/<int:device_id>/doors/auto-assign/", views.device_doors_auto_assign, name="device-doors-auto-assign"),
     # Uniform CSV import/export (ECHIPAMENTE + CONTROL ACCES)
     path("api/csv/<str:module>/export/", views.csv_export, name="csv-export"),

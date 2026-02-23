@@ -239,6 +239,19 @@ body {
   justify-content: center;
 }
 
+/* Employee Modal: EXACT like Access (Doors) modal */
+#modalEmployee.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.72);display:none;align-items:center;justify-content:center;z-index:2500;padding:12px;opacity:0;transition:opacity 160ms ease;}
+#modalEmployee.modal-backdrop.is-open{opacity:1;}
+#modalEmployee .modal{position:relative;left:auto;top:auto;height:auto;width:min(980px, calc(100vw - 28px));max-height:92vh;background:#1e4a6b;border:2px solid #3da5d9;border-radius:2px;box-shadow:0 20px 50px rgba(0,0,0,0.55);overflow:hidden;display:flex;flex-direction:column;transform:translateY(10px) scale(0.985);opacity:0;transition:transform 180ms ease, opacity 180ms ease, box-shadow 180ms ease;}
+#modalEmployee.modal-backdrop.is-open .modal{transform:translateY(0) scale(1);opacity:1;}
+#modalEmployee .modal-header{background:#163247;border-bottom:1px solid #3da5d9;padding:4px 6px;display:flex;align-items:center;justify-content:space-between;gap:8px;color:#7db3d9;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.3px;position:relative;}
+#modalEmployee .modal-header::before,#modalEmployee .modal-header::after{display:none;content:none;}
+#modalEmployee .modal-title{text-align:left;flex:1;}
+#modalEmployee .modal-title::before{content:"+ ";color:#9fd2f1;}
+#modalEmployee .modal-close{background:#163247;border:1px solid #3d6a8b;color:#9fd2f1;width:22px;height:22px;border-radius:2px;cursor:pointer;font-weight:700;font-size:14px;}
+#modalEmployee .modal-close:hover{background:#3da5d9;border-color:#3da5d9;color:#fff;}
+#modalEmployee .modal-body{padding:6px;overflow:auto;overflow-x:hidden;color:#e8f0f8;}
+
 .modal.show {
   display: flex;
 }
@@ -515,7 +528,7 @@ input[type="checkbox"] {
     <div class="section-header">
       <span class="section-title">Lista Angajați</span>
       <div class="section-actions">
-        <a href="{% url 'crud-employee-create' %}" class="btn">➕ Adaugă Angajat</a>
+        <a href="{% url 'crud-employee-create' %}?ui=modal" class="btn" data-employee-modal="1" data-employee-title="Adăugare Angajat">➕ Adaugă Angajat</a>
         <button class="btn btn-secondary" onclick="importEmployees()">📂 Import</button>
         <button class="btn btn-secondary" onclick="exportEmployees()">📥 Export</button>
         <button class="btn btn-secondary" onclick="showEmployeeJournal()">📋 Jurnal Evenimente</button>
@@ -577,7 +590,7 @@ input[type="checkbox"] {
         </thead>
         <tbody id="emp-tbody">
           {% for emp in employees %}
-          <tr data-emp-id="{{ emp.legacy_userid }}">
+          <tr data-emp-id="{{ emp.legacy_userid }}" data-emp-pk="{{ emp.id }}" data-acc-end="{{ emp.acc_enddate|date:'Y-m-d' }}">
             <td><input type="checkbox" class="emp-check" value="{{ emp.legacy_userid }}"></td>
             <td>{{ emp.id }}</td>
             <td>{{ emp.legacy_userid|default:"-" }}</td>
@@ -596,23 +609,10 @@ input[type="checkbox"] {
             <td>{{ emp.acc_startdate|date:"d.m.Y"|default:"-" }}</td>
             <td>{{ emp.acc_enddate|date:"d.m.Y"|default:"-" }}</td>
             <td>{% if emp.access_superuser %}<span class="badge badge-active">DA</span>{% else %}-{% endif %}</td>
-            <td id="status-{{ emp.id }}" class="status-cell">
-              <script>
-                (function() {
-                  const empId = {{ emp.id }};
-                  const endDate = "{{ emp.acc_enddate|date:'Y-m-d' }}";
-                  const cell = document.getElementById('status-' + empId);
-                  if (!cell) return;
-                  if (!endDate) { cell.innerHTML = '<span class="badge badge-inactive">INACTIV</span>'; return; }
-                  const today = new Date().toISOString().split('T')[0];
-                  const isActive = endDate >= today;
-                  cell.innerHTML = isActive ? '<span class="badge badge-active">ACTIV</span>' : '<span class="badge badge-inactive">INACTIV</span>';
-                })();
-              </script>
-            </td>
+            <td class="status-cell" data-emp-status="1">-</td>
             <td class="action-cell">
-              <a href="{% url 'crud-employee-edit' emp.id %}" class="action-link">✏️ Edit</a>
-              <a href="#" class="action-link delete" onclick="deleteEmployee({{ emp.legacy_userid }}); return false;">🗑️ Șterge</a>
+              <a href="{% url 'crud-employee-edit' emp.id %}?ui=modal" class="action-link" data-employee-modal="1" data-employee-title="Editare Angajat">✏️ Edit</a>
+              <a href="#" class="action-link delete" onclick="deleteEmployee({{ emp.id }}); return false;">🗑️ Șterge</a>
               <a href="#" class="action-link" onclick="showEmpJournal({{ emp.legacy_userid }}); return false;">📋 Jurnal</a>
             </td>
           </tr>
@@ -621,6 +621,17 @@ input[type="checkbox"] {
           {% endfor %}
         </tbody>
       </table>
+    </div>
+  </div>
+
+  <div id="modalEmployee" class="modal-backdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <div style="width:30px;"></div>
+        <div class="modal-title" id="modalEmployeeTitle">Formular</div>
+        <button type="button" class="modal-close" id="modalEmployeeClose" title="Închide">✕</button>
+      </div>
+      <div class="modal-body" id="modalEmployeeBody"></div>
     </div>
   </div>
 
@@ -1895,27 +1906,517 @@ function filterLogs() {
 // Employee Functions
 function deleteEmployee(id) {
   const run = ()=>{
+    const hasActionModal = window.zkActionModal && typeof window.zkActionModal.open === 'function' && typeof window.zkActionModal.setState === 'function';
+    if(hasActionModal){
+      try{ window.zkActionModal.open({mode:'', module:'', title:'DELETE', subtitle:'Ștergere angajat'}); window.zkActionModal.setState('loading','ȘTERGERE ÎN CURS','Se șterge angajatul...'); }catch(_e){}
+    }
     fetch(`/agent/crud/employees/${id}/delete/`, {
       method: 'POST',
       headers: {
-        'X-CSRFToken': getCookie('csrftoken')
+        'X-CSRFToken': getCookie('csrftoken'),
+        'X-Requested-With': 'XMLHttpRequest'
       }
     })
-    .then(r => {
+    .then(async r => {
       if (r.ok) {
-        location.reload();
-        alert('Angajat șters!');
+        try{ await refreshEmployeesTable(); }catch(_e){}
+        if(hasActionModal){
+          try{ window.zkActionModal.setState('success','ȘTERGERE REALIZATĂ CU SUCCES','Angajatul a fost șters.'); window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1200); }catch(_e){}
+        } else {
+          showToast('Angajat șters!', 'success');
+        }
       } else {
-        alert('Eroare la ștergere!');
+        if(hasActionModal){
+          try{ window.zkActionModal.setState('error','ȘTERGERE NEREUȘITĂ','Eroare la ștergere.'); window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1400); }catch(_e){}
+        } else {
+          showToast('Eroare la ștergere!', 'danger');
+        }
       }
     })
-    .catch(e => alert('Eroare de rețea!'));
+    .catch(_e => {
+      if(window.zkActionModal && typeof window.zkActionModal.setState === 'function'){
+        try{ window.zkActionModal.setState('error','ȘTERGERE NEREUȘITĂ','Eroare de rețea.'); }catch(_x){}
+      } else {
+        showToast('Eroare de rețea!', 'danger');
+      }
+    });
   };
   const msg = 'Sigur ștergi acest angajat? Acțiunea este ireversibilă!';
   if(window.zkConfirmDialog){ zkConfirmDialog({title:'Confirmare',message:msg,okText:'Șterge',cancelText:'Renunță',variant:'danger'}).then(ok=>{ if(ok) run(); }); return; }
   if (!confirm(msg)) return;
   run();
 }
+
+// ===== Employee Modal (Access-style) =====
+(function(){
+  const backdrop = document.getElementById('modalEmployee');
+  const body = document.getElementById('modalEmployeeBody');
+  const titleEl = document.getElementById('modalEmployeeTitle');
+  const closeBtn = document.getElementById('modalEmployeeClose');
+  let currentUrl = null;
+
+  // Ensure true viewport-fixed centering even if page wrappers use CSS transforms.
+  try{
+    if(backdrop && backdrop.parentElement && backdrop.parentElement !== document.body){
+      document.body.appendChild(backdrop);
+    }
+  }catch(_e){}
+
+  function openModal(){
+    if(!backdrop) return;
+    backdrop.style.display = 'flex';
+    requestAnimationFrame(()=> backdrop.classList.add('is-open'));
+    backdrop.setAttribute('aria-hidden','false');
+  }
+  function closeModal(){
+    if(!backdrop) return;
+    backdrop.classList.remove('is-open');
+    backdrop.setAttribute('aria-hidden','true');
+    window.setTimeout(()=>{ backdrop.style.display = 'none'; }, 180);
+    currentUrl = null;
+  }
+
+  function isSaved(){
+    try{ return Boolean(body && body.querySelector('[data-employee-saved="1"]')); }catch(_e){ return false; }
+  }
+
+  function renderEmployeeStatusBadges(){
+    const rows = Array.from(document.querySelectorAll('#emp-tbody tr[data-emp-pk]'));
+    const today = new Date().toISOString().split('T')[0];
+    rows.forEach(r => {
+      const endDate = (r.getAttribute('data-acc-end') || '').trim();
+      const cell = r.querySelector('td[data-emp-status="1"], td.status-cell[data-emp-status="1"], td.status-cell');
+      if(!cell) return;
+      if(!endDate){ cell.innerHTML = '<span class="badge badge-inactive">INACTIV</span>'; return; }
+      const isActive = endDate >= today;
+      cell.innerHTML = isActive ? '<span class="badge badge-active">ACTIV</span>' : '<span class="badge badge-inactive">INACTIV</span>';
+    });
+  }
+  window.renderEmployeeStatusBadges = renderEmployeeStatusBadges;
+
+  async function refreshEmployeesTable(){
+    const tbody = document.getElementById('emp-tbody');
+    if(!tbody) return;
+    const keep = {
+      search: (document.getElementById('emp-search') || {}).value || '',
+      dept: (document.getElementById('emp-dept-filter') || {}).value || '',
+      status: (document.getElementById('emp-status-filter') || {}).value || ''
+    };
+    const resp = await fetch(window.location.href, {headers:{'X-Requested-With':'XMLHttpRequest'}});
+    const html = await resp.text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const fresh = doc.getElementById('emp-tbody');
+    if(fresh) tbody.innerHTML = fresh.innerHTML;
+    renderEmployeeStatusBadges();
+    try{
+      const s = document.getElementById('emp-search');
+      const d = document.getElementById('emp-dept-filter');
+      const st = document.getElementById('emp-status-filter');
+      if(s) s.value = keep.search;
+      if(d) d.value = keep.dept;
+      if(st) st.value = keep.status;
+      if(typeof window.filterEmployees === 'function') window.filterEmployees();
+    }catch(_e){}
+  }
+  window.refreshEmployeesTable = refreshEmployeesTable;
+
+  function wireModalBody(){
+    if(!body) return;
+    body.querySelectorAll('[data-modal-close="1"]').forEach(btn => btn.addEventListener('click', closeModal));
+    const form = body.querySelector('form[data-modal-form="1"], form');
+    if(!form) return;
+
+    // Wire validation + checks for required(*) fields
+    wireEmployeeModalValidation(form);
+
+    form.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+
+      const pre = await ensureEmployeeModalValid(form);
+      if(!pre.ok) return;
+
+      const submitUrl = (form.getAttribute('action') || currentUrl || window.location.href);
+      const hasActionModal = window.zkActionModal && typeof window.zkActionModal.open === 'function' && typeof window.zkActionModal.setState === 'function';
+      if(hasActionModal){
+        try{ window.zkActionModal.open({mode:'', module:'', title:'UPDATE', subtitle:'Salvare date'}); window.zkActionModal.setState('loading','UPDATE ÎN CURS','Se salvează datele...'); }catch(_e){}
+      }
+      try{
+        const resp = await fetch(submitUrl, {
+          method: 'POST',
+          headers: {'X-Requested-With':'XMLHttpRequest','X-CSRFToken': getCookie('csrftoken')},
+          body: new FormData(form)
+        });
+
+        // NOTE: invalid form returns HTTP 400 with modal HTML; we still want to render it.
+        const html = await resp.text();
+        body.innerHTML = html;
+        wireModalBody();
+
+        if(isSaved()){
+          window.setTimeout(async ()=>{
+            try{ await refreshEmployeesTable(); }catch(_e){}
+            closeModal();
+            if(hasActionModal){
+              try{ window.zkActionModal.setState('success','UPDATE REALIZAT CU SUCCES','Datele au fost salvate.'); window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1200); }catch(_e){}
+            } else {
+              showToast('Salvat cu succes!', 'success');
+            }
+          }, 220);
+        } else {
+          if(hasActionModal){
+            try{ window.zkActionModal.setState('error','UPDATE NEREUȘIT','Verifică câmpurile din formular.'); window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1400); }catch(_e){}
+          }
+        }
+      }catch(err){
+        const msg = (err && err.message) ? err.message : String(err);
+        try{
+          body.innerHTML = '<div class="hint" style="color:#ffd0cc;">Eroare la salvare: ' + String(msg).replace(/\</g,'&lt;') + '</div>';
+        }catch(_e){}
+        if(hasActionModal){
+          try{ window.zkActionModal.setState('error','UPDATE NEREUȘIT','Eroare de rețea.'); window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1400); }catch(_e){}
+        }
+      }
+    });
+  }
+
+  function getEmployeeModalStatusEl(root){
+    try{ return (root || document).querySelector('#empModalStatus'); }catch(_e){ return null; }
+  }
+  function setEmpModalStatus(root, msg, variant){
+    const el = getEmployeeModalStatusEl(root);
+    if(!el) return;
+    if(!msg){ el.style.display = 'none'; el.textContent = ''; return; }
+    el.style.display = 'block';
+    el.innerHTML = msg;
+    const v = String(variant || 'info');
+    el.style.borderColor = v === 'danger' ? 'rgba(217,74,61,0.55)' : (v === 'success' ? 'rgba(46,204,113,0.45)' : 'rgba(61,165,217,0.35)');
+    el.style.background = v === 'danger' ? 'rgba(217,74,61,0.12)' : (v === 'success' ? 'rgba(46,204,113,0.10)' : 'rgba(10,26,39,0.25)');
+    el.style.color = v === 'danger' ? '#ffd0cc' : (v === 'success' ? '#dbffea' : '#cfe9f8');
+  }
+
+  function setCheckmark(el, ok, pending){
+    if(!el) return;
+    if(pending){
+      el.style.display = 'inline';
+      el.textContent = '…';
+      el.style.color = '#ffd166';
+      return;
+    }
+    if(ok === true){
+      el.style.display = 'inline';
+      el.textContent = '✓';
+      el.style.color = '#2ecc71';
+      return;
+    }
+    if(ok === false){
+      el.style.display = 'inline';
+      el.textContent = '✗';
+      el.style.color = '#d94a3d';
+      return;
+    }
+    el.style.display = 'none';
+  }
+
+  function normalizeVal(v){ return String(v || '').trim(); }
+
+  function wireEmployeeModalValidation(form){
+    if(!form || form.getAttribute('data-emp-wired') === '1') return;
+    form.setAttribute('data-emp-wired', '1');
+
+    const root = form;
+    const personnelInput = root.querySelector('#id_legacy_userid');
+    const deptInput = root.querySelector('#id_dept');
+    const primaryCardInput = root.querySelector('#id_card_number');
+    const secondaryCardInput = root.querySelector('#id_secondary_card_number');
+    const btnVerifyPersonnel = root.querySelector('#empModalVerifyPersonnel');
+    const cmPersonnel = root.querySelector('#empModalPersonnelCheck');
+    const cmPrimary = root.querySelector('#empModalPrimaryCardCheck');
+    const cmSecondary = root.querySelector('#empModalSecondaryCardCheck');
+    const toggleAccessAll = root.querySelector('#select_all_access_levels');
+
+    const state = {
+      lastPersonnel: null,
+      personnelOk: null,
+      lastPrimary: null,
+      primaryOk: null,
+      lastSecondary: null,
+      secondaryOk: null,
+    };
+    form.__empModalState = state;
+
+    function excludeId(){
+      const id = normalizeVal(form.getAttribute('data-employee-id'));
+      return id ? id : '';
+    }
+
+    async function checkPersonnel(force){
+      const val = normalizeVal(personnelInput && personnelInput.value);
+      if(!personnelInput) return {ok:false, msg:'Lipsește câmpul Nr. Personal.'};
+      if(!val) {
+        state.lastPersonnel = '';
+        state.personnelOk = null;
+        setCheckmark(cmPersonnel, null);
+        return {ok:false, msg:'Completează *Nr. Personal.'};
+      }
+      if(!force && state.lastPersonnel === val && state.personnelOk === true) return {ok:true};
+
+      state.lastPersonnel = val;
+      state.personnelOk = null;
+      setCheckmark(cmPersonnel, null, true);
+      setEmpModalStatus(root, 'Verificare Nr. Personal...', 'info');
+
+      const params = new URLSearchParams();
+      params.set('check', val);
+      const ex = excludeId();
+      if(ex) params.set('exclude_id', ex);
+      const url = `/agent/crud/employees/check-personnel-no/?${params.toString()}`;
+      try{
+        const resp = await fetch(url, {headers:{'X-Requested-With':'XMLHttpRequest'}});
+        const data = await resp.json();
+        const ok = (data && data.is_available === true);
+        state.personnelOk = ok;
+        setCheckmark(cmPersonnel, ok);
+        if(ok){
+          setEmpModalStatus(root, '✓ Nr. Personal este disponibil.', 'success');
+          try{ personnelInput.style.borderColor = 'rgba(46,204,113,0.85)'; }catch(_e){}
+          return {ok:true};
+        }
+        const usedBy = (data && data.used_by) ? String(data.used_by) : '';
+        const next = (data && data.available !== undefined) ? String(data.available) : '';
+        setEmpModalStatus(root, `✗ Nr. Personal <strong>${val}</strong> este deja folosit${usedBy ? ' de <strong>'+usedBy+'</strong>' : ''}.${next ? '<br/>Următorul disponibil: <strong>'+next+'</strong>' : ''}`, 'danger');
+        try{ personnelInput.style.borderColor = 'rgba(217,74,61,0.9)'; }catch(_e){}
+        return {ok:false, msg:'Nr. Personal duplicat.'};
+      }catch(err){
+        state.personnelOk = false;
+        setCheckmark(cmPersonnel, false);
+        setEmpModalStatus(root, `✗ Eroare verificare Nr. Personal: ${String(err).replace(/\</g,'&lt;')}`, 'danger');
+        return {ok:false, msg:'Eroare verificare Nr. Personal.'};
+      }
+    }
+
+    async function checkCards(force){
+      if(!primaryCardInput || !secondaryCardInput) return {ok:false, msg:'Lipsesc câmpurile de card.'};
+      const p = normalizeVal(primaryCardInput.value);
+      const s = normalizeVal(secondaryCardInput.value);
+
+      // Required by UI (*). Keep consistent with the legacy expectation.
+      if(!p) return {ok:false, msg:'Completează *Nr. Card Principal.'};
+      if(!s) return {ok:false, msg:'Completează *Card Secundar.'};
+      if(p && s && p === s){
+        state.primaryOk = false; state.secondaryOk = false;
+        setCheckmark(cmPrimary, false);
+        setCheckmark(cmSecondary, false);
+        setEmpModalStatus(root, '✗ Nr. Card Principal și Card Secundar nu pot fi aceleași.', 'danger');
+        try{ primaryCardInput.style.borderColor = 'rgba(217,74,61,0.9)'; secondaryCardInput.style.borderColor = 'rgba(217,74,61,0.9)'; }catch(_e){}
+        return {ok:false, msg:'Carduri identice.'};
+      }
+
+      if(!force && state.lastPrimary === p && state.primaryOk === true && state.lastSecondary === s && state.secondaryOk === true) return {ok:true};
+
+      state.lastPrimary = p; state.lastSecondary = s;
+      state.primaryOk = null; state.secondaryOk = null;
+      setCheckmark(cmPrimary, null, true);
+      setCheckmark(cmSecondary, null, true);
+      setEmpModalStatus(root, 'Verificare carduri...', 'info');
+
+      const params = new URLSearchParams();
+      params.set('primary', p);
+      params.set('secondary', s);
+      const ex = excludeId();
+      if(ex) params.set('exclude_id', ex);
+      const url = `/agent/crud/employees/check-cards/?${params.toString()}`;
+      try{
+        const resp = await fetch(url, {headers:{'X-Requested-With':'XMLHttpRequest'}});
+        const data = await resp.json();
+        const pOk = (data && data.primary_available === true);
+        const sOk = (data && data.secondary_available === true);
+        state.primaryOk = pOk;
+        state.secondaryOk = sOk;
+        setCheckmark(cmPrimary, pOk);
+        setCheckmark(cmSecondary, sOk);
+
+        if(pOk && sOk){
+          setEmpModalStatus(root, '✓ Cardurile sunt disponibile.', 'success');
+          try{ primaryCardInput.style.borderColor = 'rgba(46,204,113,0.85)'; secondaryCardInput.style.borderColor = 'rgba(46,204,113,0.85)'; }catch(_e){}
+          return {ok:true};
+        }
+
+        let msg = '';
+        if(!pOk){
+          const used = (data && data.primary_used_by) ? String(data.primary_used_by) : 'Un alt angajat';
+          msg += `✗ Nr. Card Principal <strong>${p}</strong> este deja folosit de <strong>${used}</strong>.`;
+        }
+        if(!sOk){
+          const used = (data && data.secondary_used_by) ? String(data.secondary_used_by) : 'Un alt angajat';
+          msg += (msg ? '<br/>' : '') + `✗ Card Secundar <strong>${s}</strong> este deja folosit de <strong>${used}</strong>.`;
+        }
+        setEmpModalStatus(root, msg || '✗ Card duplicat.', 'danger');
+        try{
+          if(!pOk) primaryCardInput.style.borderColor = 'rgba(217,74,61,0.9)';
+          if(!sOk) secondaryCardInput.style.borderColor = 'rgba(217,74,61,0.9)';
+        }catch(_e){}
+        return {ok:false, msg:'Card duplicat.'};
+      }catch(err){
+        state.primaryOk = false; state.secondaryOk = false;
+        setCheckmark(cmPrimary, false);
+        setCheckmark(cmSecondary, false);
+        setEmpModalStatus(root, `✗ Eroare verificare carduri: ${String(err).replace(/\</g,'&lt;')}`, 'danger');
+        return {ok:false, msg:'Eroare verificare carduri.'};
+      }
+    }
+
+    function checkDeptRequired(){
+      if(!deptInput) return {ok:false, msg:'Lipsește câmpul Departament.'};
+      const v = normalizeVal(deptInput.value);
+      if(!v){
+        setEmpModalStatus(root, '✗ Completează *Departament.', 'danger');
+        try{ deptInput.style.borderColor = 'rgba(217,74,61,0.9)'; }catch(_e){}
+        return {ok:false, msg:'Departament lipsă.'};
+      }
+      try{ deptInput.style.borderColor = 'rgba(61,165,217,0.35)'; }catch(_e){}
+      return {ok:true};
+    }
+
+    // Expose helpers for ensureEmployeeModalValid
+    form.__empModalChecks = {checkPersonnel, checkCards, checkDeptRequired};
+
+    // Select/deselect all access levels
+    if(toggleAccessAll){
+      toggleAccessAll.addEventListener('change', function(){
+        const checks = root.querySelectorAll('input[type=checkbox][name*="access_levels"]');
+        checks.forEach(c => { c.checked = toggleAccessAll.checked; });
+      });
+    }
+
+    // Wire events
+    const debounce = (fn, ms)=>{
+      let t = null;
+      return function(){
+        const args = arguments;
+        clearTimeout(t);
+        t = setTimeout(()=> fn.apply(null, args), ms);
+      };
+    };
+    const debouncedPersonnel = debounce(()=>{ checkPersonnel(false); }, 500);
+    const debouncedCards = debounce(()=>{ checkCards(false); }, 500);
+
+    if(personnelInput){
+      personnelInput.addEventListener('blur', ()=> checkPersonnel(false));
+      personnelInput.addEventListener('input', debouncedPersonnel);
+    }
+    if(primaryCardInput){
+      primaryCardInput.addEventListener('blur', ()=> checkCards(false));
+      primaryCardInput.addEventListener('input', debouncedCards);
+    }
+    if(secondaryCardInput){
+      secondaryCardInput.addEventListener('blur', ()=> checkCards(false));
+      secondaryCardInput.addEventListener('input', debouncedCards);
+    }
+    if(deptInput){ deptInput.addEventListener('change', ()=>{ checkDeptRequired(); }); }
+    if(btnVerifyPersonnel){ btnVerifyPersonnel.addEventListener('click', ()=> checkPersonnel(true)); }
+
+    // Initialize checkmarks hidden
+    setCheckmark(cmPersonnel, null);
+    setCheckmark(cmPrimary, null);
+    setCheckmark(cmSecondary, null);
+  }
+
+  async function ensureEmployeeModalValid(form){
+    if(!form) return {ok:false};
+    const root = form;
+    const personnelInput = root.querySelector('#id_legacy_userid');
+    const deptInput = root.querySelector('#id_dept');
+    const primaryCardInput = root.querySelector('#id_card_number');
+    const secondaryCardInput = root.querySelector('#id_secondary_card_number');
+
+    const requiredMissing = [];
+    if(!normalizeVal(personnelInput && personnelInput.value)) requiredMissing.push('Nr. Personal');
+    if(!normalizeVal(primaryCardInput && primaryCardInput.value)) requiredMissing.push('Nr. Card Principal');
+    if(!normalizeVal(secondaryCardInput && secondaryCardInput.value)) requiredMissing.push('Card Secundar');
+    if(!normalizeVal(deptInput && deptInput.value)) requiredMissing.push('Departament');
+    if(requiredMissing.length){
+      try{
+        if(personnelInput && !normalizeVal(personnelInput.value)) personnelInput.style.borderColor = 'rgba(217,74,61,0.9)';
+        if(primaryCardInput && !normalizeVal(primaryCardInput.value)) primaryCardInput.style.borderColor = 'rgba(217,74,61,0.9)';
+        if(secondaryCardInput && !normalizeVal(secondaryCardInput.value)) secondaryCardInput.style.borderColor = 'rgba(217,74,61,0.9)';
+        if(deptInput && !normalizeVal(deptInput.value)) deptInput.style.borderColor = 'rgba(217,74,61,0.9)';
+      }catch(_e){}
+      const msg = 'Completează câmpurile obligatorii (*): ' + requiredMissing.join(', ');
+      setEmpModalStatus(root, '✗ <strong>' + msg + '</strong>.', 'danger');
+      if(window.zkActionModal && typeof window.zkActionModal.open === 'function' && typeof window.zkActionModal.setState === 'function'){
+        try{ window.zkActionModal.open({mode:'', module:'', title:'VALIDARE', subtitle:'Câmpuri obligatorii'}); window.zkActionModal.setState('error','VALIDARE NEREUȘITĂ', msg); window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1300); }catch(_e){}
+      }
+      return {ok:false};
+    }
+
+    const checks = form.__empModalChecks;
+    if(checks && typeof checks.checkDeptRequired === 'function'){
+      const d = checks.checkDeptRequired();
+      if(!d.ok) return {ok:false};
+    }
+    if(checks && typeof checks.checkPersonnel === 'function'){
+      const p = await checks.checkPersonnel(false);
+      if(!p.ok) return {ok:false};
+    }
+    if(checks && typeof checks.checkCards === 'function'){
+      const c = await checks.checkCards(false);
+      if(!c.ok) return {ok:false};
+    }
+    setEmpModalStatus(root, '', 'info');
+    return {ok:true};
+  }
+
+  async function openEmployeeModal(url, title){
+    currentUrl = url;
+    // Base layout shows a global "Se încarcă pagina..." overlay on ANY <a> click.
+    // For modal navigation we must hide it, otherwise it stays open (no page navigation).
+    try{ if(window.zkBusy && typeof window.zkBusy.hide === 'function') window.zkBusy.hide(); }catch(_e){}
+    if(titleEl) titleEl.textContent = title || 'Formular';
+    if(body) body.innerHTML = '<div class="hint" style="display:flex;align-items:center;gap:10px;"><span style="width:14px;height:14px;border:2px solid rgba(125,179,217,0.35);border-top-color:#3da5d9;border-radius:50%;display:inline-block;animation:spin 0.8s linear infinite;"></span><span>Se încarcă...</span></div><style>@keyframes spin{to{transform:rotate(360deg);}}</style>';
+    openModal();
+
+    const ac = (window.AbortController ? new AbortController() : null);
+    const t = window.setTimeout(()=>{ try{ ac && ac.abort(); }catch(_e){} }, 20000);
+    try{
+      const resp = await fetch(url, {headers:{'X-Requested-With':'XMLHttpRequest'}, signal: ac ? ac.signal : undefined});
+      const html = await resp.text();
+      if(body) body.innerHTML = html;
+      wireModalBody();
+    }catch(err){
+      const msg = (err && err.name === 'AbortError') ? 'Timeout la încărcare (20s).' : ((err && err.message) ? err.message : String(err));
+      if(body){
+        body.innerHTML = '<div class="hint" style="color:#ffd0cc;">Eroare încărcare formular: ' + String(msg).replace(/\</g,'&lt;') + '</div>' +
+          '<div style="padding:6px 0 0 0;"><a href="' + String(url).replace(/\"/g,'&quot;') + '" target="_blank" style="color:#7db3d9;text-decoration:underline;font-size:11px;">Deschide în pagină nouă</a></div>';
+      }
+    }finally{
+      window.clearTimeout(t);
+    }
+  }
+
+  closeBtn?.addEventListener('click', closeModal);
+  backdrop?.addEventListener('click', (e)=>{ if(e && e.target === backdrop) closeModal(); });
+  document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape' && backdrop && backdrop.style.display === 'flex') closeModal(); });
+
+  // Intercept clicks for employee modal links
+  document.addEventListener('click', (e)=>{
+    const a = e.target && e.target.closest ? e.target.closest('a[data-employee-modal="1"]') : null;
+    if(!a) return;
+    const href = a.getAttribute('href');
+    if(!href) return;
+    // Allow ctrl/cmd click to open archive page
+    if(e.ctrlKey || e.metaKey || e.shiftKey || e.button === 1) return;
+    // Stop global <a> click handlers from showing the navigation busy overlay.
+    try{ e.preventDefault(); }catch(_e){}
+    try{ e.stopImmediatePropagation(); }catch(_e){}
+    try{ e.stopPropagation(); }catch(_e){}
+    try{ if(window.zkBusy && typeof window.zkBusy.hide === 'function') window.zkBusy.hide(); }catch(_e){}
+    const t = a.getAttribute('data-employee-title') || 'Formular';
+    openEmployeeModal(href, t);
+  }, true);
+
+  // Initial status badges (replaces inline row scripts)
+  window.setTimeout(()=>{ try{ renderEmployeeStatusBadges(); }catch(_e){} }, 0);
+})();
 
 function filterEmployees() {
   const search = document.getElementById('emp-search').value.toLowerCase();

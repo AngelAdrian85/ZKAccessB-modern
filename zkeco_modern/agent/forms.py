@@ -18,6 +18,15 @@ except Exception:  # pragma: no cover
 class DoorForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        # Defaults for create: match operator expectation in modal UX.
+        try:
+            if (not self.is_bound) and (not getattr(getattr(self, 'instance', None), 'pk', None)):
+                self.initial.setdefault('enabled', True)
+                self.initial.setdefault('normally_open', True)
+        except Exception:
+            pass
+
         try:
             self.fields['device'].queryset = Device.objects.filter(scanner_linked=False).order_by('name')
         except Exception:
@@ -50,14 +59,20 @@ class DoorForm(forms.ModelForm):
         cleaned = super().clean()
         device = cleaned.get('device')
         door_number = cleaned.get('door_number')
+        # Doors must always belong to a controller (centrala), never be standalone.
+        if device is None:
+            raise forms.ValidationError('Ușa trebuie atribuită unei centrale (Device).')
+
+        try:
+            is_controller = bool(getattr(device, 'is_controller', None) and device.is_controller())
+        except Exception:
+            is_controller = False
+        if not is_controller:
+            raise forms.ValidationError('Ușa poate fi asociată doar unei centrale (controller), nu unui cititor standalone.')
+
         # When mapping to a controller, require a door index (1-32)
-        if device is not None:
-            try:
-                is_controller = bool(getattr(device, 'is_controller', None) and device.is_controller())
-            except Exception:
-                is_controller = False
-            if is_controller and not door_number:
-                raise forms.ValidationError('Selectează numărul ușii (1-32) pentru această centrală.')
+        if not door_number:
+            raise forms.ValidationError('Selectează numărul ușii (1-32) pentru această centrală.')
 
         # If user leaves reader names equal to the derived default, don't store redundant custom values.
         try:
@@ -93,7 +108,6 @@ class DoorForm(forms.ModelForm):
             "verify_mode",
             "duress_password",
             "emergency_password",
-            "location",
             "normally_open",
             "enabled",
         ]
@@ -113,16 +127,98 @@ class DoorForm(forms.ModelForm):
             "verify_mode": "Mod verificare",
             "duress_password": "Parolă duress",
             "emergency_password": "Parolă urgență",
-            "location": "Zonă / Locație",
             "normally_open": "Normal deschis",
             "enabled": "Activ",
         }
         widgets = {
             "name": forms.TextInput(attrs={"class": "txt"}),
-            "location": forms.TextInput(attrs={"class": "txt"}),
             "duress_password": forms.PasswordInput(render_value=True, attrs={"autocomplete": "off"}),
             "emergency_password": forms.PasswordInput(render_value=True, attrs={"autocomplete": "off"}),
         }
+
+
+class WizardDoorDraftForm(forms.Form):
+    """Draft door config used during discovery wizard before the Device exists in DB."""
+
+    door_number = forms.IntegerField(min_value=1, max_value=32, required=True, widget=forms.HiddenInput())
+    name = forms.CharField(max_length=128, required=True, widget=forms.TextInput(attrs={"class": "txt"}))
+    reader_in_custom_name = forms.CharField(max_length=128, required=False, widget=forms.TextInput(attrs={
+        "class": "txt",
+        "placeholder": "ex: 192.168.1.201-1 In",
+    }))
+    reader_out_custom_name = forms.CharField(max_length=128, required=False, widget=forms.TextInput(attrs={
+        "class": "txt",
+        "placeholder": "ex: 192.168.1.201-1 Out",
+    }))
+
+    # Full legacy-like door details (match DoorForm UX), but stored as a draft.
+    door_active_time_zone = forms.ModelChoiceField(
+        queryset=TimeSegment.objects.all().order_by('name'),
+        required=False,
+        empty_label='—',
+    )
+    door_passage_mode_time_zone = forms.ModelChoiceField(
+        queryset=TimeSegment.objects.all().order_by('name'),
+        required=False,
+        empty_label='—',
+    )
+    lock_open_duration = forms.IntegerField(
+        min_value=0,
+        max_value=254,
+        required=False,
+        widget=forms.NumberInput(attrs={"class": "txt"}),
+    )
+    punch_interval = forms.IntegerField(
+        min_value=0,
+        max_value=254,
+        required=False,
+        widget=forms.NumberInput(attrs={"class": "txt"}),
+    )
+    door_sensor_type = forms.ChoiceField(choices=Door.SENSOR_TYPE_CHOICES, required=False)
+    door_status_delay = forms.IntegerField(
+        min_value=1,
+        max_value=254,
+        required=False,
+        widget=forms.NumberInput(attrs={"class": "txt"}),
+    )
+    close_and_reverse_state = forms.BooleanField(required=False)
+    verify_mode = forms.ChoiceField(choices=Door.VERIFY_MODE_CHOICES, required=False)
+    duress_password = forms.CharField(
+        max_length=16,
+        required=False,
+        widget=forms.PasswordInput(render_value=True, attrs={"autocomplete": "off"}),
+    )
+    emergency_password = forms.CharField(
+        max_length=16,
+        required=False,
+        widget=forms.PasswordInput(render_value=True, attrs={"autocomplete": "off"}),
+    )
+    normally_open = forms.BooleanField(required=False)
+    enabled = forms.BooleanField(required=False)
+
+    def clean_name(self):
+        v = (self.cleaned_data.get('name') or '').strip()
+        if not v:
+            raise forms.ValidationError('Denumire ușă este obligatorie.')
+        return v
+
+    def clean(self):
+        cleaned = super().clean()
+        # Apply sane defaults matching Door model defaults.
+        try:
+            if cleaned.get('lock_open_duration') in (None, ''):
+                cleaned['lock_open_duration'] = 5
+            if cleaned.get('punch_interval') in (None, ''):
+                cleaned['punch_interval'] = 2
+            if cleaned.get('door_status_delay') in (None, ''):
+                cleaned['door_status_delay'] = 15
+            if not cleaned.get('door_sensor_type'):
+                cleaned['door_sensor_type'] = 'normal_close'
+            if not cleaned.get('verify_mode'):
+                cleaned['verify_mode'] = 'only_card'
+        except Exception:
+            pass
+        return cleaned
 
 
 class DoorFirstCardRuleForm(forms.ModelForm):
@@ -195,14 +291,228 @@ class DSTimeForm(forms.ModelForm):
 
 
 class AccessLevelForm(forms.ModelForm):
+    """Access level editor matching legacy semantics.
+
+    UX: pick one shared time segment ("Interval orar") + one or more controllers
+    ("Centrale"). Doors are derived from the selected controllers.
+
+    Back-compat: existing access levels that were manually door-curated keep
+    their door set unless the user changes the selected controllers.
+    """
+
+    time_segment = forms.ModelChoiceField(
+        queryset=TimeSegment.objects.all().order_by('name'),
+        required=False,
+        empty_label='—',
+        label='Interval orar',
+    )
+
+    devices = forms.ModelMultipleChoiceField(
+        queryset=Device.objects.filter(
+            scanner_linked=False,
+            device_type__in=('access_panel', 'door_controller', 'two_door_panel', 'multi_door_panel'),
+        ).order_by('name'),
+        required=False,
+        widget=forms.SelectMultiple(attrs={'size': 8}),
+        label='Centrale',
+    )
+
+    is_visitor = forms.TypedChoiceField(
+        label='Vizitatori',
+        required=False,
+        choices=(('0', 'Nu'), ('1', 'Da')),
+        coerce=lambda v: str(v) == '1',
+        initial='0',
+    )
+
+    @staticmethod
+    def _compute_signature(*, ts_id: int, door_ids: list[int]) -> str:
+        import hashlib
+
+        try:
+            ts_id_i = int(ts_id or 0)
+        except Exception:
+            ts_id_i = 0
+        try:
+            door_ids_i = sorted({int(x) for x in (door_ids or []) if int(x) > 0})
+        except Exception:
+            door_ids_i = []
+        payload = f"ts={ts_id_i};doors={','.join(str(x) for x in door_ids_i)}"
+        return hashlib.sha256(payload.encode('utf-8')).hexdigest()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Tight widgets for compact Access modal UX.
+        try:
+            if 'name' in self.fields:
+                self.fields['name'].widget = forms.TextInput(attrs={'class': 'txt'})
+            if 'description' in self.fields:
+                self.fields['description'].widget = forms.Textarea(attrs={'rows': 3})
+        except Exception:
+            pass
+
+        # Initialize non-model fields from instance relations.
+        inst = getattr(self, 'instance', None)
+        if inst is not None and getattr(inst, 'pk', None) and (not self.is_bound):
+            try:
+                seg = inst.time_segments.order_by('name', 'id').first()
+                if seg:
+                    self.initial.setdefault('time_segment', seg)
+            except Exception:
+                pass
+
+            try:
+                self.initial.setdefault('is_visitor', '1' if bool(getattr(inst, 'is_visitor', False)) else '0')
+            except Exception:
+                pass
+            try:
+                # Derive controllers from the currently assigned doors.
+                dev_ids = (
+                    inst.doors.exclude(device__isnull=True)
+                    .values_list('device_id', flat=True)
+                    .distinct()
+                )
+                self.initial.setdefault('devices', list(dev_ids))
+            except Exception:
+                pass
+
+    def clean(self):
+        cleaned = super().clean()
+        ts = cleaned.get('time_segment')
+        devs = cleaned.get('devices')
+
+        # Require a time segment when any exist (legacy semantics).
+        try:
+            if ts is None and TimeSegment.objects.exists():
+                raise forms.ValidationError('Selectează un "Interval orar" pentru acest nivel.')
+        except forms.ValidationError:
+            raise
+        except Exception:
+            # If we cannot query, do not block.
+            pass
+
+        # Require at least one controller.
+        if not devs:
+            raise forms.ValidationError('Selectează cel puțin o centrală.')
+
+        # Enforce uniqueness by (time segment + door combination).
+        # We compute the exact derived door set for the selected controllers.
+        try:
+            ts_id = int(getattr(ts, 'id', 0) or 0)
+        except Exception:
+            ts_id = 0
+        try:
+            devs_list = list(devs or [])
+
+            # Ensure doors exist for each selected controller before computing the
+            # derived door set / signature (prevents levels from being created
+            # while a device still has only 1 door row).
+            try:
+                from .door_provisioning import ensure_controller_doors
+
+                for _dev in devs_list:
+                    try:
+                        ensure_controller_doors(_dev)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+            doors_qs = Door.objects.filter(device__in=devs_list).order_by('id')
+            door_ids = list(doors_qs.values_list('id', flat=True))
+            sig = self._compute_signature(ts_id=ts_id, door_ids=[int(x) for x in door_ids if x])
+
+            # If signature field exists, use it. If not (older DB), best-effort skip.
+            from .models import AccessLevel
+
+            qs = AccessLevel.objects.filter(signature=sig)
+            if getattr(self.instance, 'pk', None):
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise forms.ValidationError('Nu poți avea două niveluri cu același Interval orar și aceeași combinație de uși.')
+
+            cleaned['_computed_signature'] = sig
+        except forms.ValidationError:
+            raise
+        except Exception:
+            # Do not block if something unexpected happens.
+            pass
+
+        return cleaned
+
+    def save(self, commit=True):
+        is_create = not bool(getattr(getattr(self, 'instance', None), 'pk', None))
+        instance = super().save(commit=False)
+
+        if commit:
+            instance.save()
+
+        # Time segment: enforce a single shared segment.
+        ts = self.cleaned_data.get('time_segment')
+        try:
+            if ts is not None:
+                instance.time_segments.set([ts])
+            else:
+                instance.time_segments.clear()
+        except Exception:
+            pass
+
+        # Doors: derived from selected controllers when creating or when user changed controllers.
+        try:
+            # IMPORTANT (legacy parity): doors are derived from the selected controllers.
+            # Always recompute the door set on save, so existing levels created
+            # before full door provisioning don't get "stuck" with only 1 door.
+            devs = list(self.cleaned_data.get('devices') or [])
+
+            # Ensure each controller has its full door rows before assigning.
+            try:
+                from .door_provisioning import ensure_controller_doors
+
+                for _dev in devs:
+                    try:
+                        ensure_controller_doors(_dev)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+            doors_qs = Door.objects.filter(device__in=devs).order_by('device__name', 'door_number', 'name', 'id')
+            instance.doors.set(list(doors_qs))
+        except Exception:
+            pass
+
+        # Visitor flag
+        try:
+            instance.is_visitor = bool(self.cleaned_data.get('is_visitor'))
+            if commit:
+                instance.save(update_fields=['is_visitor'])
+        except Exception:
+            pass
+
+        # Signature: persist computed uniqueness fingerprint.
+        try:
+            sig = self.cleaned_data.get('_computed_signature')
+            if not sig:
+                ts_obj = self.cleaned_data.get('time_segment')
+                ts_id = int(getattr(ts_obj, 'id', 0) or 0)
+                door_ids = list(instance.doors.order_by('id').values_list('id', flat=True))
+                sig = self._compute_signature(ts_id=ts_id, door_ids=[int(x) for x in door_ids if x])
+            if sig:
+                instance.signature = str(sig)[:64]
+                if commit:
+                    instance.save(update_fields=['signature'])
+        except Exception:
+            pass
+
+        return instance
+
     class Meta:
         model = AccessLevel
-        fields = ["name", "doors", "time_segments", "description"]
+        fields = ["name", "description", "is_visitor"]
         widgets = {
             "name": forms.TextInput(attrs={"class": "txt"}),
             "description": forms.Textarea(attrs={"rows": 3}),
-            "doors": forms.SelectMultiple(attrs={"size": 8}),
-            "time_segments": forms.SelectMultiple(attrs={"size": 5}),
         }
 
 
@@ -592,10 +902,10 @@ class DeviceExtendedForm(forms.ModelForm):
             'device_type': forms.Select(attrs={'class': 'form-control'}),
             'comm_mode': forms.RadioSelect(choices=Device.COMM_MODE_CHOICES),
             'ip_address': forms.TextInput(attrs={'class': 'form-control', 'placeholder': '192.168.1.100'}),
-            'port': forms.NumberInput(attrs={'class': 'form-control', 'value': '4370'}),
+            'port': forms.NumberInput(attrs={'class': 'form-control'}),
             'comm_password': forms.PasswordInput(attrs={'class': 'form-control', 'placeholder': '(optional)'}),
             'rs485_port': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'COM1'}),
-            'rs485_baudrate': forms.NumberInput(attrs={'class': 'form-control', 'value': '9600'}),
+            'rs485_baudrate': forms.NumberInput(attrs={'class': 'form-control'}),
             'rs485_address': forms.NumberInput(attrs={'class': 'form-control'}),
             'area_name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Physical location'}),
             'time_zone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Europe/Bucharest'}),
@@ -609,12 +919,56 @@ class DeviceExtendedForm(forms.ModelForm):
         }
     
     def __init__(self, *args, **kwargs):
+        wizard = bool(kwargs.pop('wizard', False))
+        wizard_step = (kwargs.pop('wizard_step', '') or '').strip().lower()
         super().__init__(*args, **kwargs)
-        self.fields['comm_mode'].initial = 'tcp'
-        self.fields['auto_sync_time'].initial = True
-        self.fields['enabled'].initial = True
-        self.fields['port'].initial = 4370
-        self.fields['rs485_baudrate'].initial = 9600
+
+        self._wizard = wizard
+        self._wizard_step = wizard_step if wizard_step in ('identify', 'config') else ''
+
+        # Defaults should apply only when creating a NEW device form.
+        # Do NOT override instance values (e.g., discovered port 14370).
+        try:
+            is_new = (not getattr(getattr(self, 'instance', None), 'pk', None))
+        except Exception:
+            is_new = True
+
+        if (not self.is_bound) and is_new:
+            if not self.initial.get('comm_mode') and not self.fields['comm_mode'].initial:
+                self.fields['comm_mode'].initial = 'tcp'
+            if (self.initial.get('auto_sync_time') is None) and (self.fields['auto_sync_time'].initial is None):
+                self.fields['auto_sync_time'].initial = True
+            if (self.initial.get('enabled') is None) and (self.fields['enabled'].initial is None):
+                self.fields['enabled'].initial = True
+            if (self.initial.get('port') is None) and (self.fields['port'].initial is None):
+                self.fields['port'].initial = 4370
+            if (self.initial.get('rs485_baudrate') is None) and (self.fields['rs485_baudrate'].initial is None):
+                self.fields['rs485_baudrate'].initial = 9600
+
+        # RS485 fields must be optional unless RS485 mode is selected.
+        # Otherwise, the hidden RS485 section can block TCP onboarding.
+        try:
+            for fn in ('rs485_port', 'rs485_baudrate', 'rs485_address'):
+                if fn in self.fields:
+                    self.fields[fn].required = False
+                    try:
+                        self.fields[fn].widget.attrs.pop('required', None)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        # Wizard-only: Zona/Locație must be required only on the final config step.
+        # Identify step should be lightweight (discovered data + optional wipe).
+        try:
+            if self._wizard and (self._wizard_step != 'identify') and 'area_name' in self.fields:
+                self.fields['area_name'].required = True
+                try:
+                    self.fields['area_name'].widget.attrs['required'] = 'required'
+                except Exception:
+                    pass
+        except Exception:
+            pass
         self.fields['scanner_linked'] = forms.BooleanField(required=False, label='Scanner Linked', widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}))
         self.fields['scanner_type'] = forms.ChoiceField(required=False, label='Scanner Type', choices=[('', 'Select'), ('acp', 'ACP TCP'), ('elatec', 'Elatec Serial')], widget=forms.Select(attrs={'class': 'form-control'}))
 
@@ -696,13 +1050,42 @@ class DeviceExtendedForm(forms.ModelForm):
     def clean(self):
         cleaned = super().clean()
         comm_mode = cleaned.get('comm_mode')
+
+        try:
+            if getattr(self, '_wizard', False) and (getattr(self, '_wizard_step', '') != 'identify'):
+                area_val = (cleaned.get('area_name') or '').strip()
+                if not area_val:
+                    self.add_error('area_name', 'Zonă / Locație este obligatoriu.')
+        except Exception:
+            pass
         
         if comm_mode == 'tcp':
-            if not cleaned.get('ip_address'):
+            ip_val = (cleaned.get('ip_address') or '').strip()
+            if not ip_val:
                 self.add_error('ip_address', 'IP address required for TCP/IP')
+            else:
+                try:
+                    import ipaddress
+
+                    ipaddress.ip_address(ip_val)
+                except Exception:
+                    self.add_error('ip_address', 'Invalid IP address')
+
+            port_val = cleaned.get('port')
+            if not port_val:
+                self.add_error('port', 'Port required for TCP/IP')
+            else:
+                try:
+                    p = int(port_val)
+                    if p < 1 or p > 65535:
+                        self.add_error('port', 'Invalid port range (1-65535)')
+                except Exception:
+                    self.add_error('port', 'Invalid port')
         elif comm_mode == 'rs485':
             if not cleaned.get('rs485_port'):
                 self.add_error('rs485_port', 'Serial port required for RS485')
+            if not cleaned.get('rs485_baudrate'):
+                self.add_error('rs485_baudrate', 'Baud rate required for RS485')
         
         return cleaned
 

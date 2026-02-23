@@ -47,6 +47,9 @@ Thumbs.db
 .vscode/
 .idea/
 
+# VS Code workspace files
+*.code-workspace
+
 # Pytest
 .pytest_cache/
 
@@ -61,3 +64,28 @@ mysql/data/
 
 # Zip/patch outputs
 *.zip
+
+# Portable Python 32-bit (downloaded/extracted locally)
+tools/python32/*
+
+# Local vendor/resources (large binaries)
+Resurse/
+
+# Local web UI dumps (may contain cookies/credentials)
+device_webui_dump/
+
+# Local experiments / debug scratch
+debug_pyc/
+tmp/
+tmp_*
+probe_connect_matrix_*.txt
+
+# .NET build artifacts (do not commit)
+zkeco_modern/agent/bridge_dotnet/**/bin/
+zkeco_modern/agent/bridge_dotnet/**/obj/
+
+# Local last-run probe outputs
+tools/_last_*.txt
+
+# Never commit corrupted venv artifacts
+.venv_corrupt/

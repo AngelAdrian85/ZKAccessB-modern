@@ -292,6 +292,7 @@ label { display: block; font-size: 9px; color: #cfe9f8; margin-bottom: 2px; }
       <div class="tz">TZ: {{ active_tz|default:"" }}{% if system_time_zone %} (set: {{ system_time_zone }}){% endif %}</div>
       <div class="time" id="systemClockTime">{{ system_now_time|default:"" }}</div>
       <div class="date" id="systemClockDate">{{ system_now_date|default:"" }}</div>
+      <div id="dbDrift" style="margin-top:2px;font-size:9px;opacity:0.85;">DB drift: …</div>
       <div style="margin-top:4px;display:flex;justify-content:flex-end;gap:6px;">
         <button class="btn" style="padding:2px 6px;font-size:9px;" type="button" onclick="SystemUI.syncAppTime()">Sync</button>
         <button class="btn btn-secondary" type="button" onclick="SystemUI.openModal('/agent/system/set-time/', 'Setează ora echipamentelor')">Setează ora</button>
@@ -301,9 +302,12 @@ label { display: block; font-size: 9px; color: #cfe9f8; margin-bottom: 2px; }
 
   <div class="tabs" id="systemTabs">
     <div class="tab active" data-tab="administrare">ADMINISTRARE</div>
+    <div class="tab" data-tab="parolacom">PAROLĂ COMUNICARE</div>
     <div class="tab" data-tab="grupuri">GRUPURI</div>
     <div class="tab" data-tab="fusorar">FUS ORAR</div>
+    <div class="tab" data-tab="sinclimite">LIMITE SINCRONIZARE</div>
     <div class="tab" data-tab="loguri">LOGURI</div>
+    <div class="tab" data-tab="djangoadmin">DJANGO ADMIN</div>
   </div>
 
   <div id="tab-administrare" class="tab-content active">
@@ -352,6 +356,37 @@ label { display: block; font-size: 9px; color: #cfe9f8; margin-bottom: 2px; }
         {% endfor %}
       </tbody>
     </table>
+  </div>
+
+  <div id="tab-parolacom" class="tab-content">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Parolă comunicare (default)</div>
+        <div class="section-subtitle">Folosită ca fallback în wizard/probe când nu se introduce parolă explicit.</div>
+      </div>
+      <div class="section-actions">
+        <button class="btn" type="button" onclick="SystemUI.saveCommPassword()">Salvează</button>
+      </div>
+    </div>
+
+    <form id="commPasswordForm" onsubmit="event.preventDefault(); SystemUI.saveCommPassword();">
+      <div class="form-row">
+        <div class="form-col">
+          <label>Parolă (DB)</label>
+          <input class="form-control" name="default_comm_password" type="password" value="{{ default_comm_password_db|default:'' }}" autocomplete="off" />
+          <div class="helptext" style="margin-top:4px;">Lasă gol pentru a șterge parola salvată în DB.</div>
+        </div>
+        <div class="form-col">
+          <label>Sursă efectivă</label>
+          <div style="padding:6px 8px;background:#163247;border:1px solid #3d6a8b;border-radius:2px;font-size:10px;">
+            <div>Activă: <strong>{% if default_comm_password_effective %}DA{% else %}NU{% endif %}</strong></div>
+            <div>Sursă: <strong>{{ default_comm_password_source|default:'-' }}</strong></div>
+            <div style="margin-top:4px;opacity:0.85;">ENV: {% if default_comm_password_env %}setată{% else %}goală{% endif %}</div>
+          </div>
+          <div class="helptext" style="margin-top:6px;">Notă: fiecare centrală poate avea și parola ei (Device → More… → Communication password).</div>
+        </div>
+      </div>
+    </form>
   </div>
 
   <div id="tab-grupuri" class="tab-content">
@@ -499,6 +534,62 @@ label { display: block; font-size: 9px; color: #cfe9f8; margin-bottom: 2px; }
     </table>
   </div>
 
+  <div id="tab-sinclimite" class="tab-content">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Limite sincronizare (SYNC_PERSONNEL)</div>
+        <div class="section-subtitle">Control trafic către centrale: dedupe, batching, reassert, rate-limit</div>
+      </div>
+      <div class="section-actions">
+        <button class="btn" type="button" onclick="SystemUI.saveSyncLimits()">Salvează</button>
+      </div>
+    </div>
+
+    <form id="syncLimitsForm" onsubmit="event.preventDefault(); SystemUI.saveSyncLimits();">
+      <div class="form-row">
+        <div class="form-col">
+          <label>Sincronizare automată (event-driven)</label>
+          <select class="form-control" name="sync_personnel_enabled">
+            <option value="1" {% if sync_limits and sync_limits.enabled %}selected{% endif %}>Activ</option>
+            <option value="0" {% if sync_limits and not sync_limits.enabled %}selected{% endif %}>Oprit</option>
+          </select>
+          <div class="helptext">Când e oprit, semnalele nu mai pun SYNC_PERSONNEL în coadă.</div>
+        </div>
+        <div class="form-col">
+          <label>Max SYNC/minut (global)</label>
+          <input class="form-control" name="sync_personnel_max_per_minute" type="number" min="0" max="600" value="{% if sync_limits %}{{ sync_limits.max_per_minute }}{% else %}0{% endif %}" />
+          <div class="helptext">0 = fără limită strictă (rămân doar dedupe + no-op + batching).</div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-col">
+          <label>De-dup (secunde)</label>
+          <input class="form-control" name="sync_personnel_dedupe_seconds" type="number" min="5" max="600" value="{% if sync_limits %}{{ sync_limits.dedupe_seconds }}{% else %}60{% endif %}" />
+          <div class="helptext">Fereastra în care nu mai enqueue pentru același device.</div>
+        </div>
+        <div class="form-col">
+          <label>Reassert (secunde)</label>
+          <input class="form-control" name="sync_personnel_reassert_seconds" type="number" min="60" max="604800" value="{% if sync_limits %}{{ sync_limits.reassert_seconds }}{% else %}21600{% endif %}" />
+          <div class="helptext">No-op dacă payload nu s-a schimbat în acest interval.</div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-col">
+          <label>Batch size (înregistrări)</label>
+          <input class="form-control" name="sync_personnel_batch_size" type="number" min="20" max="2000" value="{% if sync_limits %}{{ sync_limits.batch_size }}{% else %}200{% endif %}" />
+          <div class="helptext">Câte rânduri scriem pe tabel într-un singur SetDeviceData.</div>
+        </div>
+        <div class="form-col">
+          <label>Pauză între batch-uri (sec)</label>
+          <input class="form-control" name="sync_personnel_inter_batch_sleep" type="number" step="0.01" min="0" max="0.25" value="{% if sync_limits %}{{ sync_limits.inter_batch_sleep }}{% else %}0.02{% endif %}" />
+          <div class="helptext">Pauză mică pentru a evita blocarea/DoS (0..0.25).</div>
+        </div>
+      </div>
+    </form>
+  </div>
+
   <div id="tab-loguri" class="tab-content">
     <div class="section-header">
       <div>
@@ -510,7 +601,7 @@ label { display: block; font-size: 9px; color: #cfe9f8; margin-bottom: 2px; }
       </div>
     </div>
 
-    <table class="compact-table" style="margin-bottom: 8px;">
+    <table id="logsTable" class="compact-table" style="margin-bottom: 8px;">
       <thead>
         <tr>
           <th>ID</th>
@@ -524,7 +615,7 @@ label { display: block; font-size: 9px; color: #cfe9f8; margin-bottom: 2px; }
       </thead>
       <tbody>
         {% for l in logs_all %}
-        <tr>
+        <tr data-log-id="{{ l.id }}">
           <td>{{ l.id }}</td>
           <td>{{ l.timestamp|date:"Y-m-d H:i:s" }}</td>
           <td>{{ l.user|default:"" }}</td>
@@ -614,6 +705,21 @@ label { display: block; font-size: 9px; color: #cfe9f8; margin-bottom: 2px; }
       </table>
     </div>
   </div>
+
+  <div id="tab-djangoadmin" class="tab-content">
+    <div class="section-header">
+      <div>
+        <div class="section-title">Django Admin</div>
+        <div class="section-subtitle">Interfața completă de administrare Django</div>
+      </div>
+      <div class="section-actions">
+        <a class="btn btn-secondary" href="/admin/">Deschide</a>
+      </div>
+    </div>
+    <div style="padding:6px;font-size:10px;opacity:0.95;">
+      Folosește această secțiune pentru administrare avansată (modele, permisiuni, debug).
+    </div>
+  </div>
 </div>
 
 <!-- Generic Modal -->
@@ -645,9 +751,12 @@ label { display: block; font-size: 9px; color: #cfe9f8; margin-bottom: 2px; }
     const tabs = document.querySelectorAll('#systemTabs .tab');
     const contents = {
       administrare: document.getElementById('tab-administrare'),
+      parolacom: document.getElementById('tab-parolacom'),
       grupuri: document.getElementById('tab-grupuri'),
       fusorar: document.getElementById('tab-fusorar'),
+      sinclimite: document.getElementById('tab-sinclimite'),
       loguri: document.getElementById('tab-loguri'),
+      djangoadmin: document.getElementById('tab-djangoadmin'),
     };
     tabs.forEach(t => {
       const isActive = t.getAttribute('data-tab') === tabKey;
@@ -659,6 +768,12 @@ label { display: block; font-size: 9px; color: #cfe9f8; margin-bottom: 2px; }
       el.classList.toggle('active', k === tabKey);
     });
     try{ window.location.hash = tabKey; }catch(e){}
+
+    if(tabKey === 'loguri'){
+      try{ startLogsAutoRefresh(); refreshSystemLogs(true); }catch(e){}
+    } else {
+      try{ stopLogsAutoRefresh(); }catch(e){}
+    }
   }
 
   function initTabs(){
@@ -720,6 +835,9 @@ label { display: block; font-size: 9px; color: #cfe9f8; margin-bottom: 2px; }
     const fd = new FormData(form);
     const csrftoken = getCookie('csrftoken');
 
+    actionOpen('UPDATE', 'Salvare date');
+    actionSet('loading', 'UPDATE ÎN CURS', 'Se salvează datele...');
+
     fetch(url, {
       method: 'POST',
       body: fd,
@@ -737,9 +855,12 @@ label { display: block; font-size: 9px; color: #cfe9f8; margin-bottom: 2px; }
       })
       .then(()=>{
         closeModal();
-        window.location.reload();
+        actionSet('success', 'UPDATE REALIZAT CU SUCCES', 'Datele au fost salvate.');
+        actionCloseAfter(1100);
+        window.setTimeout(()=>{ try{ window.location.reload(); }catch(_e){} }, 1150);
       })
       .catch(e=>{
+        actionSet('error', 'UPDATE NEREUȘIT', e && e.message ? e.message : 'Eroare');
         showError(e.message);
       });
   }
@@ -773,16 +894,223 @@ label { display: block; font-size: 9px; color: #cfe9f8; margin-bottom: 2px; }
     });
   }
 
+  // Animated modal (same UI as other modules)
+  function actionOpen(title, subtitle){
+    if(window.zkActionModal && typeof window.zkActionModal.open === 'function'){
+      try{ window.zkActionModal.open({mode:'', module:'', title: title || 'UPDATE', subtitle: subtitle || ''}); }catch(e){}
+    }
+  }
+
+  function actionSet(state, big, msg){
+    if(window.zkActionModal && typeof window.zkActionModal.setState === 'function'){
+      try{ window.zkActionModal.setState(state || 'loading', big || '', msg || ''); }catch(e){}
+    }
+  }
+
+  function actionCloseAfter(ms){
+    if(!(window.zkActionModal && typeof window.zkActionModal.close === 'function')) return;
+    const delay = Number(ms || 0);
+    if(delay > 0) window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(e){} }, delay);
+  }
+
+  // Logs polling (works under runserver)
+  let auditLatestId = 0;
+  let auditTimer = null;
+  let auditInFlight = false;
+
+  function ensureAuditLatestIdFromDom(){
+    if(auditLatestId && auditLatestId > 0) return;
+    const tbody = document.querySelector('#logsTable tbody');
+    if(!tbody) return;
+    const first = tbody.querySelector('tr[data-log-id]');
+    if(!first) return;
+    const val = parseInt(first.getAttribute('data-log-id') || '0', 10);
+    if(!isNaN(val) && val > 0) auditLatestId = val;
+  }
+
+  function insertAuditRows(rows){
+    if(!rows || !rows.length) return;
+    const tbody = document.querySelector('#logsTable tbody');
+    if(!tbody) return;
+
+    for(let i = rows.length - 1; i >= 0; i--){
+      const r = rows[i] || {};
+      const tr = document.createElement('tr');
+      tr.setAttribute('data-log-id', String(r.id || ''));
+
+      const cells = [
+        String(r.id || ''),
+        String(r.timestamp || ''),
+        String(r.user || ''),
+        String(r.module || ''),
+        String(r.action || ''),
+        String(r.entity || ''),
+        String(r.details || ''),
+      ];
+      for(let j = 0; j < cells.length; j++){
+        const td = document.createElement('td');
+        td.textContent = cells[j];
+        if(j === 6){ td.style.whiteSpace = 'pre-wrap'; }
+        tr.appendChild(td);
+      }
+
+      tbody.insertBefore(tr, tbody.firstChild);
+    }
+
+    while(tbody.children.length > 250){
+      tbody.removeChild(tbody.lastElementChild);
+    }
+  }
+
+  function refreshSystemLogs(force){
+    if(auditInFlight) return Promise.resolve();
+    const logsEl = document.getElementById('tab-loguri');
+    if(!force && logsEl && !logsEl.classList.contains('active')) return Promise.resolve();
+    ensureAuditLatestIdFromDom();
+    auditInFlight = true;
+    const url = `/agent/system/api/audit-latest/?since_id=${encodeURIComponent(auditLatestId || 0)}`;
+    return fetch(url, { credentials: 'same-origin' })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP '+r.status)))
+      .then(d => {
+        if(!d || !d.ok) return;
+        if(Array.isArray(d.rows) && d.rows.length){
+          insertAuditRows(d.rows);
+        }
+        if(typeof d.latest_id === 'number' && d.latest_id > (auditLatestId || 0)){
+          auditLatestId = d.latest_id;
+        }
+      })
+      .catch(()=>{})
+      .finally(()=>{ auditInFlight = false; });
+  }
+
+  function startLogsAutoRefresh(){
+    if(auditTimer) return;
+    auditTimer = setInterval(()=>{ refreshSystemLogs(false); }, 2000);
+  }
+
+  function stopLogsAutoRefresh(){
+    if(!auditTimer) return;
+    clearInterval(auditTimer);
+    auditTimer = null;
+  }
+
+  function saveSyncLimits(){
+    const form = document.getElementById('syncLimitsForm');
+    if(!form) return;
+    actionOpen('UPDATE', 'Salvare date');
+    actionSet('loading', 'UPDATE ÎN CURS', 'Se salvează setările...');
+
+    const csrftoken = getCookie('csrftoken');
+    const fd = new FormData(form);
+    return fetch('/agent/system/sync-limits/save/', {
+      method: 'POST',
+      body: fd,
+      credentials: 'same-origin',
+      headers: { 'X-CSRFToken': csrftoken },
+    })
+      .then(async (r)=>{
+        const text = await r.text().catch(()=> '');
+        let data = null;
+        try{ data = text ? JSON.parse(text) : null; }catch(e){ data = null; }
+        if(!r.ok){
+          const msg = (data && data.error) ? String(data.error) : `HTTP ${r.status}`;
+          throw new Error(msg);
+        }
+        if(!data || !data.ok) throw new Error((data && data.error) ? String(data.error) : 'Eroare');
+        return data;
+      })
+      .then((d)=>{
+        actionSet('success', 'UPDATE REALIZAT CU SUCCES', 'Datele au fost salvate.');
+        actionCloseAfter(1200);
+        refreshSystemLogs(true);
+        const val = (d && d.data) ? d.data : null;
+        if(val){
+          try{
+            const sel = form.querySelector('select[name="sync_personnel_enabled"]');
+            if(sel) sel.value = val.enabled ? '1' : '0';
+            const setNum = (name, v)=>{ const el = form.querySelector(`[name="${name}"]`); if(el) el.value = String(v); };
+            setNum('sync_personnel_max_per_minute', val.max_per_minute);
+            setNum('sync_personnel_dedupe_seconds', val.dedupe_seconds);
+            setNum('sync_personnel_reassert_seconds', val.reassert_seconds);
+            setNum('sync_personnel_batch_size', val.batch_size);
+            setNum('sync_personnel_inter_batch_sleep', val.inter_batch_sleep);
+          }catch(e){}
+        }
+      })
+      .catch((e)=>{
+        actionSet('error', 'UPDATE NEREUȘIT', 'Eroare: ' + (e && e.message ? e.message : 'necunoscut'));
+      });
+  }
+
+  function saveCommPassword(){
+    const form = document.getElementById('commPasswordForm');
+    if(!form) return;
+    actionOpen('UPDATE', 'Parolă comunicare');
+    actionSet('loading', 'SALVARE ÎN CURS', 'Se salvează parola...');
+
+    const csrftoken = getCookie('csrftoken');
+    const fd = new FormData(form);
+    return fetch('/agent/system/comm-password/save/', {
+      method: 'POST',
+      body: fd,
+      credentials: 'same-origin',
+      headers: { 'X-CSRFToken': csrftoken },
+    })
+      .then(async (r)=>{
+        const text = await r.text().catch(()=> '');
+        let data = null;
+        try{ data = text ? JSON.parse(text) : null; }catch(e){ data = null; }
+        if(!r.ok){
+          const msg = (data && data.error) ? String(data.error) : `HTTP ${r.status}`;
+          throw new Error(msg);
+        }
+        if(!data || !data.ok) throw new Error((data && data.error) ? String(data.error) : 'Eroare');
+        return data;
+      })
+      .then(()=>{
+        actionSet('success', 'SALVAT', 'Parola de comunicare a fost salvată.');
+        actionCloseAfter(900);
+        refreshSystemLogs(true);
+        window.setTimeout(()=>{ try{ window.location.reload(); }catch(_e){} }, 950);
+      })
+      .catch((e)=>{
+        actionSet('error', 'SALVARE NEREUȘITĂ', 'Eroare: ' + (e && e.message ? e.message : 'necunoscut'));
+      });
+  }
+
   function deleteUser(id, username){
     const msg = `Ștergi utilizatorul "${username}"?`; 
     if(window.zkConfirmDialog){
       window.zkConfirmDialog({ title: 'Confirmare', message: msg }).then(ok=>{
         if(!ok) return;
-        postJson(`/agent/system/users/${id}/delete/`).then(()=>window.location.reload()).catch(e=>alert(e.message));
+        actionOpen('DELETE', 'Ștergere utilizator');
+        actionSet('loading', 'ȘTERGERE ÎN CURS', 'Se șterge utilizatorul...');
+        postJson(`/agent/system/users/${id}/delete/`)
+          .then(()=>{
+            actionSet('success', 'ȘTERS CU SUCCES', 'Utilizatorul a fost șters.');
+            actionCloseAfter(900);
+            refreshSystemLogs(true);
+            window.setTimeout(()=>window.location.reload(), 950);
+          })
+          .catch(e=>{
+            actionSet('error', 'ȘTERGERE NEREUȘITĂ', (e && e.message) ? e.message : 'Eroare');
+          });
       });
     } else {
       if(confirm(msg)){
-        postJson(`/agent/system/users/${id}/delete/`).then(()=>window.location.reload()).catch(e=>alert(e.message));
+        actionOpen('DELETE', 'Ștergere utilizator');
+        actionSet('loading', 'ȘTERGERE ÎN CURS', 'Se șterge utilizatorul...');
+        postJson(`/agent/system/users/${id}/delete/`)
+          .then(()=>{
+            actionSet('success', 'ȘTERS CU SUCCES', 'Utilizatorul a fost șters.');
+            actionCloseAfter(900);
+            refreshSystemLogs(true);
+            window.setTimeout(()=>window.location.reload(), 950);
+          })
+          .catch(e=>{
+            actionSet('error', 'ȘTERGERE NEREUȘITĂ', (e && e.message) ? e.message : 'Eroare');
+          });
       }
     }
   }
@@ -792,11 +1120,33 @@ label { display: block; font-size: 9px; color: #cfe9f8; margin-bottom: 2px; }
     if(window.zkConfirmDialog){
       window.zkConfirmDialog({ title: 'Confirmare', message: msg }).then(ok=>{
         if(!ok) return;
-        postJson(`/agent/system/groups/${id}/delete/`).then(()=>window.location.reload()).catch(e=>alert(e.message));
+        actionOpen('DELETE', 'Ștergere grup');
+        actionSet('loading', 'ȘTERGERE ÎN CURS', 'Se șterge grupul...');
+        postJson(`/agent/system/groups/${id}/delete/`)
+          .then(()=>{
+            actionSet('success', 'ȘTERS CU SUCCES', 'Grupul a fost șters.');
+            actionCloseAfter(900);
+            refreshSystemLogs(true);
+            window.setTimeout(()=>window.location.reload(), 950);
+          })
+          .catch(e=>{
+            actionSet('error', 'ȘTERGERE NEREUȘITĂ', (e && e.message) ? e.message : 'Eroare');
+          });
       });
     } else {
       if(confirm(msg)){
-        postJson(`/agent/system/groups/${id}/delete/`).then(()=>window.location.reload()).catch(e=>alert(e.message));
+        actionOpen('DELETE', 'Ștergere grup');
+        actionSet('loading', 'ȘTERGERE ÎN CURS', 'Se șterge grupul...');
+        postJson(`/agent/system/groups/${id}/delete/`)
+          .then(()=>{
+            actionSet('success', 'ȘTERS CU SUCCES', 'Grupul a fost șters.');
+            actionCloseAfter(900);
+            refreshSystemLogs(true);
+            window.setTimeout(()=>window.location.reload(), 950);
+          })
+          .catch(e=>{
+            actionSet('error', 'ȘTERGERE NEREUȘITĂ', (e && e.message) ? e.message : 'Eroare');
+          });
       }
     }
   }
@@ -806,23 +1156,35 @@ label { display: block; font-size: 9px; color: #cfe9f8; margin-bottom: 2px; }
     if(window.zkConfirmDialog){
       window.zkConfirmDialog({ title: 'Confirmare', message: msg }).then(ok=>{
         if(!ok) return;
+        actionOpen('SYNC_TIME', 'Sincronizare timp');
+        actionSet('loading', 'SYNC_TIME ÎN CURS', 'Se trimite comanda către echipamente...');
         fetch('/agent/system/devices/sync-time-now/', { method: 'GET', credentials: 'same-origin' })
           .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP '+r.status)))
           .then(d => {
             if(!d || !d.ok) throw new Error((d && d.error) ? String(d.error) : 'Eroare');
-            alert('Comandă SYNC_TIME trimisă. Echipamente: ' + (d.queued||0));
+            actionSet('success', 'COMANDĂ TRIMISĂ', 'Comandă SYNC_TIME trimisă. Echipamente: ' + (d.queued||0));
+            actionCloseAfter(1400);
+            refreshSystemLogs(true);
           })
-          .catch(e=>alert(e.message));
+          .catch(e=>{
+            actionSet('error', 'SYNC_TIME NEREUȘIT', e && e.message ? e.message : 'Eroare');
+          });
       });
     } else {
       if(confirm(msg)){
+        actionOpen('SYNC_TIME', 'Sincronizare timp');
+        actionSet('loading', 'SYNC_TIME ÎN CURS', 'Se trimite comanda către echipamente...');
         fetch('/agent/system/devices/sync-time-now/', { method: 'GET', credentials: 'same-origin' })
           .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP '+r.status)))
           .then(d => {
             if(!d || !d.ok) throw new Error((d && d.error) ? String(d.error) : 'Eroare');
-            alert('Comandă SYNC_TIME trimisă. Echipamente: ' + (d.queued||0));
+            actionSet('success', 'COMANDĂ TRIMISĂ', 'Comandă SYNC_TIME trimisă. Echipamente: ' + (d.queued||0));
+            actionCloseAfter(1400);
+            refreshSystemLogs(true);
           })
-          .catch(e=>alert(e.message));
+          .catch(e=>{
+            actionSet('error', 'SYNC_TIME NEREUȘIT', e && e.message ? e.message : 'Eroare');
+          });
       }
     }
   }
@@ -832,23 +1194,35 @@ label { display: block; font-size: 9px; color: #cfe9f8; margin-bottom: 2px; }
     if(window.zkConfirmDialog){
       window.zkConfirmDialog({ title: 'Confirmare', message: msg }).then(ok=>{
         if(!ok) return;
+        actionOpen('SYNC_TIME', 'Sincronizare timp');
+        actionSet('loading', 'SYNC_TIME ÎN CURS', 'Se trimite comanda către echipament...');
         fetch(`/agent/system/devices/${id}/sync-time-now/`, { method: 'GET', credentials: 'same-origin' })
           .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP '+r.status)))
           .then(d => {
             if(!d || !d.ok) throw new Error((d && d.error) ? String(d.error) : 'Eroare');
-            alert('Comandă SYNC_TIME trimisă.');
+            actionSet('success', 'COMANDĂ TRIMISĂ', 'Comandă SYNC_TIME trimisă.');
+            actionCloseAfter(1200);
+            refreshSystemLogs(true);
           })
-          .catch(e=>alert(e.message));
+          .catch(e=>{
+            actionSet('error', 'SYNC_TIME NEREUȘIT', e && e.message ? e.message : 'Eroare');
+          });
       });
     } else {
       if(confirm(msg)){
+        actionOpen('SYNC_TIME', 'Sincronizare timp');
+        actionSet('loading', 'SYNC_TIME ÎN CURS', 'Se trimite comanda către echipament...');
         fetch(`/agent/system/devices/${id}/sync-time-now/`, { method: 'GET', credentials: 'same-origin' })
           .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP '+r.status)))
           .then(d => {
             if(!d || !d.ok) throw new Error((d && d.error) ? String(d.error) : 'Eroare');
-            alert('Comandă SYNC_TIME trimisă.');
+            actionSet('success', 'COMANDĂ TRIMISĂ', 'Comandă SYNC_TIME trimisă.');
+            actionCloseAfter(1200);
+            refreshSystemLogs(true);
           })
-          .catch(e=>alert(e.message));
+          .catch(e=>{
+            actionSet('error', 'SYNC_TIME NEREUȘIT', e && e.message ? e.message : 'Eroare');
+          });
       }
     }
   }
@@ -862,11 +1236,33 @@ label { display: block; font-size: 9px; color: #cfe9f8; margin-bottom: 2px; }
     if(window.zkConfirmDialog){
       window.zkConfirmDialog({ title: 'Confirmare', message: msg }).then(ok=>{
         if(!ok) return;
-        postJson(`/agent/system/timezones/${id}/activate/`).then(()=>window.location.reload()).catch(e=>alert(e.message));
+        actionOpen('UPDATE', 'Activare fus orar');
+        actionSet('loading', 'UPDATE ÎN CURS', 'Se activează fusul orar...');
+        postJson(`/agent/system/timezones/${id}/activate/`)
+          .then(()=>{
+            actionSet('success', 'UPDATE REALIZAT CU SUCCES', 'Fusul orar a fost activat.');
+            actionCloseAfter(900);
+            refreshSystemLogs(true);
+            window.setTimeout(()=>window.location.reload(), 950);
+          })
+          .catch(e=>{
+            actionSet('error', 'UPDATE NEREUȘIT', (e && e.message) ? e.message : 'Eroare');
+          });
       });
     } else {
       if(confirm(msg)){
-        postJson(`/agent/system/timezones/${id}/activate/`).then(()=>window.location.reload()).catch(e=>alert(e.message));
+        actionOpen('UPDATE', 'Activare fus orar');
+        actionSet('loading', 'UPDATE ÎN CURS', 'Se activează fusul orar...');
+        postJson(`/agent/system/timezones/${id}/activate/`)
+          .then(()=>{
+            actionSet('success', 'UPDATE REALIZAT CU SUCCES', 'Fusul orar a fost activat.');
+            actionCloseAfter(900);
+            refreshSystemLogs(true);
+            window.setTimeout(()=>window.location.reload(), 950);
+          })
+          .catch(e=>{
+            actionSet('error', 'UPDATE NEREUȘIT', (e && e.message) ? e.message : 'Eroare');
+          });
       }
     }
   }
@@ -876,11 +1272,33 @@ label { display: block; font-size: 9px; color: #cfe9f8; margin-bottom: 2px; }
     if(window.zkConfirmDialog){
       window.zkConfirmDialog({ title: 'Confirmare', message: msg }).then(ok=>{
         if(!ok) return;
-        postJson(`/agent/system/timezones/${id}/delete/`).then(()=>window.location.reload()).catch(e=>alert(e.message));
+        actionOpen('DELETE', 'Ștergere fus orar');
+        actionSet('loading', 'ȘTERGERE ÎN CURS', 'Se șterge setarea...');
+        postJson(`/agent/system/timezones/${id}/delete/`)
+          .then(()=>{
+            actionSet('success', 'ȘTERS CU SUCCES', 'Setarea a fost ștearsă.');
+            actionCloseAfter(900);
+            refreshSystemLogs(true);
+            window.setTimeout(()=>window.location.reload(), 950);
+          })
+          .catch(e=>{
+            actionSet('error', 'ȘTERGERE NEREUȘITĂ', (e && e.message) ? e.message : 'Eroare');
+          });
       });
     } else {
       if(confirm(msg)){
-        postJson(`/agent/system/timezones/${id}/delete/`).then(()=>window.location.reload()).catch(e=>alert(e.message));
+        actionOpen('DELETE', 'Ștergere fus orar');
+        actionSet('loading', 'ȘTERGERE ÎN CURS', 'Se șterge setarea...');
+        postJson(`/agent/system/timezones/${id}/delete/`)
+          .then(()=>{
+            actionSet('success', 'ȘTERS CU SUCCES', 'Setarea a fost ștearsă.');
+            actionCloseAfter(900);
+            refreshSystemLogs(true);
+            window.setTimeout(()=>window.location.reload(), 950);
+          })
+          .catch(e=>{
+            actionSet('error', 'ȘTERGERE NEREUȘITĂ', (e && e.message) ? e.message : 'Eroare');
+          });
       }
     }
   }
@@ -941,6 +1359,27 @@ label { display: block; font-size: 9px; color: #cfe9f8; margin-bottom: 2px; }
       .catch(()=>{});
   }
 
+  function fetchDbDrift(){
+    const el = document.getElementById('dbDrift');
+    if(!el) return;
+    return fetch('/agent/api/system/time-check/', { credentials: 'same-origin' })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP '+r.status)))
+      .then(d => {
+        if(!d || !d.ok){ el.textContent = 'DB drift: ?'; el.style.color = '#9fd2f1'; return; }
+        const drift = (typeof d.drift_seconds === 'number') ? d.drift_seconds : null;
+        if(drift === null){
+          el.textContent = 'DB drift: necunoscut';
+          el.style.color = '#d97e4a';
+          return;
+        }
+        const abs = Math.abs(drift);
+        const label = abs < 0.05 ? 'OK' : (abs < 1.0 ? 'mic' : (abs < 5.0 ? 'atenție' : 'EROARE'));
+        el.textContent = `DB drift: ${drift.toFixed(3)}s (${label})`;
+        el.style.color = abs < 1.0 ? '#2da44e' : (abs < 5.0 ? '#c48a1f' : '#d94a3d');
+      })
+      .catch(()=>{ el.textContent = 'DB drift: offline'; el.style.color = '#d94a3d'; });
+  }
+
   function pulseClock(){
     const clock = document.getElementById('systemClock');
     if(!clock) return;
@@ -971,6 +1410,7 @@ label { display: block; font-size: 9px; color: #cfe9f8; margin-bottom: 2px; }
   window.SystemUI = {
     openModal,
     closeModal,
+    refreshSystemLogs,
     deleteUser,
     deleteGroup,
     syncAppTime,
@@ -979,6 +1419,8 @@ label { display: block; font-size: 9px; color: #cfe9f8; margin-bottom: 2px; }
     activateTimeZone,
     deleteTimeZone,
     showModuleLogs,
+    saveSyncLimits,
+    saveCommPassword,
   };
 
   document.addEventListener('DOMContentLoaded', function(){
@@ -987,6 +1429,8 @@ label { display: block; font-size: 9px; color: #cfe9f8; margin-bottom: 2px; }
       tickClock();
       setInterval(tickClock, 1000);
       setInterval(fetchServerTime, 15000); // re-sync drift + DST changes
+      fetchDbDrift();
+      setInterval(fetchDbDrift, 60000);
     });
   });
 })();

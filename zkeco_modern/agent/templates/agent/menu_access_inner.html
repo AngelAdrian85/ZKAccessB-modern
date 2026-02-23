@@ -28,7 +28,7 @@
   #modalAccess.modal-backdrop,#modalAccessLogs.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.72);display:none;align-items:center;justify-content:center;z-index:2500;padding:12px;opacity:0;transition:opacity 160ms ease;}
   #modalAccess.modal-backdrop.is-open,#modalAccessLogs.modal-backdrop.is-open{opacity:1;}
   /* Ultra-compact modal size (legacy-like) */
-  #modalAccess .modal,#modalAccessLogs .modal{width:min(980px, calc(100vw - 28px));max-height:92vh;background:#1e4a6b;border:2px solid #3da5d9;border-radius:2px;box-shadow:0 20px 50px rgba(0,0,0,0.55);overflow:hidden;display:flex;flex-direction:column;transform:translateY(10px) scale(0.985);opacity:0;transition:transform 180ms ease, opacity 180ms ease, box-shadow 180ms ease;}
+  #modalAccess .modal,#modalAccessLogs .modal{width:min(860px, calc(100vw - 28px));max-height:92vh;background:#1e4a6b;border:2px solid #3da5d9;border-radius:2px;box-shadow:0 20px 50px rgba(0,0,0,0.55);overflow:hidden;display:flex;flex-direction:column;transform:translateY(10px) scale(0.985);opacity:0;transition:transform 180ms ease, opacity 180ms ease, box-shadow 180ms ease;}
   #modalAccess.modal-backdrop.is-open .modal,#modalAccessLogs.modal-backdrop.is-open .modal{transform:translateY(0) scale(1);opacity:1;}
   #modalAccess .modal-header,#modalAccessLogs .modal-header{background:#163247;border-bottom:1px solid #3da5d9;padding:4px 6px;display:flex;align-items:center;justify-content:space-between;gap:8px;color:#7db3d9;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.3px;position:relative;}
   #modalAccess .modal-header::before,#modalAccess .modal-header::after,#modalAccessLogs .modal-header::before,#modalAccessLogs .modal-header::after{display:none;content:none;}
@@ -37,6 +37,38 @@
   #modalAccess .modal-close,#modalAccessLogs .modal-close{background:#163247;border:1px solid #3d6a8b;color:#9fd2f1;width:22px;height:22px;border-radius:2px;cursor:pointer;font-weight:700;font-size:14px;}
   #modalAccess .modal-close:hover,#modalAccessLogs .modal-close:hover{background:#3da5d9;border-color:#3da5d9;color:#fff;}
   #modalAccess .modal-body,#modalAccessLogs .modal-body{padding:6px;overflow:auto;color:#e8f0f8;}
+  #modalAccess .modal-body{overflow-x:hidden;}
+
+  /* Shared form chrome used by door/device inner forms (prevents broken layout in Access modals) */
+  #modalAccess .section{border:1px solid rgba(61,106,139,0.85);border-radius:2px;padding:8px;background:#0f2433;margin-bottom:8px;}
+  #modalAccess .section h4{color:#9fd2f1;font-weight:900;font-size:12px;}
+  #modalAccess .grid-3{display:grid;grid-template-columns:repeat(3, minmax(0, 1fr));gap:8px;}
+  #modalAccess .grid-3 > *{min-width:0;}
+  @media (max-width: 780px){
+    #modalAccess .grid-3{grid-template-columns:1fr;}
+  }
+  #modalAccess .field{display:flex;flex-direction:column;gap:4px;font-size:11px;min-width:0;}
+  #modalAccess .field label{font-size:9px;color:#9fd2f1;display:block;margin-bottom:2px;text-transform:uppercase;letter-spacing:0.2px;font-weight:800;}
+  #modalAccess .field input,
+  #modalAccess .field select,
+  #modalAccess .field textarea{width:100%;max-width:100%;min-width:0;padding:5px 7px;border:1px solid #3d6a8b;background:#0a1a27;color:#e8f0f8;border-radius:2px;}
+  #modalAccess .radio-row{display:flex;gap:14px;align-items:center;margin-top:4px;flex-wrap:wrap;}
+  #modalAccess .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:8px;flex-wrap:wrap;}
+  #modalAccess .inline-msg{font-weight:900;font-size:11px;}
+  #modalAccess .inline-msg.error{color:#ffbdbd;}
+  #modalAccess .inline-msg.loading{color:#7db3d9;}
+  #modalAccess .btn-primary,
+  #modalAccess .btn-secondary{padding:4px 10px;border-radius:2px;font-weight:900;font-size:10px;border:1px solid #3d6a8b;cursor:pointer;display:inline-flex;align-items:center;gap:4px;}
+  #modalAccess .btn-primary{background:#3da5d9;border-color:#2c8ec0;color:#fff;}
+  #modalAccess .btn-primary:hover{background:#2c8ec0;}
+  #modalAccess .btn-secondary{background:#2d5a7b;border-color:#3d6a8b;color:#fff;}
+  #modalAccess .btn-secondary:hover{background:#3d6a8b;}
+
+  /* Door Configuration: "More..." dropdown (rendered in body to avoid clipping) */
+  .access-more-menu{position:fixed;display:none;min-width:260px;max-width:360px;background:#163247;border:2px solid #3da5d9;border-radius:2px;box-shadow:0 12px 26px rgba(0,0,0,0.55);z-index:3000;padding:2px;}
+  .access-more-item{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:6px 10px;border:none;background:transparent;color:#e8f0f8;font-size:12px;font-weight:700;cursor:pointer;}
+  .access-more-item:hover{background:rgba(61,165,217,0.25);}
+  .access-more-bullet{width:6px;height:6px;background:#3da5d9;border-radius:1px;flex:0 0 auto;}
 
   /* simple table chrome inside logs modal */
   #modalAccessLogs table{width:100%;border-collapse:collapse;font-size:10px;background:#163247;color:#e8f0f8;}
@@ -194,6 +226,8 @@
   modalBackdrop?.addEventListener('click', (e)=>{ if(e && e.target === modalBackdrop) closeModal(); });
   document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape' && modalBackdrop.style.display === 'flex') closeModal(); });
   document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape' && logsBackdrop.style.display === 'flex') closeLogsModal(); });
+  document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape') hideMoreMenu(); });
+  window.addEventListener('scroll', ()=>{ hideMoreMenu(); }, true);
 
   function openImportModal(module, title){
     const mod = module || 'access';
@@ -254,12 +288,145 @@
     wireModalBody();
   }
 
+  function _h(s){
+    return String(s || '').replace(/[&<>\"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c] || c));
+  }
+
+  // Door Configuration: legacy-like "More..." dropdown menu
+  const MORE_OPS = [
+    {op:'fp-ident',         label:'Change the fingerprint identification', title:'Fingerprint identification'},
+    {op:'disable',          label:'Disable', title:'Disable device'},
+    {op:'enable',           label:'Enable', title:'Enable device'},
+    {op:'disable-dst',      label:'Disable daylight saving time', title:'Disable DST'},
+    {op:'enable-dst',       label:'Enable daylight saving time', title:'Enable DST'},
+    {op:'upgrade-firmware', label:'Upgrade firmware', title:'Upgrade firmware'},
+    {op:'comm-password',    label:'Modify communication password', title:'Communication password'},
+    {op:'sync-time',        label:'Synchronize time', title:'Synchronize time'},
+    {op:'get-events',       label:'Get events', title:'Get events'},
+    {op:'get-personnel',    label:'Get information of personnel', title:'Personnel'}
+  ];
+
+  let moreMenuEl = null;
+  let moreMenuDeviceId = null;
+  let moreMenuDeviceName = '';
+
+  // "Niveluri" tab: fixed-position info dropdown (centrale / uși listing).
+  let levelInfoMenuEl = null;
+
+  function ensureLevelInfoMenu(){
+    if(levelInfoMenuEl) return levelInfoMenuEl;
+    const el = document.createElement('div');
+    el.className = 'access-more-menu';
+    el.setAttribute('data-level-menu', '1');
+    el.style.display = 'none';
+    document.body.appendChild(el);
+    levelInfoMenuEl = el;
+    return el;
+  }
+
+  function hideLevelInfoMenu(){
+    if(!levelInfoMenuEl) return;
+    levelInfoMenuEl.style.display = 'none';
+    levelInfoMenuEl.innerHTML = '';
+  }
+
+  function showLevelInfoMenu(anchorEl, html){
+    const el = ensureLevelInfoMenu();
+    el.innerHTML = html || '<div class="access-more-item" style="cursor:default;"><span class="access-more-bullet"></span><span>Nimic de afișat.</span></div>';
+    el.style.display = 'block';
+
+    // Position: below anchor; clamp to viewport
+    const r = anchorEl.getBoundingClientRect();
+    const margin = 6;
+    const w = el.offsetWidth || 280;
+    const h = el.offsetHeight || 240;
+    let left = r.left;
+    let top = r.bottom + margin;
+    const vw = window.innerWidth || document.documentElement.clientWidth || 1024;
+    const vh = window.innerHeight || document.documentElement.clientHeight || 768;
+    if((left + w) > (vw - margin)) left = Math.max(margin, vw - w - margin);
+    if(left < margin) left = margin;
+    if((top + h) > (vh - margin)) top = Math.max(margin, r.top - h - margin);
+    el.style.left = `${Math.round(left)}px`;
+    el.style.top = `${Math.round(top)}px`;
+  }
+
+  function ensureMoreMenu(){
+    if(moreMenuEl) return moreMenuEl;
+    const el = document.createElement('div');
+    el.className = 'access-more-menu';
+    el.setAttribute('data-more-menu', '1');
+    el.innerHTML = MORE_OPS.map(item => {
+      const op = _h(item.op);
+      const label = _h(item.label);
+      return `<button type="button" class="access-more-item" data-more-op="${op}"><span class="access-more-bullet"></span><span>${label}</span></button>`;
+    }).join('');
+    el.addEventListener('click', (e)=>{
+      const btn = e.target && e.target.closest ? e.target.closest('[data-more-op]') : null;
+      if(!btn) return;
+      try{ e.preventDefault(); }catch(_e){}
+      const op = String(btn.getAttribute('data-more-op') || '').trim();
+      const id = String(moreMenuDeviceId || '').trim();
+      const name = String(moreMenuDeviceName || '').trim();
+      hideMoreMenu();
+      if(!id || !op) return;
+      const url = `/agent/crud/devices/${encodeURIComponent(id)}/op/${encodeURIComponent(op)}/?modal=1`;
+      const meta = MORE_OPS.find(x => x.op === op);
+      const title = meta ? meta.title : 'Operation';
+      openAccessModal(url, `${title} – ${name || ('#'+id)}`);
+    });
+    document.body.appendChild(el);
+    moreMenuEl = el;
+    return el;
+  }
+
+  function hideMoreMenu(){
+    if(!moreMenuEl) return;
+    moreMenuEl.style.display = 'none';
+    moreMenuDeviceId = null;
+    moreMenuDeviceName = '';
+  }
+
+  function showMoreMenu(anchorEl, deviceId, deviceName){
+    const el = ensureMoreMenu();
+    moreMenuDeviceId = deviceId;
+    moreMenuDeviceName = deviceName || '';
+    el.style.display = 'block';
+
+    // Position: below anchor; clamp to viewport
+    const r = anchorEl.getBoundingClientRect();
+    const margin = 6;
+    const w = el.offsetWidth || 280;
+    const h = el.offsetHeight || 240;
+    let left = r.left;
+    let top = r.bottom + margin;
+    const vw = window.innerWidth || document.documentElement.clientWidth || 1024;
+    const vh = window.innerHeight || document.documentElement.clientHeight || 768;
+    if((left + w) > (vw - margin)) left = Math.max(margin, vw - w - margin);
+    if(left < margin) left = margin;
+    if((top + h) > (vh - margin)) top = Math.max(margin, r.top - h - margin);
+    el.style.left = `${Math.round(left)}px`;
+    el.style.top = `${Math.round(top)}px`;
+  }
+
   function isSavedContent(){
     return Boolean(modalBody.querySelector('[data-access-saved="1"], [data-segment-saved="1"]'));
   }
 
   function wireModalBody(){
     modalBody.querySelectorAll('[data-modal-close="1"]').forEach(btn => btn.addEventListener('click', closeModal));
+
+    // In-modal content reload (used by Get events / data-heavy modals)
+    modalBody.querySelectorAll('[data-modal-reload-url]').forEach(btn => {
+      btn.addEventListener('click', (e)=>{
+        try{ e.preventDefault(); }catch(_e){}
+        const url = String(btn.getAttribute('data-modal-reload-url') || '').trim();
+        if(!url) return;
+        const title = String(btn.getAttribute('data-modal-title') || '').trim();
+        openAccessModal(url, title || modalTitle.textContent || 'Formular');
+      });
+    });
+
     const form = modalBody.querySelector('form[data-modal-form="1"]');
     if(form){
       form.addEventListener('submit', async (e)=>{
@@ -269,8 +436,12 @@
         const hasActionModal = window.zkActionModal && typeof window.zkActionModal.open === 'function' && typeof window.zkActionModal.setState === 'function';
         if(hasActionModal){
           try{
-            window.zkActionModal.open({mode:'', module:'', title:'UPDATE', subtitle:'Salvare date'});
-            window.zkActionModal.setState('loading', 'UPDATE ÎN CURS', 'Se salvează datele...');
+            const modalTitle = String(form.getAttribute('data-action-modal-title') || 'UPDATE');
+            const modalSubtitle = String(form.getAttribute('data-action-modal-subtitle') || 'Salvare date');
+            const loadingBig = String(form.getAttribute('data-action-loading-big') || 'UPDATE ÎN CURS');
+            const loadingMsg = String(form.getAttribute('data-action-loading-msg') || 'Se salvează datele...');
+            window.zkActionModal.open({mode:'', module:'', title: modalTitle, subtitle: modalSubtitle});
+            window.zkActionModal.setState('loading', loadingBig, loadingMsg);
           }catch(_e){}
         }
 
@@ -283,17 +454,31 @@
         modalBody.innerHTML = html;
         wireModalBody();
         if(isSavedContent()){
+          const savedEl = modalBody.querySelector('[data-access-saved="1"], [data-segment-saved="1"]');
+          let closeDelayMs = 250;
+          let actionState = 'success';
+          let actionTitle = 'UPDATE REALIZAT CU SUCCES';
+          let actionMsg = 'Datele au fost salvate.';
+          try{
+            if(savedEl){
+              closeDelayMs = parseInt(savedEl.getAttribute('data-close-delay-ms') || '250', 10) || 250;
+              actionState = savedEl.getAttribute('data-action-state') || actionState;
+              actionTitle = savedEl.getAttribute('data-action-title') || actionTitle;
+              actionMsg = savedEl.getAttribute('data-action-message') || actionMsg;
+            }
+          }catch(_e){}
+
           window.setTimeout(async ()=>{
             try{ await loadTab(currentTab, currentTabUrl); }catch(e){}
             closeModal();
 
             if(hasActionModal){
               try{
-                window.zkActionModal.setState('success', 'UPDATE REALIZAT CU SUCCES', 'Datele au fost salvate.');
+                window.zkActionModal.setState(actionState, actionTitle, actionMsg);
                 window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1200);
               }catch(_e){}
             }
-          }, 250);
+          }, closeDelayMs);
         } else {
           if(hasActionModal){
             try{
@@ -376,6 +561,198 @@
           r.addEventListener('change', applyCommMode);
         });
         applyCommMode();
+      }
+    }catch(_e){}
+
+    // Initialize Access Level modal widgets: controller picker (table add/remove)
+    try{
+      const picker = modalBody.querySelector('[data-al-device-picker="1"]');
+      const addBtn = modalBody.querySelector('[data-al-device-add="1"]');
+      const tbody = modalBody.querySelector('[data-al-device-table-body="1"]');
+      if(picker && addBtn && tbody){
+        let sharedTimeWrap = tbody.querySelector('[data-al-shared-time="1"]');
+        let sharedVisitorWrap = tbody.querySelector('[data-al-shared-visitor="1"]');
+
+        function _detachShared(fromEl){
+          try{
+            if(fromEl){
+              const t = fromEl.querySelector('[data-al-shared-time="1"]');
+              const v = fromEl.querySelector('[data-al-shared-visitor="1"]');
+              if(t){ sharedTimeWrap = t; }
+              if(v){ sharedVisitorWrap = v; }
+            }
+          }catch(_e){}
+        }
+
+        function _deviceRows(){
+          return Array.from(tbody.querySelectorAll('tr[data-al-device-row="1"][data-device-id]'));
+        }
+
+        function _syncSharedPlacement(){
+          const rows = _deviceRows();
+          const cnt = rows.length;
+
+          if(cnt <= 0){
+            // Ensure empty row exists and holds shared widgets.
+            if(!tbody.querySelector('[data-al-device-empty="1"]')){
+              const tr = document.createElement('tr');
+              tr.setAttribute('data-al-device-empty', '1');
+              tr.innerHTML = `
+                <td colspan="2" class="td-center-muted">Nu ai selectat nicio centrală.</td>
+                <td style="white-space:normal;"></td>
+                <td style="white-space:normal;"></td>
+                <td class="td-center-muted">—</td>
+              `;
+              // Attach shared widgets (move them into this row)
+              const tCell = tr.children && tr.children[1] ? tr.children[1] : null;
+              const vCell = tr.children && tr.children[2] ? tr.children[2] : null;
+              if(tCell && sharedTimeWrap) tCell.appendChild(sharedTimeWrap);
+              if(vCell && sharedVisitorWrap) vCell.appendChild(sharedVisitorWrap);
+              tbody.appendChild(tr);
+            }
+            return;
+          }
+
+          // Remove any empty placeholder.
+          const empty = tbody.querySelector('[data-al-device-empty="1"]');
+          if(empty){
+            _detachShared(empty);
+            empty.remove();
+          }
+
+          const first = rows[0];
+          let timeTd = first.querySelector('td[data-al-time-td="1"]');
+          let visitorTd = first.querySelector('td[data-al-visitor-td="1"]');
+
+          // If first row doesn't have shared columns (added via JS), insert them.
+          if(!timeTd || !visitorTd){
+            // Insert before actions cell (last)
+            const t = document.createElement('td');
+            t.setAttribute('data-al-time-td', '1');
+            t.style.whiteSpace = 'normal';
+            const v = document.createElement('td');
+            v.setAttribute('data-al-visitor-td', '1');
+            v.style.whiteSpace = 'normal';
+            const actionCell = first.lastElementChild;
+            if(actionCell){
+              first.insertBefore(t, actionCell);
+              first.insertBefore(v, actionCell);
+            } else {
+              first.appendChild(t);
+              first.appendChild(v);
+            }
+            timeTd = t;
+            visitorTd = v;
+          }
+
+          try{ timeTd.setAttribute('rowspan', String(cnt)); }catch(_e){}
+          try{ visitorTd.setAttribute('rowspan', String(cnt)); }catch(_e){}
+
+          // Ensure shared widgets are inside these cells.
+          if(sharedTimeWrap && timeTd && !timeTd.contains(sharedTimeWrap)) timeTd.appendChild(sharedTimeWrap);
+          if(sharedVisitorWrap && visitorTd && !visitorTd.contains(sharedVisitorWrap)) visitorTd.appendChild(sharedVisitorWrap);
+        }
+
+        function _selIds(){
+          return Array.from(tbody.querySelectorAll('tr[data-al-device-row="1"][data-device-id]'))
+            .map(tr => String(tr.getAttribute('data-device-id') || '').trim())
+            .filter(Boolean);
+        }
+        function _ensureEmpty(){
+          if(_deviceRows().length > 0) return;
+          _syncSharedPlacement();
+        }
+        function _addOption(id, name){
+          if(!id) return;
+          const exists = Array.from(picker.options || []).some(o => String(o.value||'') === String(id));
+          if(exists) return;
+          const opt = document.createElement('option');
+          opt.value = String(id);
+          opt.textContent = String(name || ('#'+id));
+          try{ opt.setAttribute('data-device-name', String(name||'')); }catch(_e){}
+          picker.appendChild(opt);
+        }
+        function _removeOption(id){
+          if(!id) return;
+          const opt = picker.querySelector('option[value="' + String(id).replace(/"/g,'') + '"]');
+          if(opt) opt.remove();
+          try{ picker.value = ''; }catch(_e){}
+        }
+        function _addRow(id, name){
+          const rows = _deviceRows();
+
+          // If we are transitioning from empty -> first device, preserve shared widgets.
+          const empty = tbody.querySelector('[data-al-device-empty="1"]');
+          if(empty){
+            _detachShared(empty);
+            empty.remove();
+          }
+
+          const tr = document.createElement('tr');
+          tr.setAttribute('data-al-device-row', '1');
+          tr.setAttribute('data-device-id', String(id));
+          tr.setAttribute('data-device-name', String(name||''));
+
+          if(rows.length === 0){
+            tr.innerHTML = `
+              <td><span class="al-pill">#${_h(id)}</span></td>
+              <td><strong>${_h(name || ('#'+id))}</strong></td>
+              <td data-al-time-td="1" style="white-space:normal;"></td>
+              <td data-al-visitor-td="1" style="white-space:normal;"></td>
+              <td>
+                <input type="hidden" name="devices" value="${_h(id)}" data-al-device-input="1" />
+                <button type="button" class="btn-danger btn-small" data-al-device-remove="1">Șterge</button>
+              </td>
+            `;
+          } else {
+            tr.innerHTML = `
+              <td><span class="al-pill">#${_h(id)}</span></td>
+              <td><strong>${_h(name || ('#'+id))}</strong></td>
+              <td>
+                <input type="hidden" name="devices" value="${_h(id)}" data-al-device-input="1" />
+                <button type="button" class="btn-danger btn-small" data-al-device-remove="1">Șterge</button>
+              </td>
+            `;
+          }
+
+          tbody.appendChild(tr);
+          _syncSharedPlacement();
+        }
+
+        addBtn.addEventListener('click', (e)=>{
+          try{ e.preventDefault(); }catch(_e){}
+          const id = String(picker.value || '').trim();
+          if(!id) return;
+          const already = _selIds().includes(id);
+          if(already) return;
+          const opt = picker.querySelector('option[value="' + id.replace(/"/g,'') + '"]');
+          const name = opt ? String(opt.textContent || '').trim() : ('#'+id);
+          _addRow(id, name);
+          _removeOption(id);
+        });
+
+        tbody.addEventListener('click', (e)=>{
+          const rm = e.target && e.target.closest ? e.target.closest('[data-al-device-remove="1"]') : null;
+          if(!rm) return;
+          try{ e.preventDefault(); }catch(_e){}
+          const tr = rm.closest('tr[data-al-device-row="1"]');
+          if(!tr) return;
+
+          // Preserve shared widgets if we are removing the row that contains them.
+          _detachShared(tr);
+
+          const id = String(tr.getAttribute('data-device-id') || '').trim();
+          const name = String(tr.getAttribute('data-device-name') || '').trim();
+          tr.remove();
+          _addOption(id, name);
+
+          _syncSharedPlacement();
+          _ensureEmpty();
+        });
+
+        // Normalize initial state after server render.
+        _syncSharedPlacement();
+        _ensureEmpty();
       }
     }catch(_e){}
   }
@@ -661,6 +1038,39 @@
       return;
     }
 
+    // Niveluri: expand/collapse access level -> controllers list
+    const lvlTgl = e.target && e.target.closest ? e.target.closest('[data-level-toggle="1"]') : null;
+    if(lvlTgl){
+      const levelId = lvlTgl.getAttribute('data-level-id');
+      const row = document.querySelector('[data-level-detail-row="1"][data-level-id="'+levelId+'"]');
+      if(row){
+        let isHidden = false;
+        try{ isHidden = (row.style.display === 'none') || (window.getComputedStyle && window.getComputedStyle(row).display === 'none'); }catch(_e){ isHidden = (row.style.display === 'none'); }
+        const open = isHidden;
+        row.style.display = open ? 'table-row' : 'none';
+        const txt = (lvlTgl.textContent || '').trim();
+        if(txt === '+' || txt === '−' || txt === '-') lvlTgl.textContent = open ? '−' : '+';
+      }
+      return;
+    }
+
+    // Niveluri: expand/collapse controller -> doors inside the level detail subtable
+    const lvlDevTgl = e.target && e.target.closest ? e.target.closest('[data-level-device-toggle="1"]') : null;
+    if(lvlDevTgl){
+      const levelId = lvlDevTgl.getAttribute('data-level-id');
+      const devId = lvlDevTgl.getAttribute('data-device-id');
+      const row = document.querySelector('[data-level-device-detail-row="1"][data-level-id="'+levelId+'"][data-device-id="'+devId+'"]');
+      if(row){
+        let isHidden = false;
+        try{ isHidden = (row.style.display === 'none') || (window.getComputedStyle && window.getComputedStyle(row).display === 'none'); }catch(_e){ isHidden = (row.style.display === 'none'); }
+        const open = isHidden;
+        row.style.display = open ? 'table-row' : 'none';
+        const txt = (lvlDevTgl.textContent || '').trim();
+        if(txt === '+' || txt === '−' || txt === '-') lvlDevTgl.textContent = open ? '−' : '+';
+      }
+      return;
+    }
+
     // Door auto-assign mapping (repairs imported/legacy doors)
     const autoAssign = e.target && e.target.closest ? e.target.closest('[data-auto-assign="1"]') : null;
     if(autoAssign){
@@ -874,31 +1284,78 @@
       // If the trigger is an <a href=...>, prevent browser navigation.
       try{ e.preventDefault(); }catch(_e){}
       // Close any open "More..." menus.
-      try{ document.querySelectorAll('[data-more-menu="1"]').forEach(m=>{ m.style.display = 'none'; }); }catch(_e){}
+      try{ hideMoreMenu(); }catch(_e){}
+      try{ hideLevelInfoMenu(); }catch(_e){}
       const url = openBtn.getAttribute('data-url');
       const title = openBtn.getAttribute('data-title') || 'Formular';
       if(url) openAccessModal(url, title);
       return;
     }
 
-    // "More..." dropdown (Door Configuration)
-    const moreToggle = e.target && e.target.closest ? e.target.closest('[data-more-toggle="1"]') : null;
-    if(moreToggle){
-      try{ e.preventDefault(); e.stopPropagation(); }catch(_e){}
-      const id = moreToggle.getAttribute('data-device-id');
-      const menu = document.querySelector('[data-more-menu="1"][data-device-id="'+id+'"]');
-      // close others
-      document.querySelectorAll('[data-more-menu="1"]').forEach(m=>{ if(m !== menu) m.style.display = 'none'; });
-      if(menu){
-        menu.style.display = (menu.style.display === 'none' || !menu.style.display) ? 'block' : 'none';
+    // Niveluri: per-centrală "+" dropdown (listează ușile pentru o centrală din nivel)
+    const alDevMore = e.target && e.target.closest ? e.target.closest('[data-al-dev-more="1"]') : null;
+    if(alDevMore){
+      try{ e.preventDefault(); }catch(_e){}
+      try{ hideMoreMenu(); }catch(_e){}
+
+      const levelId = String(alDevMore.getAttribute('data-level-id') || '').trim();
+      const devId = String(alDevMore.getAttribute('data-device-id') || '').trim();
+      const key = (levelId && devId) ? (levelId + ':' + devId) : '';
+      let html = '';
+      if(key){
+        try{
+          const src = document.querySelector('[data-al-dev-menu-src="' + key.replace(/"/g, '') + '"]');
+          html = src ? (src.innerHTML || '') : '';
+        }catch(_e){ html = ''; }
       }
+      showLevelInfoMenu(alDevMore, html);
       return;
     }
 
-    // Click outside closes any open "More" menus
-    const insideMore = e.target && e.target.closest ? e.target.closest('[data-more-menu="1"], [data-more-toggle="1"]') : null;
-    if(!insideMore){
-      document.querySelectorAll('[data-more-menu="1"]').forEach(m=>{ m.style.display = 'none'; });
+    // Niveluri: "Mai multe..." dropdown (centrale / uși)
+    const alMore = e.target && e.target.closest ? e.target.closest('[data-al-more="1"]') : null;
+    if(alMore){
+      try{ e.preventDefault(); }catch(_e){}
+      try{ hideMoreMenu(); }catch(_e){}
+
+      const levelId = String(alMore.getAttribute('data-level-id') || '').trim();
+      let html = '';
+      if(levelId){
+        try{
+          const src = document.querySelector('[data-al-menu-src="' + levelId.replace(/"/g, '') + '"]');
+          html = src ? (src.innerHTML || '') : '';
+        }catch(_e){ html = ''; }
+      }
+      showLevelInfoMenu(alMore, html);
+      return;
+    }
+
+    // Niveluri: placeholder "More..." dropdown (future actions)
+    const lvlMore = e.target && e.target.closest ? e.target.closest('[data-level-more="1"]') : null;
+    if(lvlMore){
+      try{ e.preventDefault(); }catch(_e){}
+      try{ hideMoreMenu(); }catch(_e){}
+      const html = '<div class="access-more-item" style="cursor:default;"><span class="access-more-bullet"></span><span>În curând...</span></div>';
+      showLevelInfoMenu(lvlMore, html);
+      return;
+    }
+
+    // Door Configuration: "Mai multe..." dropdown
+    const devMore = e.target && e.target.closest ? e.target.closest('[data-device-more="1"]') : null;
+    if(devMore){
+      try{ e.preventDefault(); }catch(_e){}
+      try{ hideLevelInfoMenu(); }catch(_e){}
+      const id = devMore.getAttribute('data-device-id');
+      const name = devMore.getAttribute('data-device-name') || '';
+      if(id) showMoreMenu(devMore, id, name);
+      return;
+    }
+
+    // Click outside menu closes it.
+    const insideMenu = (e.target && e.target.closest) ? e.target.closest('[data-more-menu="1"], [data-level-menu="1"]') : null;
+    if(!insideMenu){
+      hideMoreMenu();
+      hideLevelInfoMenu();
     }
 
     const delBtn = e.target && e.target.closest ? e.target.closest('[data-access-del="1"]') : null;

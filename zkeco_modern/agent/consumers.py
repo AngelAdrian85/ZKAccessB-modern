@@ -44,7 +44,10 @@ class MonitorConsumer(AsyncWebsocketConsumer):
     @database_sync_to_async
     def _fetch_devices(self):
         if Device:
-            return list(Device.objects.all().values("id", "serial_number"))
+            try:
+                return list(Device.objects.all().values("id", "serial_number", "name"))
+            except Exception:
+                return list(Device.objects.all().values("id", "serial_number"))
         return []
 
     async def _send_initial_status(self):
@@ -53,10 +56,17 @@ class MonitorConsumer(AsyncWebsocketConsumer):
         persisted = await self._fetch_status_map()
         for d in devices:
             st = persisted.get(d["id"], {"online": True, "door_state": "CLOSED", "updated_at": None})
+            dev_name = None
+            try:
+                dev_name = d.get("name")
+            except Exception:
+                dev_name = None
+            serial_label = d.get("serial_number") or dev_name or str(d["id"])
             await self.send(text_data=json.dumps({
                 "type": "device.status",
                 "device_id": d["id"],
-                "serial": d.get("serial_number") or str(d["id"]),
+                "serial": serial_label,
+                "name": dev_name,
                 "online": st.get("online", True),
                 "door_state": st.get("door_state", "CLOSED"),
                 "updated_at": st.get("updated_at")
@@ -67,9 +77,9 @@ class MonitorConsumer(AsyncWebsocketConsumer):
         try:
             from agent.models import DeviceStatus
             # Prefer in-memory/commcenter-known last-seen timestamps recorded during
-            # startup broadcasts. This file is written by ModernCommCenter so that
-            # freshly connected WebSocket clients receive an up-to-date timestamp
-            # even if the DB wasn't updated during CommCenter startup.
+            # broadcasts. This file is written by ModernCommCenter so that freshly
+            # connected WebSocket clients receive an up-to-date timestamp even if
+            # the DB wasn't updated during CommCenter startup.
             import os, json
             try:
                 base = getattr(__import__('django.conf').conf.settings, 'BASE_DIR', os.getcwd())
@@ -94,6 +104,16 @@ class MonitorConsumer(AsyncWebsocketConsumer):
                             db_ts = s.updated_at
                         except Exception:
                             db_ts = None
+
+                    contact_ts = None
+                    try:
+                        dev = getattr(s, 'device', None)
+                        contact_ts = getattr(dev, 'last_contact', None) if dev is not None else None
+                        if contact_ts is not None and dj_tz.is_naive(contact_ts):
+                            contact_ts = dj_tz.make_aware(contact_ts, dj_tz.get_current_timezone())
+                    except Exception:
+                        contact_ts = None
+
                     b = broadcasts.get(str(s.device_id))
                     b_ts = None
                     if b:
@@ -105,15 +125,14 @@ class MonitorConsumer(AsyncWebsocketConsumer):
                         except Exception:
                             b_ts = None
 
-                    # Choose the most recent timestamp between DB and broadcast
+                    # Choose the most recent timestamp between last_contact, DB and broadcast.
                     chosen = None
-                    if db_ts and b_ts:
+                    candidates = [c for c in (contact_ts, db_ts, b_ts) if c is not None]
+                    if candidates:
                         try:
-                            chosen = db_ts if db_ts >= b_ts else b_ts
+                            chosen = max(candidates)
                         except Exception:
-                            chosen = db_ts or b_ts
-                    else:
-                        chosen = db_ts or b_ts
+                            chosen = candidates[0]
 
                     ua = None
                     if chosen is not None:

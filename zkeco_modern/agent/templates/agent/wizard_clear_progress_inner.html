@@ -1,0 +1,27 @@
+<div id="wizClearCard" class="access-modal-card"
+  data-wizard-token="{{ wizard_token|default:'' }}"
+  data-device-ip="{{ device_ip|default:'' }}"
+  data-device-port="{{ device_port|default:'4370' }}"
+  data-comm-password="{{ comm_password|default:'' }}"
+  style="background:#0a1a27;border:1px solid #2f5876;border-radius:6px;padding:14px;">
+  <div style="color:#9fd2f1;font-weight:900;font-size:12px;margin-bottom:6px;">Ștergere date de pe centrală</div>
+  <div style="color:#e8f0f8;font-size:11px; margin-bottom:10px;">
+    Centrală: <strong style="color:#9fd2f1;">{{ device_ip|default:'—' }}:{{ device_port|default:'—' }}</strong>
+  </div>
+
+  <div id="wizClearStatus" style="background:#0f2433;border:1px solid #3d6a8b;border-radius:6px;padding:10px;color:#e8f0f8;font-size:11px;">
+    ⏳ Inițializare...
+  </div>
+
+  <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
+    <button type="button" class="btn-secondary" data-modal-close="1">Renunță</button>
+    <button type="button" id="wizClearRetry" class="btn-secondary" style="display:none;">Reîncearcă</button>
+    <button type="button" id="wizClearContinue" class="btn-primary" disabled>Continuă</button>
+  </div>
+
+  <div style="color:#7db3d9;font-size:10px;margin-top:10px; line-height:1.35;">
+    Notă: procesul este blocant. După ce apare <strong>OK</strong>, apasă <strong>Continuă</strong> pentru configurarea ușilor.
+  </div>
+</div>
+
+{# JS is wired by the Unified page runtime because injected <script> tags don't execute. #}

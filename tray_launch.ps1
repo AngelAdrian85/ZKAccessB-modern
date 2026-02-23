@@ -2,14 +2,109 @@ Param(
   [int]$Port = 8000,
   [string]$Settings = 'zkeco_config.settings',
   [string]$Venv = '.venv',
+  [string]$WebUser = '',
+  [string]$WebPassword = '',
+  [switch]$SaveWebCreds,
   [switch]$SelfTest,
   [switch]$NoCommCenter,
   [switch]$WSGI
 )
-# Kill any process bound to desired port or persisted tray port (config file may override)
+
+# Force Django settings module for this session.
+# Legacy installations may have DJANGO_SETTINGS_MODULE=mysite.settings in the system env.
+$env:DJANGO_SETTINGS_MODULE = $Settings
+
+# Optional: controller web UI credentials (used only for diagnostics / config scraping).
+# NOTE: We do NOT hard-code defaults here; operators can pass -WebUser/-WebPassword and
+# optionally persist them to USERPROFILE\zkeco_tray_config.ini via -SaveWebCreds.
+
+# Helper: read/write minimal INI values
+function Get-IniValue {
+  param(
+    [string[]]$Lines,
+    [string]$Section,
+    [string]$Key
+  )
+  try {
+    $inSec = $false
+    foreach($ln in ($Lines | ForEach-Object { [string]$_ })){
+      if($ln -match '^\s*\[(.+)\]\s*$'){
+        $inSec = ($Matches[1] -ieq $Section)
+        continue
+      }
+      if(-not $inSec){ continue }
+      $rx = '^\s*' + [regex]::Escape($Key) + '\s*=\s*(.*)\s*$'
+      if($ln -match $rx){
+        return [string]($Matches[1])
+      }
+    }
+  } catch {}
+  return ''
+}
+
+# Determine config file path early (used by multiple sections)
+$configFile = $null
+try {
+  if($env:USERPROFILE){
+    $configFile = Join-Path $env:USERPROFILE 'zkeco_tray_config.ini'
+  }
+} catch { $configFile = $null }
+
+# Load any existing stored web creds
+$cfgLines = @()
+try {
+  if($configFile -and (Test-Path $configFile)){
+    try { $cfgLines = Get-Content $configFile -ErrorAction SilentlyContinue } catch { $cfgLines = @() }
+  }
+} catch { $cfgLines = @() }
+
+$storedWebUser = ''
+$storedWebPassword = ''
+try {
+  if($cfgLines -and $cfgLines.Count -gt 0){
+    $storedWebUser = (Get-IniValue -Lines $cfgLines -Section 'controller_web' -Key 'web_user')
+    $storedWebPassword = (Get-IniValue -Lines $cfgLines -Section 'controller_web' -Key 'web_password')
+  }
+} catch {
+  $storedWebUser = ''
+  $storedWebPassword = ''
+}
+
+# Expose to env (for optional tooling) only if not already set.
+try {
+  if((-not $env:ZKACCESS_WEB_USER) -or [string]::IsNullOrWhiteSpace([string]$env:ZKACCESS_WEB_USER)){
+    $wu = [string]$WebUser
+    if([string]::IsNullOrWhiteSpace($wu)){ $wu = [string]$storedWebUser }
+    if(-not [string]::IsNullOrWhiteSpace($wu)){
+      $env:ZKACCESS_WEB_USER = $wu
+      Write-Host "[TRAY] ZKACCESS_WEB_USER set (from param/ini)"
+    }
+  }
+} catch {}
+try {
+  if((-not $env:ZKACCESS_WEB_PASSWORD) -or [string]::IsNullOrWhiteSpace([string]$env:ZKACCESS_WEB_PASSWORD)){
+    $wp = [string]$WebPassword
+    if([string]::IsNullOrWhiteSpace($wp)){ $wp = [string]$storedWebPassword }
+    if(-not [string]::IsNullOrWhiteSpace($wp)){
+      $env:ZKACCESS_WEB_PASSWORD = $wp
+      Write-Host "[TRAY] ZKACCESS_WEB_PASSWORD set (from param/ini)"
+    }
+  }
+} catch {}
+
+# Default controller communication password/key for plcommpro (passwd=...).
+# Only set if missing so operators (or a future Admin UI tab) can override.
+if(-not $env:ZKACCESS_DEFAULT_COMM_PASSWORD -or [string]::IsNullOrWhiteSpace([string]$env:ZKACCESS_DEFAULT_COMM_PASSWORD)){
+  # TODO (Admin tab): load/save this value from SystemSettings/DB.
+  $env:ZKACCESS_DEFAULT_COMM_PASSWORD = 'Zk@123'
+  Write-Host "[TRAY] ZKACCESS_DEFAULT_COMM_PASSWORD set (default)"
+} else {
+  Write-Host "[TRAY] ZKACCESS_DEFAULT_COMM_PASSWORD already set (keeping existing value)"
+}
+# Kill any process bound to desired port or persisted tray port.
+# NOTE: tray_agent persists config to HOME\zkeco_tray_config.ini.
 Write-Host "[TRAY] Killing old processes on port(s) (requested=$Port, config)"
 try {
-  $configFile = Join-Path 'zkeco_modern' 'zkeco_tray_config.ini'
   $cfgPort = $null
   if(Test-Path $configFile){
     try {
@@ -26,6 +121,96 @@ try {
       if($proc_id -match '^[0-9]+$'){
         try { Stop-Process -Id [int]$proc_id -Force -ErrorAction SilentlyContinue; Write-Host "[TRAY] Killed PID $proc_id on port $p" } catch {}
       }
+    }
+  }
+} catch {}
+
+# Ensure tray_agent will use the port/mode requested by this launch.
+try {
+  if($env:USERPROFILE){
+    $cfgPath = Join-Path $env:USERPROFILE 'zkeco_tray_config.ini'
+    $mode = if($WSGI){ 'wsgi' } else { 'asgi' }
+    $lines = @()
+    if(Test-Path $cfgPath){
+      try { $lines = Get-Content $cfgPath -ErrorAction SilentlyContinue } catch { $lines = @() }
+    }
+    # Minimal INI update: ensure [tray] exists, update port and server_mode
+    $out = @()
+    $inTray = $false
+    $seenTray = $false
+    $wrotePort = $false
+    $wroteMode = $false
+
+    $inWeb = $false
+    $seenWeb = $false
+    $wroteWebUser = $false
+    $wroteWebPassword = $false
+
+    $wantSaveWeb = $false
+    try {
+      $wantSaveWeb = [bool]$SaveWebCreds
+    } catch { $wantSaveWeb = $false }
+    $webUserToSave = ''
+    $webPasswordToSave = ''
+    try {
+      $webUserToSave = [string]($WebUser)
+      $webPasswordToSave = [string]($WebPassword)
+      if([string]::IsNullOrWhiteSpace($webUserToSave)){ $webUserToSave = [string]($env:ZKACCESS_WEB_USER) }
+      if([string]::IsNullOrWhiteSpace($webPasswordToSave)){ $webPasswordToSave = [string]($env:ZKACCESS_WEB_PASSWORD) }
+    } catch {
+      $webUserToSave = ''
+      $webPasswordToSave = ''
+    }
+    foreach($ln in $lines){
+      if($ln -match '^\s*\[(.+)\]\s*$'){
+        if($inTray -and (-not $wrotePort)) { $out += "port=$Port"; $wrotePort = $true }
+        if($inTray -and (-not $wroteMode)) { $out += "server_mode=$mode"; $wroteMode = $true }
+
+        if($inWeb -and $wantSaveWeb){
+          if((-not $wroteWebUser) -and (-not [string]::IsNullOrWhiteSpace($webUserToSave))) { $out += "web_user=$webUserToSave"; $wroteWebUser = $true }
+          if((-not $wroteWebPassword) -and (-not [string]::IsNullOrWhiteSpace($webPasswordToSave))) { $out += "web_password=$webPasswordToSave"; $wroteWebPassword = $true }
+        }
+        $section = $Matches[1]
+        $inTray = ($section -ieq 'tray')
+        if($inTray){ $seenTray = $true }
+
+        $inWeb = ($section -ieq 'controller_web')
+        if($inWeb){ $seenWeb = $true }
+        $out += $ln
+        continue
+      }
+      if($inTray){
+        if($ln -match '^\s*port\s*='){ if(-not $wrotePort){ $out += "port=$Port"; $wrotePort = $true }; continue }
+        if($ln -match '^\s*server_mode\s*='){ if(-not $wroteMode){ $out += "server_mode=$mode"; $wroteMode = $true }; continue }
+      }
+
+      if($inWeb -and $wantSaveWeb){
+        if($ln -match '^\s*web_user\s*='){ if(-not $wroteWebUser -and (-not [string]::IsNullOrWhiteSpace($webUserToSave))){ $out += "web_user=$webUserToSave"; $wroteWebUser = $true }; continue }
+        if($ln -match '^\s*web_password\s*='){ if(-not $wroteWebPassword -and (-not [string]::IsNullOrWhiteSpace($webPasswordToSave))){ $out += "web_password=$webPasswordToSave"; $wroteWebPassword = $true }; continue }
+      }
+      $out += $ln
+    }
+    if(-not $seenTray){
+      $out += ''
+      $out += '[tray]'
+    }
+    if(-not $wrotePort){ $out += "port=$Port" }
+    if(-not $wroteMode){ $out += "server_mode=$mode" }
+
+    # Optionally persist controller web creds (diagnostics only)
+    if($wantSaveWeb -and ((-not [string]::IsNullOrWhiteSpace($webUserToSave)) -or (-not [string]::IsNullOrWhiteSpace($webPasswordToSave)))){
+      if(-not $seenWeb){
+        $out += ''
+        $out += '[controller_web]'
+      }
+      if((-not $wroteWebUser) -and (-not [string]::IsNullOrWhiteSpace($webUserToSave))){ $out += "web_user=$webUserToSave" }
+      if((-not $wroteWebPassword) -and (-not [string]::IsNullOrWhiteSpace($webPasswordToSave))){ $out += "web_password=$webPasswordToSave" }
+    }
+    Set-Content -Path $cfgPath -Value $out -Encoding UTF8
+    if($wantSaveWeb){
+      Write-Host "[TRAY] Persisted tray config (+web creds if provided): port=$Port, server_mode=$mode ($cfgPath)"
+    } else {
+      Write-Host "[TRAY] Persisted tray config: port=$Port, server_mode=$mode ($cfgPath)"
     }
   }
 } catch {}
@@ -50,6 +235,171 @@ if(!(Test-Path "$Venv\Scripts\python.exe")){
   py -3 -m venv $Venv; if($LASTEXITCODE -ne 0){ Write-Error 'venv failed'; exit 1 }
 }
 $py = Join-Path $Venv 'Scripts/python.exe'
+
+# Optional: configure plcommpro.dll bridge runner
+# Preferred modern path: x86 .NET bridge EXE (no Python 32-bit required).
+# Fallback path: 32-bit Python 3 bridge runner.
+
+function Resolve-ZkAccessBridgeExe {
+  try {
+    if($env:ZKACCESS_BRIDGE_EXE -and (Test-Path $env:ZKACCESS_BRIDGE_EXE)){
+      return $env:ZKACCESS_BRIDGE_EXE
+    }
+    # Repo-local default (published output)
+    $cand = Join-Path $PWD 'zkeco_modern\agent\bridge_dotnet\PlcommproBridgeRunner\bin\Release\net8.0\win-x86\publish\PlcommproBridgeRunner.exe'
+    if(Test-Path $cand){
+      return $cand
+    }
+  } catch {}
+  return $null
+}
+
+function Resolve-ZkAccessBridgeExeX64 {
+  try {
+    # Repo-local default (published output)
+    $cand = Join-Path $PWD 'zkeco_modern\agent\bridge_dotnet\PlcommproBridgeRunner\bin\Release\net8.0\win-x64\publish\PlcommproBridgeRunner.exe'
+    if(Test-Path $cand){
+      return $cand
+    }
+  } catch {}
+  return $null
+}
+
+function Resolve-PlcommproDllX86 {
+  try {
+    if($env:ZKACCESS_PLCOMMPRO_DLL -and (Test-Path $env:ZKACCESS_PLCOMMPRO_DLL)){
+      return $env:ZKACCESS_PLCOMMPRO_DLL
+    }
+    $cands = @(
+      (Join-Path $PWD 'Resurse\Standalone SDK-6.3.1.55\PullSDK\plcommpro.dll'),
+      (Join-Path $PWD 'Resurse\ZKEUBioAccessSetup\Dependencies\ZKAccess3.5\NewSDK\plcommpro.dll'),
+      (Join-Path $PWD 'Resurse\Standalone SDK-6.3.1.55\SDK\x86\plcommpro.dll')
+    )
+    foreach($c in $cands){
+      if($c -and (Test-Path $c)) { return $c }
+    }
+  } catch {}
+  return $null
+}
+
+function Resolve-PlcommproDllX64 {
+  try {
+    if($env:ZKACCESS_PLCOMMPRO_DLL -and (Test-Path $env:ZKACCESS_PLCOMMPRO_DLL)){
+      return $env:ZKACCESS_PLCOMMPRO_DLL
+    }
+    $cands = @(
+      (Join-Path $PWD 'Resurse\Standalone SDK-6.3.1.55\SDK\x64\plcommpro.dll')
+    )
+    foreach($c in $cands){
+      if($c -and (Test-Path $c)) { return $c }
+    }
+  } catch {}
+  return $null
+}
+
+# Optional: prefer x64 SDK bundle if explicitly requested.
+try {
+  if(($env:ZKACCESS_PLCOMMPRO_ARCH -as [string]).ToLower() -eq 'x64'){
+    if(-not $env:ZKACCESS_BRIDGE_EXE){
+      $bridge64 = Resolve-ZkAccessBridgeExeX64
+      if($bridge64){
+        $env:ZKACCESS_BRIDGE_EXE = $bridge64
+        Write-Host "[TRAY] Bridge runner set (x64 EXE): $bridge64"
+      }
+    }
+    if(-not $env:ZKACCESS_PLCOMMPRO_DLL){
+      $dll64 = Resolve-PlcommproDllX64
+      if($dll64){
+        $env:ZKACCESS_PLCOMMPRO_DLL = $dll64
+        Write-Host "[TRAY] plcommpro.dll set (x64): $dll64"
+      }
+    }
+  }
+} catch {}
+
+try {
+  if(-not $env:ZKACCESS_BRIDGE_EXE){
+    $bridgeExe = Resolve-ZkAccessBridgeExe
+    if($bridgeExe){
+      $env:ZKACCESS_BRIDGE_EXE = $bridgeExe
+      Write-Host "[TRAY] Bridge runner set (x86 EXE): $bridgeExe"
+    }
+  }
+} catch {}
+
+try {
+  if(-not $env:ZKACCESS_PLCOMMPRO_DLL){
+    $dll = Resolve-PlcommproDllX86
+    if($dll){
+      $env:ZKACCESS_PLCOMMPRO_DLL = $dll
+      Write-Host "[TRAY] plcommpro.dll set (x86): $dll"
+    }
+  }
+} catch {}
+
+# If we don't have the EXE bridge, try to locate a Python 32-bit runner.
+function Resolve-ZkAccessBridgePython32 {
+  try {
+    if($env:ZKACCESS_PYBRIDGE -and (Test-Path $env:ZKACCESS_PYBRIDGE)){
+      return $env:ZKACCESS_PYBRIDGE
+    }
+
+    # Preferred: portable (non-installed) Python 3.x 32-bit shipped/extracted in repo
+    try {
+      $portable = Join-Path $PWD 'tools\python32\python.exe'
+      if(Test-Path $portable){
+        return $portable
+      }
+    } catch {}
+
+    $candidates = @()
+    # Common 32-bit installs
+    $candidates += @(
+      "C:\\Program Files (x86)\\Python311-32\\python.exe",
+      "C:\\Program Files (x86)\\Python310-32\\python.exe",
+      "C:\\Program Files (x86)\\Python39-32\\python.exe"
+    )
+    # Per-user installs
+    if($env:LocalAppData){
+      $candidates += (Get-ChildItem -Path (Join-Path $env:LocalAppData 'Programs\Python') -Filter 'python.exe' -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+    }
+    # System-wide installs
+    $candidates += (Get-ChildItem -Path 'C:\\Program Files (x86)' -Filter 'python.exe' -Recurse -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+
+    # De-dupe + exclude legacy ZKAccessB Python 2.6 bundles
+    $candidates = $candidates | Where-Object { $_ -and ($_ -notmatch 'ZKTeco\\ZKAccessB\\Python26') -and ($_ -notmatch 'Python26') } | Sort-Object -Unique
+
+    foreach($cand in $candidates){
+      try {
+        if(-not (Test-Path $cand)) { continue }
+        # Validate 32-bit + Python 3
+        $out = & $cand -S -c "import struct,sys; print(struct.calcsize('P')*8); print(sys.version_info[0])" 2>$null
+        if($LASTEXITCODE -ne 0) { continue }
+        $lines = @($out)
+        $bits = 0
+        $major = 0
+        if($lines.Count -ge 1){ $bits = [int]($lines[0]) }
+        if($lines.Count -ge 2){ $major = [int]($lines[1]) }
+        if($bits -eq 32 -and $major -ge 3){
+          return $cand
+        }
+      } catch {}
+    }
+  } catch {}
+  return $null
+}
+
+try {
+  if((-not $env:ZKACCESS_BRIDGE_EXE) -and (-not $env:ZKACCESS_PYBRIDGE)){
+    $bridgePy = Resolve-ZkAccessBridgePython32
+    if($bridgePy){
+      $env:ZKACCESS_PYBRIDGE = $bridgePy
+      Write-Host "[TRAY] Bridge runner set (Python 32-bit): $bridgePy"
+    } else {
+      Write-Warning "[TRAY] plcommpro bridge not configured. Hardware ops (plcommpro.dll) unavailable until either ZKACCESS_BRIDGE_EXE (preferred) or ZKACCESS_PYBRIDGE is set."
+    }
+  }
+} catch {}
 
 # Ensure virtual environment is activated for the current session
 try {
@@ -229,6 +579,7 @@ try {
     acp_enabled    = $acpEnabled
     elatec_enabled = $elatecEnabled
     commcenter     = 'PORNESTE'
+    commcenter_driver  = 'auto'
   }
   # Color: treat disabled readers as satisfied
   $allReadersOk = (($statusInit.acp_enabled -eq $false) -or ($statusInit.acp -eq 'ON')) -and (($statusInit.elatec_enabled -eq $false) -or ($statusInit.elatec -eq 'ON'))
@@ -292,6 +643,7 @@ try {
     acp_enabled    = $acpEnabled
     elatec_enabled = $elatecEnabled
     commcenter     = 'PORNESTE'
+    commcenter_driver  = 'auto'
   }
   $allReadersOk = (($statusRun.acp_enabled -eq $false) -or ($statusRun.acp -eq 'ON')) -and (($statusRun.elatec_enabled -eq $false) -or ($statusRun.elatec -eq 'ON'))
   $statusRun.color = if(($statusRun.server -eq 'PORNIT') -and $allReadersOk){ 'green' } elseif(($statusRun.server -eq 'PORNIT') -or $allReadersOk){ 'yellow' } else { 'red' }

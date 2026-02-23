@@ -457,7 +457,7 @@
       <h2 data-href="/agent/monitor/" role="link" tabindex="0">MONITORIZARE</h2>
       <a href="/agent/dashboard/" data-tip="Panou principal cu statistici și starea dispozitivelor">Dashboard</a>
       <a href="/agent/monitor/" data-tip="Monitorizare evenimente în timp real">Monitorizare live</a>
-      <a href="/agent/status/" data-tip="Rezumat stare dispozitive și uși">Rezumat stare</a>
+      <a href="/agent/status/" data-tip="Stare dispozitive și uși">Stare dispozitive</a>
       <a href="/agent/monitor/legacy-device/" data-tip="Formularul vechi DEVICE (acțiuni rapide pe uși)">Formular DEVICE vechi</a>
     </div>
     <div class="nav-section">
@@ -495,7 +495,6 @@
     </div>
     <div class="nav-section">
       <h2>Admin</h2>
-      <a href="/admin/" data-tip="Interfața completă de administrare Django">Django Admin</a>
       <a href="/agent/menu/system/" data-tip="Administrare sistem: utilizatori, grupuri, fus orar, loguri">Administrare sistem</a>
     </div>
   </aside>
@@ -1013,21 +1012,42 @@ function hideLoading(){
 }
 document.addEventListener('DOMContentLoaded',()=>{ hideLoading(); });
 window.addEventListener('pageshow', hideLoading);
-document.addEventListener('DOMContentLoaded',()=>{
-  document.querySelectorAll('a').forEach(a=>{
-    a.addEventListener('click', e => {
-      const hrefAttr = (a.getAttribute('href') || '').trim();
-      // Don't show the global loading overlay for tab switches / hash-only navigation.
-      // Example: /agent/menu/personnel/#departments changes only the fragment.
-      if(hrefAttr.startsWith('#')) return;
-      try{
-        if(a.hash && a.origin === window.location.origin && a.pathname === window.location.pathname && a.search === window.location.search) return;
-      }catch(_e){}
-      if(a.target==='_blank' || hrefAttr === '#' || a.href.startsWith('javascript:')) return;
-      showLoading();
-    });
-  });
-});
+// Delegated navigation loader:
+// - Avoids per-anchor wiring (works for dynamically injected content)
+// - Respects preventDefault() from modal handlers
+// - Never shows the loader for clicks inside modals
+document.addEventListener('click', (e)=>{
+  try {
+    // Only left-click navigation without modifiers.
+    if(e.button !== 0) return;
+    if(e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+
+    const a = e.target && (e.target.closest ? e.target.closest('a') : null);
+    if(!a) return;
+
+    // If a handler already prevented navigation (typical for modal open/close), don't show loader.
+    if(e.defaultPrevented) return;
+
+    const hrefAttr = (a.getAttribute('href') || '').trim();
+    if(!hrefAttr) return;
+
+    // Don't show loader for modal interactions (prevents stuck/stacked overlays).
+    if(a.closest('.modal-backdrop, .modal-overlay, .modal-panel, [role="dialog"], .zk-action, .zk-busy')) return;
+    if(a.getAttribute('data-no-loading') === '1') return;
+    if(a.getAttribute('data-ui') === 'modal') return;
+
+    // Ignore hash-only navigation / tab switches.
+    if(hrefAttr.startsWith('#')) return;
+    try{
+      if(a.hash && a.origin === window.location.origin && a.pathname === window.location.pathname && a.search === window.location.search) return;
+    }catch(_e){}
+
+    // Ignore explicit non-navigation anchors.
+    if(a.target==='_blank' || hrefAttr === '#' || a.href.startsWith('javascript:') || a.hasAttribute('download')) return;
+
+    showLoading();
+  } catch(_e){ /* ignore */ }
+}, false);
 
 // Allow clicking on sidebar section titles to navigate
 document.addEventListener('DOMContentLoaded',()=>{
@@ -1340,5 +1360,6 @@ document.getElementById('btnCfgReaders').addEventListener('click', async ()=>{
   }
 })();
 </script>
+<script src="{% static 'agent/device_discovery_modal.js' %}"></script>
 </body>
 </html>

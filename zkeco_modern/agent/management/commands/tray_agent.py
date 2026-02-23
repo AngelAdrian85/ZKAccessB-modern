@@ -37,14 +37,23 @@ _LISTENER_PROCS = []  # ACP/Elatec listener processes started by tray agent
 _PID_FILE = Path.home() / 'zkeco_tray_agent.pid'
 _START_TS = time.time()
 _DB_ERR_LAST = {}
+_LAST_CONTACT_LAST = {}
+
+# CommCenter defaults (populated from CLI options in Command.handle)
+_COMM_DEFAULT_DRIVER = 'auto'
+_COMM_DEFAULT_POLL = 1.5
+_COMM_LAST_DRIVER = None
+_COMM_LAST_BACKEND = None
 
 DEFAULT_HOST = '0.0.0.0'
 DEFAULT_PORT = 8000
 CONFIG_PATH = Path.home() / 'zkeco_tray_config.ini'
-_CONFIG = configparser.ConfigParser()
+# Be tolerant to manual edits: allow duplicate keys (keeps last occurrence)
+_CONFIG = configparser.ConfigParser(strict=False)
 if CONFIG_PATH.exists():
     try:
-        _CONFIG.read(CONFIG_PATH)
+        # Support UTF-8 BOM (common when edited via PowerShell Out-File)
+        _CONFIG.read(CONFIG_PATH, encoding='utf-8-sig')
     except Exception:
         pass
 if not _CONFIG.has_section('tray'):
@@ -239,6 +248,185 @@ def _show_help_ro():
 def _server_log_path() -> Path:
     return Path(getattr(settings, 'BASE_DIR', Path.cwd())) / 'server.log'
 
+def _server_state_path() -> Path:
+    """Persist last server PID/port so a new tray_agent can stop orphaned servers.
+
+    This prevents the last used port from remaining bound if tray_agent/server
+    crashed or was killed ungracefully.
+    """
+    try:
+        base = Path(getattr(settings, 'BASE_DIR', Path.cwd()))
+        p = base.parent / 'runtime_logs' / 'last_server_state.json'
+        p.parent.mkdir(parents=True, exist_ok=True)
+        return p
+    except Exception:
+        p = Path('last_server_state.json')
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+        return p
+
+def _read_server_state() -> dict:
+    try:
+        p = _server_state_path()
+        if p.exists():
+            return json.loads(p.read_text(encoding='utf-8')) or {}
+    except Exception:
+        pass
+    return {}
+
+def _write_server_state(pid: int, host: str, port: int, asgi: bool, server_type: str):
+    try:
+        try:
+            from django.utils import timezone
+
+            started_at = timezone.now().isoformat(timespec='seconds')
+        except Exception:
+            started_at = datetime.now().isoformat(timespec='seconds')
+        payload = {
+            'pid': int(pid),
+            'host': str(host),
+            'port': int(port),
+            'asgi': bool(asgi),
+            'server_type': str(server_type),
+            'started_at': started_at,
+        }
+        p = _server_state_path()
+        tmp = p.with_suffix('.tmp')
+        tmp.write_text(json.dumps(payload, ensure_ascii=False), encoding='utf-8')
+        try:
+            if p.exists():
+                p.unlink()
+        except Exception:
+            pass
+        tmp.replace(p)
+    except Exception:
+        pass
+
+def _windows_get_process_cmdline(pid: int) -> str:
+    try:
+        cmd = (
+            "Get-CimInstance Win32_Process "
+            f"-Filter \"ProcessId = {int(pid)}\" "
+            "| Select-Object -ExpandProperty CommandLine"
+        )
+        r = subprocess.run(
+            ['powershell', '-ExecutionPolicy', 'Bypass', '-Command', cmd],
+            capture_output=True,
+            text=True,
+        )
+        return (r.stdout or '').strip()
+    except Exception:
+        return ''
+
+def _looks_like_our_server_cmdline(cmdline: str) -> bool:
+    if not cmdline:
+        return False
+    cl = cmdline.lower()
+    # ASGI daphne style
+    if ('daphne' in cl) and ('zkeco_config.asgi:application' in cl):
+        return True
+    # Django runserver fallback style
+    if ('manage.py' in cl) and ('runserver' in cl) and ('zkeco_config.settings' in cl or 'zkeco_config' in cl):
+        return True
+    return False
+
+def _windows_listening_pids_on_port(port: int) -> set:
+    pids = set()
+    try:
+        r = subprocess.run(['netstat', '-ano', '-p', 'TCP'], capture_output=True, text=True)
+        for line in (r.stdout or '').splitlines():
+            if 'LISTENING' not in line.upper():
+                continue
+            if f':{int(port)}' not in line:
+                continue
+            parts = line.split()
+            if not parts:
+                continue
+            pid = parts[-1]
+            if pid.isdigit() and pid != '0':
+                pids.add(int(pid))
+    except Exception:
+        pass
+    return pids
+
+def _stop_our_server_on_port(port: int):
+    """Stop ZKAccessB server processes listening on a given port.
+
+    Safety: only kills processes whose command line matches our server.
+    """
+    try:
+        if os.name != 'nt':
+            return
+        port = int(port)
+        listen_pids = _windows_listening_pids_on_port(port)
+        for pid in sorted(listen_pids):
+            try:
+                if pid == os.getpid():
+                    continue
+                cmdline = _windows_get_process_cmdline(pid)
+                if not _looks_like_our_server_cmdline(cmdline):
+                    continue
+                subprocess.run(
+                    ['taskkill', '/PID', str(pid), '/F', '/T'],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                logging.info('Stopped server pid=%s on port %s', pid, port)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+def _stop_orphan_server_from_state():
+    """Stop previous server instance (if any) recorded in last_server_state.json.
+
+    Uses a safety check on command line so we don't kill unrelated processes.
+    """
+    try:
+        st = _read_server_state() or {}
+        port = st.get('port')
+        pid = st.get('pid')
+        if not port:
+            return
+        try:
+            port = int(port)
+        except Exception:
+            return
+        # Stop anything that looks like our server on the last-used port.
+        _stop_our_server_on_port(port)
+
+        listen_pids = _windows_listening_pids_on_port(port) if os.name == 'nt' else set()
+
+        candidate_pids = []
+        if pid:
+            try:
+                candidate_pids.append(int(pid))
+            except Exception:
+                pass
+        if not candidate_pids:
+            candidate_pids = list(listen_pids)
+
+        for cand in candidate_pids:
+            try:
+                # If we can see who is listening, require the PID to actually own the port
+                if listen_pids and cand not in listen_pids:
+                    continue
+                cmdline = _windows_get_process_cmdline(cand) if os.name == 'nt' else ''
+                if os.name == 'nt' and not _looks_like_our_server_cmdline(cmdline):
+                    continue
+                subprocess.run(
+                    ['taskkill', '/PID', str(cand), '/F', '/T'],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                logging.info('Stopped previous server pid=%s on port %s', cand, port)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
 def _tray_status_path() -> Path:
     try:
         base = Path(getattr(settings, 'BASE_DIR', Path.cwd()))
@@ -282,6 +470,8 @@ def _write_tray_status(acp_on: bool, elatec_on: bool, server_state: str, center_
             'acp': 'ON' if acp_on else 'OPRIT',
             'elatec': 'ON' if elatec_on else 'OPRIT',
             'commcenter': 'ON' if center_on else 'OPRIT',
+            'commcenter_driver': _COMM_LAST_DRIVER or _COMM_DEFAULT_DRIVER,
+            'commcenter_backend': _COMM_LAST_BACKEND,
             'server': srv,
             'acp_enabled': acp_enabled,
             'elatec_enabled': elatec_enabled,
@@ -329,8 +519,84 @@ def _set_device_online_flag(scanner: str, online: bool):
     """Safely set DeviceStatus.online for devices matching scanner type.
     Tries ORM update first; falls back to direct SQL. Works for sqlite/mysql/postgres.
     """
+    # ORM-first path (preferred). Also updates Device.last_contact as a throttled heartbeat
+    # when the reader process is alive, so the dashboard has a persisted 'last seen'.
+    try:
+        from datetime import timedelta
+        from django.utils import timezone
+        from django.db.models import Q
+        from agent.models import Device, DeviceStatus
+        from agent.ws import broadcast_device_status
+
+        now = timezone.now()
+        dev_ids = list(
+            Device.objects.filter(scanner_type=str(scanner), scanner_linked=True, enabled=True)
+            .values_list('id', flat=True)
+        )
+        if not dev_ids:
+            return
+
+        COOLDOWN_SECONDS = 5.0
+        if online:
+            # Only update DeviceStatus rows that actually change state.
+            DeviceStatus.objects.filter(device_id__in=dev_ids).exclude(online=True).update(
+                online=True, updated_at=now
+            )
+        else:
+            cutoff = now - timedelta(seconds=COOLDOWN_SECONDS)
+            DeviceStatus.objects.filter(device_id__in=dev_ids).exclude(online=False).filter(
+                Q(updated_at__lte=cutoff) | Q(updated_at__isnull=True)
+            ).update(online=False, updated_at=now)
+
+        # Heartbeat for 'live process' state.
+        if online:
+            try:
+                interval_s = float(os.getenv('TRAY_LAST_CONTACT_INTERVAL', '30'))
+            except Exception:
+                interval_s = 30.0
+            try:
+                now_ts = time.time()
+                last_ts = float(_LAST_CONTACT_LAST.get(str(scanner), 0.0) or 0.0)
+                if interval_s <= 0 or (now_ts - last_ts) >= interval_s:
+                    Device.objects.filter(id__in=dev_ids).update(last_contact=now)
+                    _LAST_CONTACT_LAST[str(scanner)] = now_ts
+            except Exception:
+                pass
+
+        # Broadcast current status snapshot (use last_contact when present)
+        try:
+            for ds in DeviceStatus.objects.select_related('device').filter(device_id__in=dev_ids):
+                dev = getattr(ds, 'device', None)
+                last_seen = None
+                try:
+                    last_seen = getattr(dev, 'last_contact', None) or getattr(ds, 'updated_at', None)
+                except Exception:
+                    last_seen = getattr(ds, 'updated_at', None)
+                ua = None
+                try:
+                    ua = last_seen.isoformat() if last_seen is not None and hasattr(last_seen, 'isoformat') else (str(last_seen) if last_seen is not None else None)
+                except Exception:
+                    ua = None
+                broadcast_device_status(
+                    int(ds.device_id),
+                    bool(ds.online),
+                    door_state=getattr(ds, 'door_state', None),
+                    serial=getattr(dev, 'serial_number', None) if dev else None,
+                    updated_at=ua,
+                )
+        except Exception:
+            pass
+        return
+    except Exception as e:
+        try:
+            logging.getLogger(__name__).exception('ORM DeviceStatus update failed for scanner=%s; falling back to SQL: %s', scanner, e)
+        except Exception:
+            pass
+
     try:
         from django.db import connection
+        from django.utils import timezone
+        from django.utils.dateparse import parse_datetime
         val = 1 if online else 0
         esc = str(scanner).replace("'", "''")
         cur = connection.cursor()
@@ -391,15 +657,15 @@ def _set_device_online_flag(scanner: str, online: bool):
             else:
                 # Perform update for selected device ids
                 id_list = ','.join(str(int(x)) for x in ids_to_update)
+                updated_at_now = timezone.now()
                 try:
                     if vendor == 'sqlite':
-                        upd = (f"UPDATE agent_devicestatus SET online={val}, updated_at=CURRENT_TIMESTAMP "
+                        upd = (f"UPDATE agent_devicestatus SET online=%s, updated_at=%s "
                                f"WHERE device_id IN ({id_list})")
-                        cur.execute(upd)
+                        cur.execute(upd, [val, updated_at_now])
                     else:
-                        # Use generic CURRENT_TIMESTAMP for DBs that support it
-                        upd = (f"UPDATE agent_devicestatus SET online = {val}, updated_at = CURRENT_TIMESTAMP WHERE device_id IN ({id_list})")
-                        cur.execute(upd)
+                        upd = (f"UPDATE agent_devicestatus SET online = %s, updated_at = %s WHERE device_id IN ({id_list})")
+                        cur.execute(upd, [val, updated_at_now])
                     try:
                         connection.commit()
                     except Exception:
@@ -428,16 +694,34 @@ def _set_device_online_flag(scanner: str, online: bool):
                     from agent.ws import broadcast_device_status
                     for did, serial, door_state, online_db, updated_at in rows:
                             try:
-                                # Normalize updated_at to ISO string when possible
+                                # Normalize updated_at to an *aware* ISO string.
+                                # Some DB drivers return naive datetimes; JS will misinterpret them.
                                 ua = None
                                 try:
-                                    if updated_at is not None:
-                                        # sqlite may return string, others may return datetime
-                                        import datetime as _dt
-                                        if isinstance(updated_at, _dt.datetime):
-                                            ua = updated_at.isoformat()
+                                    import datetime as _dt
+
+                                    def _to_aware_dt(v):
+                                        if v is None:
+                                            return None
+                                        if isinstance(v, _dt.datetime):
+                                            dt = v
+                                        elif isinstance(v, (int, float)):
+                                            dt = _dt.datetime.fromtimestamp(float(v), tz=_dt.timezone.utc)
                                         else:
-                                            ua = str(updated_at)
+                                            dt = parse_datetime(str(v))
+                                            if dt is None:
+                                                return None
+                                        if timezone.is_naive(dt):
+                                            # Assume UTC to match Django DB timezone handling.
+                                            dt = timezone.make_aware(dt, timezone=timezone.utc)
+                                        return dt
+
+                                    # If this device was updated in this cycle, prefer the known UTC timestamp.
+                                    if 'updated_at_now' in locals() and did in (ids_to_update or []):
+                                        dt_aware = updated_at_now
+                                    else:
+                                        dt_aware = _to_aware_dt(updated_at)
+                                    ua = dt_aware.isoformat() if dt_aware is not None else None
                                 except Exception:
                                     ua = None
                                 try:
@@ -559,13 +843,33 @@ def _read_first_error_from_log(max_bytes: int = 32768) -> str:
     except Exception:
         return ''
 
-def _start_comm_center(poll_interval=1.5, driver='stub'):
+def _start_comm_center(poll_interval=None, driver=None):
     """Start the ModernCommCenter thread if not already running."""
     global _CENTER
+    global _COMM_LAST_DRIVER, _COMM_LAST_BACKEND
     if _CENTER is not None:
         return _CENTER
     from agent.modern_comm_center import build_and_run_stub
-    _CENTER = build_and_run_stub(poll_interval=poll_interval, driver=driver)
+
+    poll = _COMM_DEFAULT_POLL if poll_interval is None else float(poll_interval)
+    drv = _COMM_DEFAULT_DRIVER if (driver is None or driver == '') else str(driver)
+
+    # Best-effort: report the effective backend used by auto selection.
+    backend = None
+    if drv == 'auto':
+        try:
+            from agent.plcommpro_bridge import bridge_available
+
+            backend = 'plcommpro' if bridge_available() else None
+        except Exception:
+            backend = None
+    else:
+        backend = drv
+
+    _COMM_LAST_DRIVER = drv
+    _COMM_LAST_BACKEND = backend
+
+    _CENTER = build_and_run_stub(poll_interval=poll, driver=drv)
     return _CENTER
 
 def _stop_comm_center():
@@ -782,6 +1086,13 @@ def _start_server(host=DEFAULT_HOST, port=DEFAULT_PORT, asgi=True, retry_count=3
     global _SERVER_PROC
     if _SERVER_PROC and _SERVER_PROC.poll() is None:
         return True
+    # If a previous tray run crashed, the server may still be running on the last used port.
+    # Stop it before we decide whether the port is already in use.
+    try:
+        _stop_orphan_server_from_state()
+        time.sleep(0.2)
+    except Exception:
+        pass
     # Retry with exponential backoff if port bind fails
     for attempt in range(retry_count):
         try:
@@ -829,6 +1140,10 @@ def _start_server(host=DEFAULT_HOST, port=DEFAULT_PORT, asgi=True, retry_count=3
                 # Process died, retry
                 logging.warning('Server process exited immediately, retrying...')
                 continue
+            try:
+                _write_server_state(_SERVER_PROC.pid, host, int(port), bool(asgi), server_type)
+            except Exception:
+                pass
             # Success
             return True
         except Exception as e:
@@ -868,17 +1183,179 @@ def _open_dashboard():
 
 def _shutdown(icon):
     """Cleanly shutdown tray agent, stop all services, and destroy the icon instance."""
+    def _emit(msg: str, level: str = 'info'):
+        """Log, and print to terminal only when needed.
+
+        When the Python logger is already configured with a StreamHandler to the
+        console, printing would duplicate each line.
+        """
+        def _console_logging_enabled() -> bool:
+            try:
+                import sys
+                streams = (sys.stdout, sys.stderr, getattr(sys, '__stdout__', None), getattr(sys, '__stderr__', None))
+                loggers = [logging.getLogger(), logging.getLogger(__name__)]
+                handlers = []
+                for lg in loggers:
+                    try:
+                        handlers.extend(list(getattr(lg, 'handlers', []) or []))
+                    except Exception:
+                        continue
+                for h in handlers:
+                    try:
+                        if isinstance(h, logging.StreamHandler):
+                            stream = getattr(h, 'stream', None)
+                            if stream in streams:
+                                return True
+                            # Some environments wrap stdout; fall back to stream name.
+                            try:
+                                nm = getattr(stream, 'name', None)
+                                if nm in ('<stdout>', '<stderr>'):
+                                    return True
+                            except Exception:
+                                pass
+                    except Exception:
+                        continue
+            except Exception:
+                return False
+            return False
+
+        def _force_print() -> bool:
+            try:
+                v = str(os.getenv('TRAY_FORCE_STDOUT', '') or '').strip().lower()
+                return v in ('1', 'true', 'yes', 'y', 'on')
+            except Exception:
+                return False
+
+        try:
+            if level == 'warn':
+                logging.warning(msg)
+            elif level == 'err':
+                logging.error(msg)
+            else:
+                logging.info(msg)
+        except Exception:
+            pass
+        # Avoid duplicate console output when the logger already prints there.
+        try:
+            if _force_print() or (not _console_logging_enabled()):
+                print(msg, flush=True)
+        except Exception:
+            pass
+
+    def _taskkill_pid(pid: int, label: str = '') -> bool:
+        try:
+            if not pid or int(pid) <= 0:
+                return False
+        except Exception:
+            return False
+        try:
+            args = ['taskkill', '/PID', str(int(pid)), '/F', '/T']
+            out = subprocess.run(args, capture_output=True, text=True)
+            ok = (out.returncode == 0)
+            if ok:
+                _emit(f"[TRAY] Killed PID {pid} {('(' + label + ')') if label else ''}".rstrip())
+            else:
+                msg = (out.stderr or out.stdout or '').strip()
+                _emit(f"[TRAY] taskkill failed PID={pid} {('(' + label + ')') if label else ''} rc={out.returncode} msg={msg}", level='warn')
+            return ok
+        except Exception as e:
+            _emit(f"[TRAY] taskkill exception PID={pid} {('(' + label + ')') if label else ''}: {e}", level='warn')
+            return False
+
+    def _summarize_listening(port: int) -> list[dict]:
+        """Return [{pid, ours, cmd}] for LISTENING TCP port."""
+        rows: list[dict] = []
+        try:
+            if os.name != 'nt':
+                return rows
+            pids = _windows_listening_pids_on_port(int(port))
+            for pid in sorted(list(pids)):
+                try:
+                    cmd = _windows_get_process_cmdline(int(pid))
+                except Exception:
+                    cmd = ''
+                ours = _looks_like_our_server_cmdline(cmd)
+                rows.append({'pid': int(pid), 'ours': bool(ours), 'cmd': (cmd or '')[:220]})
+        except Exception:
+            pass
+        return rows
+
+    # ---- Capture state BEFORE stopping anything (so we can report what was used) ----
     try:
-        logging.info('===== SHUTDOWN INITIATED =====')
-        logging.info('Stopping server...')
+        cfg_port = int(_CONFIG.get('tray', 'port', fallback=str(DEFAULT_PORT)))
+    except Exception:
+        cfg_port = DEFAULT_PORT
+    ports_to_report = sorted({int(DEFAULT_PORT), int(cfg_port)})
+
+    server_pid = None
+    try:
+        if _SERVER_PROC and _SERVER_PROC.poll() is None:
+            server_pid = int(_SERVER_PROC.pid)
+    except Exception:
+        server_pid = None
+
+    listener_pids: list[int] = []
+    try:
+        for p in list(_LISTENER_PROCS or []):
+            try:
+                if p is not None and p.poll() is None:
+                    listener_pids.append(int(p.pid))
+            except Exception:
+                continue
+    except Exception:
+        pass
+    listener_pids = sorted(set([p for p in listener_pids if p and int(p) > 0]))
+
+    pre_ports: dict[int, list[dict]] = {}
+    try:
+        for port in ports_to_report:
+            pre_ports[int(port)] = _summarize_listening(int(port))
+    except Exception:
+        pre_ports = {}
+
+    try:
+        _emit('===== SHUTDOWN INITIATED =====')
+        _emit(f"[TRAY] Shutdown pre-scan: server_pid={server_pid or '-'} listener_pids={listener_pids or '[]'}")
+        for port in ports_to_report:
+            rows = pre_ports.get(int(port), [])
+            if not rows:
+                _emit(f"[TRAY] Port {port}: no LISTENING TCP processes")
+            else:
+                ours = [r for r in rows if r.get('ours')]
+                pids = [r.get('pid') for r in rows]
+                _emit(f"[TRAY] Port {port}: LISTENING pids={pids} (ours={ [r.get('pid') for r in ours] })")
+    except Exception:
+        pass
+
+    killed: list[dict] = []  # [{pid,label,ok}]
+
+    try:
+        _emit('Stopping server...')
         _stop_server()
-        logging.info('Stopping commcenter...')
+        _emit('Stopping commcenter...')
         _stop_comm_center()
-        logging.info('Stopping card listeners...')
+        _emit('Stopping card listeners...')
         _stop_listeners()
         time.sleep(0.5)
     except Exception as e:
-        logging.error('Error stopping server/commcenter: %s', e)
+        _emit(f"Error stopping server/commcenter/listeners: {e}", level='err')
+
+    # Extra safety: force-kill known child PIDs captured pre-stop (so we can both kill and report).
+    try:
+        if server_pid:
+            ok = _taskkill_pid(int(server_pid), label='server')
+            killed.append({'pid': int(server_pid), 'label': 'server', 'ok': bool(ok)})
+    except Exception:
+        pass
+    try:
+        for pid in listener_pids:
+            try:
+                ok = _taskkill_pid(int(pid), label='listener')
+                killed.append({'pid': int(pid), 'label': 'listener', 'ok': bool(ok)})
+            except Exception:
+                continue
+    except Exception:
+        pass
     # Write final OFF status and set icon red
     try:
         _write_tray_status(False, False, 'OPRIT', False)
@@ -890,33 +1367,39 @@ def _shutdown(icon):
     except Exception:
         pass
     
-    # Kill any lingering processes on configured port
+    # Cleanup ports: only stop processes that look like OUR server.
+    # Also report port 8000 even if not configured.
     try:
-        logging.info('Cleaning up port bindings...')
-        cfg_port = _CONFIG.get('tray', 'port', fallback='8000')
-        logging.info(f'Scanning for processes on port {cfg_port}')
-        pids = subprocess.run(['netstat', '-ano'], capture_output=True, text=True)
-        seen = set()
-        for line in pids.stdout.split('\n'):
-            if f':{cfg_port}' in line:
-                parts = line.split()
-                if not parts:
-                    continue
-                pid = parts[-1]
-                # Skip invalid or system PID 0 and current process
-                if (not pid.isdigit()) or (pid == '0') or (int(pid) == os.getpid()):
-                    continue
-                if pid in seen:
-                    continue
-                seen.add(pid)
-                try:
-                    subprocess.run(['taskkill', '/PID', pid, '/F', '/T'], 
-                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                    logging.info(f'Killed PID {pid} on port {cfg_port}')
-                except Exception as e:
-                    logging.error(f'Failed to kill PID {pid}: {e}')
+        _emit('Cleaning up port bindings (safe: only our server cmdlines)...')
+        for port in ports_to_report:
+            try:
+                _stop_our_server_on_port(int(port))
+            except Exception:
+                continue
+        time.sleep(0.25)
     except Exception as e:
-        logging.error(f'Error cleaning up ports: {e}')
+        _emit(f'Error cleaning up ports: {e}', level='err')
+
+    # Post-check and summary
+    try:
+        _emit('[TRAY] Shutdown summary:')
+        if killed:
+            _emit('[TRAY] Killed PIDs: ' + ', '.join([f"{k.get('pid')}({k.get('label')})" for k in killed if k.get('pid')]))
+        else:
+            _emit('[TRAY] Killed PIDs: (none)')
+
+        for port in ports_to_report:
+            post_rows = _summarize_listening(int(port))
+            if not post_rows:
+                _emit(f"[TRAY] Port {port}: FREE (no LISTENING)")
+                continue
+            ours = [r for r in post_rows if r.get('ours')]
+            if ours:
+                _emit(f"[TRAY] Port {port}: still LISTENING by OUR process(es): {[r.get('pid') for r in ours]}" , level='warn')
+            else:
+                _emit(f"[TRAY] Port {port}: still LISTENING by non-app process(es): {[r.get('pid') for r in post_rows]}" , level='warn')
+    except Exception:
+        pass
     
     try:
         if _STOP_EVENT:
@@ -925,16 +1408,16 @@ def _shutdown(icon):
         pass
     
     try:
-        logging.info('Removing tray icon...')
+        _emit('Removing tray icon...')
         icon.visible = False
         icon.stop()
     except Exception as e:
-        logging.error('Error removing icon: %s', e)
+        _emit(f"Error removing icon: {e}", level='err')
     
     try:
-        logging.info('===== SHUTDOWN COMPLETE =====')
+        _emit('===== SHUTDOWN COMPLETE =====')
         time.sleep(0.3)
-        logging.info('Terminating process...')
+        _emit('Terminating process...')
         try:
             if _PID_FILE.exists():
                 _PID_FILE.unlink()
@@ -1275,7 +1758,17 @@ class Command(BaseCommand):
         parser.add_argument('--host', type=str, default=DEFAULT_HOST, help='Bind host')
         parser.add_argument('--port', type=int, default=DEFAULT_PORT, help='Bind port')
         parser.add_argument('--poll', type=float, default=1.5, help='CommCenter poll interval seconds')
-        parser.add_argument('--driver', type=str, default='stub', choices=['stub','socket','sdk','auto'], help='CommCenter driver mode')
+        parser.add_argument(
+            '--driver',
+            type=str,
+            default='auto',
+            choices=['auto', 'stub', 'socket', 'sdk', 'zk', 'plcommpro'],
+            help=(
+                'CommCenter driver mode. '
+                'Use plcommpro when the 32-bit bridge is configured; '
+                'use zk for the pure-python ZKTech socket driver.'
+            ),
+        )
         parser.add_argument('--no-commcenter', action='store_true', help='Skip auto start of CommCenter')
         parser.add_argument('--status-interval', type=float, default=1.0, help='Tray tooltip update interval seconds')
         parser.add_argument('--auto-restart', action='store_true', help='Auto-restart server if process exits')
@@ -1306,6 +1799,19 @@ class Command(BaseCommand):
         os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'zkeco_config.settings')
         django.setup()
         _init_logging()
+        # Apply CLI defaults to global CommCenter defaults so tray menu actions
+        # (Start/Stop/Restart) reuse the same driver/poll mode.
+        global _COMM_DEFAULT_DRIVER, _COMM_DEFAULT_POLL, _COMM_LAST_DRIVER, _COMM_LAST_BACKEND
+        try:
+            _COMM_DEFAULT_DRIVER = str(options.get('driver') or 'auto')
+        except Exception:
+            _COMM_DEFAULT_DRIVER = 'auto'
+        try:
+            _COMM_DEFAULT_POLL = float(options.get('poll') or 1.5)
+        except Exception:
+            _COMM_DEFAULT_POLL = 1.5
+        _COMM_LAST_DRIVER = _COMM_DEFAULT_DRIVER
+        _COMM_LAST_BACKEND = None
         host = options['host']; port = options['port']
         # Override port/mode from persisted config
         try:
@@ -1322,6 +1828,16 @@ class Command(BaseCommand):
             except Exception:
                 options['asgi'] = False
                 self.stdout.write('Daphne not found; starting WSGI instead.')
+        if not options.get('no_server'):
+            # Always stop any orphaned previous server first, so the manual port can be re-used.
+            try:
+                _stop_orphan_server_from_state()
+                # Also stop any orphan server currently bound to the configured port.
+                _stop_our_server_on_port(port)
+                time.sleep(0.2)
+            except Exception:
+                pass
+
         if not options.get('no_server') and not _is_server_running(host=host, port=port):
             if _start_server(host=host, port=port, asgi=options.get('asgi')):
                 mode = 'ASGI' if options.get('asgi') else 'WSGI'
@@ -1418,12 +1934,11 @@ class Command(BaseCommand):
                     el_live = _listener_running('elatec')
                     # Respect explicit UI blocked flags immediately
                     try:
-                        if st.get('acp_blocked', False):
+                        st_block = status_json or {}
+                        if st_block.get('acp_blocked', False):
                             acp_live = False
-                            acp_reason = 'blocked'
-                        if st.get('elatec_blocked', False):
+                        if st_block.get('elatec_blocked', False):
                             el_live = False
-                            el_reason = 'blocked'
                     except Exception:
                         pass
                     # record initial source reasons

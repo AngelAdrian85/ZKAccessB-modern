@@ -204,6 +204,14 @@
   }
   .device-container .table-shell th:last-child, #modalDiscovery .table-shell th:last-child { border-right: none; }
 
+  /* Give the Options column enough room so it doesn't collapse into ellipsis */
+  .device-container .table-shell th.col-opt, #modalDiscovery .table-shell th.col-opt{ width: 520px; }
+
+  /* Options cell should not bleed outside modal; keep one line but clamp */
+  .device-container .table-shell td.col-opt, #modalDiscovery .table-shell td.col-opt{
+    text-overflow: clip;
+  }
+
   .device-container .table-shell td, #modalDiscovery .table-shell td {
     padding: 2px 4px;
     border-right: 1px solid rgba(61, 106, 139, 0.80);
@@ -313,7 +321,8 @@
   }
 
   /* Size tuning for compact utility modals */
-  #modalDiscovery .modal { width: min(900px, 96vw); }
+  /* Wider so discovery rows fit on one line (avoid horizontal scrollbar) */
+  #modalDiscovery .modal { width: min(1200px, 98vw); }
   #modalConfirm .modal, #modalAreaResult .modal, #modalPrompt .modal { width: min(560px, 92vw); }
   /* Match the compact modal proportions used across the app */
   #modalAreaEdit .modal { width: min(560px, 92vw); }
@@ -467,6 +476,13 @@
 
   #modalDeviceCreate .modal-body, #modalScannerCreate .modal-body { padding: 6px; overflow: auto; color: #e8f0f8; }
   #modalDiscovery .modal-body { padding: 6px; overflow: auto; color: #e8f0f8; }
+
+  /* Door editor inside device modal: force a narrower, more compact dialog */
+  #modalDeviceCreate .modal.is-door-form{ width: min(780px, calc(100vw - 28px)); }
+  #modalDeviceCreate .modal.is-door-form .modal-body{ padding: 4px; }
+  #modalDeviceCreate .modal.is-door-form .door-hintbar{ margin-bottom: 6px; }
+  #modalDeviceCreate .modal.is-door-form .form-section{ padding: 4px 0; }
+  #modalDeviceCreate .modal.is-door-form .form-row{ gap: 6px; margin-bottom: 3px; }
   #modalDeviceCreate .section, #modalScannerCreate .section { border: 1px solid var(--border-color); border-radius: 6px; padding: 12px; background: var(--bg-primary); margin-bottom: 10px; }
   #modalDeviceCreate .section h4, #modalScannerCreate .section h4 { margin: 0 0 10px 0; font-size: 12px; letter-spacing: 0.3px; text-transform: uppercase; color: var(--color-primary); }
   #modalDeviceCreate .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
@@ -524,6 +540,39 @@
     border-color: rgba(255,255,255,0.18);
     color: #fff;
   }
+
+  /* Discovery scan button hover policy:
+     - idle: blue, hover green ("start")
+     - running: green, hover red ("stop")
+  */
+  #modalDiscovery #modalStart.btn-primary:hover{
+    background:#2da44e;
+    border-color:#238636;
+    color:#fff;
+  }
+  #modalDiscovery #modalStart.btn-success:hover{
+    background:#d94a3d;
+    border-color:#b03a2e;
+    color:#fff;
+  }
+  #modalDiscovery #modalClose:hover,
+  #modalDiscovery #modalClose2:hover{
+    background:#d94a3d;
+    border-color:#b03a2e;
+    color:#fff;
+  }
+  #modalDiscovery .btn-success{
+    background: #2da44e;
+    border-color: #238636;
+    color: #fff;
+  }
+  #modalDiscovery .btn-success:hover{ background: #238636; }
+  #modalDiscovery .btn-danger{
+    background: #d94a3d;
+    border-color: #b03a2e;
+    color: #fff;
+  }
+  #modalDiscovery .btn-danger:hover{ background: #b03a2e; }
   #modalPrompt .btn-secondary, #modalConfirm .btn-secondary { background: var(--bg-tertiary); }
   #modalConfirm .btn-danger {
     background: #ff6b6b;
@@ -541,8 +590,10 @@
   }
 
   /* Center action overlay (success/fail) for this page */
-  .menu-action-overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:2000;background:rgba(0,0,0,0.45);}
+  .menu-action-overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:4000;background:rgba(0,0,0,0.45);}
   .menu-action-overlay .panel{width:min(520px,92vw);padding:18px 16px;border-radius:8px;border:1px solid var(--border-color);background:var(--bg-secondary);box-shadow:0 20px 40px rgba(0,0,0,0.6);text-align:center;transform:scale(.94);opacity:0;animation:overlayIn 180ms ease-out forwards;}
+  .menu-action-overlay.clickable .panel{cursor:pointer;}
+  .menu-action-overlay.clickable .msg{white-space:pre-line;}
   .menu-action-overlay.success .panel{border-color:#2da44e;}
   .menu-action-overlay.error .panel{border-color:#ff6b6b;}
   .menu-action-overlay .title{font-weight:800;font-size:12px;margin-bottom:6px;color:var(--text-light);}
@@ -551,6 +602,10 @@
   .menu-action-overlay .msg{font-size:11px;color:var(--text-light);line-height:1.35;}
   .menu-action-overlay .bar{height:6px;border-radius:6px;background:var(--bg-primary);border:1px solid var(--border-color);margin-top:12px;overflow:hidden;}
   .menu-action-overlay .bar>div{height:100%;width:0%;background:var(--color-primary);animation:barRun 900ms linear forwards;}
+  .menu-action-overlay .actions{display:none;gap:8px;justify-content:center;margin-top:12px;}
+  .menu-action-overlay.error .actions{display:flex;}
+  .menu-action-overlay .actions button{background:var(--bg-tertiary);border:1px solid var(--border-color);color:var(--text-light);padding:6px 10px;border-radius:10px;cursor:pointer;}
+  .menu-action-overlay .actions button:hover{filter:brightness(1.05);}
   .menu-action-overlay.loading .panel{border-color: rgba(61,165,217,0.75);}
   .menu-action-overlay.loading .title{color:#9fd2f1;}
   .menu-action-overlay.loading .bar>div{width:35%;animation:barIndeterminate 900ms ease-in-out infinite;}
@@ -559,6 +614,63 @@
   @keyframes overlayIn{to{transform:scale(1);opacity:1;}}
   @keyframes barRun{to{width:100%;}}
   @keyframes barIndeterminate{0%{transform:translateX(-120%);}100%{transform:translateX(320%);}}
+
+  @keyframes rowNewGlow{
+    0%{background: rgba(46,191,150,0.28);}
+    100%{background: rgba(46,191,150,0.00);}
+  }
+
+  .row-new td{animation: rowNewGlow 1.4s ease-out;}
+
+  @keyframes rowIpChangedGlow{
+    0%{background: rgba(61,165,217,0.26);}
+    100%{background: rgba(61,165,217,0.00);}
+  }
+
+  .row-ip-updated td{animation: rowIpChangedGlow 1.2s ease-out;}
+
+  /* Discovery: UDP/TCP adminability badges */
+  /* Discovery: keep everything one-line per row */
+  .discover-adminline{margin-top:0;display:inline-flex;gap:4px;flex-wrap:nowrap;align-items:center;vertical-align:middle;max-width:100%;overflow:hidden;}
+  .discover-badge{font-size:9px;line-height:1;padding:2px 6px;border-radius:999px;border:1px solid var(--border-color);background:var(--bg-tertiary);color:var(--text-muted);white-space:nowrap;}
+  .discover-badge-udp{background:rgba(46,191,150,0.16);border-color:rgba(46,191,150,0.35);color:#bff7e7;}
+  .discover-badge-icmp{background:rgba(61,165,217,0.14);border-color:rgba(61,165,217,0.30);color:#cfe9ff;}
+  .discover-badge-ok{background:rgba(45,164,78,0.16);border-color:rgba(45,164,78,0.35);color:#c8f7d2;}
+  .discover-badge-bad{background:rgba(255,107,107,0.14);border-color:rgba(255,107,107,0.35);color:#ffd1d1;}
+  .discover-badge-muted{opacity:0.92;}
+  .btn-fw{display:none;border:1px dashed rgba(255,255,255,0.22);background:transparent;color:var(--text-muted);padding:2px 6px;border-radius:999px;font-size:9px;cursor:pointer;white-space:nowrap;}
+  .btn-fw:hover{border-style:solid;color:var(--text-light);}
+
+  /* Discovery action buttons (compact, fixed-height, no wrap) */
+  .btn-add,.btn-edit,.btn-admin,.btn-ip{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:4px;
+    height:18px;
+    padding:0 6px;
+    border-radius:2px;
+    border:1px solid rgba(255,255,255,0.18);
+    background:#2d5a7b;
+    color:#fff;
+    cursor:pointer;
+    font-size:9px;
+    font-weight:800;
+    line-height:1;
+    vertical-align:middle;
+    white-space:nowrap;
+  }
+  .btn-add{background:#3da5d9;border-color:#2c8ec0;}
+  .btn-edit{background:rgba(46,191,150,0.16);border-color:rgba(46,191,150,0.55);color:#bff7e7;}
+  .btn-edit:hover{background:rgba(46,191,150,0.24);border-color:rgba(46,191,150,0.75);color:var(--text-light);}
+  .btn-admin{background:#2da44e;border-color:#238636;}
+  /* Schimbă IP: distinct, but consistent with existing blue palette */
+  .btn-ip{background:rgba(61,165,217,0.10);border-style:solid;border-color:rgba(61,165,217,0.45);color:#cfe9ff;padding:0 6px;}
+  .btn-ip:hover{background:rgba(61,165,217,0.18);border-color:rgba(61,165,217,0.65);color:var(--text-light);}
+
+  /* Tighten the Discovery modal controls line to reduce vertical space */
+  #modalDiscovery .form-grid{margin:6px 0 8px 0;}
+  #modalDiscovery .table-shell{margin-top:6px !important;}
 
   /* Area result modal (lives outside .device-container; define vars locally) */
   #modalAreaResult {
@@ -626,7 +738,7 @@
   <section id="tab-devices" class="tab-content hidden">
     <div class="action-bar split">
       <div class="left-actions">
-        <button type="button" id="btnDiscovery" class="btn-secondary">🔎 Căutare centrale</button>
+        <button type="button" id="btnDiscovery" class="btn-success">🔎 Căutare centrale</button>
         <button type="button" id="btnQuickAdd" class="btn-primary">⚡ Adaugă centrală rapid</button>
         <a href="{% url 'agent-control-center' %}" class="btn-success">🕐 Sincronizează timp</a>
         <a href="{% url 'agent-status-summary' %}" class="btn-secondary">🔄 Refresh status</a>
@@ -642,7 +754,9 @@
     </div>
     <div class="table-shell">
       {% url 'agent-menu-device' as device_menu_url %}
-      {% include 'agent/devices_crud_embed.html' with page=devices_page active_filter=devices_filter embed_base_url=device_menu_url embed_tab='devices' %}
+      <div id="devicesEmbedContainer">
+        {% include 'agent/devices_crud_embed.html' with page=devices_page active_filter=devices_filter embed_base_url=device_menu_url embed_tab='devices' %}
+      </div>
     </div>
   </section>
 
@@ -650,6 +764,17 @@
     <div class="action-bar">
       <label class="hint">Subrețea</label>
       <input id="subnetInput" type="text" value="" placeholder="ex: 192.168.1" class="input-compact" />
+      <label class="hint" style="margin-left:10px;">Metodă</label>
+      <select id="discoverModeInline" class="input-compact" style="min-width:220px;">
+        <option value="udp">UDP legacy (rapid, recomandat)</option>
+        <option value="scan">Scan subrețea (ICMP/TCP)</option>
+      </select>
+      <label class="hint" style="margin-left:10px; display:flex; align-items:center; gap:6px;">
+        <input type="checkbox" id="discoverAutoInline" /> Actualizare automată
+      </label>
+      <label class="hint" style="margin-left:10px; display:flex; align-items:center; gap:6px;" title="Dacă TCP/4370 e blocat, propune automat adăugarea unei reguli Windows Firewall (necesită Administrator).">
+        <input type="checkbox" id="discoverAutoFirewallInline" /> Auto firewall
+      </label>
       <button type="button" id="btnStartScan" class="btn-primary">Începe scanare</button>
       <span class="hint">Implicit: subrețeaua serverului</span>
     </div>
@@ -657,9 +782,9 @@
     <div class="table-shell mt-10">
       <table id="scanResultsTbl">
         <thead>
-          <tr><th>IP</th><th>Metodă</th><th>Acțiuni</th></tr>
+          <tr><th>IP</th><th>Serie</th><th>MAC</th><th>Model</th><th class="col-w-120">Nr. uși</th><th class="col-opt">Opțiuni</th></tr>
         </thead>
-        <tbody><tr><td colspan="3" class="td-center-muted">Așteaptă rezultatele...</td></tr></tbody>
+        <tbody><tr><td colspan="6" class="td-center-muted">Așteaptă rezultatele...</td></tr></tbody>
       </table>
     </div>
   </section>
@@ -714,8 +839,8 @@
     </div>
     <div class="table-shell">
       <table>
-        <thead><tr><th>#</th><th>Dispozitiv</th><th>Serie</th><th>Ușă</th><th>Conținut</th><th>Status</th><th>Creat</th></tr></thead>
-        <tbody id="cmdTableBody"><tr><td colspan="7" class="td-center-muted">Se încarcă comenzi...</td></tr></tbody>
+        <thead><tr><th>#</th><th>Dispozitiv</th><th>Serie</th><th>Ușă</th><th>Conținut</th><th>Status</th><th>Creat</th><th>Acțiuni</th></tr></thead>
+        <tbody id="cmdTableBody"><tr><td colspan="8" class="td-center-muted">Se încarcă comenzi...</td></tr></tbody>
       </table>
     </div>
     <div id="cmdFlash" class="hint mt-6"></div>
@@ -753,7 +878,7 @@
   <div class="modal">
     <div class="modal-header compact">
       <span class="modal-spacer" aria-hidden="true"></span>
-      <span class="modal-title">Căutare centrale (scanare rețea)</span>
+      <span class="modal-title">Căutare centrale (legacy-style)</span>
       <button type="button" id="modalClose" aria-label="Închide" title="Închide">✕</button>
     </div>
     <div class="modal-body">
@@ -763,19 +888,40 @@
           <input id="modalSubnet" type="text" placeholder="192.168.1" />
         </div>
         <div>
-          <label>Porturi comune</label>
-          <input disabled value="4370, 8080, 80" />
+          <label>Metodă</label>
+          <select id="discoverMode" class="input-compact" style="width:100%;">
+            <option value="udp">UDP legacy (rapid, recomandat)</option>
+            <option value="scan">Scan subrețea (ICMP/TCP)</option>
+          </select>
+        </div>
+        <div>
+          <label>Actualizare</label>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <label class="hint" style="display:flex; align-items:center; gap:6px; margin:0;">
+              <input type="checkbox" id="discoverAuto" /> Auto
+            </label>
+            <label class="hint" style="display:flex; align-items:center; gap:6px; margin:0;" title="Dacă TCP/4370 e blocat, propune automat adăugarea unei reguli Windows Firewall (necesită Administrator).">
+              <input type="checkbox" id="discoverAutoFirewall" /> Auto firewall
+            </label>
+            <select id="discoverInterval" class="input-compact" style="min-width:120px;">
+              <option value="3">3s</option>
+              <option value="5" selected>5s</option>
+              <option value="10">10s</option>
+            </select>
+            <span class="hint" id="discoverLast">—</span>
+          </div>
         </div>
       </div>
       <div class="progress"><div class="progress-bar" id="modalProgress"></div></div>
       <div class="table-shell mt-10">
         <table id="modalResults">
-          <thead><tr><th>IP</th><th>Metodă</th><th>Opțiuni</th></tr></thead>
-          <tbody><tr><td colspan="3" class="td-center-muted">Începe scanarea pentru a vedea rezultate.</td></tr></tbody>
+          <thead><tr><th>IP</th><th>Serie</th><th>MAC</th><th>Model</th><th class="col-w-120">Nr. uși</th><th class="col-opt">Opțiuni</th></tr></thead>
+          <tbody><tr><td colspan="6" class="td-center-muted">Începe scanarea pentru a vedea rezultate.</td></tr></tbody>
         </table>
       </div>
     </div>
     <div class="modal-footer">
+      <button type="button" id="modalClose2" class="btn-secondary">Închide</button>
       <button type="button" id="modalStart" class="btn-primary">Pornește scanarea</button>
     </div>
   </div>
@@ -1065,6 +1211,17 @@
   </div>
 </div>
 
+<div id="wizardContinueOverlay" class="menu-action-overlay clickable" aria-hidden="true" style="z-index:4010;">
+  <div class="panel" id="wizardContinuePanel" role="button" tabindex="0" aria-label="Continuă configurarea">
+    <div class="title" id="wizardContinueTitle">Ștergere date</div>
+    <div class="msg" id="wizardContinueMsg"></div>
+    <div class="bar"><div></div></div>
+    <div class="actions" aria-hidden="true">
+      <button type="button" id="wizardContinueBackBtn">Înapoi la identificare</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal: Audit Logs (ECHIPAMENTE) -->
 <div class="modal-backdrop" id="modalAuditLogs" aria-hidden="true">
   <div class="modal">
@@ -1124,6 +1281,10 @@
 
 <script>
 (function(){
+  const DEVICE_INDEX = (function(){
+    try{ return {{ device_index_json|default:'{}'|safe }}; }catch(e){ return {}; }
+  })();
+
   const tabs = document.querySelectorAll('#deviceTabs .tab-btn');
   const sections = {
     area: document.getElementById('tab-area'),
@@ -1268,6 +1429,9 @@
         sections[k].classList.toggle('hidden', k !== tab);
         sections[k].classList.toggle('active', k === tab);
       });
+      if(tab !== 'search'){
+        try{ stopInlineAuto(); }catch(e){}
+      }
     });
   });
 
@@ -1284,18 +1448,79 @@
     });
   }
 
+  function _formatEmbeddedTimestamps(container){
+    try{
+      const root = container || document;
+      root.querySelectorAll && root.querySelectorAll('.ts[data-ts]').forEach(el=>{
+        try{
+          const s = el.getAttribute('data-ts');
+          const d = new Date(s);
+          if(!isNaN(d)){
+            const day=('0'+d.getDate()).slice(-2);
+            const month=('0'+(d.getMonth()+1)).slice(-2);
+            const time=d.toLocaleTimeString(undefined,{hour:'2-digit',minute:'2-digit'});
+            el.textContent=`${day}.${month} ${time}`;
+          }
+        }catch(_e){}
+      });
+    }catch(e){}
+  }
+
+  function _currentDevicesFilter(){
+    try{
+      const url = new URL(window.location.href);
+      const f = (url.searchParams.get('filter') || '').trim().toLowerCase();
+      return f || 'all';
+    }catch(e){
+      return 'all';
+    }
+  }
+
+  async function refreshDevicesEmbed(){
+    const container = document.getElementById('devicesEmbedContainer');
+    if(!container) return false;
+    try{
+      const flt = _currentDevicesFilter();
+      const url = '{% url "crud-devices-list" %}' + `?embedded=1&filter=${encodeURIComponent(flt)}`;
+      const resp = await fetch(url, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
+      const html = await resp.text();
+      container.innerHTML = html;
+      _formatEmbeddedTimestamps(container);
+      return true;
+    }catch(e){
+      return false;
+    }
+  }
+
   // Discovery modal triggers
   const modal = document.getElementById('modalDiscovery');
   const modalStart = document.getElementById('modalStart');
   const modalClose = document.getElementById('modalClose');
+  const modalClose2 = document.getElementById('modalClose2');
   const modalSubnet = document.getElementById('modalSubnet');
+  const discoverMode = document.getElementById('discoverMode');
+  const discoverAuto = document.getElementById('discoverAuto');
+  const discoverAutoFirewall = document.getElementById('discoverAutoFirewall');
+  const discoverInterval = document.getElementById('discoverInterval');
+  const discoverLast = document.getElementById('discoverLast');
   const modalProgress = document.getElementById('modalProgress');
   const modalResults = document.querySelector('#modalResults tbody');
   const btnDiscovery = document.getElementById('btnDiscovery');
   const btnQuickAdd = document.getElementById('btnQuickAdd');
   const subnetInput = document.getElementById('subnetInput');
+  const discoverModeInline = document.getElementById('discoverModeInline');
+  const discoverAutoInline = document.getElementById('discoverAutoInline');
+  const discoverAutoFirewallInline = document.getElementById('discoverAutoFirewallInline');
   const scanProgress = document.getElementById('scanProgress');
   const scanResultsTbl = document.querySelector('#scanResultsTbl tbody');
+
+  let _discoverTimerModal = null;
+  let _discoverTimerInline = null;
+  let _lastModalIps = new Set();
+  let _lastInlineIps = new Set();
+  const _fwAutoPrompted = new Set();
+  const _bestPortByIp = new Map();
+  const _capsByIp = new Map();
 
   // ===== Unified prompt modal (replaces browser prompt()) =====
   const promptModal = document.getElementById('modalPrompt');
@@ -1341,17 +1566,26 @@
       const placeholder = (f.placeholder != null) ? String(f.placeholder) : '';
       const value = (f.value != null) ? String(f.value) : '';
       const required = !!f.required;
+      const checked = Boolean(f && (f.checked === true || String(f.value || '').toLowerCase() === 'true' || String(f.value || '') === '1'));
+      const isCheckbox = (type === 'checkbox');
+      const readonly = !!f.readonly;
+      const disabled = !!f.disabled;
       return `<div class="prompt-field">
         <label for="prompt_${name}">${label}${required ? ' <span class="required-star">*</span>' : ''}</label>
-        <input id="prompt_${name}" data-name="${name}" type="${type}" ${required ? 'required' : ''} value="${value.replace(/\"/g,'&quot;')}" placeholder="${placeholder.replace(/\"/g,'&quot;')}" />
+        <input id="prompt_${name}" data-name="${name}" type="${type}" ${required ? 'required' : ''} ${readonly ? 'readonly' : ''} ${disabled ? 'disabled' : ''} ${isCheckbox ? (checked ? 'checked' : '') : `value="${value.replace(/\"/g,'&quot;')}"`} placeholder="${placeholder.replace(/\"/g,'&quot;')}" />
       </div>`;
     }).join('');
 
     // wire value collection + submit on Enter
     promptFields.querySelectorAll('input[data-name]').forEach(inp => {
       const k = inp.getAttribute('data-name');
-      _promptValues[k] = inp.value;
-      inp.addEventListener('input', ()=>{ _promptValues[k] = inp.value; });
+      if(String(inp.type || '').toLowerCase() === 'checkbox'){
+        _promptValues[k] = Boolean(inp.checked);
+        inp.addEventListener('change', ()=>{ _promptValues[k] = Boolean(inp.checked); });
+      } else {
+        _promptValues[k] = inp.value;
+        inp.addEventListener('input', ()=>{ _promptValues[k] = inp.value; });
+      }
       inp.addEventListener('keydown', (e)=>{
         if(e.key === 'Enter'){
           e.preventDefault();
@@ -1385,123 +1619,1042 @@
   function openModal(){
     _openModal(modal);
     modalProgress.style.width = '0%';
-    modalResults.innerHTML = '<tr><td colspan="3" class="td-center-muted">Pregătit pentru scanare...</td></tr>';
+    if(discoverLast) discoverLast.textContent = '—';
+    modalResults.innerHTML = '<tr><td colspan="6" class="td-center-muted">Pregătit pentru scanare...</td></tr>';
   }
   function closeModal(){ _closeModal(modal); }
   btnDiscovery?.addEventListener('click', openModal);
-  modalClose?.addEventListener('click', closeModal);
-  modal?.addEventListener('click', (e)=>{ if(e && e.target === modal) closeModal(); });
+  function stopModalAuto(){
+    if(_discoverTimerModal){
+      try{ clearInterval(_discoverTimerModal); }catch(e){}
+      _discoverTimerModal = null;
+    }
+  }
+  function stopInlineAuto(){
+    if(_discoverTimerInline){
+      try{ clearInterval(_discoverTimerInline); }catch(e){}
+      _discoverTimerInline = null;
+    }
+  }
+  modalClose?.addEventListener('click', ()=>{ stopModalAuto(); closeModal(); });
+  modalClose2?.addEventListener('click', ()=>{ stopModalAuto(); closeModal(); });
+  // IMPORTANT: do not close discovery modal on backdrop click (only X / Închide / Escape)
 
-  async function runScan(targetSubnet, setProgress, setTable){
+  function _setModalStartState(state){
+    if(!modalStart) return;
+    modalStart.classList.remove('btn-primary','btn-success','btn-danger');
+    if(state === 'running'){
+      modalStart.classList.add('btn-success');
+      modalStart.textContent = 'Oprește scanarea';
+      return;
+    }
+    if(state === 'stopping'){
+      modalStart.classList.add('btn-danger');
+      modalStart.textContent = 'Oprește scanarea';
+      return;
+    }
+    modalStart.classList.add('btn-primary');
+    modalStart.textContent = 'Pornește scanarea';
+  }
+
+  // Visual smoothness (no extra UI): just transitions
+  try{
+    if(modalStart){
+      modalStart.style.transition = 'background-color 160ms ease, border-color 160ms ease, color 160ms ease';
+    }
+  }catch(e){}
+
+  function _fmtNow(){
+    try{
+      const d = new Date();
+      return d.toLocaleString();
+    }catch(e){
+      return '';
+    }
+  }
+
+  function _guessGateway(ip){
+    try{
+      const parts = String(ip||'').trim().split('.');
+      if(parts.length !== 4) return '';
+      return [parts[0],parts[1],parts[2],'254'].join('.');
+    }catch(e){
+      return '';
+    }
+  }
+
+  function _deviceLabel(d){
+    return String(d.device_name || d.model || d.product || '').trim();
+  }
+
+  function _escapeHtml(s){
+    return String(s || '').replace(/</g,'&lt;');
+  }
+
+  function _escapeAttr(s){
+    return String(s || '')
+      .replace(/&/g,'&amp;')
+      .replace(/</g,'&lt;')
+      .replace(/"/g,'&quot;')
+      .replace(/'/g,'&#39;');
+  }
+
+  function _renderRows(devices, method, prevSet){
+    const seen = new Set();
+    const meth = String(method || '').toLowerCase();
+    const rows = devices.map(d => {
+      const ip = String(d.ip || '').trim();
+      if(!ip) return '';
+      if(seen.has(ip)) return '';
+      seen.add(ip);
+
+      const inSystem = Boolean(d && d.in_system);
+      const deviceId = (()=>{
+        try{
+          const raw = (d && (d.device_id != null ? d.device_id : (d.deviceId != null ? d.deviceId : null)));
+          const n = parseInt(String(raw == null ? '' : raw), 10);
+          return (n && n > 0) ? n : 0;
+        }catch(e){
+          return 0;
+        }
+      })();
+
+      // Prefer comm port discovered via UDP (CommPort/Port) when available.
+      let commPort = 4370;
+      try{
+        const rawPort = (d && (
+          d.port != null ? d.port : (
+            d.commPort != null ? d.commPort : (
+              d.comm_port != null ? d.comm_port : (
+                d.commport != null ? d.commport : (
+                  d.CommPort != null ? d.CommPort : null
+                )
+              )
+            )
+          )
+        ));
+        const n = parseInt(String(rawPort == null ? '' : rawPort), 10);
+        if(n && n > 0 && n <= 65535) commPort = n;
+      }catch(e){}
+      // If we already found a better port by probing, keep it.
+      try{ commPort = _getBestPort(ip) || commPort; }catch(e){}
+
+      // Preserve per-IP capabilities across scans so badges don't disappear.
+      // - UDP is considered "seen" when we have MAC or when discovery method is UDP.
+      // - ICMP is considered "seen" when scan mode produced the IP.
+      const prevCaps = _capsByIp.get(ip) || { udp: false, icmp: false };
+      const hasMac = Boolean(String(d.mac || '').trim());
+      const udpSeen = prevCaps.udp || hasMac || meth.includes('udp');
+      const icmpSeen = prevCaps.icmp || (!meth.includes('udp'));
+      const nextCaps = { udp: udpSeen, icmp: icmpSeen };
+      _capsByIp.set(ip, nextCaps);
+
+      const sn = String(d.serial_number || d.sn || '').trim();
+      const mac = String(d.mac || '').trim();
+      const model = _deviceLabel(d) || '';
+      const isNew = prevSet && !prevSet.has(ip);
+      const css = isNew ? ' class="row-new"' : '';
+      const ipHtml = _escapeHtml(ip);
+      const snDisp = _escapeHtml(sn || '—');
+      const macDisp = _escapeHtml(mac || '—');
+      const snData = _escapeHtml(sn || '');
+      const macData = _escapeHtml(mac || '');
+      const modelHtml = _escapeHtml(model || (method || '—'));
+      const modelData = _escapeAttr(model || '');
+
+      let doorsDisp = '—';
+      let doorsData = '';
+      try{
+        const capRaw = (d && (d.doors_capacity != null ? d.doors_capacity : (d.doorsCapacity != null ? d.doorsCapacity : null)));
+        const cap = parseInt(String(capRaw == null ? '' : capRaw), 10);
+        if(cap && cap > 0){
+          doorsDisp = String(cap);
+          doorsData = String(cap);
+        }
+      }catch(e){}
+      return `<tr${css}>
+        <td>${ipHtml}</td>
+        <td>${snDisp}</td>
+        <td>${macDisp}</td>
+        <td>${modelHtml}</td>
+        <td class="td-center-muted">${_escapeHtml(doorsDisp)}</td>
+        <td class="col-opt">
+          ${inSystem ? (deviceId ? `<button type="button" data-device-id="${_escapeAttr(String(deviceId))}" class="btn-edit" title="Editează centrala din sistem">Editează</button>` : '') : `<button type="button" data-ip="${ipHtml}" data-port="${commPort}" data-mac="${macData}" data-sn="${snData}" data-model="${modelData}" data-doors="${_escapeAttr(doorsData)}" class="btn-add" title="Adaugă centrală în sistem">Adaugă</button>`}
+          <button type="button" data-ip="${ipHtml}" data-port="${commPort}" class="btn-admin" title="Testează administrarea (plcommpro)">Test admin</button>
+          <button type="button" data-ip="${ipHtml}" data-mac="${macData}" class="btn-ip" title="Schimbă IP (${mac ? 'UDP' : 'TCP'})">Schimbă IP</button>
+          <span class="discover-adminline">
+            ${udpSeen ? '<span class="discover-badge discover-badge-udp">UDP ✓</span>' : ''}
+            ${icmpSeen ? '<span class="discover-badge discover-badge-icmp">ICMP ✓</span>' : ''}
+            <span class="discover-badge discover-badge-tcp discover-badge-muted" data-adminprobe="tcp" data-ip="${ipHtml}" data-port="${commPort}">TCP/${commPort} …</span>
+            <button type="button" class="btn-fw" data-ip="${ipHtml}" data-port="${commPort}" title="Permite în Windows Firewall (OUTBOUND)">Firewall</button>
+          </span>
+        </td>
+      </tr>`;
+    }).join('');
+    return rows || '<tr><td colspan="6" class="td-center-muted">Nicio centrală găsită.</td></tr>';
+  }
+
+  function _getBestPort(ip){
+    try{
+      const key = String(ip || '').trim();
+      const v = _bestPortByIp.get(key);
+      const n = parseInt(String(v || ''), 10);
+      // IMPORTANT: return null when unknown.
+      // Returning 4370 here was accidentally overriding the real discovered port
+      // (e.g. 14370 on C3-100Pro) in the discovery table and Add flow.
+      return (n && n > 0 && n <= 65535) ? n : null;
+    }catch(e){
+      return null;
+    }
+  }
+
+  function _moveMapKey(mapObj, oldKey, newKey, opts){
+    try{
+      if(!mapObj || !oldKey || !newKey) return;
+      if(oldKey === newKey) return;
+      if(!(mapObj.has && mapObj.get && mapObj.set && mapObj.delete)) return;
+      if(!mapObj.has(oldKey)) return;
+
+      const preferSource = Boolean(opts && opts.preferSource);
+      const mergeCaps = Boolean(opts && opts.mergeCaps);
+
+      const oldVal = mapObj.get(oldKey);
+      const newVal = mapObj.has(newKey) ? mapObj.get(newKey) : undefined;
+
+      let finalVal = preferSource ? oldVal : (mapObj.has(newKey) ? newVal : oldVal);
+      if(mergeCaps && oldVal && (typeof oldVal === 'object')){
+        const ov = oldVal || {};
+        const nv = (newVal && typeof newVal === 'object') ? newVal : {};
+        finalVal = {
+          ...nv,
+          ...ov,
+          udp: Boolean((nv && nv.udp) || (ov && ov.udp)),
+          icmp: Boolean((nv && nv.icmp) || (ov && ov.icmp)),
+        };
+      }
+
+      mapObj.set(newKey, finalVal);
+      mapObj.delete(oldKey);
+    }catch(e){}
+  }
+
+  function _moveIpInSet(setObj, oldIp, newIp){
+    try{
+      if(!setObj || !oldIp || !newIp) return;
+      if(oldIp === newIp) return;
+      if(setObj.has && setObj.add && setObj.delete){
+        if(setObj.has(oldIp)){
+          setObj.delete(oldIp);
+          setObj.add(newIp);
+        }
+      }
+    }catch(e){}
+  }
+
+  function _rewriteFwPrompted(oldIp, newIp){
+    try{
+      if(!_fwAutoPrompted || !_fwAutoPrompted.size) return;
+      if(!oldIp || !newIp || oldIp === newIp) return;
+      const toAdd = [];
+      const toDel = [];
+      for(const k of _fwAutoPrompted){
+        const s = String(k || '');
+        if(s.startsWith(oldIp + ':')){
+          toDel.push(k);
+          toAdd.push(newIp + s.slice(oldIp.length));
+        }
+      }
+      toDel.forEach(k=>_fwAutoPrompted.delete(k));
+      toAdd.forEach(k=>_fwAutoPrompted.add(k));
+    }catch(e){}
+  }
+
+  function _updateDiscoveryRowIp(container, oldIp, newIp){
+    try{
+      if(!container) return false;
+      const oldStr = String(oldIp || '').trim();
+      const newStr = String(newIp || '').trim();
+      if(!oldStr || !newStr || oldStr === newStr) return false;
+
+      let rowOld = null;
+      const rowsNew = [];
+      const rows = Array.from(container.querySelectorAll('tr'));
+      for(const row of rows){
+        if(!row) continue;
+        const firstTd = row.querySelector('td');
+        const tdIp = String(firstTd && firstTd.textContent ? firstTd.textContent : '').trim();
+
+        let hasOldData = false;
+        let hasNewData = false;
+        try{ hasOldData = Boolean(row.querySelector(`[data-ip="${CSS.escape(oldStr)}"]`)); }catch(e){}
+        try{ hasNewData = Boolean(row.querySelector(`[data-ip="${CSS.escape(newStr)}"]`)); }catch(e){}
+
+        const hasOld = (tdIp === oldStr) || hasOldData;
+        const hasNew = (tdIp === newStr) || hasNewData;
+        if(hasOld) rowOld = row;
+        if(hasNew) rowsNew.push(row);
+      }
+
+      // If a row for the target IP already exists, it is likely a stale/duplicate entry.
+      // Remove it so the operator sees the IP "move" immediately.
+      if(rowOld){
+        for(const r of rowsNew){
+          if(r && r !== rowOld){
+            try{ r.remove(); }catch(e){}
+          }
+        }
+        const firstTd = rowOld.querySelector('td');
+        if(firstTd) firstTd.textContent = newStr;
+        rowOld.querySelectorAll('[data-ip]').forEach(el=>{
+          try{
+            if(String(el.dataset.ip || '').trim() === oldStr) el.dataset.ip = newStr;
+          }catch(e){}
+        });
+        try{
+          rowOld.classList.remove('row-ip-updated');
+          void rowOld.offsetWidth;
+          rowOld.classList.add('row-ip-updated');
+          setTimeout(()=>{ try{ rowOld.classList.remove('row-ip-updated'); }catch(e){} }, 1400);
+        }catch(e){}
+        return true;
+      }
+
+      // Fallback: if we can't find the old row but the new row exists, at least highlight it.
+      if(rowsNew.length){
+        const r = rowsNew[0];
+        try{
+          r.classList.remove('row-ip-updated');
+          void r.offsetWidth;
+          r.classList.add('row-ip-updated');
+          setTimeout(()=>{ try{ r.classList.remove('row-ip-updated'); }catch(e){} }, 1400);
+        }catch(e){}
+        return true;
+      }
+      return false;
+    }catch(e){
+      return false;
+    }
+  }
+
+  function _onIpChangedInUi(oldIp, newIp){
+    try{
+      const oldStr = String(oldIp || '').trim();
+      const newStr = String(newIp || '').trim();
+      if(!oldStr || !newStr || oldStr === newStr) return;
+
+      // Move cached state so badges/ports remain stable.
+      _moveMapKey(_bestPortByIp, oldStr, newStr, {preferSource:true});
+      _moveMapKey(_capsByIp, oldStr, newStr, {preferSource:true, mergeCaps:true});
+      _rewriteFwPrompted(oldStr, newStr);
+      _moveIpInSet(_lastModalIps, oldStr, newStr);
+      _moveIpInSet(_lastInlineIps, oldStr, newStr);
+
+      // Update any rendered rows so actions use the new IP immediately.
+      _updateDiscoveryRowIp(modalResults, oldStr, newStr);
+      _updateDiscoveryRowIp(scanResultsTbl, oldStr, newStr);
+    }catch(e){}
+  }
+
+  async function _probeTcpBadge(badgeEl){
+    if(!badgeEl) return;
+    const ip = String(badgeEl.dataset.ip || '').trim();
+    const port = parseInt(String(badgeEl.dataset.port || '4370') || '4370', 10) || 4370;
+    if(!ip) return;
+    if(badgeEl.dataset.probed === '1') return;
+    badgeEl.dataset.probed = '1';
+
+    try{
+      // Prefer ZKTeco/SDK style ports; generic web ports (80/443) are not useful for plcommpro.
+      const sweepBase = [14370, 4370, 4371, 4372, 5000, 5001, 6000, 8000, 8080];
+
+      // Fast path: if the current port is already a known COMM/SDK port,
+      // test just that port first (much faster than a multi-port sweep).
+      const isKnownPort = sweepBase.indexOf(port) >= 0;
+      let data = null;
+      if(isKnownPort){
+        const url1 = '{% url "device-port-test" %}' + `?ip=${encodeURIComponent(ip)}&port=${encodeURIComponent(port)}&quick=1`;
+        const resp1 = await fetch(url1, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
+        data = await resp1.json();
+      }
+
+      // Slow path: if single-port is closed/unknown, do a quick preferred sweep.
+      if(!(data && data.ok && data.open)){
+        const sweep = [port, ...sweepBase].filter((v, i, a)=> a.indexOf(v) === i);
+        const url = '{% url "device-port-test" %}' + `?ip=${encodeURIComponent(ip)}&ports=${encodeURIComponent(sweep.join(','))}&quick=1`;
+        const resp = await fetch(url, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
+        data = await resp.json();
+      }
+
+      const isOpen = Boolean(data && data.ok && data.open);
+      const bestPort = (data && data.port != null) ? (parseInt(String(data.port), 10) || port) : port;
+      if(isOpen && bestPort){
+        _bestPortByIp.set(ip, bestPort);
+        badgeEl.dataset.port = String(bestPort);
+
+        // Update row action buttons (Adaugă/Test admin/Firewall) to use the detected port.
+        try{
+          const td = badgeEl.closest('td');
+          if(td){
+            td.querySelectorAll('.btn-add[data-ip], .btn-admin[data-ip], .btn-fw[data-ip]')
+              .forEach(b=>{ try{ b.dataset.port = String(bestPort); b.setAttribute('data-port', String(bestPort)); }catch(_e){} });
+            td.querySelectorAll('[data-adminprobe="tcp"][data-ip]')
+              .forEach(b=>{ try{ b.dataset.port = String(bestPort); b.setAttribute('data-port', String(bestPort)); }catch(_e){} });
+          }
+        }catch(_e){}
+      }
+
+      try{
+        const r = data && data.results_by_port ? data.results_by_port : null;
+        if(r) badgeEl.title = `TCP probe: ${JSON.stringify(r)}`;
+        else if(data && data.reason) badgeEl.title = `TCP probe: ${String(data.reason)}`;
+      }catch(e){}
+
+      badgeEl.classList.remove('discover-badge-muted','discover-badge-ok','discover-badge-bad');
+      if(isOpen){
+        badgeEl.classList.add('discover-badge-ok');
+        badgeEl.textContent = `TCP/${bestPort} OK ✓`;
+      } else {
+        badgeEl.classList.add('discover-badge-bad');
+        badgeEl.textContent = `TCP/${port} blocat`;
+      }
+
+      try{
+        const td = badgeEl.closest('td');
+        const btn = td ? td.querySelector(`.btn-fw[data-ip="${CSS.escape(ip)}"]`) : null;
+        if(btn) btn.style.display = isOpen ? 'none' : 'inline-flex';
+      }catch(e){}
+
+      // Auto-firewall (still confirmed): prompt once per ip:port per page load.
+      try{
+        const inModal = Boolean(badgeEl.closest('#modalDiscovery'));
+        const autoBox = inModal ? discoverAutoFirewall : discoverAutoFirewallInline;
+        const autoFlag = Boolean(autoBox && autoBox.checked);
+        const confirmOpen = Boolean(confirmModal && confirmModal.classList && confirmModal.classList.contains('is-open'));
+        const key = `${ip}:${port}`;
+        if(autoFlag && !isOpen && !confirmOpen && !_fwAutoPrompted.has(key)){
+          _fwAutoPrompted.add(key);
+          ensureFirewallAllow(ip, port, badgeEl, true);
+        }
+      }catch(e){}
+    } catch(e){
+      badgeEl.classList.remove('discover-badge-muted','discover-badge-ok');
+      badgeEl.classList.add('discover-badge-bad');
+      badgeEl.textContent = 'TCP err';
+    }
+  }
+
+  async function ensureFirewallAllow(ip, port, badgeEl, isAuto=false){
+    const targetIp = String(ip || '').trim();
+    const targetPort = parseInt(String(port || '4370') || '4370', 10) || 4370;
+    if(!targetIp) return false;
+
+    const doIt = async () => {
+      showMenuActionLoading('Firewall', `Se creează excepția pentru ${targetIp}:${targetPort}...`);
+      try{
+        const resp = await fetch('{% url "device-firewall-allow" %}', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json','X-CSRFToken': getCSRF()},
+          body: JSON.stringify({ip: targetIp, port: targetPort, direction: 'outbound', protocol: 'TCP'})
+        });
+        const data = await resp.json();
+        hideMenuActionOverlay();
+        if(!data || !data.ok){
+          const cmd = data && data.suggested_powershell_admin ? String(data.suggested_powershell_admin) : '';
+          const msg = (data && (data.error || data.hint)) ? String(data.error || data.hint) : 'Nu s-a putut crea regula.';
+          showMenuActionOverlay('Nu s-a creat regula', false);
+          if(data && data.requires_admin && cmd){
+            try{
+              await openPromptDialog({
+                title: 'Firewall: necesită Administrator',
+                message: msg + '\n\nRegula NU a fost adăugată (procesul web nu e elevat).\n\nRulează în PowerShell (Run as Administrator):',
+                okText: 'OK',
+                cancelText: 'Închide',
+                fields: [{name:'cmd', label:'Comandă', value: cmd, placeholder:'', required:false}]
+              });
+            }catch(e){}
+          }
+          flash(areaFlash, cmd ? (msg + ' | PowerShell (Admin): ' + cmd) : msg, true);
+          return false;
+        }
+        showMenuActionOverlay('Regulă adăugată', true);
+        flash(areaFlash, `Firewall: permis OUTBOUND TCP/${targetPort} către ${targetIp}. Retestăm...`, false);
+
+        try{
+          const badge = badgeEl || null;
+          if(badge){
+            badge.dataset.probed = '0';
+            await _probeTcpBadge(badge);
+          }
+        }catch(e){}
+        return true;
+      } catch(e){
+        hideMenuActionOverlay();
+        showMenuActionOverlay('Eroare firewall', false);
+        flash(areaFlash, `Eroare: ${e}`, true);
+        return false;
+      }
+    };
+
+    openConfirm(
+      (isAuto ? 'Auto firewall: adaug excepție?' : 'Adaug excepție Firewall?'),
+      `Se va crea o regulă Windows Firewall (OUTBOUND) pentru a permite conexiunea TCP/${targetPort} către ${targetIp}.\n\n` +
+        'Atenție: dacă portul e blocat de centrală/rețea, nu se va rezolva. Necesită drepturi Administrator.',
+      doIt
+    );
+    return true;
+  }
+
+  function _probeTcpBadges(container){
+    try{
+      const badges = Array.from(container.querySelectorAll('[data-adminprobe="tcp"]'));
+      if(!badges.length) return;
+
+      // Light throttling to avoid spamming the server on large scans
+      let idx = 0;
+      const step = async () => {
+        const el = badges[idx++];
+        if(el) await _probeTcpBadge(el);
+        if(idx < badges.length) setTimeout(step, 40);
+      };
+      step();
+    } catch(e) {}
+  }
+
+  async function runScan(opts, setProgress, setTable, prevSet, setPrevSet, setLastEl){
     try {
       setProgress(5);
-      const resp = await fetch(`/agent/devices/discover/?base=${encodeURIComponent(targetSubnet)}`, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
-      setProgress(40);
+      const mode = (opts && opts.mode) ? String(opts.mode) : 'udp';
+      const targetSubnet = (opts && opts.subnet) ? String(opts.subnet) : '';
+      let url = '';
+      if(mode === 'udp'){
+        url = `/agent/devices/discover/?mode=udp`;
+        if(targetSubnet) url += `&base=${encodeURIComponent(targetSubnet)}`;
+      } else {
+        url = `/agent/devices/discover/?base=${encodeURIComponent(targetSubnet)}`;
+      }
+      const resp = await fetch(url, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
+      setProgress(45);
       const data = await resp.json();
       setProgress(80);
       if(!data.ok){
-        setTable(`<tr><td colspan="3" class="td-center-error">Eroare: ${data.error || 'scan failed'}</td></tr>`);
+        const err = _escapeHtml(String(data.error || 'scan failed'));
+        const hint = data && (data.hint || data.data || data.last_error != null)
+          ? _escapeHtml(String(data.hint || data.data || 'last_error=' + data.last_error))
+          : '';
+        setTable(`<tr><td colspan="6" class="td-center-error">
+          <div>Eroare: ${err}</div>
+          ${hint ? `<div class="hint" style="margin-top:6px; white-space:pre-wrap;">${hint}</div>` : ''}
+        </td></tr>`);
         setProgress(100);
         return;
       }
-      if(!data.responsive || data.responsive.length === 0){
-        setTable('<tr><td colspan="3" class="td-center-muted">Nicio centrală găsită. Verifică firewall/ICMP.</td></tr>');
-        setProgress(100);
-        return;
+      const method = String(data.method || mode || 'n/a');
+      const devices = Array.isArray(data.devices) && data.devices.length
+        ? data.devices
+        : (Array.isArray(data.responsive) ? data.responsive.map(ip=>({ip, serial_number:'', mac:'', model:'', method })) : []);
+
+      setTable(_renderRows(devices, method, prevSet));
+      if(typeof setPrevSet === 'function'){
+        const next = new Set((Array.isArray(data.responsive) ? data.responsive : []).map(x=>String(x||'').trim()).filter(Boolean));
+        setPrevSet(next);
       }
-      const rows = data.responsive.map(ip => {
-        return `<tr>
-          <td>${ip}</td>
-          <td>${data.method || 'n/a'}</td>
-          <td>
-            <button type="button" data-ip="${ip}" class="btn-add">Adaugă</button>
-            <button type="button" data-ip="${ip}" class="btn-ip">Schimbă IP</button>
-          </td>
-        </tr>`;
-      }).join('');
-      setTable(rows);
+      if(setLastEl) setLastEl.textContent = 'Ultima actualizare: ' + _fmtNow();
       setProgress(100);
     } catch (err){
-      setTable(`<tr><td colspan="3" class="td-center-error">Eroare: ${err}</td></tr>`);
+      setTable(`<tr><td colspan="6" class="td-center-error">Eroare: ${err}</td></tr>`);
       setProgress(100);
     }
   }
 
-  async function quickAdd(ip){
-    const vals = await openPromptDialog({
-      title: 'Adaugă centrală',
-      message: `Date pentru ${ip}`,
-      okText: 'Salvează',
-      cancelText: 'Renunță',
-      fields: [
-        {name:'name', label:'Nume', placeholder:`Centrală ${ip}`, value:`Centrală ${ip}`, required:true},
-        {name:'serial', label:'Serie (opțional)', placeholder:'', value:''},
-        {name:'port', label:'Port', type:'number', placeholder:'4370', value:'4370'}
-      ]
-    });
-    if(!vals) return false;
-    const name = String(vals.name || `Centrală ${ip}`) || `Centrală ${ip}`;
-    const serial = String(vals.serial || '');
-    const port = parseInt(String(vals.port || '4370') || '4370', 10) || 4370;
-    const resp = await fetch('{% url "device-discover-apply" %}', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json','X-CSRFToken': getCSRF()},
-      body: JSON.stringify({action:'add', ip, name, serial_number: serial, port})
-    });
-    const data = await resp.json();
-    const ok = data && data.ok;
-    flash(areaFlash, ok ? `Centrală salvată (${data.id})` : (data.error || 'Eroare la salvare'), !ok);
-    return ok;
+  async function quickAdd(device){
+    const ip = String((device && device.ip) || device || '').trim();
+    const snPrefill = String((device && (device.serial_number || device.sn)) || '').trim();
+    const label = _deviceLabel(device || {}) || '';
+    const modelLabel = String((device && device.model) || '').trim();
+    const doorsCapacity = (()=>{
+      try{
+        const raw = (device && (device.doors_capacity != null ? device.doors_capacity : (device.doorsCapacity != null ? device.doorsCapacity : device.doors))) || '';
+        const n = parseInt(String(raw), 10);
+        return (n && n > 0) ? n : null;
+      }catch(e){
+        return null;
+      }
+    })();
+    const preferredPort = (()=>{
+      try{
+        const raw = (device && (device.port || device.commPort || device.comm_port || device.commport || device.CommPort)) || '';
+        const p = parseInt(String(raw), 10);
+        return p > 0 ? p : null;
+      }catch(e){
+        return null;
+      }
+    })();
+    const bestPort = preferredPort || _getBestPort(ip);
+    // Unified flow: open wizard identify modal directly (no prompt).
+    const name = (label ? `${label} (${ip})` : `Centrală ${ip}`);
+    const serial = snPrefill;
+    let port = parseInt(String(bestPort || 4370), 10) || 4370;
+    const commPassword = '';
+    const hardwareVersion = modelLabel;
+
+    // Best-effort reachability probe (do not block opening the wizard).
+    try{
+      const sweepBase = [14370, 4370, 4371, 4372, 5000, 5001, 6000, 8000, 8080];
+      const sweep = [port, ...sweepBase].filter((v, i, a)=> a.indexOf(v) === i);
+      const testUrl = '{% url "device-port-test" %}' + `?ip=${encodeURIComponent(ip)}&ports=${encodeURIComponent(sweep.join(','))}&quick=1`;
+      const tr = await fetch(testUrl, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
+      const td = await tr.json();
+      if(!(td && td.ok)){
+        try{ showMenuActionOverlay('Test conexiune: nu a răspuns', false, 1600); }catch(_e){}
+      }
+      try{
+        const isOpen = Boolean(td.open);
+        if(!isOpen){
+          const msg = td && td.message ? String(td.message) : 'Port închis / filtrat (continuă oricum).';
+          try{ showMenuActionOverlay(msg, false, 2200); }catch(_e){}
+        }
+        const bo = parseInt(String(td.best_open_port || td.port || ''), 10) || 0;
+        if(bo > 0 && bo !== port) port = bo;
+      }catch(_e){}
+    }catch(_e){
+      try{ showMenuActionOverlay('Test conexiune: eroare (continuă oricum)', false, 1600); }catch(__e){}
+    }
+
+    // Intended wizard flow: DO NOT save to DB here.
+    // Step 4: optionally run clear (blocking).
+    // Step 5+: open config modal (draft); DB create happens only on final save.
+    try{ if(ip && port) _bestPortByIp.set(ip, port); }catch(e){}
+
+    try{
+      // Close discovery UI (if open) and open create wizard.
+      try{ stopModalAuto(); closeModal(); }catch(_e){}
+
+      const baseUrl = '{% url "crud-device-create-access" %}';
+      const wizardToken = (function(){
+        try{
+          const a = Math.random().toString(36).slice(2, 10);
+          const b = Date.now().toString(36);
+          return 'wz_' + a + '_' + b;
+        }catch(_e){
+          return 'wz_' + String(Date.now());
+        }
+      })();
+      const qp = new URLSearchParams();
+      qp.set('wizard', '1');
+      qp.set('wizard_token', wizardToken);
+      qp.set('wizard_step', 'identify');
+      if(name) qp.set('name', name);
+      if(serial) qp.set('serial_number', serial);
+      if(hardwareVersion) qp.set('hardware_version', hardwareVersion);
+      if(ip) qp.set('ip_address', ip);
+      if(port) qp.set('port', String(port));
+      if(doorsCapacity) qp.set('doors_capacity', String(doorsCapacity));
+      const url = baseUrl + '?' + qp.toString();
+
+      try{
+        window.zkNewDeviceWizardActive = true;
+        window.zkNewDeviceWizardDeviceId = 0;
+        window.zkNewDeviceWizardDoorSaved = false;
+        window.zkNewDeviceWizardClearCommandId = 0;
+        window.zkNewDeviceWizardClearRequested = false;
+        window.zkNewDeviceWizardToken = wizardToken;
+        window.zkNewDeviceWizardNextUrl = url;
+      }catch(_e){}
+
+      if(typeof openDeviceModal === 'function') openDeviceModal(url, 'Identificare centrală');
+      return true;
+    }catch(e){
+      try{ showMenuActionOverlay('Eroare deschidere wizard', false, 3000); }catch(_e){}
+      return false;
+    }
   }
 
-  async function changeIp(ip){
-    const vals = await openPromptDialog({
+  async function changeIp(device){
+    const ip = String((device && device.ip) || device || '').trim();
+    const mac = String((device && device.mac) || '').trim();
+    const bestPort = _getBestPort(ip) || 4370;
+
+    // Prefill gateway/netmask should NOT block opening the prompt.
+    // Use fast defaults and try to fetch device values in the background (short timeout).
+    let prefillGateway = _guessGateway(ip);
+    let prefillMask = '255.255.255.0';
+    const initialGateway = String(prefillGateway || '').trim();
+    const initialMask = String(prefillMask || '').trim();
+
+    const prefillPromise = (async ()=>{
+      try{
+        const payload = { ip, port: bestPort, protocol: 'AUTO', items: 'NetMask,GATEIPAddress' };
+        const reqInit = {
+          method: 'POST',
+          headers: {
+            'Content-Type':'application/json',
+            'X-CSRFToken': getCSRF(),
+            'X-Requested-With':'XMLHttpRequest'
+          },
+          body: JSON.stringify(payload)
+        };
+
+        // Abort quickly so a slow/offline device doesn't stall the UI.
+        const timeoutMs = 1400;
+        let resp;
+        if(typeof AbortController !== 'undefined'){
+          const ctrl = new AbortController();
+          const to = window.setTimeout(()=>{ try{ ctrl.abort(); }catch(e){} }, timeoutMs);
+          try{
+            resp = await fetch('{% url "device-admin-test" %}', { ...reqInit, signal: ctrl.signal });
+          } finally {
+            try{ window.clearTimeout(to); }catch(e){}
+          }
+        } else {
+          resp = await fetch('{% url "device-admin-test" %}', reqInit);
+        }
+
+        const data = await resp.json();
+        if(!(data && data.ok && data.data)) return null;
+
+        const kv = {};
+        String(data.data || '').split(',').forEach(p=>{
+          const idx = p.indexOf('=');
+          if(idx > 0){
+            const k = p.slice(0, idx).trim();
+            const v = p.slice(idx+1).trim();
+            if(k) kv[k] = v;
+          }
+        });
+        return {
+          subnet_mask: kv.NetMask ? String(kv.NetMask) : '',
+          gateway: kv.GATEIPAddress ? String(kv.GATEIPAddress) : ''
+        };
+      }catch(e){
+        return null;
+      }
+    })();
+
+    const valsPromise = openPromptDialog({
       title: 'Schimbă IP',
       message: `Schimbare IP pentru ${ip}`,
       okText: 'Aplică',
       cancelText: 'Renunță',
       fields: [
+        ...(mac ? [{name:'mac', label:'MAC (detectat)', placeholder:'', value: mac}] : []),
         {name:'target', label:'IP nou', placeholder: ip, value: ip, required:true},
+        {name:'subnet_mask', label:'Subnet mask', placeholder:'255.255.255.0', value: String(prefillMask || '255.255.255.0'), required:true},
+        {name:'gateway', label:'Gateway', placeholder:_guessGateway(ip), value: String(prefillGateway || _guessGateway(ip) || ''), required:true},
+        {name:'port', label:'Port', type:'number', placeholder:'4370', value:String(bestPort)},
         {name:'device_id', label:'ID device existent (opțional)', placeholder:'', value:''},
         {name:'serial', label:'Serie existentă (opțional)', placeholder:'', value:''}
       ]
     });
+
+    // If prefill arrives while prompt is open, update fields only if the user didn't edit them.
+    prefillPromise.then((pf)=>{
+      try{
+        if(!pf) return;
+        if(!promptModal || !promptModal.classList || !promptModal.classList.contains('is-open')) return;
+
+        const nextMask = String(pf.subnet_mask || '').trim();
+        const nextGw = String(pf.gateway || '').trim();
+
+        const maskEl = document.getElementById('prompt_subnet_mask');
+        const gwEl = document.getElementById('prompt_gateway');
+
+        if(nextMask && maskEl){
+          const cur = String(maskEl.value || '').trim();
+          if(cur === initialMask){
+            maskEl.value = nextMask;
+            try{ if(_promptValues) _promptValues['subnet_mask'] = nextMask; }catch(e){}
+          }
+        }
+        if(nextGw && gwEl){
+          const cur = String(gwEl.value || '').trim();
+          if(cur === initialGateway){
+            gwEl.value = nextGw;
+            try{ if(_promptValues) _promptValues['gateway'] = nextGw; }catch(e){}
+          }
+        }
+      }catch(e){}
+    });
+
+    const vals = await valsPromise;
     if(!vals) return;
     const target = String(vals.target || '').trim();
     if(!target) return;
     const deviceId = String(vals.device_id || '').trim();
     const serial = String(vals.serial || '').trim();
+    const gateway = String(vals.gateway || '').trim();
+    const subnetMask = String(vals.subnet_mask || '').trim();
+    const port = parseInt(String(vals.port || '4370') || '4370', 10) || 4370;
+    const macVal = String(vals.mac || '').trim();
+
+    showMenuActionLoading('Se aplică', macVal ? 'Schimbare IP prin UDP...' : 'Schimbare IP prin TCP...');
     const resp = await fetch('{% url "device-discover-apply" %}', {
       method: 'POST',
       headers: {'Content-Type':'application/json','X-CSRFToken': getCSRF()},
-      body: JSON.stringify({action:'change_ip', ip, target_ip: target, device_id: deviceId, serial_number: serial})
+      body: JSON.stringify({
+        action: macVal ? 'modify_ip_udp' : 'change_ip',
+        ip,
+        mac: macVal,
+        target_ip: target,
+        gateway,
+        subnet_mask: subnetMask,
+        port,
+        device_id: deviceId,
+        serial_number: serial,
+      })
     });
     const data = await resp.json();
     const ok = data && data.ok;
-    flash(areaFlash, ok ? `IP actualizat la ${target}` : (data.error || 'Eroare schimbare IP'), !ok);
+    hideMenuActionOverlay();
+    const hardwareOk = Boolean(data && data.hardware_ok);
+    const visualOk = ok || hardwareOk;
+    const msg = ok
+      ? `IP schimbat cu succes: ${ip} → ${target}`
+      : (hardwareOk
+          ? String(data.hint || 'IP schimbat pe centrală, dar conflict în baza de date. Repornește scanarea.')
+          : String(data.error || 'Eroare schimbare IP'));
+    showMenuActionOverlay(msg, visualOk);
+    flash(areaFlash, msg, !visualOk);
+
+    // Only if the hardware change succeeded: update modal rows in real time.
+    if(visualOk){
+      _onIpChangedInUi(ip, target);
+    }
+  }
+
+  function _previewText(s, n){
+    try{
+      const t = String(s || '');
+      if(!n || n < 10) n = 220;
+      return t.length > n ? (t.slice(0, n) + '…') : t;
+    }catch(e){
+      return '';
+    }
+  }
+
+  async function adminTest(device){
+    const ip = String((device && device.ip) || device || '').trim();
+    if(!ip) return;
+    let port = (()=>{
+      try{
+        const p = parseInt(String(device && device.port || ''), 10);
+        return p > 0 ? p : null;
+      }catch(e){
+        return null;
+      }
+    })() || _getBestPort(ip);
+
+    // Never try plcommpro on common web ports by default.
+    if(port === 80 || port === 443){
+      port = 4370;
+    }
+
+    async function _callAdminTest(pw){
+      const payload = { ip, port, protocol: 'AUTO' };
+      if(pw) payload.password = String(pw);
+      const resp = await fetch('{% url "device-admin-test" %}', {
+        method: 'POST',
+        headers: {
+          'Content-Type':'application/json',
+          'X-CSRFToken': getCSRF(),
+          'X-Requested-With':'XMLHttpRequest'
+        },
+        body: JSON.stringify(payload)
+      });
+      return await resp.json();
+    }
+
+    try{
+      showMenuActionLoading('Test admin', `Verific portul TCP/${port}...`);
+      const portUrl = '{% url "device-port-test" %}' + `?ip=${encodeURIComponent(ip)}&port=${encodeURIComponent(port)}`;
+      const portResp = await fetch(portUrl, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
+      const portData = await portResp.json();
+      if(!portData || !portData.ok || !portData.open){
+        // Try a short sweep to find an alternative port, then retry.
+        const sweep = [14370, 4370, 4371, 4372, 5000, 5001, 6000, 8000, 8080, 80];
+        showMenuActionLoading('Test admin', 'Port blocat; caut port alternativ...');
+        const sweepUrl = '{% url "device-port-test" %}' + `?ip=${encodeURIComponent(ip)}&ports=${encodeURIComponent(sweep.join(','))}`;
+        const sweepResp = await fetch(sweepUrl, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
+        const sweepData = await sweepResp.json();
+        const best = (sweepData && sweepData.ok && sweepData.open && sweepData.port)
+          ? (parseInt(String(sweepData.port), 10) || null)
+          : null;
+        if(!best){
+          // Even if TCP looks blocked, plcommpro may still succeed via UDP on some controllers.
+          showMenuActionLoading('Test admin', 'TCP pare blocat; încerc plcommpro pe AUTO (TCP→UDP)...');
+          const data = await _callAdminTest('');
+          hideMenuActionOverlay();
+          if(!data || !data.ok){
+            showMenuActionOverlay('Admin blocat', false);
+            const attempts = Array.isArray(data && data.attempts) ? data.attempts : [];
+            const attText = attempts.length
+              ? attempts.map(a=>`${a.protocol||'?'}:${a.ok?'ok':(a.last_error||a.result||'fail')}`).join(' | ')
+              : '';
+            const more = [attText, data && data.error, data && data.hint].filter(Boolean).join(' | ');
+            flash(areaFlash, more || 'Nu s-a putut administra centrala (TCP/UDP).', true);
+            return;
+          }
+          showMenuActionOverlay('Administrare OK', true);
+          const preview = _previewText(data.data || '', 300);
+          flash(areaFlash, preview ? (`(${data.protocol||'?'}) Parametri: ${preview}`) : `Administrare OK (${data.protocol||'?'}).`, false);
+          return;
+        }
+
+        _bestPortByIp.set(ip, best);
+        port = best;
+      }
+
+      showMenuActionLoading('Test admin', `Conectare plcommpro + GetDeviceParam (${port})...`);
+      let data = await _callAdminTest('');
+      hideMenuActionOverlay();
+      if(!data || !data.ok){
+        // Common case: device has a communication password; allow operator to retry.
+        const pwVals = await openPromptDialog({
+          title: 'Test admin - parolă comunicație',
+          message: 'Dacă centrala are setată o parolă de comunicație, introdu-o și reîncercăm.',
+          okText: 'Reîncearcă',
+          cancelText: 'Renunță',
+          fields: [
+            {name:'comm_password', label:'Parolă comunicație', type:'password', placeholder:'', value:''},
+          ]
+        });
+        const retryPw = pwVals ? String(pwVals.comm_password || '').trim() : '';
+        if(retryPw){
+          showMenuActionLoading('Test admin', 'Reîncearcă cu parolă...');
+          data = await _callAdminTest(retryPw);
+          hideMenuActionOverlay();
+        }
+
+        if(!data || !data.ok){
+          showMenuActionOverlay('Connect eșuat', false);
+          const attempts = Array.isArray(data && data.attempts) ? data.attempts : [];
+          const attText = attempts.length
+            ? attempts.map(a=>`${a.protocol||'?'}:${a.ok?'ok':(a.last_error||a.result||'fail')}`).join(' | ')
+            : '';
+          const more = [attText, data && data.error, data && data.hint].filter(Boolean).join(' | ');
+          flash(areaFlash, more || 'Eroare: nu s-a putut administra centrala.', true);
+          return;
+        }
+      }
+      showMenuActionOverlay('Administrare OK', true);
+      const preview = _previewText(data.data || '', 300);
+      flash(areaFlash, preview ? (`(${data.protocol||'?'}) Parametri: ${preview}`) : `Administrare OK (${data.protocol||'?'}).`, false);
+    } catch (e){
+      hideMenuActionOverlay();
+      showMenuActionOverlay('Eroare test admin', false);
+      flash(areaFlash, `Eroare: ${e}`, true);
+    }
   }
 
   function bindInlineActions(container){
+    container.querySelectorAll('.btn-edit').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const idNum = parseInt(String(btn.dataset.deviceId || ''), 10) || 0;
+        if(!(idNum > 0)) return;
+        try{ stopModalAuto(); closeModal(); }catch(_e){}
+        try{
+          const tmpl = '{% url "crud-device-edit-access" 0 %}';
+          const editUrl = tmpl.replace('/0/', '/' + encodeURIComponent(String(idNum)) + '/');
+          if(typeof openDeviceModal === 'function') openDeviceModal(editUrl, 'Configurare centrală');
+        }catch(_e){}
+      });
+    });
     container.querySelectorAll('.btn-add').forEach(btn => {
-      btn.addEventListener('click', async () => { const ip = btn.dataset.ip; await quickAdd(ip); });
+      btn.addEventListener('click', async () => {
+        const device = {ip: btn.dataset.ip, port: btn.dataset.port, mac: btn.dataset.mac, serial_number: btn.dataset.sn, model: btn.dataset.model, doors_capacity: btn.dataset.doors};
+        await quickAdd(device);
+      });
+    });
+    container.querySelectorAll('.btn-admin').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const device = {ip: btn.dataset.ip, port: btn.dataset.port};
+        await adminTest(device);
+      });
     });
     container.querySelectorAll('.btn-ip').forEach(btn => {
-      btn.addEventListener('click', async () => { const ip = btn.dataset.ip; await changeIp(ip); });
+      btn.addEventListener('click', async () => {
+        const device = {ip: btn.dataset.ip, mac: btn.dataset.mac};
+        await changeIp(device);
+      });
     });
+
+    container.querySelectorAll('.btn-fw').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const ip = btn.dataset.ip;
+        const port = btn.dataset.port || '4370';
+        const td = btn.closest('td');
+        const badge = td ? td.querySelector('[data-adminprobe="tcp"]') : null;
+        await ensureFirewallAllow(ip, port, badge, false);
+      });
+    });
+
+    _probeTcpBadges(container);
   }
 
-  modalStart?.addEventListener('click', () => {
-    const subnet = modalSubnet.value.trim() || subnetInput?.value.trim() || '';
-    if(!subnet){ modalSubnet.focus(); return; }
-    modalResults.innerHTML = '<tr><td colspan="3" class="td-center-muted">Scanare în curs...</td></tr>';
-    runScan(subnet, (val)=>{ modalProgress.style.width = `${val}%`; }, (html)=>{ modalResults.innerHTML = html; bindInlineActions(modalResults); });
+  modalStart?.addEventListener('click', async () => {
+    // Toggle stop if auto timer is running
+    if(_discoverTimerModal){
+      _setModalStartState('stopping');
+      stopModalAuto();
+      window.setTimeout(()=>_setModalStartState('idle'), 140);
+      return;
+    }
+
+    const mode = String(discoverMode?.value || 'udp');
+    const subnet = (modalSubnet.value.trim() || subnetInput?.value.trim() || '').trim();
+    if(mode !== 'udp' && !subnet){ modalSubnet.focus(); return; }
+    modalResults.innerHTML = '<tr><td colspan="6" class="td-center-muted">Căutare în curs...</td></tr>';
+    _setModalStartState('running');
+    await runScan({mode, subnet},
+      (val)=>{ modalProgress.style.width = `${val}%`; },
+      (html)=>{ modalResults.innerHTML = html; bindInlineActions(modalResults); },
+      _lastModalIps,
+      (s)=>{ _lastModalIps = s; },
+      discoverLast
+    );
+
+    stopModalAuto();
+    if(discoverAuto && discoverAuto.checked){
+      const iv = parseInt(String(discoverInterval?.value || '5'), 10) || 5;
+      _discoverTimerModal = setInterval(()=>{
+        runScan({mode, subnet},
+          (val)=>{ modalProgress.style.width = `${val}%`; },
+          (html)=>{ modalResults.innerHTML = html; bindInlineActions(modalResults); },
+          _lastModalIps,
+          (s)=>{ _lastModalIps = s; },
+          discoverLast
+        );
+      }, Math.max(2, iv) * 1000);
+      _setModalStartState('running');
+    } else {
+      _setModalStartState('idle');
+    }
   });
 
   document.getElementById('btnStartScan')?.addEventListener('click', () => {
+    const mode = String(discoverModeInline?.value || 'udp');
     const subnet = subnetInput.value.trim();
-    if(!subnet){ subnetInput.value = ''; subnetInput.placeholder = 'ex: 192.168.1'; subnetInput.focus(); return; }
-    scanResultsTbl.innerHTML = '<tr><td colspan="3" class="td-center-muted">Scanare în curs...</td></tr>';
-    runScan(subnet, (val)=>{ scanProgress.style.width = `${val}%`; }, (html)=>{ scanResultsTbl.innerHTML = html; bindInlineActions(scanResultsTbl); });
+    if(mode !== 'udp' && !subnet){ subnetInput.value = ''; subnetInput.placeholder = 'ex: 192.168.1'; subnetInput.focus(); return; }
+    scanResultsTbl.innerHTML = '<tr><td colspan="6" class="td-center-muted">Căutare în curs...</td></tr>';
+    runScan({mode, subnet},
+      (val)=>{ scanProgress.style.width = `${val}%`; },
+      (html)=>{ scanResultsTbl.innerHTML = html; bindInlineActions(scanResultsTbl); },
+      _lastInlineIps,
+      (s)=>{ _lastInlineIps = s; },
+      null
+    );
+
+    stopInlineAuto();
+    if(discoverAutoInline && discoverAutoInline.checked){
+      _discoverTimerInline = setInterval(()=>{
+        runScan({mode, subnet},
+          (val)=>{ scanProgress.style.width = `${val}%`; },
+          (html)=>{ scanResultsTbl.innerHTML = html; bindInlineActions(scanResultsTbl); },
+          _lastInlineIps,
+          (s)=>{ _lastInlineIps = s; },
+          null
+        );
+      }, 5000);
+    }
   });
 
   btnQuickAdd?.addEventListener('click', () => {
@@ -1527,6 +2680,376 @@
 
   let currentDeviceModalUrl = null;
 
+  // Nested modal stack (wizard door edit): keep the underlying config modal alive.
+  // IMPORTANT: store the original DOM nodes (not clones) so any event listeners
+  // and widget state remain intact when we restore the previous modal.
+  let _deviceModalStack = [];
+  function _deviceModalStackPush(){
+    try{
+      const content = document.getElementById('deviceCreateContent');
+      if(!content) return;
+      const header = document.getElementById('deviceCreateTitle');
+      const title = header ? String(header.textContent || '') : '';
+      const nodes = Array.from(content.childNodes || []);
+      _deviceModalStack.push({
+        title: title,
+        url: currentDeviceModalUrl || '',
+        nodes: nodes,
+        scrollTop: content.scrollTop || 0,
+      });
+    }catch(_e){}
+  }
+  function _deviceModalStackClear(){
+    try{ _deviceModalStack = []; }catch(_e){ _deviceModalStack = []; }
+  }
+  function _deviceModalStackPopRestore(){
+    try{
+      if(!_deviceModalStack || _deviceModalStack.length === 0) return false;
+      const st = _deviceModalStack.pop();
+      if(!st) return false;
+
+      const header = document.getElementById('deviceCreateTitle');
+      if(header) header.textContent = st.title || 'Dispozitiv';
+      const content = document.getElementById('deviceCreateContent');
+      if(content){
+        content.innerHTML = '';
+        try{
+          const kids = Array.from(st.nodes || []);
+          kids.forEach(n => { try{ content.appendChild(n); }catch(_e0){} });
+        }catch(_e2){
+          // Fallback: nothing to restore
+        }
+        try{ content.scrollTop = st.scrollTop || 0; }catch(_e4){}
+      }
+      currentDeviceModalUrl = st.url || currentDeviceModalUrl;
+      try{ wireDeviceModalBody(); }catch(_e5){}
+      return true;
+    }catch(_e){
+      return false;
+    }
+  }
+
+  let _wizardContinueClick = null;
+  let _wizardContinueTimer = null;
+
+  function _wizardSuspendDeviceModal(){
+    try{
+      if(!deviceCreateModal) return;
+      if(deviceCreateModal.dataset.wizardSuspended === '1') return;
+      deviceCreateModal.dataset.wizardPrevVisibility = String(deviceCreateModal.style.visibility || '');
+      deviceCreateModal.dataset.wizardPrevPointerEvents = String(deviceCreateModal.style.pointerEvents || '');
+      // Hide the whole modal (step 4) so the centered message is the only UI surface.
+      deviceCreateModal.style.visibility = 'hidden';
+      deviceCreateModal.style.pointerEvents = 'none';
+      deviceCreateModal.dataset.wizardSuspended = '1';
+    }catch(_e){}
+  }
+
+  function _wizardUnsuspendDeviceModal(){
+    try{
+      if(!deviceCreateModal) return;
+      if(deviceCreateModal.dataset.wizardSuspended !== '1') return;
+      const prevVis = String(deviceCreateModal.dataset.wizardPrevVisibility || '');
+      const prevPe = String(deviceCreateModal.dataset.wizardPrevPointerEvents || '');
+      deviceCreateModal.style.visibility = prevVis;
+      deviceCreateModal.style.pointerEvents = prevPe;
+      delete deviceCreateModal.dataset.wizardPrevVisibility;
+      delete deviceCreateModal.dataset.wizardPrevPointerEvents;
+      delete deviceCreateModal.dataset.wizardSuspended;
+    }catch(_e){}
+  }
+
+  function _wizardContinueSetState(state){
+    const el = document.getElementById('wizardContinueOverlay');
+    if(!el) return;
+    el.classList.remove('success','error','loading');
+    if(state === 'success') el.classList.add('success');
+    else if(state === 'error') el.classList.add('error');
+    else el.classList.add('loading');
+    try {
+      const bar = el.querySelector('.bar');
+      if(bar) bar.innerHTML = '<div></div>';
+    } catch(e) {}
+  }
+
+  function showWizardContinueOverlay(opts){
+    const el = document.getElementById('wizardContinueOverlay');
+    if(!el) return;
+    const t = document.getElementById('wizardContinueTitle');
+    const m = document.getElementById('wizardContinueMsg');
+    if(t) t.textContent = (opts && opts.title) ? String(opts.title) : 'Ștergere date';
+    if(m) m.textContent = (opts && opts.message) ? String(opts.message) : '';
+    _wizardContinueClick = (opts && typeof opts.onClick === 'function') ? opts.onClick : null;
+    _wizardContinueSetState((opts && opts.state) ? String(opts.state) : 'loading');
+    el.style.display = 'flex';
+    el.setAttribute('aria-hidden', 'false');
+    // Suspend the underlying identify/config modal while the overlay is active.
+    _wizardSuspendDeviceModal();
+  }
+
+  function updateWizardContinueOverlay(opts){
+    const el = document.getElementById('wizardContinueOverlay');
+    if(!el || el.style.display === 'none') return;
+    const t = document.getElementById('wizardContinueTitle');
+    const m = document.getElementById('wizardContinueMsg');
+    if(t && opts && typeof opts.title !== 'undefined') t.textContent = String(opts.title);
+    if(m && opts && typeof opts.message !== 'undefined') m.textContent = String(opts.message);
+    if(opts && opts.state) _wizardContinueSetState(String(opts.state));
+  }
+
+  function hideWizardContinueOverlay(){
+    const el = document.getElementById('wizardContinueOverlay');
+    if(!el) return;
+    el.style.display = 'none';
+    el.setAttribute('aria-hidden', 'true');
+    el.classList.remove('success','error','loading');
+    _wizardContinueClick = null;
+    try{ if(_wizardContinueTimer) window.clearInterval(_wizardContinueTimer); }catch(_e){}
+    _wizardContinueTimer = null;
+    // Restore the modal surface (used when wipe fails / user dismisses error).
+    _wizardUnsuspendDeviceModal();
+  }
+
+  (function wireWizardContinueOverlay(){
+    const panel = document.getElementById('wizardContinuePanel');
+    const overlay = document.getElementById('wizardContinueOverlay');
+    if(!panel || !overlay) return;
+    if(panel.dataset.wired === '1') return;
+    panel.dataset.wired = '1';
+    overlay.dataset.wired = '1';
+
+    try{
+      const btnBack = document.getElementById('wizardContinueBackBtn');
+      if(btnBack && btnBack.dataset.wired !== '1'){
+        btnBack.dataset.wired = '1';
+        btnBack.addEventListener('click', (e)=>{
+          try{ e.preventDefault(); e.stopPropagation(); }catch(_e){}
+          // Only meaningful on error state; harmless otherwise.
+          hideWizardContinueOverlay();
+        });
+      }
+    }catch(_e){}
+
+    function fire(){
+      try{
+        const ov = document.getElementById('wizardContinueOverlay');
+        // If clear failed, allow dismiss so the UI isn't blocked.
+        if(ov && ov.classList && ov.classList.contains('error')){
+          hideWizardContinueOverlay();
+          return;
+        }
+        // If clear succeeded, but the click handler wasn't set for some reason,
+        // still allow dismiss so the UI doesn't stay blocked.
+        if(ov && ov.classList && ov.classList.contains('success') && typeof _wizardContinueClick !== 'function'){
+          hideWizardContinueOverlay();
+          return;
+        }
+        if(typeof _wizardContinueClick === 'function'){
+          const fn = _wizardContinueClick;
+          hideWizardContinueOverlay();
+          fn();
+        }
+      }catch(_e){}
+    }
+
+    // Click on panel OR backdrop should trigger (users often click outside the panel).
+    panel.addEventListener('click', (e)=>{ e.preventDefault(); e.stopPropagation(); fire(); });
+    overlay.addEventListener('click', (e)=>{
+      if(e && e.target === overlay){
+        e.preventDefault();
+        fire();
+      }
+    });
+    panel.addEventListener('keydown', (e)=>{
+      const k = e && e.key ? String(e.key) : '';
+      if(k === 'Escape'){
+        // Only dismiss on error (do not allow cancel while running).
+        const ov = document.getElementById('wizardContinueOverlay');
+        if(ov && ov.classList && ov.classList.contains('error')){
+          e.preventDefault();
+          hideWizardContinueOverlay();
+        }
+        return;
+      }
+      if(k === 'Enter' || k === ' '){ e.preventDefault(); fire(); }
+    });
+  })();
+
+  function startWizardClearOverlayPolling(cmdId){
+    try{ if(_wizardContinueTimer) window.clearInterval(_wizardContinueTimer); }catch(_e){}
+    _wizardContinueTimer = null;
+    const idNum = parseInt(String(cmdId || ''), 10) || 0;
+    if(!(idNum > 0)) return;
+
+    let ticks = 0;
+    const maxTicks = 140;
+
+    function _wizardUpdateNextUrlFromClearResult(resultText){
+      try{
+        const res = String(resultText || '');
+        if(!res) return;
+
+        // Detect auto-selected port from backend: 'port=4370'
+        const m = res.match(/(?:^|;|\s)port=(\d{2,5})(?:$|;|\s)/);
+        const portUsed = m ? (parseInt(String(m[1] || ''), 10) || 0) : 0;
+        const blankPw = /(?:^|;|\s)pw=blank(?:$|;|\s)/.test(res);
+        if(!(portUsed > 0)) return;
+
+        try{
+          const nxt = String(window.zkNewDeviceWizardNextUrl || '').trim();
+          if(!nxt) return;
+          const u = new URL(nxt, window.location.origin);
+          u.searchParams.set('port', String(portUsed));
+          if(blankPw){
+            // If controller uses no comm password, ensure we don't carry a stale password.
+            u.searchParams.delete('comm_password');
+          }
+          const updated = u.pathname + '?' + u.searchParams.toString();
+          window.zkNewDeviceWizardNextUrl = updated;
+        }catch(_e){}
+      }catch(_e){}
+    }
+
+    function _wizardBuildClearErrorMessage(resultText){
+      try{
+        const res = String(resultText || '').trim();
+        const lines = [];
+        lines.push('Ștergere date: eșuată.');
+
+        let ipGuess = '';
+        try{
+          const nxt = String(window.zkNewDeviceWizardNextUrl || '').trim();
+          if(nxt){
+            const u = new URL(nxt, window.location.origin);
+            ipGuess = String(u.searchParams.get('ip_address') || '').trim();
+          }
+        }catch(_e){}
+
+        try{
+          const mOpen = res.match(/(?:^|;|\s)tcpopen=([0-9,]{2,64})(?:$|;|\s)/);
+          if(mOpen && mOpen[1]){
+            const ports = String(mOpen[1]).split(',').map(s=>String(s).trim()).filter(Boolean);
+            if(ports.length){
+              lines.push('Porturi TCP deschise: ' + ports.join(', ') + '.');
+              try{
+                if(ipGuess && ports.indexOf('443') >= 0){
+                  lines.push('Interfață web: https://' + ipGuess + '/login.html');
+                }
+              }catch(_e){}
+            }
+          }
+        }catch(_e){}
+
+        const isTimeout = /Bridge timed out|bridge_error:.*timed out/i.test(res);
+        const isConnectFail = /connect failed/i.test(res);
+        if(isTimeout){
+          lines.push('SDK: timeout (port acceptă conexiune, dar nu răspunde plcommpro).');
+        }else if(isConnectFail){
+          lines.push('SDK: connect failed.');
+        }
+
+        lines.push('Verifică: portul de comunicare SDK/COMM din centrală (uzual 4370), parola de comunicare, firewall/ACL, și că IP-ul este al centralei (nu un bridge).');
+        lines.push('Proces blocat. (Click pentru închidere)');
+        return lines.join('\n');
+      }catch(_e){
+        const tail = resultText ? (': ' + String(resultText)) : '';
+        return 'Ștergere date: eșuată' + tail + '\nProces blocat. (Click pentru închidere)';
+      }
+    }
+
+    _wizardContinueTimer = window.setInterval(async ()=>{
+      try{
+        const el = document.getElementById('wizardContinueOverlay');
+        if(!el || el.style.display === 'none'){
+          window.clearInterval(_wizardContinueTimer);
+          _wizardContinueTimer = null;
+          return;
+        }
+
+        ticks++;
+        if(ticks > maxTicks){
+          updateWizardContinueOverlay({
+            state: 'error',
+            title: 'Ștergere date',
+            message: 'Ștergere date: nu s-a confirmat finalizarea (timeout).\nProces blocat. (Click pentru închidere)'
+          });
+          try{ _wizardContinueClick = null; }catch(_e){}
+          window.clearInterval(_wizardContinueTimer);
+          _wizardContinueTimer = null;
+          return;
+        }
+
+        const url = `/agent/api/commands/${encodeURIComponent(String(idNum))}/status/`;
+        const resp = await fetch(url, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
+        const data = await resp.json();
+        if(!(data && data.ok)){
+          const err = (data && data.error) ? String(data.error) : 'status unavailable';
+          updateWizardContinueOverlay({
+            state: 'error',
+            title: 'Ștergere date',
+            message: `Ștergere date: eșuată: ${err}\nProces blocat. (Click pentru închidere)`
+          });
+          try{ _wizardContinueClick = null; }catch(_e){}
+          window.clearInterval(_wizardContinueTimer);
+          _wizardContinueTimer = null;
+          return;
+        }
+
+        const st = String(data.status || '').toUpperCase();
+        const res = (data.result != null) ? String(data.result) : '';
+
+        // While running, backend may already report the working port/password markers.
+        try{ _wizardUpdateNextUrlFromClearResult(res); }catch(_e){}
+
+        if(st === 'OK'){
+          updateWizardContinueOverlay({
+            state: 'success',
+            title: 'Ștergere date',
+            message: 'Ștergere date: finalizată cu succes.\nApasă pentru continuare.'
+          });
+          try{
+            const nxt = String(window.zkNewDeviceWizardNextUrl || '').trim();
+            if(nxt) _wizardContinueClick = ()=>{ try{ openDeviceModal(nxt, 'Configurare centrală nouă'); }catch(_e){} };
+          }catch(_e){}
+          window.clearInterval(_wizardContinueTimer);
+          _wizardContinueTimer = null;
+          return;
+        }
+
+        if(st === 'ERR' || st === 'ERROR' || st === 'FAILED'){
+          updateWizardContinueOverlay({
+            state: 'error',
+            title: 'Ștergere date',
+            message: _wizardBuildClearErrorMessage(res)
+          });
+          try{ _wizardContinueClick = null; }catch(_e){}
+          window.clearInterval(_wizardContinueTimer);
+          _wizardContinueTimer = null;
+          return;
+        }
+
+        if(st === 'RUNNING'){
+          updateWizardContinueOverlay({
+            state: 'loading',
+            title: 'Ștergere date',
+            message: 'Ștergere date: în curs...'
+          });
+          try{ _wizardContinueClick = null; }catch(_e){}
+          return;
+        }
+
+        updateWizardContinueOverlay({
+          state: 'loading',
+          title: 'Ștergere date',
+          message: 'Ștergere date: în așteptare (pusă în coadă)...'
+        });
+        try{ _wizardContinueClick = null; }catch(_e){}
+      }catch(_e){
+        // transient errors: keep polling
+      }
+    }, 1000);
+  }
+
   function showMenuActionOverlay(message, ok){
     const el = document.getElementById('menuActionOverlay');
     if(!el) return;
@@ -1537,7 +3060,9 @@
     el.classList.remove('success','error','loading');
     el.classList.add(ok ? 'success' : 'error');
     el.style.display = 'flex';
-    setTimeout(()=>{ el.style.display = 'none'; }, 1100);
+    const holdMs = arguments.length >= 3 ? arguments[2] : null;
+    const ms = (typeof holdMs === 'number' && holdMs > 0) ? holdMs : (ok ? 1100 : 2600);
+    setTimeout(()=>{ el.style.display = 'none'; }, ms);
   }
 
   function showMenuActionLoading(title, message){
@@ -1564,6 +3089,62 @@
     el.classList.remove('success','error','loading');
   }
 
+  let _menuSyncPollTimer = null;
+  function syncDevicePersonnelMenu(deviceId, deviceName){
+    try{ if(_menuSyncPollTimer){ clearInterval(_menuSyncPollTimer); _menuSyncPollTimer = null; } }catch(e){}
+    const dn = (deviceName || ('#' + String(deviceId||'')));
+    showMenuActionLoading('Sincronizare', `Se sincronizează server → centrală (${dn})...`);
+    fetch(`/agent/api/devices/${encodeURIComponent(String(deviceId))}/sync-personnel/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type':'application/json',
+        'X-CSRFToken': getCSRF(),
+      },
+      body: '{}'
+    })
+    .then(async (r)=>{
+      let data = {};
+      try{ data = await r.json(); }catch(e){ data = {}; }
+      if(!r.ok || !data || !data.ok){
+        const err = (data && (data.error || data.detail || data.message)) ? (data.error || data.detail || data.message) : (`HTTP ${r.status}`);
+        throw new Error(String(err));
+      }
+      const cmdId = parseInt(String(data.command_id || 0), 10) || 0;
+      if(!(cmdId > 0)) throw new Error('missing-command-id');
+      _menuSyncPollTimer = setInterval(()=>{
+        fetch(`/agent/api/commands/${encodeURIComponent(String(cmdId))}/status/`)
+          .then(rr=>rr.json())
+          .then(res=>{
+            const st = String(res.status || '').toUpperCase();
+            const result = String(res.result || '').trim();
+            if(st === 'OK'){
+              try{ clearInterval(_menuSyncPollTimer); }catch(e){}
+              _menuSyncPollTimer = null;
+              showMenuActionOverlay('Sincronizare: finalizată cu succes.', true, 1100);
+              return;
+            }
+            if(st === 'ERR' || st === 'ERROR' || st === 'FAILED'){
+              try{ clearInterval(_menuSyncPollTimer); }catch(e){}
+              _menuSyncPollTimer = null;
+              showMenuActionOverlay('Sincronizare eșuată: ' + (result || 'ERR'), false, 2600);
+              return;
+            }
+            if(st === 'RUNNING'){
+              showMenuActionLoading('Sincronizare', 'Sincronizare: în curs...');
+              return;
+            }
+            showMenuActionLoading('Sincronizare', 'Sincronizare: în așteptare (pusă în coadă)...');
+          })
+          .catch(_e=>{ /* transient */ });
+      }, 1000);
+    })
+    .catch((e)=>{
+      const msg = String(e && e.message ? e.message : e);
+      showMenuActionOverlay('Sincronizare: nu a pornit (' + msg + ')', false, 2600);
+    });
+  }
+  try{ window.syncDevicePersonnelMenu = syncDevicePersonnelMenu; }catch(e){}
+
   function deviceModalHasActionModal(){
     return Boolean(window.zkActionModal && typeof window.zkActionModal.open === 'function' && typeof window.zkActionModal.setState === 'function');
   }
@@ -1578,6 +3159,473 @@
     const content = document.getElementById('deviceCreateContent');
     if(!content) return;
 
+    // Door editor: make modal compact (avoid the "two windows" giant layout)
+    try{
+      const modalEl = deviceCreateModal ? deviceCreateModal.querySelector('.modal') : null;
+      const isDoorForm = !!content.querySelector('form[data-door-form="1"]');
+      if(modalEl && modalEl.classList){
+        modalEl.classList.toggle('is-door-form', isDoorForm);
+      }
+    }catch(_e){}
+
+    function _wizardSyncFromContent(){
+      try{
+        const stepEl = content.querySelector('input[name="wizard_step"]');
+        const tokEl = content.querySelector('input[name="wizard_token"]');
+        const step = stepEl ? String(stepEl.value || '').trim().toLowerCase() : '';
+        const tok = tokEl ? String(tokEl.value || '').trim() : '';
+
+        if(tok){
+          try{ window.zkNewDeviceWizardToken = tok; }catch(_e){}
+          try{ window.zkNewDeviceWizardActive = true; }catch(_e){}
+        }
+
+        // Keep a stable "next" URL so door-edit returns to the config modal.
+        if(tok && step){
+          const qp = new URLSearchParams();
+          qp.set('wizard', '1');
+          qp.set('wizard_token', tok);
+          qp.set('wizard_step', step);
+          const nextUrl = '/agent/crud/devices/new-access/?' + qp.toString();
+          try{ window.zkNewDeviceWizardNextUrl = nextUrl; }catch(_e){}
+        }
+
+        // Title should reflect step transitions.
+        try{
+          const header = document.getElementById('deviceCreateTitle');
+          if(header){
+            if(step === 'identify') header.textContent = 'Identificare centrală';
+            else if(step === 'config') header.textContent = 'Configurare centrală';
+          }
+        }catch(_e){}
+      }catch(_e){}
+    }
+
+    function _wireWizardClearProgressCard(){
+      try{
+        const card = content.querySelector('#wizClearCard');
+        if(!card) return;
+        if(card.getAttribute('data-wired') === '1') return;
+        card.setAttribute('data-wired', '1');
+
+        const wizardToken = String(card.getAttribute('data-wizard-token') || '').trim();
+        const ip = String(card.getAttribute('data-device-ip') || '').trim();
+        const port = parseInt(String(card.getAttribute('data-device-port') || '4370'), 10) || 4370;
+        const commPassword = String(card.getAttribute('data-comm-password') || '').trim();
+
+        const statusEl = content.querySelector('#wizClearStatus');
+        const btnContinue = content.querySelector('#wizClearContinue');
+        const btnRetry = content.querySelector('#wizClearRetry');
+
+        function setStatus(text, variant){
+          try{
+            if(statusEl) statusEl.textContent = String(text || '');
+            if(statusEl){
+              statusEl.style.borderColor = (variant === 'ok') ? '#2da44e' : (variant === 'err' ? '#ff6b6b' : '#3d6a8b');
+            }
+          }catch(_e){}
+        }
+
+        function buildConfigUrl(){
+          const qp = new URLSearchParams();
+          qp.set('wizard', '1');
+          if(wizardToken) qp.set('wizard_token', wizardToken);
+          qp.set('wizard_step', 'config');
+          return '/agent/crud/devices/new-access/?' + qp.toString();
+        }
+
+        async function pollCommand(commandId){
+          const cmdId = parseInt(String(commandId || ''), 10) || 0;
+          if(!(cmdId > 0)){
+            setStatus('✗ Lipsește command_id.', 'err');
+            if(btnRetry) btnRetry.style.display = '';
+            return;
+          }
+
+          let ticks = 0;
+          const maxTicks = 140;
+          async function step(){
+            try{
+              ticks++;
+              if(ticks > maxTicks){
+                setStatus('✗ Timeout: nu s-a confirmat finalizarea.', 'err');
+                if(btnRetry) btnRetry.style.display = '';
+                return;
+              }
+              const resp = await fetch(`/agent/api/commands/${encodeURIComponent(String(cmdId))}/status/`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+              const data = await resp.json();
+              if(!(data && data.ok)){
+                const err = (data && data.error) ? String(data.error) : 'status-failed';
+                setStatus('✗ Eroare status: ' + err, 'err');
+                if(btnRetry) btnRetry.style.display = '';
+                return;
+              }
+              const item = data.item || data;
+              const st = String(item.status || '').toUpperCase();
+              const res = String(item.result || '').trim();
+              if(st === 'OK'){
+                setStatus('✓ Ștergere finalizată (OK).' + (res ? (' Detalii: ' + res) : ''), 'ok');
+                if(btnContinue) btnContinue.disabled = false;
+                return;
+              }
+              if(st === 'ERR' || st === 'ERROR' || st === 'FAILED'){
+                setStatus('✗ Ștergere eșuată.' + (res ? (' Detalii: ' + res) : ''), 'err');
+                if(btnRetry) btnRetry.style.display = '';
+                return;
+              }
+              setStatus('⏳ Ștergere în curs...' + (res ? (' (' + res + ')') : ''), 'run');
+              window.setTimeout(step, 900);
+            }catch(e){
+              setStatus('✗ Eroare status: ' + (e && e.message ? e.message : e), 'err');
+              if(btnRetry) btnRetry.style.display = '';
+            }
+          }
+          step();
+        }
+
+        async function startClear(){
+          try{
+            if(btnContinue) btnContinue.disabled = true;
+            if(btnRetry) btnRetry.style.display = 'none';
+            if(!wizardToken || !ip){
+              setStatus('✗ Date lipsă pentru ștergere (wizard_token / IP).', 'err');
+              if(btnRetry) btnRetry.style.display = '';
+              return;
+            }
+            setStatus('⏳ Pornește ștergerea datelor...', 'run');
+
+            const payload = { ip: ip, port: port, wizard_token: wizardToken };
+            if(commPassword) payload.comm_password = commPassword;
+            const resp = await fetch('{% url "wizard-clear-device" %}', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+              body: JSON.stringify(payload)
+            });
+            const data = await resp.json();
+            if(!(data && data.ok && data.command_id)){
+              const msg = (data && (data.error || data.message)) ? String(data.error || data.message) : 'Nu am putut iniția ștergerea';
+              setStatus('✗ Eroare inițiere: ' + msg, 'err');
+              if(btnRetry) btnRetry.style.display = '';
+              return;
+            }
+            pollCommand(data.command_id);
+          }catch(e){
+            setStatus('✗ Eroare inițiere: ' + (e && e.message ? e.message : e), 'err');
+            if(btnRetry) btnRetry.style.display = '';
+          }
+        }
+
+        if(btnContinue){
+          btnContinue.addEventListener('click', (e)=>{
+            e.preventDefault();
+            if(btnContinue.disabled) return;
+            const url = buildConfigUrl();
+            try{ openDeviceModal(url, '⚙️ Configurare centrală'); }catch(_e){}
+          });
+        }
+        if(btnRetry){
+          btnRetry.addEventListener('click', (e)=>{
+            e.preventDefault();
+            startClear();
+          });
+        }
+
+        // auto-start
+        startClear();
+      }catch(_e){}
+    }
+
+    function _isDeviceAccessForm(formEl){
+      try{
+        if(!formEl) return false;
+        // Device create/edit fragments include comm/device specific fields.
+        return Boolean(formEl.querySelector('[name="device_type"], [name="comm_mode"], [name="ip_address"], [name="rs485_port"], [name="port"]'));
+      }catch(_e){
+        return false;
+      }
+    }
+
+    function _isWizardUrl(url){
+      try{
+        const u = String(url || '');
+        return /[?&]wizard=1(\b|&|$)/.test(u);
+      }catch(_e){
+        return false;
+      }
+    }
+
+    function _appendWizard(url){
+      try{
+        const u = String(url || '').trim();
+        if(!u) return u;
+        let out = u;
+        if(!_isWizardUrl(out)) out = out + (out.includes('?') ? '&' : '?') + 'wizard=1';
+
+        // Preserve draft token across nested modals.
+        try{
+          const tok = String(window.zkNewDeviceWizardToken || '').trim();
+          if(tok && !/[?&]wizard_token=/.test(out)){
+            out = out + (out.includes('?') ? '&' : '?') + 'wizard_token=' + encodeURIComponent(tok);
+          }
+        }catch(_e){}
+
+        return out;
+      }catch(_e){
+        return url;
+      }
+    }
+
+    function _wizardDeviceIdFromUrl(url){
+      try{
+        const u = String(url || '');
+        const m = u.match(/\/crud\/devices\/(\d+)\/edit-access\//);
+        if(m && m[1]) return parseInt(m[1], 10) || 0;
+      }catch(_e){}
+      return 0;
+    }
+
+    function _wizardDeviceIdFromSavedContent(){
+      try{
+        const saved = content.querySelector('[data-access-saved="1"][data-device-id]');
+        if(!saved) return 0;
+        const raw = saved.getAttribute('data-device-id') || '';
+        return parseInt(String(raw), 10) || 0;
+      }catch(_e){
+        return 0;
+      }
+    }
+
+    function _wizardClearCommandIdFromSavedContent(){
+      try{
+        const saved = content.querySelector('[data-access-saved="1"][data-clear-command-id]');
+        if(!saved) return 0;
+        const raw = saved.getAttribute('data-clear-command-id') || '';
+        return parseInt(String(raw), 10) || 0;
+      }catch(_e){
+        return 0;
+      }
+    }
+
+    function _wizardClearRequestedFromSavedContent(){
+      try{
+        const saved = content.querySelector('[data-access-saved="1"][data-clear-requested="1"]');
+        return Boolean(saved);
+      }catch(_e){
+        return false;
+      }
+    }
+
+    function _setWizardStateFromUrl(url){
+      try{
+        const active = _isWizardUrl(url);
+        window.zkNewDeviceWizardActive = Boolean(active);
+        if(active){
+          const idNum = _wizardDeviceIdFromUrl(url);
+          if(idNum > 0) window.zkNewDeviceWizardDeviceId = idNum;
+          if(typeof window.zkNewDeviceWizardDoorSaved === 'undefined') window.zkNewDeviceWizardDoorSaved = false;
+        }
+      }catch(_e){}
+    }
+
+    function _focusField(el){
+      try{
+        if(!el) return;
+        el.focus();
+        if(typeof el.select === 'function') el.select();
+      }catch(_e){}
+    }
+
+    function _validateDeviceModalForm(formEl){
+      try{
+        const wizStepEl = formEl.querySelector('input[name="wizard_step"]');
+        const wizardStep = wizStepEl ? String(wizStepEl.value || '').trim().toLowerCase() : '';
+        const nameEl = formEl.querySelector('input[name="name"], textarea[name="name"]');
+        const typeEl = formEl.querySelector('select[name="device_type"], input[name="device_type"]');
+        const commEl = formEl.querySelector('input[name="comm_mode"]:checked');
+        const commMode = commEl ? String(commEl.value || 'tcp') : 'tcp';
+
+        // Wizard requirement: Zona/Locație is mandatory ONLY on config/final step.
+        // Identify step must stay lightweight and allow continue.
+        if(wizardStep !== 'identify'){
+          try{
+            const areaEl = formEl.querySelector('select[name="area_name"], input[name="area_name"]');
+            const areaVal = areaEl ? String(areaEl.value || '').trim() : '';
+            if(areaEl && !areaVal){
+              if(typeof showMenuActionOverlay === 'function') showMenuActionOverlay('ZONĂ / LOCAȚIE', false, 3000);
+              _focusField(areaEl);
+              return false;
+            }
+          }catch(_e){}
+        }
+
+        const nameVal = nameEl ? String(nameEl.value || '').trim() : '';
+        if(!nameVal){
+          if(typeof showMenuActionOverlay === 'function') showMenuActionOverlay('NUME DISPOZITIV', false, 3000);
+          _focusField(nameEl);
+          return false;
+        }
+
+        // Device type is mandatory for a correct controller configuration.
+        try{
+          const typeVal = typeEl ? String(typeEl.value || '').trim() : '';
+          if(typeEl && !typeVal){
+            if(typeof showMenuActionOverlay === 'function') showMenuActionOverlay('TIP DISPOZITIV', false, 3000);
+            _focusField(typeEl);
+            return false;
+          }
+        }catch(_e){}
+
+        if(commMode === 'tcp'){
+          const ipEl = formEl.querySelector('input[name="ip_address"]');
+          const portEl = formEl.querySelector('input[name="port"], select[name="port"]');
+          const ipVal = ipEl ? String(ipEl.value || '').trim() : '';
+          const portValRaw = portEl ? String(portEl.value || '').trim() : '';
+
+          if(!ipVal){
+            if(typeof showMenuActionOverlay === 'function') showMenuActionOverlay('ADRESĂ IP', false, 3000);
+            _focusField(ipEl);
+            return false;
+          }
+
+          const portNum = parseInt(portValRaw, 10);
+          if(!(portNum > 0 && portNum <= 65535)){
+            if(typeof showMenuActionOverlay === 'function') showMenuActionOverlay('PORT', false, 3000);
+            _focusField(portEl);
+            return false;
+          }
+        }
+
+        if(commMode === 'rs485'){
+          const rsEl = formEl.querySelector('input[name="rs485_port"]');
+          const rsVal = rsEl ? String(rsEl.value || '').trim() : '';
+          if(!rsVal){
+            if(typeof showMenuActionOverlay === 'function') showMenuActionOverlay('PORT SERIAL (RS485)', false, 3000);
+            _focusField(rsEl);
+            return false;
+          }
+        }
+
+        return true;
+      }catch(_e){
+        return true;
+      }
+    }
+
+    function _wizardEnsureClearStatusBox(){
+      try{
+        const isWizard = Boolean(window.zkNewDeviceWizardActive);
+        const cmdId = parseInt(String(window.zkNewDeviceWizardClearCommandId || ''), 10) || 0;
+        if(!isWizard || !(cmdId > 0)) return null;
+        let box = content.querySelector('#wizardClearStatusBox');
+        if(!box){
+          box = document.createElement('div');
+          box.id = 'wizardClearStatusBox';
+          box.className = 'inline-msg loading';
+          try{ box.style.marginBottom = '10px'; }catch(_e){}
+          box.textContent = 'Ștergere date: în așteptare (pusă în coadă)...';
+          // Put it at the top of the modal content.
+          content.insertBefore(box, content.firstChild);
+        }
+        return box;
+      }catch(_e){
+        return null;
+      }
+    }
+
+    function _wizardUpdateClearStatus(box, status, result){
+      try{
+        if(!box) return;
+        const st = String(status || '').toUpperCase();
+        if(st === 'OK'){
+          box.className = 'inline-msg';
+          box.textContent = 'Ștergere date: finalizată.';
+          return;
+        }
+        if(st === 'ERR' || st === 'ERROR' || st === 'FAILED'){
+          box.className = 'inline-msg error';
+          const tail = result ? (': ' + String(result)) : '';
+          box.textContent = 'Ștergere date: eșuată' + tail;
+          return;
+        }
+        if(st === 'RUNNING'){
+          box.className = 'inline-msg loading';
+          box.textContent = 'Ștergere date: în curs...';
+          return;
+        }
+        // Default: pending/unknown
+        box.className = 'inline-msg loading';
+        box.textContent = 'Ștergere date: în așteptare...';
+      }catch(_e){}
+    }
+
+    function _wizardPollClearCommand(){
+      try{
+        const isWizard = Boolean(window.zkNewDeviceWizardActive);
+        const cmdId = parseInt(String(window.zkNewDeviceWizardClearCommandId || ''), 10) || 0;
+        if(!isWizard || !(cmdId > 0)) return;
+
+        const box = _wizardEnsureClearStatusBox();
+        if(!box) return;
+
+        let ticks = 0;
+        let lastStatus = '';
+        const maxTicks = 140; // ~140s @ 1s interval
+
+        const timer = window.setInterval(async ()=>{
+          try{
+            // Stop if modal closed or wizard no longer active.
+            if(!deviceCreateModal || !deviceCreateModal.classList.contains('is-open') || !window.zkNewDeviceWizardActive){
+              window.clearInterval(timer);
+              return;
+            }
+
+            ticks++;
+            if(ticks > maxTicks){
+              window.clearInterval(timer);
+              try{ box.className = 'inline-msg error'; box.textContent = 'Ștergere date: nu s-a confirmat finalizarea (timeout).'; }catch(_e){}
+              return;
+            }
+
+            const url = `/agent/api/commands/${encodeURIComponent(String(cmdId))}/status/`;
+            const resp = await fetch(url, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
+            const data = await resp.json();
+            if(!(data && data.ok)){
+              const err = (data && data.error) ? String(data.error) : 'status unavailable';
+              _wizardUpdateClearStatus(box, 'ERR', err);
+              window.clearInterval(timer);
+              try{ if(typeof showMenuActionOverlay === 'function') showMenuActionOverlay('ȘTERGERE DATE EȘUATĂ', false, 3000); }catch(_e){}
+              try{ window.zkNewDeviceWizardClearCommandId = 0; }catch(_e){}
+              return;
+            }
+
+            const st = String(data.status || '').toUpperCase();
+            const res = (data.result != null) ? String(data.result) : '';
+            _wizardUpdateClearStatus(box, st, res);
+
+            // Only show the centered overlay on final states.
+            if(st && st !== lastStatus){
+              if(st === 'OK'){
+                try{ if(typeof showMenuActionOverlay === 'function') showMenuActionOverlay('ȘTERGERE DATE FINALIZATĂ', true, 3000); }catch(_e){}
+              }
+              if(st === 'ERR' || st === 'ERROR' || st === 'FAILED'){
+                try{ if(typeof showMenuActionOverlay === 'function') showMenuActionOverlay('ȘTERGERE DATE EȘUATĂ', false, 3000); }catch(_e){}
+              }
+            }
+            lastStatus = st;
+
+            if(st === 'OK' || st === 'ERR' || st === 'ERROR' || st === 'FAILED'){
+              window.clearInterval(timer);
+              try{ window.zkNewDeviceWizardClearCommandId = 0; }catch(_e){}
+              return;
+            }
+          }catch(err){
+            // Keep polling a bit; show a non-fatal hint.
+            try{ box.className = 'inline-msg loading'; box.textContent = 'Ștergere date: se verifică status...'; }catch(_e){}
+          }
+        }, 1000);
+      }catch(_e){}
+    }
+
     // Close buttons
     content.querySelectorAll('[data-modal-close="1"]').forEach(btn => {
       btn.addEventListener('click', (e)=>{ e.preventDefault(); closeDeviceModal(); });
@@ -1589,7 +3637,16 @@
         e.preventDefault();
         const url = (btn.getAttribute('data-url') || btn.getAttribute('href') || '').trim();
         const title = (btn.getAttribute('data-title') || '').trim();
-        if(url) openDeviceModal(url, title || 'Formular');
+        if(url){
+          const isWizard = Boolean(window.zkNewDeviceWizardActive);
+          const nextUrl = isWizard ? _appendWizard(url) : url;
+          try{
+            const u = String(nextUrl || '');
+            const isDoorEditor = u.includes('/agent/crud/wizard/doors/') || u.includes('/agent/crud/door');
+            if(isWizard && isDoorEditor) _deviceModalStackPush();
+          }catch(_e){}
+          openDeviceModal(nextUrl, title || 'Formular');
+        }
       });
     });
 
@@ -1598,37 +3655,356 @@
       form.addEventListener('submit', async (e)=>{
         e.preventDefault();
         const url = currentDeviceModalUrl || form.getAttribute('action') || window.location.href;
+        _setWizardStateFromUrl(url);
 
-        if(deviceModalHasActionModal()){
+        const isDeviceForm = _isDeviceAccessForm(form);
+        const isDoorForm = String(form.getAttribute('data-door-form') || '') === '1';
+        const isWizard = Boolean(window.zkNewDeviceWizardActive);
+
+        // Wizard-create: remember if the user requested clear-on-add so we can block continuation
+        // behind a click-to-continue message (even if the backend fails to return a command id).
+        let clearRequested = false;
+        try{
+          const clr = form.querySelector('input[name="clear_on_add"]');
+          clearRequested = Boolean(clr && String(clr.type||'').toLowerCase()==='checkbox' ? clr.checked : String(clr && clr.value || '').trim());
+        }catch(_e){ clearRequested = false; }
+        try{ window.zkNewDeviceWizardClearRequested = Boolean(clearRequested); }catch(_e){}
+
+        // Wizard-only: do not allow final save before at least one door was saved.
+        if(isWizard && isDeviceForm){
+          try{
+            const wizardDevId = parseInt(String(window.zkNewDeviceWizardDeviceId || ''), 10) || 0;
+            const doorDone = Boolean(window.zkNewDeviceWizardDoorSaved);
+            // Only enforce door-save requirement AFTER the device exists.
+            if(wizardDevId > 0 && !doorDone){
+              if(typeof showMenuActionOverlay === 'function') showMenuActionOverlay('CONFIGURARE UȘĂ', false, 3000);
+              return;
+            }
+          }catch(_e){}
+        }
+
+        // Wizard-only: fast required-field check before hitting the server (device form only).
+        // (The template uses novalidate, so we enforce key requirements here.)
+        if(isWizard && isDeviceForm && !_validateDeviceModalForm(form)){
+          if(deviceModalHasActionModal()){
+            try{
+              window.zkActionModal.open({mode:'', module:'', title:'VALIDARE', subtitle:'Câmpuri obligatorii'});
+              window.zkActionModal.setState('error', 'DATE INCOMPLETE', 'Completează câmpurile obligatorii și încearcă din nou.');
+              window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1400);
+            }catch(_e){}
+          }
+          return;
+        }
+
+        // In wizard mode we rely on the centered overlay (spec) so avoid extra dialogs.
+        if(deviceModalHasActionModal() && !(isWizard && isDeviceForm)){
           try{
             window.zkActionModal.open({mode:'', module:'', title:'UPDATE', subtitle:'Salvare date'});
             window.zkActionModal.setState('loading', 'UPDATE ÎN CURS', 'Se salvează datele...');
           }catch(_e){}
         }
 
+        // Wizard-only: preflight test (IP/port) before saving a NEW controller config.
+        // Only test TCP reachability here (port open). Do NOT require SDK response.
+        // IMPORTANT: do not hard-block the wizard on this check; some controllers keep TCP open
+        // but do not answer SDK requests, and some environments block probes while the wizard
+        // should still allow DB onboarding.
+        if(isWizard && isDeviceForm){
+          try{
+            const ipEl = form.querySelector('input[name="ip_address"]');
+            const portEl = form.querySelector('input[name="port"], select[name="port"]');
+            const ipVal = ipEl ? String(ipEl.value || '').trim() : '';
+            const portNum = parseInt(portEl ? String(portEl.value || '').trim() : '', 10) || 0;
+            if(ipVal && portNum > 0){
+              const testUrl = '{% url "device-port-test" %}' + `?ip=${encodeURIComponent(ipVal)}&port=${encodeURIComponent(String(portNum))}&quick=1`;
+              let resp;
+              if(typeof AbortController !== 'undefined'){
+                const ctrl = new AbortController();
+                const to = window.setTimeout(()=>{ try{ ctrl.abort(); }catch(_e){} }, 2500);
+                try{
+                  resp = await fetch(testUrl, { headers: { 'X-Requested-With':'XMLHttpRequest' }, signal: ctrl.signal });
+                } finally {
+                  try{ window.clearTimeout(to); }catch(_e){}
+                }
+              } else {
+                resp = await fetch(testUrl, { headers: { 'X-Requested-With':'XMLHttpRequest' } });
+              }
+              const data = await resp.json();
+              if(!(data && data.ok && data.open)){
+                try{ if(typeof showMenuActionOverlay === 'function') showMenuActionOverlay('IP/PORT (avertizare)', false, 2000); }catch(_e){}
+                try{ if(deviceModalHasActionModal()) window.zkActionModal.close(); }catch(_e){}
+              }
+            }
+          }catch(_e){
+            // Best-effort preflight; do not block save if wiring fails.
+          }
+        }
+
+        async function _readWizardResponse(fetchResp){
+          try{
+            const ct = String(fetchResp && fetchResp.headers ? (fetchResp.headers.get('content-type') || '') : '').toLowerCase();
+            if(ct.includes('application/json')){
+              const j = await fetchResp.json();
+              return { kind: 'json', json: j };
+            }
+          }catch(_e){}
+          try{
+            const txt = await fetchResp.text();
+            const s = String(txt || '').trim();
+            if(s && (s.startsWith('{') || s.startsWith('['))){
+              try{
+                const j = JSON.parse(s);
+                return { kind: 'json', json: j };
+              }catch(_e){
+                return { kind: 'html', html: txt };
+              }
+            }
+            return { kind: 'html', html: txt };
+          }catch(_e){
+            return { kind: 'html', html: '' };
+          }
+        }
+
         try{
-          const resp = await fetch(url, {
-            method: 'POST',
-            headers: {'X-Requested-With':'XMLHttpRequest','X-CSRFToken': getCSRF() || ''},
-            body: new FormData(form)
-          });
-          const html = await resp.text();
+          let resp;
+          if(typeof AbortController !== 'undefined'){
+            const ctrl = new AbortController();
+            const to = window.setTimeout(()=>{ try{ ctrl.abort(); }catch(_e){} }, 20000);
+            try{
+              resp = await fetch(url, {
+                method: 'POST',
+                headers: {'X-Requested-With':'XMLHttpRequest','X-CSRFToken': getCSRF() || ''},
+                body: new FormData(form),
+                signal: ctrl.signal
+              });
+            } finally {
+              try{ window.clearTimeout(to); }catch(_e){}
+            }
+          } else {
+            resp = await fetch(url, {
+              method: 'POST',
+              headers: {'X-Requested-With':'XMLHttpRequest','X-CSRFToken': getCSRF() || ''},
+              body: new FormData(form)
+            });
+          }
+          const parsed = await _readWizardResponse(resp);
+          if(parsed.kind === 'json'){
+            const data = parsed.json || {};
+            const ok = Boolean(data && data.ok);
+            // Wizard identify -> wipe (step 4): use centered overlay only.
+            // Backend returns {ok:true,wizard_step:'clear',wizard_token,device_ip,device_port,comm_password}
+            // and we start the wipe + polling here (no in-modal progress card).
+            try{
+              const step = String(data && data.wizard_step ? data.wizard_step : '').trim().toLowerCase();
+              if(ok && step === 'clear'){
+                const wizardToken = String(data.wizard_token || window.zkNewDeviceWizardToken || '').trim();
+                const ip = String(data.device_ip || '').trim();
+                const port = parseInt(String(data.device_port || '4370'), 10) || 4370;
+                const commPassword = String(data.comm_password || '').trim();
+
+                if(wizardToken){
+                  try{ window.zkNewDeviceWizardToken = wizardToken; }catch(_e){}
+                  try{ window.zkNewDeviceWizardActive = true; }catch(_e){}
+                  // Ensure next url points to config step.
+                  try{
+                    const qp = new URLSearchParams();
+                    qp.set('wizard', '1');
+                    qp.set('wizard_token', wizardToken);
+                    qp.set('wizard_step', 'config');
+                    window.zkNewDeviceWizardNextUrl = '/agent/crud/devices/new-access/?' + qp.toString();
+                  }catch(_e){}
+                }
+
+                if(!ip){
+                  try{
+                    showWizardContinueOverlay({
+                      state: 'error',
+                      title: 'Ștergere date',
+                      message: 'Ștergere date: eșuată (IP lipsă).\nProces blocat. (Click pentru închidere)'
+                    });
+                  }catch(_e){}
+                  return;
+                }
+
+                try{
+                  showWizardContinueOverlay({
+                    state: 'loading',
+                    title: 'Ștergere date',
+                    message: 'Ștergere date: în curs...'
+                  });
+                }catch(_e){}
+
+                (async ()=>{
+                  try{
+                    const payload = { ip: ip, port: port, wizard_token: wizardToken };
+                    if(commPassword) payload.comm_password = commPassword;
+                    const resp2 = await fetch('{% url "wizard-clear-device" %}', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                      body: JSON.stringify(payload)
+                    });
+                    const data2 = await resp2.json();
+                    if(!(data2 && data2.ok && data2.command_id)){
+                      const msg = (data2 && (data2.error || data2.message)) ? String(data2.error || data2.message) : 'Nu am putut iniția ștergerea';
+                      try{
+                        updateWizardContinueOverlay({
+                          state: 'error',
+                          title: 'Ștergere date',
+                          message: 'Ștergere date: eșuată: ' + msg + '\nProces blocat. (Click pentru închidere)'
+                        });
+                      }catch(_e){}
+                      return;
+                    }
+
+                    try{ window.zkNewDeviceWizardClearCommandId = parseInt(String(data2.command_id || ''), 10) || 0; }catch(_e){}
+                    try{ window.zkNewDeviceWizardClearRequested = true; }catch(_e){}
+                    try{ startWizardClearOverlayPolling(data2.command_id); }catch(_e){}
+                  }catch(e2){
+                    const msg = (e2 && e2.message) ? e2.message : String(e2);
+                    try{
+                      updateWizardContinueOverlay({
+                        state: 'error',
+                        title: 'Ștergere date',
+                        message: 'Ștergere date: eșuată: ' + msg + '\nProces blocat. (Click pentru închidere)'
+                      });
+                    }catch(_e){}
+                  }
+                })();
+
+                return;
+              }
+            }catch(_e){}
+
+            const nextHtml = (data && typeof data.html === 'string') ? data.html : '';
+            if(nextHtml && typeof window.replaceDeviceModalContent === 'function'){
+              window.replaceDeviceModalContent(nextHtml);
+            }
+
+            // Wizard step transitions (identify -> clear progress -> config) are OK even though they aren't "saved" screens.
+            if(ok){
+              try{ if(deviceModalHasActionModal()) window.zkActionModal.close(); }catch(_e){}
+              try{ if(typeof refreshDevicesEmbed === 'function') refreshDevicesEmbed(); }catch(_e){}
+              return;
+            }
+
+            const msg = (data && (data.error || data.message)) ? String(data.error || data.message) : 'Verifică câmpurile din formular.';
+            if(deviceModalHasActionModal()){
+              try{
+                window.zkActionModal.setState('error', 'UPDATE NEREUȘIT', msg);
+                window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1400);
+              }catch(_e){}
+            } else {
+              if(typeof showMenuActionOverlay === 'function') showMenuActionOverlay(msg, false);
+            }
+            return;
+          }
+
+          // HTML fallback (legacy fragments)
+          const html = parsed.html;
           window.replaceDeviceModalContent(html);
 
           if(isDeviceModalSavedContent()){
             window.setTimeout(()=>{
-              closeDeviceModal();
+              // Wizard create step: after saving a NEW device, continue into edit wizard
+              // so the user can configure at least one door.
+              if(isWizard && isDeviceForm){
+                try{
+                  const wizardDevId = parseInt(String(window.zkNewDeviceWizardDeviceId || ''), 10) || 0;
+                  if(!(wizardDevId > 0)){
+                    const newId = _wizardDeviceIdFromSavedContent();
+                    if(newId > 0){
+                      // Pick up any queued clear command id so the edit wizard can poll it.
+                      try{
+                        const ccid = _wizardClearCommandIdFromSavedContent();
+                        if(ccid > 0) window.zkNewDeviceWizardClearCommandId = ccid;
+                      }catch(_e){}
+
+                      try{ window.zkNewDeviceWizardActive = true; window.zkNewDeviceWizardDeviceId = newId; window.zkNewDeviceWizardDoorSaved = false; }catch(_e){}
+                      const tmpl = '{% url "crud-device-edit-access" 0 %}';
+                      const editUrl = tmpl.replace('/0/', '/' + encodeURIComponent(String(newId)) + '/');
+                      const ccidNum = parseInt(String(window.zkNewDeviceWizardClearCommandId || ''), 10) || 0;
+                      // If clear-on-add is requested, do NOT auto-open edit wizard.
+                      // Require an explicit click on the centered message.
+                      try{
+                        const wantClear = Boolean(
+                          clearRequested ||
+                          window.zkNewDeviceWizardClearRequested ||
+                          (ccidNum > 0) ||
+                          _wizardClearRequestedFromSavedContent() ||
+                          (String(currentDeviceModalUrl || '').includes('clear_on_add=1'))
+                        );
+                        if(wantClear){
+                          // Non-blocking: open configuration immediately; clear status is shown via status box.
+                          try{ if(typeof refreshDevicesEmbed === 'function') refreshDevicesEmbed(); }catch(_e){}
+                          try{ if(typeof showMenuActionOverlay === 'function') showMenuActionOverlay('CENTALA NOUA SALVATA CU SUCCES', true, 1800); }catch(_e){}
+                          window.setTimeout(()=>{ try{ openDeviceModal(_appendWizard(editUrl), 'Configurare centrală'); }catch(_e){} }, 700);
+                          return;
+                        }
+                      }catch(_e){}
+
+                      try{ if(typeof showMenuActionOverlay === 'function') showMenuActionOverlay('CENTALA NOUA SALVATA CU SUCCES', true, 3000); }catch(_e){}
+                      window.setTimeout(()=>{ try{ openDeviceModal(_appendWizard(editUrl), 'Configurare centrală'); }catch(_e){} }, 3000);
+                      return;
+                    }
+                  }
+                }catch(_e){}
+              }
+
+              // Door form (wizard only): after saving a door, return to device edit modal.
+              if(isWizard && isDoorForm){
+                try{ window.zkNewDeviceWizardDoorSaved = true; }catch(_e){}
+                try{
+                  try{ _deviceModalStackClear(); }catch(_e2){}
+                  const idNum = parseInt(String(window.zkNewDeviceWizardDeviceId || ''), 10) || 0;
+                  if(idNum > 0 && typeof openDeviceModal === 'function'){
+                    const tmpl = '{% url "crud-device-edit-access" 0 %}';
+                    const editUrl = tmpl.replace('/0/', '/' + encodeURIComponent(String(idNum)) + '/');
+                    try{ if(typeof showMenuActionOverlay === 'function') showMenuActionOverlay('SALVARE CU SUCCES', true, 3000); }catch(_e){}
+                    window.setTimeout(()=>{ openDeviceModal(_appendWizard(editUrl), 'Configurare centrală'); }, 3000);
+                    return;
+                  }
+
+                  // Draft wizard create (no DB device yet): return to create-access config modal.
+                  const nxt = String(window.zkNewDeviceWizardNextUrl || '').trim();
+                  const tok = String(window.zkNewDeviceWizardToken || '').trim();
+                  if(nxt && tok && typeof openDeviceModal === 'function'){
+                    try{ if(typeof showMenuActionOverlay === 'function') showMenuActionOverlay('SALVARE CU SUCCES', true, 1200); }catch(_e){}
+                    window.setTimeout(()=>{ openDeviceModal(nxt, 'Configurare centrală nouă'); }, 900);
+                    return;
+                  }
+                }catch(_e){}
+              }
+
+              // Success messaging.
               if(deviceModalHasActionModal()){
                 try{
-                  window.zkActionModal.setState('success', 'UPDATE REALIZAT CU SUCCES', 'Datele au fost salvate.');
-                  window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1200);
+                  if(isWizard && isDeviceForm){
+                    window.zkActionModal.setState('success', 'CENTALĂ NOUĂ', 'Centrală nouă salvată cu succes.');
+                  } else {
+                    window.zkActionModal.setState('success', 'SALVAT', 'Modificarea a fost salvată.');
+                  }
+                  window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1100);
                 }catch(_e){}
               } else {
-                if(typeof showMenuActionOverlay === 'function') showMenuActionOverlay('Datele au fost salvate.', true);
+                if(isWizard && isDeviceForm){
+                  if(typeof showMenuActionOverlay === 'function') showMenuActionOverlay('CENTALA NOUA SALVATA CU SUCCES', true, 3000);
+                } else {
+                  if(typeof showMenuActionOverlay === 'function') showMenuActionOverlay('Modificarea a fost salvată.', true);
+                }
               }
-              // refresh list to reflect changes
-              window.setTimeout(()=>{ try{ window.location.reload(); }catch(_e){} }, 1250);
-            }, 250);
+
+              // Device list refresh where applicable.
+              try{ if(typeof refreshDevicesEmbed === 'function') refreshDevicesEmbed(); }catch(_e){}
+
+              // Wizard completion: close modal and exit wizard.
+              if(isWizard && isDeviceForm){
+                try{ window.zkNewDeviceWizardActive = false; }catch(_e){}
+                window.setTimeout(()=>{ try{ closeDeviceModal(); }catch(_e){} }, 3000);
+              } else {
+                // Classic behavior: close modal after save.
+                try{ closeDeviceModal(); }catch(_e){}
+              }
+            }, 180);
           } else {
             if(deviceModalHasActionModal()){
               try{
@@ -1718,6 +4094,119 @@
         applyCommMode();
       }
     }catch(_e){}
+
+    // Derived doors preview: the fragment contains a <script>, but injected scripts do not execute
+    // when loaded via innerHTML. Re-implement the preview renderer here.
+    try{
+      const section = content.querySelector('#derivedDoorsSection');
+      const box = content.querySelector('#derivedDoorsBox');
+      if(section && box){
+        const serverDoors = (String(box.getAttribute('data-server-doors') || '') === '1');
+        const wired = (String(box.getAttribute('data-derived-wired') || '') === '1');
+
+        function inferCapacity(haystack, deviceType){
+          try{
+            const hs = String(haystack || '').toUpperCase();
+            if (hs.includes('ACP-400') || hs.includes('C3-400') || hs.includes('INBIO-460') || hs.includes('4-DOOR') || hs.includes('4 DOOR')) return 4;
+            if (hs.includes('ACP-200') || hs.includes('C3-200') || hs.includes('INBIO-260') || hs.includes('2-DOOR') || hs.includes('2 DOOR')) return 2;
+            if (hs.includes('ACP-100') || hs.includes('C3-100') || hs.includes('INBIO-160') || hs.includes('1-DOOR') || hs.includes('1 DOOR')) return 1;
+            if (deviceType === 'two_door_panel') return 2;
+            if (deviceType === 'multi_door_panel') return 4;
+            if (deviceType === 'access_panel' || deviceType === 'door_controller') return 1;
+          }catch(_e){}
+          return 0;
+        }
+
+        function readVal(sel){
+          const el = content.querySelector(sel);
+          return el ? String(el.value || '').trim() : '';
+        }
+
+        function renderDerived(){
+          if(serverDoors) return; // edit mode already rendered by server
+
+          const ip = readVal('input[name="ip_address"]');
+          const name = readVal('input[name="name"], textarea[name="name"]');
+          const hw = readVal('input[name="hardware_version"], textarea[name="hardware_version"]');
+          const fw = readVal('input[name="firmware_version"], textarea[name="firmware_version"]');
+          const deviceType = readVal('select[name="device_type"], input[name="device_type"]');
+
+          let scannerLinked = false;
+          try{
+            const sl = content.querySelector('input[name="scanner_linked"]');
+            if(sl){
+              if(String(sl.type || '').toLowerCase() === 'checkbox') scannerLinked = Boolean(sl.checked);
+              else {
+                const v = String(sl.value || '').trim().toLowerCase();
+                scannerLinked = (v === '1' || v === 'true' || v === 'on' || v === 'yes');
+              }
+            }
+          }catch(_e){ scannerLinked = false; }
+
+          const isController = (!scannerLinked) && (deviceType === 'access_panel' || deviceType === 'door_controller' || deviceType === 'two_door_panel' || deviceType === 'multi_door_panel');
+          if(!isController){
+            try{ section.style.display = 'none'; }catch(_e){}
+            return;
+          }
+          try{ section.style.display = 'block'; }catch(_e){}
+
+          const cap = inferCapacity(`${hw} ${fw} ${name}`, deviceType) || 1;
+          if(!ip){
+            box.innerHTML = '<div class="derived-doors-empty">Introdu IP-ul centralei ca să pot deriva cititoarele (In/Out).</div>';
+            return;
+          }
+
+          let html = '<table class="derived-doors-table" aria-label="Uși derivate">' +
+            '<thead><tr>' +
+            '<th style="width: 70px;">Ușă</th>' +
+            '<th>Nume ușă (default)</th>' +
+            '<th style="width: 220px;">Reader1 (In)</th>' +
+            '<th style="width: 220px;">Reader2 (Out)</th>' +
+            '</tr></thead><tbody>';
+          for(let i=1;i<=cap;i++){
+            const doorName = (name ? `${name} ${i}` : `${ip}-${i}`);
+            html += '<tr>' +
+              `<td><span class="derived-pill">${i}</span></td>` +
+              `<td>${doorName}</td>` +
+              `<td>${ip}-${i} In</td>` +
+              `<td>${ip}-${i} Out</td>` +
+              '</tr>';
+          }
+          html += '</tbody></table>';
+          box.innerHTML = html;
+        }
+
+        if(!wired){
+          box.setAttribute('data-derived-wired','1');
+          const fields = [
+            'input[name="ip_address"]',
+            'input[name="name"], textarea[name="name"]',
+            'select[name="device_type"], input[name="device_type"]',
+            'input[name="hardware_version"], textarea[name="hardware_version"]',
+            'input[name="firmware_version"], textarea[name="firmware_version"]',
+            'input[name="scanner_linked"]',
+          ];
+          fields.forEach(sel=>{
+            content.querySelectorAll(sel).forEach(el=>{
+              try{
+                el.addEventListener('change', renderDerived);
+                el.addEventListener('input', renderDerived);
+              }catch(_e){}
+            });
+          });
+        }
+        renderDerived();
+      }
+    }catch(_e){}
+
+    // Wizard-only: if clear-on-add was queued, show a tiny status surface and poll progress.
+    try{
+      _wizardEnsureClearStatusBox();
+      _wizardPollClearCommand();
+    }catch(_e){}
+
+    // Ensure wizard state (title + next url) follows the loaded fragment.
+    try{ _wizardSyncFromContent(); }catch(_e){}
   }
 
   window.replaceDeviceModalContent = function(html){
@@ -1730,7 +4219,13 @@
 
   function closeDeviceModal(){
     if(!deviceCreateModal) return;
+    try{
+      // If a nested wizard door modal is open, restore the previous modal instead of closing.
+      if(_deviceModalStackPopRestore()) return;
+    }catch(_e){}
     _closeModal(deviceCreateModal);
+    try{ hideWizardContinueOverlay(); }catch(_e){}
+    try{ _deviceModalStackClear(); }catch(_e){}
     window.setTimeout(()=>{
       const content = document.getElementById('deviceCreateContent');
       if(content) content.innerHTML = '';
@@ -1794,6 +4289,7 @@
 
   async function openDeviceModal(url, title){
     if(!deviceCreateModal) return;
+    try{ _wizardUnsuspendDeviceModal(); }catch(_e){}
     currentDeviceModalUrl = url;
     const header = document.getElementById('deviceCreateTitle');
     const content = document.getElementById('deviceCreateContent');
@@ -1811,8 +4307,10 @@
   window.openDeviceModal = openDeviceModal;
 
   function openDeviceCreate(){
-    const url = '{% url "crud-device-create-access" %}';
-    openDeviceModal(url, '✚ Dispozitiv Nou');
+    try{ window.zkNewDeviceWizardActive = true; window.zkNewDeviceWizardDeviceId = 0; }catch(e){}
+    const baseUrl = '{% url "crud-device-create-access" %}';
+    const url = baseUrl + (baseUrl.includes('?') ? '&' : '?') + 'wizard=1';
+    openDeviceModal(url, '✚ Centrală Nouă');
   }
   function closeDeviceCreate(){ closeDeviceModal(); }
 
@@ -2540,7 +5038,15 @@
       const data = await resp.json();
       if(!data.ok) throw new Error(data.error || 'load fail');
       const tbody = document.getElementById('cmdTableBody');
-      tbody.innerHTML = data.items.map((c, idx) => `<tr>
+      tbody.innerHTML = data.items.map((c, idx) => {
+        const devId = parseInt(String(c.device_id || 0), 10) || 0;
+        const devMeta = (devId && DEVICE_INDEX && DEVICE_INDEX[devId]) ? DEVICE_INDEX[devId] : null;
+        const isPhys = Boolean(devMeta && devMeta.is_physical);
+        const devName = String((c.device || (devMeta && devMeta.name) || '') || '');
+        const syncBtn = (devId > 0 && isPhys)
+          ? `<button type="button" class="row-action" title="Sincronizează server → centrală" onclick="if(window.syncDevicePersonnelMenu){ window.syncDevicePersonnelMenu(${devId}, ${JSON.stringify(devName)}); }">SYNC</button>`
+          : '';
+        return `<tr>
         <td>${idx+1}</td>
         <td>${c.device || '-'}</td>
         <td>${c.serial || ''}</td>
@@ -2548,7 +5054,9 @@
         <td>${c.command}</td>
         <td><span class="badge ${c.status==='OK'?'badge-green':'badge-orange'}">${c.status}</span></td>
         <td>${(c.created_at||'').replace('T',' ').slice(0,16)}</td>
-      </tr>`).join('');
+        <td>${syncBtn}</td>
+      </tr>`;
+      }).join('');
       flash(cmdFlash, `Comenzi: ${data.items.length}`);
     }catch(err){ flash(cmdFlash, `Eroare comenzi: ${err}`, true); }
   }

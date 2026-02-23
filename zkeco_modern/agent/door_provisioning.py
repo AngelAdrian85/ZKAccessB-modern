@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import ipaddress
+import re
 
 from django.db import transaction
 
@@ -69,30 +71,70 @@ def ensure_controller_doors(device: Device) -> DoorProvisionResult:
     created = 0
     existing = 0
 
-    base_name = (getattr(device, "name", "") or "").strip()
-    ip = getattr(device, "ip_address", None)
-    for_defaults_prefix = base_name or (str(ip) if ip else "Centrală")
     location = (getattr(device, "area_name", "") or "").strip()
+
+    def _looks_auto_provisioned_name(name: str, door_no: int) -> bool:
+        nm = (name or "").strip()
+        if not nm:
+            return False
+        if not nm.endswith(f" {door_no}"):
+            return False
+        prefix = nm[: -(len(str(door_no)) + 1)].strip()
+        if not prefix:
+            return False
+        up = prefix.upper()
+        if up.startswith("DEVICE"):
+            return True
+        if up in ("CENTRALĂ", "CENTRALA", "CONTROLLER"):
+            return True
+        try:
+            ipaddress.ip_address(prefix)
+            return True
+        except Exception:
+            pass
+        return bool(re.fullmatch(r"[A-Z0-9._-]{3,}", prefix)) and (" " not in prefix)
 
     with transaction.atomic():
         for door_no in range(1, capacity + 1):
-            d, was_created = Door.objects.get_or_create(
-                device=device,
-                door_number=door_no,
-                defaults={
-                    "name": f"{for_defaults_prefix} {door_no}".strip(),
-                    "location": location,
-                    "enabled": True,
-                },
-            )
-            if was_created:
-                created += 1
+            expected_name = f"Ușă {door_no}"  # neutral, never looks like a controller
+
+            # If there is already a door with this index, keep it (but rename old auto-names).
+            d = Door.objects.filter(device=device, door_number=door_no).first()
+            if d is None:
+                # Prefer to take an existing unnumbered door already linked to this controller.
+                candidate = (
+                    Door.objects.filter(device=device, door_number__isnull=True)
+                    .order_by("id")
+                    .first()
+                )
+                if candidate is not None:
+                    candidate.door_number = door_no
+                    candidate.save(update_fields=["door_number"])
+                    d = candidate
+                    existing += 1
+                else:
+                    d = Door.objects.create(
+                        device=device,
+                        door_number=door_no,
+                        name=expected_name,
+                        location=location,
+                        enabled=True,
+                        normally_open=True,
+                    )
+                    created += 1
             else:
                 existing += 1
-                # Keep derived defaults reasonably in sync for auto-created doors.
-                # If user customized name/location we do not overwrite.
-                if (not (d.location or "").strip()) and location:
-                    d.location = location
-                    d.save(update_fields=["location"])
+
+            # Auto-rename only if it looks auto-provisioned (avoid overwriting user names).
+            if expected_name and (d.name or "").strip() != expected_name:
+                if _looks_auto_provisioned_name(d.name or "", door_no):
+                    d.name = expected_name
+                    d.save(update_fields=["name"])
+
+            # Keep derived defaults reasonably in sync for auto-created doors.
+            # If user customized location we do not overwrite.
+            if (not (d.location or "").strip()) and location:
+                d.location = location
+                d.save(update_fields=["location"])
 
     return DoorProvisionResult(capacity=capacity, created=created, existing=existing)

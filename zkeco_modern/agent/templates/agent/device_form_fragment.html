@@ -381,9 +381,18 @@
 
     <div class="form-row full">
       <div class="form-group">
+        <label for="{{ form.hardware_version.id_for_label }}">Model / Tip centrală</label>
+        {{ form.hardware_version }}
+        {% if form.hardware_version.errors %}<span class="form-errors">{{ form.hardware_version.errors|join:", " }}</span>{% endif %}
+      </div>
+    </div>
+
+    <div class="form-row full">
+      <div class="form-group">
         <div class="checkbox-options">
           <label>{{ form.enabled }}<span>Activ (Enabled)</span></label>
           <label>{{ form.auto_sync_time }}<span>Sincronizare Automată Oră</span></label>
+          <label>{{ form.clear_on_add }}<span>Șterge Datele din Dispozitiv la Adăugare (fără event log)</span></label>
         </div>
       </div>
     </div>

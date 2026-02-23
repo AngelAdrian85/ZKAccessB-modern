@@ -1,4 +1,4 @@
 {# Access modal HTML form for editing a controller/device (no JSON responses). #}
 <div class="device-form-scope">
-  {% include 'agent/_device_form_inner.html' with is_modal=True access_modal=True access_shell=True action_url=action_url next_url=next_url obj=obj form=form controller_doors=controller_doors %}
+  {% include 'agent/_device_form_inner.html' with is_modal=True access_modal=True access_shell=True action_url=action_url next_url=next_url obj=obj form=form controller_doors=controller_doors wizard=wizard %}
 </div>

@@ -11,62 +11,569 @@
   .op-btn.primary{background:#3da5d9;border-color:#3da5d9;color:#fff;}
   .op-btn:hover{filter:brightness(1.08);}
   .op-error{color:#ffbdbd;font-size:10px;margin:6px 0;}
+
+  /* Enable/Disable special palettes */
+  .op-danger .op-title{color:#ffd0d0;}
+  .op-danger .op-btn.primary{background:#d94a4a;border-color:#d94a4a;}
+  .op-danger .op-btn.primary:hover{filter:brightness(1.06);}
+  .op-success .op-title{color:#c8ffd6;}
+  .op-success .op-btn.primary{background:#2da44e;border-color:#2da44e;}
+  .op-success .op-btn.primary:hover{filter:brightness(1.06);}
+  @keyframes pulseGlow{0%{box-shadow:0 0 0 rgba(0,0,0,0);}50%{box-shadow:0 0 18px rgba(61,165,217,0.35);}100%{box-shadow:0 0 0 rgba(0,0,0,0);}}
+  .op-animate{animation:pulseGlow 900ms ease-in-out infinite;}
+
+  /* Legacy-like window for "Modify Device IP Address" */
+  .legacy-ipwin{background:#eef6ff;border:2px solid #2f73c0;border-radius:6px;padding:10px;}
+  .legacy-ipwin .legacy-title{display:flex;align-items:center;gap:8px;font-weight:700;color:#1f4f87;font-size:13px;margin:0 0 10px 0;}
+  .legacy-ipwin .legacy-grid{display:grid;grid-template-columns:150px 1fr;gap:8px 10px;align-items:center;}
+  .legacy-ipwin label{color:#1f2f44;font-size:12px;font-weight:600;text-transform:none;letter-spacing:0;}
+  .legacy-ipwin input{background:#fff;border:1px solid #8aa9c7;color:#102033;border-radius:2px;padding:3px 6px;font-size:12px;}
+  .legacy-ipwin input[readonly]{background:#f3f3f3;color:#333;}
+  .legacy-ipwin .legacy-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:12px;}
+  .legacy-ipwin .legacy-btn{min-width:70px;padding:3px 10px;border-radius:2px;border:1px solid #7d9fc3;background:#e6f0fb;color:#123a66;font-size:12px;font-weight:600;cursor:pointer;}
+  .legacy-ipwin .legacy-btn.primary{background:#d7ebff;border-color:#5f8fc2;}
+  .legacy-ipwin .legacy-btn:hover{filter:brightness(1.03);}
+  .legacy-ipwin .op-error{color:#b30000;font-size:12px;margin:0 0 8px 0;}
 </style>
 
-<div class="op-card">
-  <div class="op-title">{{ title }}</div>
-  <div class="op-sub">Device: <strong>{{ dev.name }}</strong> (ID #{{ dev.id }})</div>
+{% if op == 'change-ip' %}
+  <div class="legacy-ipwin">
+    <div class="legacy-title">Modifică IP centrală</div>
 
-  {% if error %}<div class="op-error">{{ error }}</div>{% endif %}
+    {% if error %}<div class="op-error">{{ error }}</div>{% endif %}
 
-  <form method="post" data-modal-form="1">
-    {% csrf_token %}
+    <form method="post" data-modal-form="1">
+      {% csrf_token %}
+      <div class="legacy-grid">
+        <label>IP curent:</label>
+        <input type="text" value="{{ dev.ip_address|default:'' }}" readonly />
 
-    {% if op == 'change-ip' %}
-      <div class="op-grid">
-        <div class="op-row">
-          <label>IP Address</label>
-          <input name="ip_address" type="text" value="{{ dev.ip_address|default:'' }}" placeholder="192.168.1.10" />
-        </div>
-        <div class="op-row">
-          <label>Port</label>
-          <input name="port" type="number" value="{{ dev.port|default:4370 }}" min="1" max="65535" />
-        </div>
+        <label>IP nou:</label>
+        <input name="ip_address" type="text" value="{{ new_ip_address|default:'' }}" placeholder="192.168.1.10" />
+
+        <label>Mască rețea:</label>
+        <input name="subnet_mask" type="text" value="{{ subnet_mask|default:'' }}" placeholder="255.255.255.0" />
+
+        <label>Gateway:</label>
+        <input name="gateway" type="text" value="{{ gateway|default:'' }}" placeholder="192.168.1.254" />
+
+        <label>Port:</label>
+        <input name="port" type="number" value="{{ new_port|default:dev.port|default:4370 }}" min="1" max="65535" />
       </div>
 
-    {% elif op == 'toggle-enabled' %}
+      <div class="legacy-actions">
+        <button type="submit" class="legacy-btn primary">OK</button>
+        <button type="button" class="legacy-btn" data-modal-close="1">Renunță</button>
+      </div>
+    </form>
+  </div>
+{% else %}
+  <div class="op-card {% if op == 'disable' %}op-danger{% elif op == 'enable' %}op-success{% endif %}">
+    <div class="op-title">{{ title }}</div>
+    <div class="op-sub">Centrală: <strong>{{ dev.name }}</strong> (ID #{{ dev.id }})</div>
+
+    {% if error %}<div class="op-error">{{ error }}</div>{% endif %}
+
+    <form method="post" data-modal-form="1">
+      {% csrf_token %}
+
+      {% if op == 'disable' %}
+        <div class="op-sub" style="margin-top:6px;color:#ffd0d0;">Această acțiune va dezactiva centrala în aplicație.</div>
+        <div class="op-actions">
+          <button type="button" class="op-btn" data-modal-close="1">Renunță</button>
+          <button type="submit" class="op-btn primary op-animate">DEZACTIVARE CENTRALĂ</button>
+        </div>
+
+      {% elif op == 'enable' %}
+        <div class="op-sub" style="margin-top:6px;color:#c8ffd6;">Această acțiune va activa centrala în aplicație.</div>
+        <div class="op-actions">
+          <button type="button" class="op-btn" data-modal-close="1">Renunță</button>
+          <button type="submit" class="op-btn primary op-animate">ACTIVARE CENTRALĂ</button>
+        </div>
+
+      {% elif op == 'toggle-enabled' %}
       <div class="op-row">
-        <label>Enabled</label>
+        <label>Activ</label>
         <select name="enabled">
-          <option value="1" {% if dev.enabled %}selected{% endif %}>Enabled</option>
-          <option value="0" {% if not dev.enabled %}selected{% endif %}>Disabled</option>
+          <option value="1" {% if dev.enabled %}selected{% endif %}>Activă</option>
+          <option value="0" {% if not dev.enabled %}selected{% endif %}>Dezactivată</option>
         </select>
       </div>
 
     {% elif op == 'comm-password' %}
       <div class="op-row">
-        <label>Communication Password</label>
+        <label>Parolă comunicare</label>
         <input name="comm_password" type="password" value="{{ dev.comm_password|default:'' }}" autocomplete="off" />
       </div>
 
     {% elif op == 'upgrade-firmware' %}
       <div class="op-row">
-        <label>Firmware (path/url)</label>
+        <label>Firmware (cale/URL)</label>
         <input name="firmware" type="text" value="" placeholder="firmware.bin or http(s)://..." />
       </div>
-      <div class="op-sub">This queues a command for CommCenter.</div>
+      <div class="op-sub">Această acțiune pune o comandă în coadă (CommCenter).</div>
+
+    {% elif op == 'sync-time' %}
+      <div class="op-sub" style="margin-top:6px;">Ora server: <strong>{{ server_now_local|default:'' }}</strong></div>
+      <div class="op-sub" style="margin-top:2px;">Acțiune legacy: sincronizează ora centralei cu ora serverului.</div>
+
+      <div class="op-actions">
+        <button type="button" class="op-btn" data-modal-close="1">Renunță</button>
+        <button type="submit" class="op-btn primary">SINCRONIZEAZĂ ORA</button>
+      </div>
+
+      {% if cmd_rows %}
+        <div class="op-sub" style="margin-top:10px;">Comenzi recente (device)</div>
+        <div style="border:1px solid #2f5876;border-radius:2px;overflow:hidden;">
+          <table style="width:100%;border-collapse:collapse;font-size:10px;background:#0f2433;color:#e8f0f8;">
+            <thead style="background:#163247;color:#9fd2f1;">
+              <tr>
+                <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:160px;">Creat</th>
+                <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;">Comandă</th>
+                <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:90px;">Stare</th>
+                <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:180px;">Rezultat</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in cmd_rows|slice:':12' %}
+              <tr>
+                <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ r.created_at|date:'Y-m-d H:i:s' }}</td>
+                <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ r.command }}</td>
+                <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ r.status }}</td>
+                <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ r.result|default:'' }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endif %}
+
+    {% elif op == 'get-events' %}
+      <div class="op-sub" style="margin-top:6px;">Afișare locală (din baza de date) + opțiune de preluare (CommCenter).</div>
+
+      {% if counts %}
+        <div class="op-sub" style="margin-top:2px;">Total DB (device #{{ dev.id }}):
+          <strong>Evenimente={{ counts.events|default:0 }}</strong>,
+          <strong>RTLog={{ counts.rt|default:0 }}</strong>,
+          <strong>Comenzi={{ counts.cmd|default:0 }}</strong>,
+          <strong>Audit={{ counts.audit|default:0 }}</strong>
+          <span style="color:#7db3d9;">(afișează ultimele {{ limit|default:'' }})</span>
+        </div>
+      {% endif %}
+
+      <div class="op-actions">
+        <button type="button" class="op-btn" data-modal-close="1">Închide</button>
+        <button type="button" class="op-btn" data-modal-reload-url="/agent/crud/devices/{{ dev.id }}/op/get-events/?modal=1&limit=2000" data-modal-title="Get events – {{ dev.name }}">2.000</button>
+        <button type="button" class="op-btn" data-modal-reload-url="/agent/crud/devices/{{ dev.id }}/op/get-events/?modal=1&limit=5000" data-modal-title="Get events – {{ dev.name }}">5.000</button>
+        <button type="button" class="op-btn" data-modal-reload-url="/agent/crud/devices/{{ dev.id }}/op/get-events/?modal=1&all=1" data-modal-title="Get events – {{ dev.name }}">TOT (max)</button>
+        <button type="submit" class="op-btn primary">PREIA EVENIMENTE (DIN CENTRALĂ)</button>
+      </div>
+
+      <div class="op-grid" style="margin-top:10px;grid-template-columns:1fr 1fr;">
+        <div>
+          <div class="op-sub" style="margin:0 0 6px 0;">Evenimente (DeviceEventLog)</div>
+          <div style="border:1px solid #2f5876;border-radius:2px;overflow:hidden;max-height:320px;overflow:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:10px;background:#0f2433;color:#e8f0f8;">
+              <thead style="background:#163247;color:#9fd2f1;">
+                <tr>
+                  <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:118px;">Timp</th>
+                  <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:70px;">Cod</th>
+                  <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;">Raw</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% if event_rows %}
+                  {% for r in event_rows %}
+                  <tr>
+                    <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ r.timestamp_str|default:r.created_at|date:'Y-m-d H:i:s' }}</td>
+                    <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ r.code }}</td>
+                    <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:320px;">{{ r.raw_line }}</td>
+                  </tr>
+                  {% endfor %}
+                {% else %}
+                  <tr><td colspan="3" style="padding:6px;color:#7db3d9;">Nu există evenimente salvate pentru acest device.</td></tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div>
+          <div class="op-sub" style="margin:0 0 6px 0;">Realtime (DeviceRealtimeLog)</div>
+          <div style="border:1px solid #2f5876;border-radius:2px;overflow:hidden;max-height:320px;overflow:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:10px;background:#0f2433;color:#e8f0f8;">
+              <thead style="background:#163247;color:#9fd2f1;">
+                <tr>
+                  <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:150px;">Creat</th>
+                  <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;">Raw</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% if rt_rows %}
+                  {% for r in rt_rows %}
+                  <tr>
+                    <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ r.created_at|date:'Y-m-d H:i:s' }}</td>
+                    <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:340px;">{{ r.raw }}</td>
+                  </tr>
+                  {% endfor %}
+                {% else %}
+                  <tr><td colspan="2" style="padding:6px;color:#7db3d9;">Nu există rtlog salvate pentru acest device.</td></tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {% if cmd_rows %}
+        <div class="op-sub" style="margin-top:10px;">Comenzi recente (device)</div>
+        <div style="border:1px solid #2f5876;border-radius:2px;overflow:hidden;max-height:260px;overflow:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:10px;background:#0f2433;color:#e8f0f8;">
+            <thead style="background:#163247;color:#9fd2f1;">
+              <tr>
+                <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:160px;">Creat</th>
+                <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;">Comandă</th>
+                <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:90px;">Stare</th>
+                <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:180px;">Rezultat</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in cmd_rows %}
+              <tr>
+                <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ r.created_at|date:'Y-m-d H:i:s' }}</td>
+                <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ r.command }}</td>
+                <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ r.status }}</td>
+                <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ r.result|default:'' }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endif %}
+
+      {% if audit_rows %}
+        <div class="op-sub" style="margin-top:10px;">Audit (acțiuni cu centrala + status online/offline)</div>
+        <div style="border:1px solid #2f5876;border-radius:2px;overflow:hidden;max-height:260px;overflow:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:10px;background:#0f2433;color:#e8f0f8;">
+            <thead style="background:#163247;color:#9fd2f1;">
+              <tr>
+                <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:160px;">Timp</th>
+                <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:110px;">Modul</th>
+                <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:120px;">Acțiune</th>
+                <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:140px;">Utilizator</th>
+                <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;">Detalii</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for a in audit_rows %}
+              <tr>
+                <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ a.timestamp|date:'Y-m-d H:i:s' }}</td>
+                <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ a.module }}</td>
+                <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ a.action }}</td>
+                <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ a.user|default:'' }}</td>
+                <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:520px;">{{ a.details|default:'' }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endif %}
+
+      {% if timeline_rows %}
+        <div class="op-sub" style="margin-top:10px;">Timeline unificat (evenimente + rtlog + comenzi + audit) – ultimele {{ timeline_limit|default:'' }}</div>
+        <div style="border:1px solid #2f5876;border-radius:2px;overflow:hidden;max-height:340px;overflow:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:10px;background:#0f2433;color:#e8f0f8;">
+            <thead style="background:#163247;color:#9fd2f1;">
+              <tr>
+                <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:160px;">Timp</th>
+                <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:70px;">Tip</th>
+                <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:240px;">Sumar</th>
+                <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;">Detalii</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for t in timeline_rows %}
+              <tr>
+                <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ t.ts|date:'Y-m-d H:i:s' }}</td>
+                <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ t.kind }}</td>
+                <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:240px;">{{ t.summary }}</td>
+                <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:640px;">{{ t.raw }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% endif %}
+
+    {% elif op == 'get-personnel' %}
+      <div class="op-sub" style="margin-top:6px;">Afișează ce există pe centrală (device) + ce există în DB. Permite alinierea frecventă server → centrală.</div>
+
+      <div class="op-actions">
+        <button type="button" class="op-btn" data-modal-close="1">Închide</button>
+        {% if show_device_data %}
+          <button type="button" class="op-btn" data-modal-reload-url="/agent/crud/devices/{{ dev.id }}/op/get-personnel/?modal=1&limit={{ limit }}" data-modal-title="Get personnel – {{ dev.name }}">ASCUNDE DATELE DEVICE</button>
+        {% else %}
+          <button type="button" class="op-btn" data-modal-reload-url="/agent/crud/devices/{{ dev.id }}/op/get-personnel/?modal=1&limit={{ limit }}&device=1" data-modal-title="Get personnel – {{ dev.name }}">CITEȘTE DIN CENTRALĂ</button>
+        {% endif %}
+        <button type="submit" class="op-btn primary" name="do" value="sync" {% if not can_sync_personnel %}disabled title="SYNC disponibil doar pentru centrale fizice, când există personal syncabil în DB și listele diferă."{% endif %}>
+          {% if personnel_sets_identical %}SYNC (deja identic){% else %}SYNC SERVER → CENTRALĂ{% endif %}
+        </button>
+      </div>
+
+      <div class="op-grid" style="margin-top:10px;grid-template-columns:1fr 1fr;">
+        <div>
+          <div class="op-sub" style="margin:0 0 6px 0;">Contorizare pe centrală</div>
+          <div style="border:1px solid #2f5876;border-radius:2px;padding:6px;background:#0f2433;">
+            {% if personnel_counts %}
+              <div style="font-size:10px;color:#e8f0f8;">Tabele detectate:</div>
+              <div style="margin-top:4px;font-size:10px;color:#9fd2f1;">
+                {% for k,v in personnel_counts.items %}
+                  <div><strong style="color:#e8f0f8;">{{ k }}</strong>: {{ v }}</div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div style="font-size:10px;color:#7db3d9;">Nu există contorizare disponibilă (bridge indisponibil sau device fără IP).</div>
+              {% if personnel_counts_error %}<div class="op-error" style="margin-top:6px;">{{ personnel_counts_error }}</div>{% endif %}
+            {% endif %}
+          </div>
+
+          <div class="op-sub" style="margin:10px 0 6px 0;">Personal în centrală (preview)</div>
+          <div style="border:1px solid #2f5876;border-radius:2px;overflow:hidden;">
+            {% if device_personnel_preview %}
+              <table style="width:100%;border-collapse:collapse;font-size:10px;background:#0f2433;color:#e8f0f8;">
+                <thead style="background:#163247;color:#9fd2f1;">
+                  <tr>
+                    <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:70px;">PIN</th>
+                    <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:120px;">Card</th>
+                    <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;">Nume</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for p in device_personnel_preview|slice:':25' %}
+                  <tr>
+                    <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ p.pin|default:p.Pin|default:'' }}</td>
+                    <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ p.cardno|default:p.CardNo|default:'' }}</td>
+                    <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ p.name|default:p.Name|default:'' }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            {% else %}
+              <div style="padding:6px;font-size:10px;color:#7db3d9;">Nu există preview disponibil (bridge indisponibil sau device nu răspunde).</div>
+              {% if device_personnel_preview_error %}<div class="op-error" style="margin:0 6px 6px 6px;">{{ device_personnel_preview_error }}</div>{% endif %}
+              {% if device_personnel_preview_raw %}<pre style="margin:0;padding:6px;font-size:10px;color:#e8f0f8;white-space:pre-wrap;max-height:160px;overflow:auto;border-top:1px solid rgba(47,88,118,0.55);">{{ device_personnel_preview_raw }}</pre>{% endif %}
+            {% endif %}
+          </div>
+
+          {% if show_device_data %}
+            <div class="op-sub" style="margin:10px 0 6px 0;">Personal pe centrală (detaliat: user)</div>
+            <div style="border:1px solid #2f5876;border-radius:2px;overflow:hidden;">
+              {% if device_user_rows %}
+                <table style="width:100%;border-collapse:collapse;font-size:10px;background:#0f2433;color:#e8f0f8;">
+                  <thead style="background:#163247;color:#9fd2f1;">
+                    <tr>
+                      <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:60px;">PIN</th>
+                      <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:110px;">Card</th>
+                      <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;">Nume</th>
+                      <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:60px;">Dept</th>
+                      <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:70px;">Priv</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for p in device_user_rows|slice:':60' %}
+                    <tr>
+                      <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ p.pin }}</td>
+                      <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ p.cardno }}</td>
+                      <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ p.name }}</td>
+                      <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ p.group }}</td>
+                      <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ p.privilege }}</td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              {% else %}
+                <div style="padding:6px;font-size:10px;color:#7db3d9;">Nu există date user disponibile de pe device.</div>
+                {% if device_userauthorize_error %}<div class="op-error" style="margin:0 6px 6px 6px;">{{ device_userauthorize_error }}</div>{% endif %}
+              {% endif %}
+            </div>
+          {% endif %}
+
+          <div class="op-sub" style="margin:10px 0 6px 0;">Comenzi recente (device)</div>
+          <div style="border:1px solid #2f5876;border-radius:2px;overflow:hidden;">
+            <table style="width:100%;border-collapse:collapse;font-size:10px;background:#0f2433;color:#e8f0f8;">
+              <thead style="background:#163247;color:#9fd2f1;">
+                <tr>
+                  <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:160px;">Creat</th>
+                  <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;">Comandă</th>
+                  <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:90px;">Stare</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% if cmd_rows %}
+                  {% for r in cmd_rows|slice:':12' %}
+                  <tr>
+                    <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ r.created_at|date:'Y-m-d H:i:s' }}</td>
+                    <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ r.command }}</td>
+                    <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ r.status }}</td>
+                  </tr>
+                  {% endfor %}
+                {% else %}
+                  <tr><td colspan="3" style="padding:6px;color:#7db3d9;">Nu există comenzi salvate pentru acest device.</td></tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div>
+          <div class="op-sub" style="margin:0 0 6px 0;">Personal în DB (syncabil pe această centrală)</div>
+          <div style="border:1px solid #2f5876;border-radius:2px;padding:6px;background:#0f2433;">
+            <div style="font-size:10px;color:#e8f0f8;">Total DB: <strong>{{ db_personnel_count|default:0 }}</strong></div>
+            {% if not db_personnel_count %}
+              <div style="font-size:10px;color:#7db3d9;margin-top:4px;">Nu există personal syncabil (active + AccessLevel pe ușile acestei centrale).</div>
+            {% endif %}
+          </div>
+
+          <div class="op-sub" style="margin:10px 0 6px 0;">Personal în DB (preview)</div>
+          <div style="border:1px solid #2f5876;border-radius:2px;overflow:hidden;">
+            {% if db_personnel_preview %}
+              <table style="width:100%;border-collapse:collapse;font-size:10px;background:#0f2433;color:#e8f0f8;">
+                <thead style="background:#163247;color:#9fd2f1;">
+                  <tr>
+                    <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:120px;">Card</th>
+                    <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;">Nume</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for p in db_personnel_preview|slice:':40' %}
+                  <tr>
+                    <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ p.cardno }}</td>
+                    <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ p.name }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            {% else %}
+              <div style="padding:6px;font-size:10px;color:#7db3d9;">Nu există preview DB.</div>
+            {% endif %}
+          </div>
+
+          <div class="op-sub" style="margin:10px 0 6px 0;">Diferențe DB ↔ centrală (CardNo)</div>
+          <div style="border:1px solid #2f5876;border-radius:2px;padding:6px;background:#0f2433;">
+            {% if personnel_diff %}
+              <div style="font-size:10px;color:#e8f0f8;">DB: <strong>{{ personnel_diff.db_count }}</strong> | Centrală: <strong>{{ personnel_diff.device_count }}</strong></div>
+              <div style="font-size:10px;color:#9fd2f1;margin-top:4px;">
+                Lipsă pe centrală: <strong>{{ personnel_diff.missing_on_device_count }}</strong> | În plus pe centrală: <strong>{{ personnel_diff.extra_on_device_count }}</strong>
+              </div>
+              {% if personnel_diff_note %}<div style="font-size:10px;color:#7db3d9;margin-top:4px;">{{ personnel_diff_note }}</div>{% endif %}
+              {% if personnel_diff.missing_on_device %}
+                <div style="margin-top:6px;font-size:10px;color:#e8f0f8;">Exemple lipsă pe centrală: <span style="color:#9fd2f1;">{{ personnel_diff.missing_on_device|join:", " }}</span></div>
+              {% endif %}
+              {% if personnel_diff.extra_on_device %}
+                <div style="margin-top:6px;font-size:10px;color:#e8f0f8;">Exemple în plus pe centrală: <span style="color:#9fd2f1;">{{ personnel_diff.extra_on_device|join:", " }}</span></div>
+              {% endif %}
+            {% else %}
+              <div style="font-size:10px;color:#7db3d9;">Nu s-a putut calcula diferența.</div>
+            {% endif %}
+          </div>
+
+          <div class="op-sub" style="margin:0 0 6px 0;">Ultimele evenimente legate (context)</div>
+          <div style="border:1px solid #2f5876;border-radius:2px;overflow:hidden;">
+            <table style="width:100%;border-collapse:collapse;font-size:10px;background:#0f2433;color:#e8f0f8;">
+              <thead style="background:#163247;color:#9fd2f1;">
+                <tr>
+                  <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:118px;">Timp</th>
+                  <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:70px;">Cod</th>
+                  <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;">Raw</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% if event_rows %}
+                  {% for r in event_rows|slice:':18' %}
+                  <tr>
+                    <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ r.timestamp_str|default:r.created_at|date:'Y-m-d H:i:s' }}</td>
+                    <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ r.code }}</td>
+                    <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:340px;">{{ r.raw_line }}</td>
+                  </tr>
+                  {% endfor %}
+                {% else %}
+                  <tr><td colspan="3" style="padding:6px;color:#7db3d9;">Nu există evenimente salvate pentru acest device.</td></tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+
+          {% if show_device_data %}
+            <div class="op-sub" style="margin-top:10px;">Drepturi acces pe centrală (userauthorize)</div>
+            <div style="border:1px solid #2f5876;border-radius:2px;overflow:hidden;">
+              {% if device_access_rows %}
+                <table style="width:100%;border-collapse:collapse;font-size:10px;background:#0f2433;color:#e8f0f8;">
+                  <thead style="background:#163247;color:#9fd2f1;">
+                    <tr>
+                      <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:60px;">PIN</th>
+                      <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;">Nume</th>
+                      <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:70px;">TZ ID</th>
+                      <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;">Uși (mask)</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for r in device_access_rows|slice:':80' %}
+                    <tr>
+                      <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ r.pin }}</td>
+                      <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px;">{{ r.name }}</td>
+                      <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ r.timezone_id }}{% if r.timezone_name %} ({{ r.timezone_name }}){% endif %}</td>
+                      <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;">{{ r.doors }}</td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              {% else %}
+                <div style="padding:6px;font-size:10px;color:#7db3d9;">Nu există date userauthorize disponibile.</div>
+                {% if device_userauthorize_error %}<div class="op-error" style="margin:0 6px 6px 6px;">{{ device_userauthorize_error }}</div>{% endif %}
+              {% endif %}
+            </div>
+          {% else %}
+            <div class="op-sub" style="margin-top:8px;">Notă</div>
+            <div style="font-size:10px;color:#7db3d9;">Apasă „CITEȘTE DIN CENTRALĂ” pentru a afișa personalul + departamentul (Group) + drepturile (userauthorize) existente pe device.</div>
+          {% endif %}
+        </div>
+      </div>
+
+    {% elif op == 'disable-dst' %}
+      <div class="op-sub" style="margin-top:6px;">Dezactivează ora de vară pe centrală (comandă în coadă pentru CommCenter).</div>
+      <div class="op-actions">
+        <button type="button" class="op-btn" data-modal-close="1">Renunță</button>
+        <button type="submit" class="op-btn primary">DEZACTIVEAZĂ DST</button>
+      </div>
+
+    {% elif op == 'enable-dst' %}
+      <div class="op-sub" style="margin-top:6px;">Activează ora de vară pe centrală (comandă în coadă pentru CommCenter).</div>
+      <div class="op-actions">
+        <button type="button" class="op-btn" data-modal-close="1">Renunță</button>
+        <button type="submit" class="op-btn primary">ACTIVEAZĂ DST</button>
+      </div>
+
+    {% elif op == 'fp-ident' %}
+      <div class="op-sub" style="margin-top:6px;">Schimbă identificarea pe bază de amprentă (comandă în coadă pentru CommCenter).</div>
+      <div class="op-actions">
+        <button type="button" class="op-btn" data-modal-close="1">Renunță</button>
+        <button type="submit" class="op-btn primary">APLICĂ</button>
+      </div>
 
     {% else %}
-      <div class="op-sub">This will enqueue a command for CommCenter.</div>
+      <div class="op-sub">Această acțiune pune o comandă în coadă (CommCenter).</div>
       <div class="op-row">
-        <label>Command</label>
+        <label>Comandă</label>
         <input name="command_preview" type="text" value="{{ command_preview }}" readonly />
       </div>
     {% endif %}
 
-    <div class="op-actions">
-      <button type="button" class="op-btn" data-modal-close="1">Cancel</button>
-      <button type="submit" class="op-btn primary">OK</button>
-    </div>
-  </form>
-</div>
+      {% if op != 'disable' and op != 'enable' and op != 'sync-time' and op != 'get-events' and op != 'get-personnel' and op != 'disable-dst' and op != 'enable-dst' and op != 'fp-ident' %}
+        <div class="op-actions">
+          <button type="button" class="op-btn" data-modal-close="1">Renunță</button>
+          <button type="submit" class="op-btn primary">OK</button>
+        </div>
+      {% endif %}
+    </form>
+  </div>
+{% endif %}

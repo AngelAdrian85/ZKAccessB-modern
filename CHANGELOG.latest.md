@@ -1,5 +1,27 @@
 # Changelog — latest save
 
+Commit: (pending) — "Major update: ZKTech integration + bridge + provisioning + docs"
+Merged into: main
+Date: 2026-02-23
+Author: local workspace
+
+Summary
+-------
+Major project sync bringing in the latest device integration work (ZKTeco/ZKTech), bridge runners, provisioning flows, new migrations, tooling, and documentation.
+
+High-level changes
+------------------
+- Added ZKTech/ZKTeco integration docs (guides, quick start, test results) and project progress reports.
+- Added bridge implementations (Python / Python2 compatibility + .NET runner sources) and drivers for device communication.
+- Added/updated device provisioning, CommCenter/tray agent flows, and WebSocket/UI plumbing.
+- Added new migrations and tests supporting the updated model + provisioning behavior.
+
+Notes
+-----
+- Build outputs (e.g. `.NET bin/obj`) and large local resources/dumps are intentionally excluded from Git.
+
+---
+
 Commit: 0aef9f36 — "UI: unified Action Modal feedback + dashboard backup modal"
 Merged into: main
 Date: 2026-01-16

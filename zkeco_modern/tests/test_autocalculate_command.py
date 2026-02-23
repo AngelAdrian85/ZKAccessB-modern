@@ -8,6 +8,9 @@ def test_autocalculate_once(monkeypatch):
     # Skip test if legacy attcalc module is not importable in this environment
     pytest.importorskip("mysite.iclock.attcalc")
 
+    # Skip if the legacy management command is not present in this repo/runtime
+    pytest.importorskip("zkeco.units.adms.mysite.att.management.commands.autocalculate")
+
     # Import the management command module
     mod = importlib.import_module(
         "zkeco.units.adms.mysite.att.management.commands.autocalculate"

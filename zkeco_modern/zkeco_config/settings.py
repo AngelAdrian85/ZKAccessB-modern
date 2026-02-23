@@ -249,3 +249,10 @@ LOGOUT_REDIRECT_URL = "/accounts/login/"
 if DEBUG and os.environ.get("DEBUG_TOOLBAR") == "1":
     INSTALLED_APPS.append("debug_toolbar")
     MIDDLEWARE.append("debug_toolbar.middleware.DebugToolbarMiddleware")
+
+# ZKTeco controller communication password (plcommpro "passwd=")
+#
+# Many controllers use a numeric communication key (often "0"), but some deployments
+# use a non-empty password. We keep this configurable and use it as a fallback only
+# when the operator/device does not provide a password.
+ZKACCESS_DEFAULT_COMM_PASSWORD = (os.environ.get("ZKACCESS_DEFAULT_COMM_PASSWORD") or "").strip()

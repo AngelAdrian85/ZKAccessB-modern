@@ -1,5 +1,39 @@
 # 🔍 Network Discovery & Device Detection - Troubleshooting Guide
 
+## 🆕 Legacy UDP Discovery (Recommended for ZKTeco Controllers)
+
+The modern app supports **legacy-equivalent UDP discovery** using `plcommpro.dll` (`SearchDevice` / `ModifyIPAddress`).
+
+Important constraints:
+- `plcommpro.dll` is **32-bit** → it must run in a **32-bit process**.
+- The main Django server remains **Python 3 (usually 64-bit)**.
+- Hardware UDP discovery/IP-change is executed through a **Python 3 (32-bit) bridge**.
+
+### ✅ No-install setup (portable Python 3 x86)
+
+1. Download/extract a portable 32-bit Python into `tools/python32/`:
+    - Run: `powershell -ExecutionPolicy Bypass -File scripts\setup_bridge_python32.ps1`
+
+2. Start the app normally (tray startup):
+    - Run: `tray_launch.ps1`
+    - The launcher will automatically pick `tools\python32\python.exe` as the bridge runner when present.
+
+### 🔧 Environment variables (only if needed)
+
+- `ZKACCESS_PYBRIDGE` → full path to **Python 3 (32-bit)** `python.exe`.
+   - Example: `setx ZKACCESS_PYBRIDGE "C:\\Path\\To\\python.exe"`
+
+- `ZKACCESS_PLCOMMPRO_DLL` → full path to `plcommpro.dll` if it’s not in `C:\Windows\SysWOW64` or not in PATH.
+   - Example: `setx ZKACCESS_PLCOMMPRO_DLL "C:\\Windows\\SysWOW64\\plcommpro.dll"`
+
+### UI usage
+
+- Go to Devices → Discovery
+- Select **UDP (Legacy / plcommpro)**
+- Use **Change IP (UDP)** when MAC is available (best for devices on same L2 network)
+
+---
+
 **Date**: December 4, 2025  
 **Issue**: Discovering devices in network and device discovery not working  
 **Status**: ✅ FIXED

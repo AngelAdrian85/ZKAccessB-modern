@@ -1,4 +1,8 @@
 import os
+import json
+import threading
+from types import SimpleNamespace
+from typing import Any, Optional, cast
 from django.http import JsonResponse, HttpRequest, HttpResponse
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.shortcuts import render
@@ -15,11 +19,9 @@ except ImportError:
     AuditLog = None
 from .forms import (DoorForm, DoorFirstCardRuleForm, DoorMultiCardRuleForm, TimeSegmentFormWithDays, HolidayForm, AccessLevelForm,
                     EmployeeForm, EmployeeExtendedForm, DeptForm, AreaForm,
-                    AccessLogFilterForm, DeviceExtendedForm, DSTimeForm)
-try:
-    from .forms import IssueCardForm
-except ImportError:
-    IssueCardForm = None
+                    AccessLogFilterForm, DeviceExtendedForm, DSTimeForm, WizardDoorDraftForm)
+from . import forms as _agent_forms
+IssueCardForm = getattr(_agent_forms, 'IssueCardForm', None)
 try:
     from legacy_models.models import Area as LegacyArea, AccessLog as LegacyAccessLog, Dept
 except Exception:  # pragma: no cover
@@ -42,166 +44,63 @@ def _audit_log(request: HttpRequest, *, module: str, action: str, entity_id: int
 
     Writes to agent.AuditLog when available. Never raises.
     """
-    if AuditLog is None:
-        return
     try:
+        if AuditLog is None:
+            return
+        try:
+            uname = ''
+            if hasattr(request, 'user') and getattr(request.user, 'is_authenticated', False):
+                uname = str(getattr(request.user, 'username', '') or '')
+        except Exception:
+            uname = ''
+        try:
+            ip_addr = request.META.get('REMOTE_ADDR')
+        except Exception:
+            ip_addr = None
         AuditLog.objects.create(
-            module=(module or '').lower(),
-            action=(action or '').lower(),
-            entity_id=int(entity_id),
-            entity_name=entity_name or '',
-            user=getattr(getattr(request, 'user', None), 'username', None),
-            ip_address=(request.META.get('REMOTE_ADDR') if hasattr(request, 'META') else None),
-            details=details or '',
+            user=uname or None,
+            module=(module or '')[:32],
+            action=(action or '')[:32],
+            entity_id=int(entity_id or 0),
+            entity_name=(entity_name or '')[:256] or None,
+            details=(details or ''),
+            ip_address=ip_addr,
         )
     except Exception:
         return
 
 
-def _qs_without_page(request: HttpRequest) -> str:
-    """Return current querystring without 'page=' (for pagination links)."""
-    try:
-        q = request.GET.copy()
-        if 'page' in q:
-            q.pop('page')
-        return q.urlencode()
-    except Exception:
-        return ''
-
-
-def _read_heartbeat():
-    url = os.getenv("REDIS_URL")
-    if redis and url:
-        try:
-            client = redis.Redis.from_url(url)
-            last_cycle = client.hget("commcenter:heartbeat", "last_cycle")
-            if isinstance(last_cycle, bytes):
-                last_cycle = last_cycle.decode()
-            return {"backend": "redis", "last_cycle": last_cycle}
-        except Exception:
-            pass
-    # Fallback: derive from DB last created_at timestamps
-    rt_max = DeviceRealtimeLog.objects.aggregate(Max("created_at"))[
-        "created_at__max"
-    ]
-    ev_max = DeviceEventLog.objects.aggregate(Max("created_at"))["created_at__max"]
-    latest = max([d for d in [rt_max, ev_max] if d] or [None])
-    return {"backend": "db", "last_cycle": latest and latest.timestamp()}
-
-
-def health(request: HttpRequest):
-    hb = _read_heartbeat()
-    counts = {
-        "rtlog": DeviceRealtimeLog.objects.count(),
-        "events": DeviceEventLog.objects.count(),
-    }
-    # In-memory snapshot (only if process store active)
-    snapshot = {}
-    try:
-        # The store may have been created inside agent module; we attempt import
-        from agent.modern_comm_center import ModernCommCenter  # type: ignore
-        # Not directly accessible instance; fallback to DB-only
-    except Exception:
-        pass
-    # Backup & mysqldump status sourced from agent_controller.ini
-    import configparser, pathlib
-    base_dir = pathlib.Path(__file__).resolve().parent.parent  # zkeco_modern
-    ini = base_dir / 'agent_controller.ini'
-    backup_info = {
-        'latest': None,
-        'age_minutes': None,
-    }
-    dump_info = {
-        'ready': False,
-        'version': None,
-        'path': None,
-        'error': None,
-    }
-    if ini.exists():
-        cfg = configparser.ConfigParser()
-        try:
-            cfg.read(ini)
-            bdir = pathlib.Path(cfg.get('controller','backup_path', fallback=str(base_dir/'backups')))
-            backups = []
-            if bdir.exists():
-                try:
-                    backups = sorted(bdir.glob('db_backup_*.sql'), key=lambda p: p.stat().st_mtime)
-                except Exception:
-                    backups = []
-            if backups:
-                latest = backups[-1]
-                backup_info['latest'] = latest.name
-                try:
-                    mtime = latest.stat().st_mtime
-                    now_ts = timezone.now().timestamp()
-                    age_minutes = int(max(0, (now_ts - mtime) / 60))
-                except Exception:
-                    age_minutes = None
-                backup_info['age_minutes'] = age_minutes
-            mdir = pathlib.Path(cfg.get('controller','mysql_bin', fallback=str(base_dir/'mysql'/'bin')))
-            cand = mdir / 'mysqldump.exe'
-            if cand.exists():
-                dump_info['path'] = str(cand)
-                try:
-                    with open(cand,'rb') as f:
-                        sig = f.read(2)
-                    if sig == b'MZ' and cand.stat().st_size > 50000:
-                        # version check
-                        import subprocess
-                        try:
-                            proc = subprocess.run([str(cand), '--version'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=5)
-                            dump_info['version'] = (proc.stdout.splitlines()[0] if proc.stdout else '')
-                        except Exception:
-                            pass
-                        dump_info['ready'] = True
-                    else:
-                        dump_info['error'] = 'invalid-header'
-                except Exception as e:
-                    dump_info['error'] = f'read-error:{e}'
-            else:
-                dump_info['error'] = 'missing'
-        except Exception as e:
-            dump_info['error'] = f'ini-error:{e}'
-    server_type = os.environ.get('SC_SERVER_TYPE') or os.environ.get('DJANGO_SERVER_TYPE') or 'unknown'
-    return JsonResponse({
-        "ok": True,
-        "heartbeat": hb,
-        "counts": counts,
-        "state": snapshot,
-        "backup": backup_info,
-        "dump": dump_info,
-        "now": timezone.now().isoformat(),
-        "server_type": server_type,
-    })
-
-
-def metrics(request: HttpRequest):
-    # Basic counters; for Prometheus you'd output text exposition format
-    hb = _read_heartbeat()
-    return JsonResponse({
-        "rtlog_total": DeviceRealtimeLog.objects.count(),
-        "event_total": DeviceEventLog.objects.count(),
-        "heartbeat": hb,
-    })
-
-
-# ===================== Card Readers Config/Status API =====================
-def _readers_cfg_path():
-    import pathlib
-    base_dir = pathlib.Path(__file__).resolve().parent.parent  # zkeco_modern
-    return (base_dir.parent / 'scripts' / 'card_readers.json')
-
-
 def _tray_status_path():
-    import pathlib
-    base_dir = pathlib.Path(__file__).resolve().parent.parent
-    return base_dir.parent / 'tray_status.json'
+    try:
+        from pathlib import Path
+        from django.conf import settings
+
+        base = Path(getattr(settings, 'BASE_DIR', Path.cwd()))
+        return base.parent / 'tray_status.json'
+    except Exception:
+        from pathlib import Path
+
+        return Path('tray_status.json')
+
+
+def _readers_cfg_path():
+    try:
+        from pathlib import Path
+        from django.conf import settings
+
+        base = Path(getattr(settings, 'BASE_DIR', Path.cwd()))
+        return base.parent / 'scripts' / 'card_readers.json'
+    except Exception:
+        from pathlib import Path
+
+        return Path('scripts') / 'card_readers.json'
 
 
 def _read_json_safe(p):
     try:
-        import json, pathlib
-        pp = pathlib.Path(p)
+        from pathlib import Path
+
+        pp = p if isinstance(p, Path) else Path(str(p))
         if pp.exists():
             return json.loads(pp.read_text(encoding='utf-8')) or {}
     except Exception:
@@ -209,10 +108,11 @@ def _read_json_safe(p):
     return {}
 
 
-def _write_json_safe(p, data):
+def _write_json_safe(p, data) -> bool:
     try:
-        import json, pathlib, os
-        pp = pathlib.Path(p)
+        from pathlib import Path
+
+        pp = p if isinstance(p, Path) else Path(str(p))
         pp.parent.mkdir(parents=True, exist_ok=True)
         tmp = pp.with_suffix('.tmp')
         tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
@@ -225,6 +125,227 @@ def _write_json_safe(p, data):
         return True
     except Exception:
         return False
+
+
+def _qs_without_page(request: HttpRequest) -> str:
+    try:
+        from urllib.parse import urlencode
+
+        q = {}
+        try:
+            q = dict(getattr(request, 'GET', {}) or {})
+        except Exception:
+            q = {}
+        try:
+            q.pop('page', None)
+        except Exception:
+            pass
+        return urlencode(q, doseq=True)
+    except Exception:
+        return ''
+
+
+def _payload_get_str(payload: Any, key: str, default: str = '') -> str:
+    try:
+        if isinstance(payload, dict) and key in payload:
+            v = payload.get(key)
+            if v is None:
+                return default
+            return str(v)
+    except Exception:
+        pass
+    return default
+
+
+def _payload_get_int(payload: Any, key: str, default: int = 0) -> int:
+    try:
+        if isinstance(payload, dict) and key in payload:
+            v = payload.get(key)
+            if v is None or str(v).strip() == '':
+                return int(default)
+            return int(str(v).strip())
+    except Exception:
+        pass
+    try:
+        return int(default)
+    except Exception:
+        return 0
+
+
+def _get_default_comm_password_cached() -> str:
+    """Return the effective default communication password.
+
+    Precedence:
+      1) DB (SystemSettings.default_comm_password) if set
+      2) settings.ZKACCESS_DEFAULT_COMM_PASSWORD (env-backed) otherwise
+
+    Cached briefly to avoid DB hits on hot endpoints.
+    """
+    cache_key = 'agent:default_comm_password'
+    try:
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return str(cached or '').strip()
+    except Exception:
+        cached = None
+
+    pw_db = ''
+    try:
+        from agent.models import SystemSettings
+
+        ss = SystemSettings.get_solo()
+        pw_db = str(getattr(ss, 'default_comm_password', '') or '').strip()
+    except Exception:
+        pw_db = ''
+
+    pw_env = ''
+    try:
+        from django.conf import settings as _dj_settings
+
+        pw_env = str(getattr(_dj_settings, 'ZKACCESS_DEFAULT_COMM_PASSWORD', '') or '').strip()
+    except Exception:
+        pw_env = ''
+
+    eff = pw_db or pw_env
+    try:
+        cache.set(cache_key, eff, timeout=20)
+    except Exception:
+        pass
+    return eff
+
+
+def health(request: HttpRequest):
+    """Dashboard-friendly liveness endpoint.
+
+    Must remain fast but include enough info for access_dashboard health badges.
+    """
+    payload: dict[str, Any] = {'ok': True}
+
+    try:
+        payload['now'] = timezone.now().isoformat()
+    except Exception:
+        payload['now'] = ''
+
+    # DB reachability check (best-effort)
+    try:
+        from agent.models import Device
+
+        Device.objects.only('id').first()
+        payload['db'] = {'ok': True}
+    except Exception as e:
+        payload['db'] = {'ok': False, 'error': str(e)}
+
+    # CommCenter heartbeat (best-effort)
+    try:
+        import agent.modern_comm_center as mcc
+
+        center = getattr(mcc, 'ACTIVE_CENTER', None)
+        if center is not None:
+            last = getattr(center.heartbeat_backend, 'get', lambda _k: None)('last_cycle')
+            backend = getattr(center, 'driver_name', None) or getattr(center, 'driver', None) or 'commcenter'
+            payload['heartbeat'] = {'backend': str(backend), 'last_cycle': last}
+    except Exception:
+        pass
+
+    # Backup status (best-effort): newest .sql under configured backup dir
+    try:
+        import configparser
+        import pathlib
+
+        base_dir = pathlib.Path(__file__).resolve().parent.parent
+        ini = base_dir / 'agent_controller.ini'
+        backup_dir = base_dir / 'backups'
+        configured = False
+        if ini.exists():
+            cfg = configparser.ConfigParser()
+            cfg.read(ini)
+            backup_dir = pathlib.Path(cfg.get('controller', 'backup_path', fallback=str(backup_dir)))
+            configured = True
+
+        latest_name = None
+        latest_age_min = None
+        if backup_dir.exists() and backup_dir.is_dir():
+            cand = []
+            try:
+                cand.extend(list(backup_dir.glob('*.sql')))
+                cand.extend(list(backup_dir.glob('*.sql.gz')))
+            except Exception:
+                cand = []
+            if cand:
+                newest = max(cand, key=lambda p: p.stat().st_mtime)
+                latest_name = newest.name
+                try:
+                    age_s = max(0.0, float(timezone.now().timestamp() - newest.stat().st_mtime))
+                    latest_age_min = int(round(age_s / 60.0))
+                except Exception:
+                    latest_age_min = None
+
+        payload['backup'] = {
+            'configured': bool(configured),
+            'latest': latest_name,
+            'age_minutes': latest_age_min,
+        }
+    except Exception:
+        pass
+
+    return JsonResponse(payload)
+
+
+def system_comm_password_save(request: HttpRequest):
+    """Save default communication password to SystemSettings (DB-backed)."""
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'method_not_allowed'}, status=405)
+
+    from agent.models import SystemSettings
+
+    new_pw = str(request.POST.get('default_comm_password') or '').strip()
+    ss = SystemSettings.get_solo()
+    try:
+        old_has = bool(str(getattr(ss, 'default_comm_password', '') or '').strip())
+    except Exception:
+        old_has = False
+
+    ss.default_comm_password = new_pw
+    ss.save(update_fields=['default_comm_password', 'updated_at'])
+
+    # Bust cache so probes immediately see the new value.
+    try:
+        cache.delete('agent:default_comm_password')
+    except Exception:
+        pass
+
+    _audit_log(
+        request,
+        module='system',
+        action='save_default_comm_password',
+        entity_id=1,
+        entity_name='SystemSettings',
+        details='set' if bool(new_pw) else ('cleared' if old_has else 'noop'),
+    )
+    return JsonResponse({'ok': True, 'data': {'has_password': bool(new_pw)}})
+
+
+def metrics(request: HttpRequest):
+    # Simple JSON metrics endpoint (human/ops friendly).
+    try:
+        import agent.modern_comm_center as mcc
+
+        center = getattr(mcc, 'ACTIVE_CENTER', None)
+        payload: dict[str, Any] = {
+            'ok': True,
+            'commcenter_active': bool(center),
+        }
+        if center:
+            payload.update({
+                'sessions': len(getattr(center, 'sessions', {}) or {}),
+                'total_rtlog_lines': int(getattr(center, 'total_rtlog_lines', 0) or 0),
+                'total_event_logs': int(getattr(center, 'total_event_logs', 0) or 0),
+            })
+        return JsonResponse(payload)
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=500)
 
 
 @csrf_exempt
@@ -271,6 +392,8 @@ def readers_status(request: HttpRequest):
     # surface commcenter/color if present in tray_status.json
     status_extra = {
         'commcenter': st.get('commcenter'),
+        'commcenter_driver': st.get('commcenter_driver'),
+        'commcenter_backend': st.get('commcenter_backend'),
         'color': st.get('color'),
         'server': st.get('server'),
     }
@@ -306,7 +429,11 @@ def readers_start(request: HttpRequest):
                 # Creating DeviceStatus rows here is acceptable because the operator
                 # explicitly requested the readers to start; persist the authoritative
                 # online state so the UI and other services can act on it.
-                ds, created = _DS.objects.get_or_create(device=dev, defaults={'online': True, 'door_state': ''})
+                ds = _DS.objects.filter(device=dev).order_by('-updated_at', '-id').first()
+                created = False
+                if ds is None:
+                    ds = _DS.objects.create(device=dev, online=True, door_state='')
+                    created = True
                 # If newly created or previously offline -> mark online and record timestamp
                 if created or not ds.online:
                     ds.online = True
@@ -329,9 +456,9 @@ def readers_start(request: HttpRequest):
                 try:
                     try:
                         ds = _DS.objects.get(device_id=did)
-                        ua = ds.updated_at.isoformat() if ds.updated_at else None
+                        ua = ds.updated_at.isoformat() if ds.updated_at else ''
                     except Exception:
-                        ua = None
+                        ua = ''
                     try:
                         import logging
                         logging.getLogger(__name__).info('readers_start -> broadcasting device=%s online=%s updated_at=%s', did, True, ua)
@@ -404,9 +531,9 @@ def readers_stop(request: HttpRequest):
                 try:
                     try:
                         ds = _DS.objects.get(device_id=did)
-                        ua = ds.updated_at.isoformat() if ds.updated_at else None
+                        ua = ds.updated_at.isoformat() if ds.updated_at else ''
                     except Exception:
-                        ua = None
+                        ua = ''
                     try:
                         import logging
                         logging.getLogger(__name__).info(
@@ -464,19 +591,70 @@ def monitor_device_legacy(request: HttpRequest):
     )
     return render(request, 'agent/monitor_device_legacy.html', {'devices': devices})
 
+
+def monitor_rtlog_json(request: HttpRequest):
+    """Return recent DeviceRealtimeLog rows for polling-based monitor fallback.
+
+    This endpoint exists so Monitorizare live can still show card scans when
+    WebSockets/ASGI are unavailable (e.g., running under Django runserver).
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': 'unauth'}, status=403)
+    try:
+        after_id = int(request.GET.get('after_id') or 0)
+    except Exception:
+        after_id = 0
+    try:
+        limit = int(request.GET.get('limit') or 200)
+    except Exception:
+        limit = 200
+    limit = max(1, min(limit, 500))
+
+    if after_id:
+        qs = DeviceRealtimeLog.objects.filter(id__gt=after_id).order_by('id')[:limit]
+    else:
+        # On initial load, return only the newest rows (avoid replaying all history).
+        newest = list(DeviceRealtimeLog.objects.order_by('-id')[:limit])
+        newest.reverse()
+        qs = newest
+
+    rows = []
+    last_id = after_id
+    for r in qs:
+        try:
+            created = r.created_at.isoformat() if r.created_at else None
+        except Exception:
+            created = None
+        rows.append({
+            'id': r.id,
+            'device_id': r.device_id,
+            'sn': r.sn or '',
+            'raw': r.raw or '',
+            'created_at': created,
+        })
+        last_id = r.id
+    return JsonResponse({'ok': True, 'rows': rows, 'last_id': last_id})
+
 def status_summary(request: HttpRequest):
     if not request.user.is_authenticated:
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
+    from django.db.models import OuterRef, Subquery
+    from .models import Device, DeviceStatus as _DS
+    latest = _DS.objects.filter(device=OuterRef('pk')).order_by('-updated_at', '-id')
     rows = []
-    for ds in DeviceStatus.objects.select_related('device').all():
+    for dev in Device.objects.order_by('id').annotate(
+        latest_online=Subquery(latest.values('online')[:1]),
+        latest_door_state=Subquery(latest.values('door_state')[:1]),
+        latest_updated_at=Subquery(latest.values('updated_at')[:1]),
+    ):
         rows.append({
-            'id': ds.device.id,
-            'name': ds.device.name,
-            'serial': ds.device.serial_number,
-            'online': ds.online,
-            'door_state': ds.door_state,
-            'updated_at': ds.updated_at,
+            'id': dev.id,
+            'name': dev.name,
+            'serial': dev.serial_number,
+            'online': bool(getattr(dev, 'latest_online', False)),
+            'door_state': getattr(dev, 'latest_door_state', '') or '',
+            'updated_at': getattr(dev, 'latest_updated_at', None),
         })
     summary = {
         'total': len(rows),
@@ -497,20 +675,26 @@ def status_summary_json(request: HttpRequest):
         return JsonResponse({'ok': False, 'error': 'unauth'}, status=403)
     out = []
     try:
-        for ds in DeviceStatus.objects.select_related('device').all():
-            # Serialize updated_at as ISO; client will render in local time
-            updated = ds.updated_at
+        from django.db.models import OuterRef, Subquery
+        from .models import Device, DeviceStatus as _DS
+        latest = _DS.objects.filter(device=OuterRef('pk')).order_by('-updated_at', '-id')
+        for dev in Device.objects.order_by('id').annotate(
+            latest_online=Subquery(latest.values('online')[:1]),
+            latest_door_state=Subquery(latest.values('door_state')[:1]),
+            latest_updated_at=Subquery(latest.values('updated_at')[:1]),
+        ):
+            updated = getattr(dev, 'latest_updated_at', None)
             iso = None
             try:
                 iso = updated.isoformat() if updated is not None else None
             except Exception:
                 iso = None
             out.append({
-                'id': ds.device.id,
-                'name': ds.device.name,
-                'serial': ds.device.serial_number,
-                'online': bool(ds.online),
-                'door_state': ds.door_state,
+                'id': dev.id,
+                'name': dev.name,
+                'serial': dev.serial_number,
+                'online': bool(getattr(dev, 'latest_online', False)),
+                'door_state': getattr(dev, 'latest_door_state', '') or '',
                 'updated_at': iso,
             })
     except Exception:
@@ -635,41 +819,274 @@ def device_port_test(request: HttpRequest):
     
     ip = request.GET.get('ip', '').strip()
     port_str = request.GET.get('port', '4370').strip()
+    ports_raw = (request.GET.get('ports') or '').strip()
+    quick = (request.GET.get('quick') or '').strip().lower() in ('1', 'true', 'yes', 'y', 'on')
+    probe = (request.GET.get('probe') or '').strip().lower() in ('1', 'true', 'yes', 'y', 'on')
+    comm_password = (request.GET.get('comm_password') or '').strip()
+    if not comm_password:
+        comm_password = _get_default_comm_password_cached()
     
     if not ip:
         return JsonResponse({'ok': False, 'error': 'missing-ip'}, status=400)
     
-    try:
-        port = int(port_str)
-        if port < 1 or port > 65535:
-            return JsonResponse({'ok': False, 'error': 'invalid-port-range'}, status=400)
-    except ValueError:
-        return JsonResponse({'ok': False, 'error': 'invalid-port-format'}, status=400)
+    def _parse_ports(raw: str) -> list[int]:
+        out: list[int] = []
+        for part in (raw or '').replace(';', ',').replace(' ', ',').split(','):
+            p = part.strip()
+            if not p:
+                continue
+            try:
+                n = int(p)
+            except Exception:
+                continue
+            if 1 <= n <= 65535 and n not in out:
+                out.append(n)
+        return out
+
+    # Backward compatible: `port=` works as before; `ports=` enables a sweep.
+    ports: list[int]
+    if ports_raw:
+        ports = _parse_ports(ports_raw)
+        if not ports:
+            return JsonResponse({'ok': False, 'error': 'invalid-ports'}, status=400)
+    else:
+        try:
+            port = int(port_str)
+            if port < 1 or port > 65535:
+                return JsonResponse({'ok': False, 'error': 'invalid-port-range'}, status=400)
+        except ValueError:
+            return JsonResponse({'ok': False, 'error': 'invalid-port-format'}, status=400)
+        ports = [port]
     
     import socket
+    import select
+
+    # Prefer known ZKTeco SDK/COMM ports when multiple ports are scanned.
+    # If a generic web port (80/443) is open, that does NOT mean plcommpro can connect.
+    preferred_ports: list[int] = [14370, 4370, 4371, 4372, 5000, 5001, 6000, 8000, 8080]
+
+    def _tcp_connect_code(ip_addr: str, tcp_port: int, timeout_s: float) -> int:
+        """Return a stable connect result code (0=open, else OS error code).
+
+        On Windows, sockets with a timeout can yield WSAEWOULDBLOCK (10035)
+        during connect_ex; we resolve that into a final status using select + SO_ERROR.
+        """
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.setblocking(False)
+            try:
+                res = int(sock.connect_ex((ip_addr, int(tcp_port))) or 0)
+            except Exception:
+                res = -1
+
+            if res == 0:
+                return 0
+
+            # In-progress / would-block -> wait for completion.
+            if res in (10035, 115, 11):
+                try:
+                    _r, w, e = select.select([], [sock], [sock], float(timeout_s))
+                except Exception:
+                    return 10060
+                if not w and not e:
+                    return 10060
+                try:
+                    err = int(sock.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR) or 0)
+                except Exception:
+                    err = -1
+                return err
+
+            return res
+        finally:
+            try:
+                sock.close()
+            except Exception:
+                pass
     
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(2)  # 2 second timeout
-        result = sock.connect_ex((ip, port))
-        sock.close()
-        
-        port_open = (result == 0)
-        
-        return JsonResponse({
-            'ok': True,
-            'open': port_open,
-            'ip': ip,
-            'port': port,
-            'status': 'reachable' if port_open else 'unreachable',
-            'message': f'Port {port} is {"OPEN ✓" if port_open else "CLOSED or FILTERED ✗"}'
-        })
+        open_ports: list[int] = []
+        results_by_port: dict[int, int] = {}
+
+        # Keep this snappy; callers may pass multiple ports.
+        # Use a slightly longer timeout for preferred ports to reduce false negatives.
+        sweep_mode = len(ports) > 1
+
+        # Reorder to probe preferred ports first in sweep mode.
+        if sweep_mode:
+            ports = [p for p in preferred_ports if p in ports] + [p for p in ports if p not in preferred_ports]
+
+        if sweep_mode and quick:
+            base_timeout = 0.18
+            preferred_timeout = 0.35
+        else:
+            base_timeout = 0.45 if sweep_mode else 2.0
+            preferred_timeout = 1.2 if sweep_mode else 2.0
+
+        for p in ports:
+            try:
+                result = _tcp_connect_code(
+                    ip,
+                    p,
+                    preferred_timeout if p in preferred_ports else base_timeout,
+                )
+                results_by_port[p] = result
+                if result == 0:
+                    open_ports.append(p)
+                    # In quick sweep mode, stop early once we hit a preferred open port,
+                    # but only if we are NOT doing a deep probe.
+                    # When probe is enabled, we may need to continue scanning because a TCP-open
+                    # port might not speak the controller protocol.
+                    if sweep_mode and quick and (not probe) and p in preferred_ports:
+                        break
+            except Exception:
+                # treat per-port failures as closed/filtered
+                results_by_port[p] = -1
+
+        port_open = bool(open_ports)
+
+        # Choose the best open port: prefer known SDK ports, otherwise fall back to first open.
+        best_open: int | None = None
+        if open_ports:
+            for pp in preferred_ports:
+                if pp in open_ports:
+                    best_open = pp
+                    break
+            if best_open is None:
+                best_open = open_ports[0]
+        else:
+            best_open = ports[0] if ports else None
+
+        # Optional deep probe (preferred): try a short plcommpro SDK connect.
+        # This is the most reliable signal that our actual driver can talk to the controller.
+        probe_ports: list[int] = []
+        probe_errors: dict[int, str] = {}
+        if probe and open_ports:
+            try:
+                from agent.plcommpro_bridge import PlcommproConnInfo, connect_only
+
+                # Probe preferred ports first.
+                probe_order = [p for p in preferred_ports if p in open_ports] + [p for p in open_ports if p not in preferred_ports]
+                for pp in probe_order:
+                    try:
+                        conn = PlcommproConnInfo(
+                            ipaddress=str(ip),
+                            ip_port=int(pp),
+                            password=str(comm_password or ''),
+                            timeout=3000,
+                            protocol='TCP',
+                        )
+                        rr = connect_only(conn, process_timeout_s=6 if quick else 10)
+                        if isinstance(rr, dict) and bool(rr.get('ok')):
+                            probe_ports.append(int(pp))
+                            if quick:
+                                break
+                        else:
+                            # Keep it compact for UI, but include a short reason.
+                            rres = rr.get('result') if isinstance(rr, dict) else None
+                            rle = rr.get('last_error') if isinstance(rr, dict) else None
+                            data = str(rr.get('data') or '') if isinstance(rr, dict) else ''
+                            data = data.replace('\r', ' ').replace('\n', ' ').strip()
+                            if len(data) > 80:
+                                data = data[:80] + '…'
+                            note = f"sdk:{rres}" + (f":{rle}" if rle is not None else "")
+                            if data:
+                                note += f":{data}"
+                            probe_errors[int(pp)] = note
+                    except Exception as ex:
+                        probe_errors[int(pp)] = f"exc:{ex}"
+            except Exception:
+                pass
+
+        # Pick a best port.
+        # - Without probing: best is the best TCP-open port.
+        # - With probing: best is ONLY a responding port; if none respond, return null
+        #   so callers don't accidentally pick a non-protocol port.
+        best_open_port: int | None = best_open
+        best_responding_port: int | None = int(probe_ports[0]) if probe_ports else None
+        best_port: int | None
+        if probe:
+            best_port = best_responding_port
+        else:
+            best_port = best_open_port
+
+        # If we are probing and found TCP-open ports but none respond,
+        # and quick sweep was requested, try to complete the sweep for remaining ports
+        # so callers can see a full picture (e.g. 4370 refused).
+        try:
+            if probe and sweep_mode and quick and open_ports and (not probe_ports):
+                for p in ports:
+                    if p in results_by_port:
+                        continue
+                    try:
+                        result = _tcp_connect_code(
+                            ip,
+                            p,
+                            preferred_timeout if p in preferred_ports else base_timeout,
+                        )
+                        results_by_port[p] = result
+                        if result == 0 and p not in open_ports:
+                            open_ports.append(p)
+                    except Exception:
+                        results_by_port[p] = -1
+        except Exception:
+            pass
+
+        # Best-effort reason for the primary port (helpful in UI/logs).
+        reason = None
+        try:
+            primary = ports[0] if ports else None
+            if primary is not None:
+                code = results_by_port.get(primary)
+                if code == 0:
+                    reason = 'open'
+                elif code in (10061, 111):
+                    reason = 'refused'
+                elif code in (10060, 110):
+                    reason = 'timeout'
+                elif code in (10065, 113):
+                    reason = 'no-route'
+                elif code == -1:
+                    reason = 'error'
+                else:
+                    reason = f'connect_ex_{code}'
+        except Exception:
+            reason = None
+
+        return JsonResponse(
+            {
+                'ok': True,
+                'open': port_open,
+                'ip': ip,
+                # Backward compatible: callers use `port` as the selected port.
+                'port': int(best_port or 0) if best_port is not None else None,
+                'best_port': int(best_port or 0) if best_port is not None else None,
+                'best_open_port': int(best_open_port or 0) if best_open_port is not None else None,
+                'best_responding_port': int(best_responding_port or 0) if best_responding_port is not None else None,
+                'requested_ports': ports,
+                'open_ports': open_ports,
+                'results_by_port': results_by_port,
+                'probe': bool(probe),
+                'probe_ports': probe_ports,
+                'probe_errors': probe_errors,
+                'reason': reason,
+                'status': 'reachable' if port_open else 'unreachable',
+                'message': (
+                    (
+                        f'Port {best_port} responds ✓'
+                        if probe_ports
+                        else (f'Port {best_open_port} is OPEN but no controller response ✗' if probe else f'Port {best_open_port} is OPEN ✓')
+                    )
+                    if port_open
+                    else f'Ports {ports} are CLOSED, REFUSED or FILTERED ✗'
+                ),
+            }
+        )
     except socket.gaierror:
         return JsonResponse({
             'ok': True,
             'open': False,
             'ip': ip,
-            'port': port,
+            'port': ports[0] if ports else None,
             'error': 'hostname-resolution-failed'
         })
     except socket.timeout:
@@ -677,17 +1094,376 @@ def device_port_test(request: HttpRequest):
             'ok': True,
             'open': False,
             'ip': ip,
-            'port': port,
+            'port': ports[0] if ports else None,
             'error': 'connection-timeout'
         })
     except Exception as e:
-        return JsonResponse({
-            'ok': True,
-            'open': False,
-            'ip': ip,
-            'port': port,
-            'error': str(e)
-        })
+        return JsonResponse({'ok': False, 'error': str(e)}, status=500)
+
+
+def _probe_device_online_plcommpro(dev: "Device") -> tuple[bool, str]:
+    """Best-effort plcommpro probe.
+
+    Returns (ok, note). Designed for UI gating where persisted DeviceStatus may be stale.
+    Must stay fast and never raise.
+    """
+    try:
+        ip = (getattr(dev, 'ip_address', '') or '').strip()
+        if not ip:
+            return (False, 'no-ip')
+        try:
+            port = int(getattr(dev, 'port', None) or 0) or 4370
+        except Exception:
+            port = 4370
+
+        comm_password = (getattr(dev, 'comm_password', '') or '').strip()
+        if not comm_password:
+            comm_password = _get_default_comm_password_cached()
+
+        from agent.plcommpro_bridge import PlcommproConnInfo, connect_only
+
+        conn = PlcommproConnInfo(
+            ipaddress=str(ip),
+            ip_port=int(port),
+            password=str(comm_password or ''),
+            timeout=2500,
+            protocol='TCP',
+        )
+        rr = connect_only(conn, process_timeout_s=5)
+        if isinstance(rr, dict) and bool(rr.get('ok')):
+            return (True, 'ok')
+
+        # Compact reason for logs/UI
+        if isinstance(rr, dict):
+            rres = rr.get('result')
+            rle = rr.get('last_error')
+            data = str(rr.get('data') or '')
+            data = data.replace('\r', ' ').replace('\n', ' ').strip()
+            if len(data) > 80:
+                data = data[:80] + '…'
+            note = f"sdk:{rres}" + (f":{rle}" if rle is not None else "")
+            if data:
+                note += f":{data}"
+            return (False, note)
+        return (False, 'probe-failed')
+    except Exception as ex:
+        return (False, f"exc:{ex}")
+
+
+def _latest_device_status_row(dev: "Device"):
+    """Return the latest DeviceStatus row for a device (or None).
+
+    Important: DeviceStatus is intentionally NOT unique per device in this project,
+    so callers must not use `.first()` without ordering.
+    """
+    try:
+        return DeviceStatus.objects.filter(device=dev).order_by('-updated_at', '-id').first()
+    except Exception:
+        return None
+
+
+def _maybe_set_device_online_from_probe(dev: "Device") -> bool:
+    """Probe controller and persist DeviceStatus if reachable."""
+    try:
+        ok, _note = _probe_device_online_plcommpro(dev)
+        if not ok:
+            return False
+        ds = _latest_device_status_row(dev)
+        if ds is None:
+            ds = DeviceStatus.objects.create(device=dev, online=True, door_state='READY')
+            return True
+        if not ds.online or not (ds.door_state or ''):
+            ds.online = True
+            if not (ds.door_state or '').strip():
+                ds.door_state = 'READY'
+            ds.save(update_fields=['online', 'door_state', 'updated_at'])
+        return True
+    except Exception:
+        return False
+
+
+
+def device_firewall_allow(request: HttpRequest):
+    """Add a Windows Firewall exception to allow connecting to a device port.
+
+    NOTE: This only changes the local Windows firewall. If the port is blocked by the
+    controller itself or by network equipment (switch/router ACL), this will not help.
+
+    POST JSON:
+      {"ip":"192.168.1.220","port":4370,"direction":"outbound","protocol":"TCP"}
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': 'unauth'}, status=403)
+
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'method-not-allowed'}, status=405)
+
+    try:
+        body = json.loads(request.body.decode('utf-8') or '{}')
+    except Exception:
+        return JsonResponse({'ok': False, 'error': 'invalid-json'}, status=400)
+
+    ip = str((body or {}).get('ip') or '').strip()
+    if not ip:
+        return JsonResponse({'ok': False, 'error': 'missing-ip'}, status=400)
+
+    try:
+        port = int((body or {}).get('port') or 4370)
+        if port < 1 or port > 65535:
+            return JsonResponse({'ok': False, 'error': 'invalid-port-range'}, status=400)
+    except Exception:
+        return JsonResponse({'ok': False, 'error': 'invalid-port-format'}, status=400)
+
+    direction = str((body or {}).get('direction') or 'outbound').strip().lower()
+    if direction not in {'outbound', 'inbound'}:
+        direction = 'outbound'
+
+    protocol = str((body or {}).get('protocol') or 'TCP').strip().upper()
+    if protocol not in {'TCP', 'UDP'}:
+        protocol = 'TCP'
+
+    import platform
+    import subprocess
+
+    if platform.system() != 'Windows':
+        return JsonResponse({'ok': False, 'error': 'unsupported-platform'}, status=400)
+
+    def _is_admin() -> bool:
+        try:
+            import ctypes
+
+            return bool(ctypes.windll.shell32.IsUserAnAdmin())
+        except Exception:
+            return False
+
+    display_name = f'ZKAccessB Allow {protocol} {direction} {port} ({ip})'
+    group_name = 'ZKAccessB'
+
+    # Keep rules scoped: outbound -> remote ip/port; inbound -> local port (optional for push/ADMS).
+    if direction == 'outbound':
+        suggested_ps = (
+            f'New-NetFirewallRule -DisplayName "{display_name}" -Group "{group_name}" '
+            f'-Direction Outbound -Action Allow -Enabled True -Profile Any -Protocol {protocol} '
+            f'-RemoteAddress {ip} -RemotePort {port} | Out-Null'
+        )
+    else:
+        suggested_ps = (
+            f'New-NetFirewallRule -DisplayName "{display_name}" -Group "{group_name}" '
+            f'-Direction Inbound -Action Allow -Enabled True -Profile Any -Protocol {protocol} '
+            f'-LocalPort {port} | Out-Null'
+        )
+
+    if not _is_admin():
+        return JsonResponse(
+            {
+                'ok': False,
+                'error': 'requires-admin',
+                'requires_admin': True,
+                'ip': ip,
+                'port': port,
+                'direction': direction,
+                'protocol': protocol,
+                'display_name': display_name,
+                'suggested_powershell_admin': suggested_ps,
+                'hint': (
+                    'Rule creation requires an elevated process (Run as Administrator). '
+                    'If TCP is still blocked afterwards, the device/network is blocking it.'
+                ),
+            },
+            status=200,
+        )
+
+    # Create rule idempotently: only if missing.
+    ps_script = (
+        f'$n = "{display_name}"; '
+        f'$r = Get-NetFirewallRule -DisplayName $n -ErrorAction SilentlyContinue; '
+        f'if(-not $r){{ {suggested_ps} }}; '
+        f'"OK"'
+    )
+
+    try:
+        proc = subprocess.run(
+            ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', ps_script],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=12,
+        )
+        out = (proc.stdout or '').strip()
+        if proc.returncode != 0:
+            return JsonResponse(
+                {
+                    'ok': False,
+                    'error': 'firewall-rule-failed',
+                    'ip': ip,
+                    'port': port,
+                    'direction': direction,
+                    'protocol': protocol,
+                    'display_name': display_name,
+                    'output': out[-2000:],
+                    'suggested_powershell_admin': suggested_ps,
+                },
+                status=200,
+            )
+        return JsonResponse(
+            {
+                'ok': True,
+                'ip': ip,
+                'port': port,
+                'direction': direction,
+                'protocol': protocol,
+                'display_name': display_name,
+                'output': out[-2000:],
+            },
+            status=200,
+        )
+    except Exception as e:
+        return JsonResponse(
+            {
+                'ok': False,
+                'error': f'firewall-rule-exception: {e}',
+                'ip': ip,
+                'port': port,
+                'direction': direction,
+                'protocol': protocol,
+                'display_name': display_name,
+                'suggested_powershell_admin': suggested_ps,
+            },
+            status=200,
+        )
+
+
+def device_admin_test(request: HttpRequest):
+    """Test whether a device is administrable via plcommpro (TCP connect + GetDeviceParam).
+
+    This is the practical next step after UDP discovery: UDP can find devices even when
+    the SDK pull port is blocked; administration requires a successful plcommpro Connect.
+
+    Usage:
+      /agent/devices/admin-test/?ip=192.168.1.220&port=4370&password=0
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': 'unauth'}, status=403)
+
+    # Support GET (legacy) and POST (preferred when sending password).
+    ip = ''
+    password = ''
+    protocol_req = ''
+    items = ''
+    port = 4370
+
+    if request.method == 'POST':
+        try:
+            import json
+
+            payload = json.loads((request.body or b'').decode('utf-8') or '{}')
+        except Exception:
+            payload = {}
+        ip = str(payload.get('ip') or '').strip()
+        try:
+            port = int(str(payload.get('port') or '4370').strip() or '4370')
+        except Exception:
+            port = 4370
+        password = str(payload.get('password') or '').strip()
+        items = str(
+            payload.get('items')
+            or 'IPAddress,NetMask,GATEIPAddress,WebServerURL,~SerialNumber,DeviceName,Product'
+        ).strip()
+        protocol_req = str(payload.get('protocol') or 'AUTO').strip().upper()
+    else:
+        ip = (request.GET.get('ip') or '').strip()
+        if not ip:
+            return JsonResponse({'ok': False, 'error': 'missing-ip'}, status=400)
+
+        try:
+            port = int((request.GET.get('port') or '4370').strip() or '4370')
+        except Exception:
+            port = 4370
+
+        password = str(request.GET.get('password') or '').strip()
+
+        # Keep this lightweight and read-only.
+        items = str(
+            request.GET.get('items')
+            or 'IPAddress,NetMask,GATEIPAddress,WebServerURL,~SerialNumber,DeviceName,Product'
+        ).strip()
+
+        protocol_req = str(request.GET.get('protocol') or 'AUTO').strip().upper()
+    if protocol_req not in {'TCP', 'UDP', 'AUTO'}:
+        protocol_req = 'AUTO'
+
+    # If password not provided, try DB-stored password (in-system devices).
+    if not password:
+        try:
+            dev = Device.objects.filter(ip_address=ip).first()
+            if dev and (dev.comm_password or '').strip():
+                password = str(dev.comm_password or '').strip()
+        except Exception:
+            pass
+
+    # Final fallback: a configured default comm password (does not persist to DB).
+    if not password:
+        password = _get_default_comm_password_cached()
+
+    try:
+        from .plcommpro_bridge import PlcommproConnInfo, get_device_options
+
+        attempts: list[dict] = []
+        protocols = ['TCP', 'UDP'] if protocol_req == 'AUTO' else [protocol_req]
+        for proto in protocols:
+            conn = PlcommproConnInfo(
+                ipaddress=ip,
+                ip_port=int(port or 4370),
+                password=password,
+                timeout=3000,
+                protocol=proto,
+            )
+            resp = get_device_options(conn, items)
+            attempts.append(
+                {
+                    'protocol': proto,
+                    'ok': bool(resp.get('ok')),
+                    'result': resp.get('result'),
+                    'last_error': resp.get('last_error'),
+                    'dll_path_used': resp.get('dll_path_used'),
+                }
+            )
+            if resp.get('ok'):
+                return JsonResponse(
+                    {
+                        'ok': True,
+                        'ip': ip,
+                        'port': port,
+                        'protocol': proto,
+                        'items': items,
+                        'data': resp.get('data') or '',
+                        'result': resp.get('result'),
+                        'last_error': resp.get('last_error'),
+                        'dll_path_used': resp.get('dll_path_used'),
+                        'attempts': attempts,
+                    }
+                )
+
+        # No protocol worked
+        return JsonResponse(
+            {
+                'ok': False,
+                'ip': ip,
+                'port': port,
+                'protocol': protocol_req,
+                'error': 'plcommpro-connect-failed',
+                'attempts': attempts,
+                'hint': (
+                    'Nu s-a putut administra centrala nici pe TCP, nici pe UDP (plcommpro). '
+                    'Dacă este vizibilă la UDP discovery dar nu răspunde la Connect, verificați: '
+                    'setările de comunicare ale centralei (SDK/COMM port), ACL/firewall de rețea, '
+                    'și dacă există un server/ADMS activ care ocupă conexiunea.'
+                ),
+            },
+            status=200,
+        )
+    except Exception as e:
+        return JsonResponse({'ok': False, 'ip': ip, 'port': port, 'error': f'admin-test-exception: {e}'}, status=200)
 
 
 def device_discover(request: HttpRequest):
@@ -701,29 +1477,277 @@ def device_discover(request: HttpRequest):
     2. TCP port scan fallback (ports 4370, 8080, 80 - common device ports)
     """
     if not request.user.is_authenticated:
-        return JsonResponse({'ok': False,'error':'unauth'}, status=403)
-    
-    base = request.GET.get('base', '').strip()
+        return JsonResponse({'ok': False, 'error': 'unauth'}, status=403)
+
+    def _normalize_base(base_str: str) -> str:
+        base_str = (base_str or '').strip()
+        if not base_str:
+            return ''
+        # Remove /24 or similar if provided
+        if '/' in base_str:
+            base_str = base_str.split('/')[0]
+            # If it's a full IP, strip last octet
+            if base_str.count('.') == 3:
+                base_str = '.'.join(base_str.split('.')[:3])
+
+        # Validate base format (should be XXX.XXX.XXX or XXX.XXX.XXX.0)
+        parts = base_str.split('.')
+        if len(parts) == 4 and parts[3] == '0':
+            return '.'.join(parts[:3])
+        if len(parts) != 3:
+            raise ValueError('invalid-base-format')
+        return base_str
+
+    def _parse_search_device(raw: str) -> list[dict]:
+        """Parse plcommpro.SearchDevice output into a list of dicts.
+
+        Format varies across firmware; we keep this permissive.
+        """
+        import re
+
+        raw = (raw or '').replace('\x00', '')
+        raw = raw.strip()
+        if not raw:
+            return []
+
+        # Split into records (usually \r\n separated)
+        records = [r.strip() for r in re.split(r'[\r\n]+', raw) if r.strip()]
+        if len(records) == 1 and raw.count('=') > 4 and ',' in raw and raw.count('IPAddress=') > 1:
+            # Some firmwares concatenate without newlines; try a softer split.
+            records = [r.strip() for r in re.split(r'(?=\b(?:IP|IPAddress|MAC|SN)=)', raw) if r.strip()]
+
+        key_map = {
+            'ip': 'ip',
+            'ipaddress': 'ip',
+            'sn': 'serial_number',
+            'serial': 'serial_number',
+            'serialnumber': 'serial_number',
+            'mac': 'mac',
+            'devicename': 'device_name',
+            'device': 'device_name',
+            'product': 'product',
+            'model': 'model',
+            # Common legacy/firmware variants for device type/model
+            'devicetype': 'model',
+            'devicetypename': 'model',
+            'deviceclass': 'model',
+            'productname': 'model',
+            'devicemodel': 'model',
+            'fwversion': 'fw_version',
+            'firmware': 'fw_version',
+            'commport': 'port',
+            'port': 'port',
+            'netmask': 'netmask',
+            'gateipaddress': 'gateway',
+            'gateway': 'gateway',
+        }
+
+        out: list[dict] = []
+        for rec in records:
+            parts = [p.strip() for p in re.split(r'[,;\t]+', rec) if p.strip()]
+            kv_raw: dict[str, str] = {}
+            for p in parts:
+                if '=' not in p:
+                    continue
+                k, v = p.split('=', 1)
+                k = (k or '').strip()
+                v = (v or '').strip()
+                if not k:
+                    continue
+                kv_raw[k] = v
+
+            normalized: dict[str, object] = {'raw': rec}
+            extras: dict[str, str] = {}
+            for k, v in kv_raw.items():
+                nk = key_map.get(k.strip().lower())
+                if nk:
+                    if nk == 'port':
+                        try:
+                            normalized[nk] = int(str(v).strip() or '0') or None
+                        except Exception:
+                            normalized[nk] = None
+                    else:
+                        normalized[nk] = v
+                else:
+                    extras[k] = v
+
+            # Ensure IP key exists when present in raw
+            if not normalized.get('ip'):
+                ip_guess = kv_raw.get('IP') or kv_raw.get('IPAddress') or kv_raw.get('ip')
+                if ip_guess:
+                    normalized['ip'] = ip_guess
+
+            if extras:
+                normalized['extra'] = extras
+
+            # If firmware provides Product but no explicit Model, use Product as a fallback label.
+            try:
+                if not str(normalized.get('model') or '').strip():
+                    prod = str(normalized.get('product') or '').strip()
+                    if prod:
+                        normalized['model'] = prod
+            except Exception:
+                pass
+            out.append(normalized)
+        return out
+
+    mode = (request.GET.get('mode') or '').strip().lower()
+    base_raw = request.GET.get('base', '').strip()
+    base = ''
+    if base_raw:
+        try:
+            base = _normalize_base(base_raw)
+        except ValueError:
+            return JsonResponse(
+                {
+                    'ok': False,
+                    'error': 'invalid-base-format',
+                    'example': '100.51.101 or 192.168.1',
+                },
+                status=400,
+            )
+
+    if mode in ('udp', 'legacy', 'broadcast'):
+        try:
+            from .plcommpro_bridge import search_device_udp
+            # Prefer directed broadcast when user provides a subnet.
+            # Many networks block 255.255.255.255 but allow 192.168.1.255.
+            addr = f"{base}.255" if base else None
+            resp = search_device_udp(address=addr)
+        except Exception as e:
+            return JsonResponse({'ok': False, 'error': f'udp-discover-failed: {e}'}, status=500)
+
+        if not resp.get('ok'):
+            hint = None
+            try:
+                data_s = str(resp.get('data') or '')
+                le = resp.get('last_error')
+                if '0x8007000B' in data_s:
+                    hint = (
+                        'plcommpro.dll are arhitectură greșită (x64 vs x86). '\
+                        'Setează ZKACCESS_PLCOMMPRO_DLL către un plcommpro.dll x86 (32-bit).'
+                    )
+                elif le in (-201, -202, -203, 10013, 10051, 10065):
+                    hint = (
+                        'UDP broadcast pare blocat (firewall/VPN/subrețea greșită). '\
+                        'Încearcă „Scan subrețea (ICMP/TCP)”, verifică PC-ul să fie în aceeași subrețea '\
+                        'și permite UDP/4370 în Windows Firewall (Private).'
+                    )
+                elif data_s:
+                    hint = data_s
+            except Exception:
+                hint = None
+            return JsonResponse(
+                {
+                    'ok': False,
+                    'error': 'udp-discover-failed',
+                    'result': resp.get('result'),
+                    'last_error': resp.get('last_error'),
+                    'data': resp.get('data', ''),
+                    'hint': hint,
+                },
+                status=500,
+            )
+
+        devices = _parse_search_device(str(resp.get('data') or ''))
+
+        # Infer door capacity (Nr. uși) from model/product strings.
+        # NOTE: This is a best-effort inference; for some firmwares SearchDevice is sparse.
+        try:
+            from agent.door_provisioning import infer_controller_door_capacity
+
+            for d in devices:
+                try:
+                    model_s = str(d.get('model') or d.get('product') or d.get('device_name') or '').strip()
+                    if not model_s:
+                        d['doors_capacity'] = None
+                        continue
+                    tmp = Device(
+                        device_type='access_panel',
+                        scanner_linked=False,
+                        name=model_s,
+                        hardware_version=model_s,
+                        firmware_version=str(d.get('fw_version') or ''),
+                    )
+                    cap = int(infer_controller_door_capacity(tmp) or 0)
+                    d['doors_capacity'] = cap if cap > 0 else None
+                except Exception:
+                    d['doors_capacity'] = None
+        except Exception:
+            # If inference fails for any reason, do not break discovery.
+            for d in devices:
+                try:
+                    d['doors_capacity'] = None
+                except Exception:
+                    pass
+
+        # Annotate each discovered device with whether it already exists in our system.
+        # Legacy UX: if already added, hide the Add button.
+        try:
+            existing_rows = list(
+                Device.objects.filter(ip_address__isnull=False)
+                .values('id', 'ip_address', 'serial_number')
+            )
+            # Also include devices that may have SN but no IP in DB.
+            existing_rows += list(
+                Device.objects.exclude(serial_number__isnull=True)
+                .exclude(serial_number='')
+                .values('id', 'ip_address', 'serial_number')
+            )
+
+            ip_to_id: dict[str, int] = {}
+            sn_to_id: dict[str, int] = {}
+            for r in existing_rows:
+                try:
+                    did = int(r.get('id') or 0)
+                except Exception:
+                    did = 0
+                if not did:
+                    continue
+                ip_s = str(r.get('ip_address') or '').strip()
+                sn_s = str(r.get('serial_number') or '').strip()
+                if ip_s and ip_s not in ip_to_id:
+                    ip_to_id[ip_s] = did
+                if sn_s and sn_s not in sn_to_id:
+                    sn_to_id[sn_s] = did
+        except Exception:
+            ip_to_id = {}
+            sn_to_id = {}
+        for d in devices:
+            try:
+                dip = str(d.get('ip') or '').strip()
+                dsn = str(d.get('serial_number') or '').strip()
+                did = 0
+                try:
+                    if dip and dip in ip_to_id:
+                        did = int(ip_to_id.get(dip) or 0)
+                    elif dsn and dsn in sn_to_id:
+                        did = int(sn_to_id.get(dsn) or 0)
+                except Exception:
+                    did = 0
+
+                d['in_system'] = bool(did)
+                d['device_id'] = did or None
+            except Exception:
+                d['in_system'] = False
+                d['device_id'] = None
+        if base:
+            devices = [d for d in devices if str(d.get('ip') or '').startswith(base + '.')]
+        ips = sorted({str(d.get('ip') or '').strip() for d in devices if str(d.get('ip') or '').strip()})
+
+        return JsonResponse(
+            {
+                'ok': True,
+                'responsive': ips,
+                'devices': devices,
+                'base': base,
+                'method': 'udp',
+                'count': len(ips),
+            }
+        )
+
     if not base:
-        return JsonResponse({'ok': False,'error':'missing-base'}, status=400)
-    
-    # Remove /24 or similar if provided
-    if '/' in base:
-        base = base.split('/')[0]
-        # If it's a full IP, strip last octet
-        if base.count('.') == 3:
-            base = '.'.join(base.split('.')[:3])
-    
-    # Validate base format (should be XXX.XXX.XXX or XXX.XXX.XXX.0)
-    parts = base.split('.')
-    if len(parts) == 4 and parts[3] == '0':
-        base = '.'.join(parts[:3])
-    elif len(parts) != 3:
-        return JsonResponse({
-            'ok': False,
-            'error': 'invalid-base-format',
-            'example': '100.51.101 or 192.168.1'
-        }, status=400)
+        return JsonResponse({'ok': False, 'error': 'missing-base'}, status=400)
     
     import subprocess, socket, threading, time
     from platform import system
@@ -753,7 +1777,7 @@ def device_discover(request: HttpRequest):
             pass
         return False
     
-    def tcp_port_scan(ip, ports=[4370, 8080, 80, 22, 23]):
+    def tcp_port_scan(ip, ports=[14370, 4370, 8080, 80, 22, 23]):
         """Fallback: Try TCP connection to common device ports"""
         for port in ports:
             try:
@@ -813,9 +1837,30 @@ def device_discover(request: HttpRequest):
     
     elapsed = time.time() - results['start_time']
     
+    responsive_sorted = sorted(results['responsive'])
+    try:
+        ip_to_id = {
+            str(r.get('ip_address') or '').strip(): int(r.get('id') or 0)
+            for r in Device.objects.filter(ip_address__isnull=False)
+            .values('id', 'ip_address')
+        }
+        ip_to_id = {k: v for k, v in ip_to_id.items() if k and v}
+    except Exception:
+        ip_to_id = {}
+
+    devices = []
+    for ip in responsive_sorted:
+        did = int(ip_to_id.get(str(ip).strip()) or 0)
+        devices.append({'ip': ip, 'in_system': bool(did), 'device_id': did or None})
+
+    # Scan mode does not include model info; keep a stable shape for the frontend.
+    for d in devices:
+        d['doors_capacity'] = None
+
     return JsonResponse({
         'ok': True,
-        'responsive': sorted(results['responsive']),
+        'responsive': responsive_sorted,
+        'devices': devices,
         'scanned': results['scanned'],
         'base': base,
         'method': results['method'],
@@ -834,37 +1879,294 @@ def device_discover_apply(request: HttpRequest):
         payload = json.loads(request.body.decode('utf-8'))
     except Exception:
         payload = request.POST.dict()
-    action = payload.get('action')
-    ip = (payload.get('ip') or '').strip()
+    def _first(v: object) -> object:
+        # Some form-style payloads can contain lists; normalize to first scalar.
+        if isinstance(v, list) and v:
+            return v[0]
+        return v
+
+    def _s(key: str, default: str = '') -> str:
+        try:
+            v = _first(payload.get(key, default))
+            return str(v or '').strip()
+        except Exception:
+            return str(default or '').strip()
+
+    def _i(key: str, default: int = 0) -> int:
+        try:
+            v = _first(payload.get(key, default))
+            return int(str(v or '').strip() or str(default))
+        except Exception:
+            return int(default)
+
+    action = _s('action')
+    action_norm = str(action or '').strip().lower().replace('-', '_')
+    ip = _s('ip')
     if not ip:
         return JsonResponse({'ok': False, 'error': 'missing-ip'}, status=400)
-    port = int(payload.get('port', 4370) or 4370)
-    name = (payload.get('name') or f'Centrală {ip}').strip()
-    serial = (payload.get('serial_number') or '').strip()
-    device_id = payload.get('device_id')
+    port = _i('port', 4370) or 4370
+    name = _s('name', f'Centrală {ip}') or f'Centrală {ip}'
+    serial = _s('serial_number')
+    device_id = _first(payload.get('device_id'))
+
+    def _to_bool(v: object) -> bool:
+        try:
+            if isinstance(v, bool):
+                return v
+            s = str(v or '').strip().lower()
+            return s in ('1', 'true', 'yes', 'y', 'on')
+        except Exception:
+            return False
+
+    comm_password_present = 'comm_password' in payload
+    comm_password = _s('comm_password') if comm_password_present else ''
+    clear_on_add_present = 'clear_on_add' in payload
+    clear_on_add_flag = _to_bool(_first(payload.get('clear_on_add'))) if clear_on_add_present else False
+
+    # Persist discovered model/type into Device.hardware_version (used across UI and door-capacity heuristics).
+    hw_present = ('hardware_version' in payload) or ('model' in payload)
+    hw_value = ''
+    if hw_present:
+        hw_value = _s('hardware_version') or _s('model')
+
+    def _guess_net(ip_str: str) -> tuple[str, str]:
+        try:
+            import ipaddress
+
+            ip_obj = ipaddress.ip_address((ip_str or '').strip())
+            if ip_obj.version != 4:
+                return ('', '')
+            parts = str(ip_obj).split('.')
+            if len(parts) != 4:
+                return ('', '')
+            gw = '.'.join(parts[:3] + ['254'])
+            return (gw, '255.255.255.0')
+        except Exception:
+            return ('', '')
 
     try:
-        if action == 'change_ip':
-            target_ip = (payload.get('target_ip') or ip).strip()
+        from django.db import IntegrityError
+
+        if action_norm == 'modify_ip_udp':
+            target_ip = _s('target_ip') or _s('target') or ip
+            mac = _s('mac')
+            gateway = _s('gateway')
+            subnet_mask = _s('subnet_mask')
+            if not mac:
+                return JsonResponse({'ok': False, 'error': 'missing-mac'}, status=400)
+            if not target_ip:
+                return JsonResponse({'ok': False, 'error': 'missing-target-ip'}, status=400)
+
+            guess_gw, guess_mask = _guess_net(target_ip)
+            if not subnet_mask:
+                subnet_mask = guess_mask
+            if not gateway:
+                gateway = guess_gw
+            if not gateway or not subnet_mask:
+                return JsonResponse({'ok': False, 'error': 'missing-gateway-or-netmask'}, status=400)
+
+            try:
+                from .plcommpro_bridge import modify_ip_udp
+
+                buf = f"MAC={mac},IPAddress={target_ip},GATEIPAddress={gateway},NetMask={subnet_mask}"
+                resp = modify_ip_udp(buf)
+                if not resp.get('ok'):
+                    return JsonResponse(
+                        {
+                            'ok': False,
+                            'error': 'udp-modify-ip-failed',
+                            'result': resp.get('result'),
+                            'last_error': resp.get('last_error'),
+                        },
+                        status=500,
+                    )
+            except Exception as e:
+                return JsonResponse({'ok': False, 'error': f'udp-modify-ip-exception: {e}'}, status=500)
+
+            # IMPORTANT: Do NOT auto-add devices to DB when doing IP change from discovery.
+            # Only update an existing in-system device record if we can match it.
             dev = None
             if device_id:
-                dev = Device.objects.filter(pk=int(device_id)).first()
+                try:
+                    dev = Device.objects.filter(pk=int(str(device_id).strip())).first()
+                except Exception:
+                    dev = None
             if not dev and serial:
                 dev = Device.objects.filter(serial_number=serial).first()
             if not dev:
                 dev = Device.objects.filter(ip_address=ip).first()
+
+            updated = False
+            if dev:
+                old_ip_db = dev.ip_address
+                dev.ip_address = target_ip
+                dev.port = port
+                if name:
+                    dev.name = name
+                if serial:
+                    dev.serial_number = serial
+                if comm_password_present and (comm_password or not (dev.comm_password or '').strip()):
+                    dev.comm_password = comm_password
+                if clear_on_add_present:
+                    dev.clear_on_add = clear_on_add_flag
+                # Persist network fields if present on model.
+                if hasattr(dev, 'gateway'):
+                    setattr(dev, 'gateway', gateway)
+                if hasattr(dev, 'subnet_mask'):
+                    setattr(dev, 'subnet_mask', subnet_mask)
+                try:
+                    update_fields = ['ip_address', 'port', 'name', 'serial_number']
+                    if comm_password_present:
+                        update_fields.append('comm_password')
+                    if clear_on_add_present:
+                        update_fields.append('clear_on_add')
+                    if hasattr(dev, 'gateway'):
+                        update_fields.append('gateway')
+                    if hasattr(dev, 'subnet_mask'):
+                        update_fields.append('subnet_mask')
+                    dev.save(update_fields=update_fields)
+                    updated = True
+                except IntegrityError as e:
+                    return JsonResponse(
+                        {
+                            'ok': False,
+                            'hardware_ok': True,
+                            'error': 'db-conflict',
+                            'hint': (
+                                'IP-ul a fost schimbat pe centrală, dar baza de date are deja un dispozitiv cu acest IP. '
+                                'Repornește scanarea și rezolvă conflictul (șterge/unește înregistrările duplicate).'
+                            ),
+                            'details': str(e),
+                            'ip': target_ip,
+                        },
+                        status=200,
+                    )
+
+                _audit_log(
+                    request,
+                    module='device',
+                    action='update',
+                    entity_id=dev.id,
+                    entity_name=getattr(dev, 'name', '') or '',
+                    details=f"udp_modify_ip mac={mac} {old_ip_db} -> {target_ip} gw={gateway} mask={subnet_mask}",
+                )
+            else:
+                _audit_log(
+                    request,
+                    module='device',
+                    action='hardware_only',
+                    entity_id=0,
+                    entity_name='',
+                    details=f"udp_modify_ip mac={mac} {ip} -> {target_ip} gw={gateway} mask={subnet_mask}",
+                )
+
+            return JsonResponse({'ok': True, 'ip': target_ip, 'updated': bool(updated), **({'id': dev.id} if dev else {})})
+
+        if action_norm == 'change_ip':
+            target_ip = _s('target_ip') or ip
+            gateway = _s('gateway')
+            subnet_mask = _s('subnet_mask')
+            dev = None
+            if device_id:
+                try:
+                    dev = Device.objects.filter(pk=int(str(device_id).strip())).first()
+                except Exception:
+                    dev = None
+            if not dev and serial:
+                dev = Device.objects.filter(serial_number=serial).first()
             if not dev:
-                return JsonResponse({'ok': False, 'error': 'device-not-found'}, status=404)
-            dev.ip_address = target_ip
-            dev.port = port
-            dev.save(update_fields=['ip_address', 'port'])
+                dev = Device.objects.filter(ip_address=ip).first()
+
+            # Guess defaults early (legacy screenshot: /24 + gateway .254)
+            guess_gw, guess_mask = _guess_net(target_ip or ip)
+            if not subnet_mask:
+                subnet_mask = guess_mask
+            if not gateway:
+                gateway = guess_gw
+            if not gateway or not subnet_mask:
+                return JsonResponse({'ok': False, 'error': 'missing-gateway-or-netmask'}, status=400)
+
+            # Push the change to the hardware first (legacy behavior: SET OPTION ...)
+            try:
+                from .plcommpro_bridge import PlcommproConnInfo, set_device_options
+
+                pw = ''
+                if comm_password_present:
+                    pw = str(comm_password or '').strip()
+                if (not pw) and dev and (dev.comm_password or '').strip():
+                    pw = str(dev.comm_password or '').strip()
+                conn = PlcommproConnInfo(
+                    ipaddress=str(ip),
+                    ip_port=int(port or 4370),
+                    password=pw,
+                    timeout=3000,
+                )
+                items = f"IPAddress={target_ip},GATEIPAddress={gateway},NetMask={subnet_mask}"
+                hw = set_device_options(conn, items)
+                if not hw.get('ok'):
+                    return JsonResponse(
+                        {
+                            'ok': False,
+                            'error': 'hardware-change-ip-failed',
+                            'result': hw.get('result'),
+                            'last_error': hw.get('last_error'),
+                        },
+                        status=500,
+                    )
+            except Exception as e:
+                return JsonResponse({'ok': False, 'error': f'hardware-change-ip-exception: {e}'}, status=500)
+
+            updated = False
+            if dev:
+                dev.ip_address = target_ip
+                dev.port = port
+                if name:
+                    dev.name = name
+                if serial:
+                    dev.serial_number = serial
+                if comm_password_present and (comm_password or not (dev.comm_password or '').strip()):
+                    dev.comm_password = comm_password
+                if clear_on_add_present:
+                    dev.clear_on_add = clear_on_add_flag
+                if hasattr(dev, 'gateway'):
+                    setattr(dev, 'gateway', gateway)
+                if hasattr(dev, 'subnet_mask'):
+                    setattr(dev, 'subnet_mask', subnet_mask)
+                try:
+                    update_fields = ['ip_address', 'port', 'name', 'serial_number']
+                    if comm_password_present:
+                        update_fields.append('comm_password')
+                    if clear_on_add_present:
+                        update_fields.append('clear_on_add')
+                    if hasattr(dev, 'gateway'):
+                        update_fields.append('gateway')
+                    if hasattr(dev, 'subnet_mask'):
+                        update_fields.append('subnet_mask')
+                    dev.save(update_fields=update_fields)
+                    updated = True
+                except IntegrityError as e:
+                    return JsonResponse(
+                        {
+                            'ok': False,
+                            'hardware_ok': True,
+                            'error': 'db-conflict',
+                            'hint': (
+                                'IP-ul a fost schimbat pe centrală, dar baza de date are deja un dispozitiv cu acest IP. '
+                                'Repornește scanarea și rezolvă conflictul (șterge/unește înregistrările duplicate).'
+                            ),
+                            'details': str(e),
+                            'ip': target_ip,
+                        },
+                        status=200,
+                    )
+
             _audit_log(
                 request,
                 module='device',
                 action='update',
                 entity_id=dev.id,
                 entity_name=getattr(dev, 'name', '') or '',
-                details=f"change_ip {ip} -> {target_ip} port={port}",
+                details=f"change_ip {ip} -> {target_ip} port={port} gw={gateway} mask={subnet_mask}",
             )
             try:
                 from legacy_models.models import Device as LegacyDevice  # type: ignore
@@ -874,9 +2176,16 @@ def device_discover_apply(request: HttpRequest):
                     legacy.save(update_fields=['com_address'])
             except Exception:
                 pass
-            return JsonResponse({'ok': True, 'id': dev.id, 'ip': dev.ip_address, 'updated': True})
+            if dev:
+                return JsonResponse({'ok': True, 'id': dev.id, 'ip': target_ip, 'updated': bool(updated)})
+            return JsonResponse({'ok': True, 'ip': target_ip, 'updated': False})
 
-        # Default: create or update existing device by IP/serial
+        # Only explicit add/update operations are allowed to touch DB records.
+        # Safety: do NOT auto-add devices for unknown/empty actions.
+        if action_norm not in ('add', 'update'):
+            return JsonResponse({'ok': False, 'error': f'unknown-action:{action_norm or "(empty)"}'}, status=400)
+
+        # Add/update: create or update existing device by IP/serial
         dev, created = Device.objects.get_or_create(
             ip_address=ip,
             defaults={
@@ -886,6 +2195,9 @@ def device_discover_apply(request: HttpRequest):
                 'device_type': 'access_panel',
                 'comm_mode': 'tcp',
                 'enabled': True,
+                **({'hardware_version': hw_value} if (hw_present and hw_value) else {}),
+                **({'comm_password': comm_password} if comm_password_present else {}),
+                **({'clear_on_add': clear_on_add_flag} if clear_on_add_present else {}),
             }
         )
         if not created:
@@ -894,7 +2206,54 @@ def device_discover_apply(request: HttpRequest):
                 dev.serial_number = serial
             dev.port = port
             dev.enabled = True
-            dev.save(update_fields=['name','serial_number','port','enabled'])
+            if hw_present and hw_value:
+                dev.hardware_version = hw_value
+            if comm_password_present and (comm_password or not (dev.comm_password or '').strip()):
+                dev.comm_password = comm_password
+            if clear_on_add_present:
+                dev.clear_on_add = clear_on_add_flag
+            update_fields = ['name','serial_number','port','enabled']
+            if hw_present and hw_value:
+                update_fields.append('hardware_version')
+            if comm_password_present:
+                update_fields.append('comm_password')
+            if clear_on_add_present:
+                update_fields.append('clear_on_add')
+            dev.save(update_fields=update_fields)
+
+        # Ensure a status row exists immediately after adding/updating a controller,
+        # so door allocation/actions won't fail with device-status-missing.
+        try:
+            from agent.models import DeviceStatus as _DS
+
+            _DS.objects.get_or_create(device=dev)
+        except Exception:
+            pass
+
+        # Best-effort: if the controller responds to our SDK probe, mark ONLINE now.
+        # This avoids the common "all offline" state right after discovery/import.
+        try:
+            _maybe_set_device_online_from_probe(dev)
+        except Exception:
+            pass
+
+        # Legacy option: "Clear Data in the Device when Adding".
+        # Semantics in legacy iAccess/ZKAccess: clear device data except the event log.
+        # We implement this by deleting key non-event tables.
+        clear_ok = None
+        clear_error = ''
+        clear_warning = ''
+        if action_norm == 'add' and clear_on_add_present and clear_on_add_flag:
+            # Never block the HTTP request on SDK delete operations.
+            # Queue a command for CommCenter to execute asynchronously.
+            clear_ok = False
+            try:
+                row = CommandLog.objects.create(device=dev, command='CLEAR_DEVICE_DATA', status='PENDING')
+                clear_ok = True
+                clear_warning = f"queued:{row.id}"
+            except Exception as e:
+                clear_ok = False
+                clear_error = f"queue_failed:{e}"
 
         # Time zone policy:
         # - Controllers: keep their configured TZ; default to system TZ only if empty.
@@ -930,7 +2289,7 @@ def device_discover_apply(request: HttpRequest):
             action=('create' if created else 'update'),
             entity_id=dev.id,
             entity_name=getattr(dev, 'name', '') or '',
-            details=f"discover_apply ip={ip} port={port} sn={getattr(dev, 'serial_number', '')}",
+            details=f"discover_apply action={action_norm} ip={ip} port={port} sn={getattr(dev, 'serial_number', '')}",
         )
 
         # Sync minimal legacy device record for migration continuity
@@ -955,6 +2314,12 @@ def device_discover_apply(request: HttpRequest):
             pass
 
         resp = {'ok': True, 'id': dev.id, 'ip': dev.ip_address, 'created': created}
+        if clear_ok is not None:
+            resp['clear_ok'] = bool(clear_ok)
+            if clear_error:
+                resp['clear_error'] = clear_error
+            if clear_warning:
+                resp['clear_warning'] = clear_warning
         if prov is not None:
             resp['door_capacity'] = getattr(prov, 'capacity', None)
             resp['doors_created'] = getattr(prov, 'created', None)
@@ -1034,6 +2399,16 @@ def device_create(request: HttpRequest):
                 from agent.door_provisioning import ensure_controller_doors
 
                 ensure_controller_doors(obj)
+            except Exception:
+                pass
+
+            # Note: do NOT auto-seed "Implicit" access levels. Levels are user-defined.
+            # Ensure a baseline status row exists so list UIs don't render OFFLINE on first load.
+            try:
+                from agent.models import DeviceStatus
+
+                if not DeviceStatus.objects.filter(device=obj).exists():
+                    DeviceStatus.objects.create(device=obj, online=True, door_state='CLOSED')
             except Exception:
                 pass
             _audit_log(
@@ -1201,6 +2576,16 @@ def device_edit(request: HttpRequest, pk: int):
                 from agent.door_provisioning import ensure_controller_doors
 
                 ensure_controller_doors(saved)
+            except Exception:
+                pass
+
+            # Note: do NOT auto-seed "Implicit" access levels. Levels are user-defined.
+            # Ensure a baseline status row exists (some UIs render OFFLINE if none exists).
+            try:
+                from agent.models import DeviceStatus
+
+                if not DeviceStatus.objects.filter(device=saved).exists():
+                    DeviceStatus.objects.create(device=saved, online=True, door_state='CLOSED')
             except Exception:
                 pass
             try:
@@ -1395,10 +2780,9 @@ def access_dashboard(request: HttpRequest):
     recent_events = list(DeviceEventLog.objects.order_by('-created_at')[:5].values('created_at','code'))
     recent_commands = list(CommandLog.objects.order_by('-created_at')[:5].values('created_at','command','status'))
     # Live device/door status panel context
-    # For the dashboard page-render we use authoritative persisted values
-    # from the DB (`DeviceStatus.updated_at`). Do NOT use runtime broadcast
-    # timestamps for the initial page render; those are transient and reflect
-    # process restarts rather than real device state-changes.
+    # For the dashboard page-render we use persisted values from the DB.
+    # - Device.last_contact: liveness/heartbeat (updated during successful communication)
+    # - DeviceStatus.updated_at: state-change timestamp (online/door_state changes)
 
     # Build live device status payload with categories (centrale / dispozitive / cititoare)
     device_statuses = []
@@ -1420,12 +2804,12 @@ def access_dashboard(request: HttpRequest):
                 type_badge = dev.type_badge()
             except Exception:
                 type_badge = device_type
-        # Serialize `updated_at` as ISO string for client-side JSON script.
-        # Prefer the runtime broadcast timestamp (if present) so a page refresh
-        # shows the same recent 'last seen' as WebSocket-connected clients.
+        # Serialize 'last seen' as ISO string for client-side JSON script.
+        # Prefer Device.last_contact (heartbeat). Fall back to DeviceStatus.updated_at.
         ua_iso = None
         try:
-            ua_iso = ds.updated_at.isoformat() if ds.updated_at is not None else None
+            last_seen = getattr(dev, 'last_contact', None) or getattr(ds, 'updated_at', None)
+            ua_iso = last_seen.isoformat() if last_seen is not None else None
         except Exception:
             ua_iso = None
         device_statuses.append({
@@ -1440,15 +2824,36 @@ def access_dashboard(request: HttpRequest):
             'type_badge': type_badge,
         })
 
-    # Build door payload with cached lock state fallback
+    # Build door payload with cached lock state fallback.
+    # Exclude orphan/unassigned Door rows (device is NULL) from live dashboard,
+    # because they are not actionable and confuse operators (they show up as "Ușă/USA").
     doors = []
-    for d in Door.objects.select_related('device').all():
+    door_qs = Door.objects.select_related('device').exclude(device__isnull=True).exclude(door_number__isnull=True).all()
+
+    # Preload latest DeviceStatus per device (avoid N+1 and avoid OPEN when offline)
+    dev_ids = [getattr(getattr(d, 'device', None), 'id', None) for d in door_qs]
+    dev_ids = [i for i in dev_ids if i is not None]
+    status_map = {}
+    if dev_ids:
+        for ds in DeviceStatus.objects.filter(device_id__in=dev_ids).order_by('device_id', '-updated_at', '-id'):
+            if ds.device_id not in status_map:
+                status_map[ds.device_id] = ds
+
+    for d in door_qs:
+        dev = getattr(d, 'device', None)
+        dev_id = getattr(dev, 'id', None) if dev else None
+        ds = status_map.get(dev_id)
+        try:
+            setattr(d, '__device_online', bool(ds.online) if ds is not None else False)
+        except Exception:
+            pass
+
         state = _door_state_from_cache_or_model(d)
         doors.append({
             'id': d.id,
             'name': d.name,
-            'device_id': getattr(d.device, 'id', None),
-            'device__name': getattr(d.device, 'name', None),
+            'device_id': dev_id,
+            'device__name': getattr(dev, 'name', None) if dev else None,
             'is_open': d.is_open,
             'enabled': d.enabled,
             'location': d.location,
@@ -1588,9 +2993,10 @@ def menu_device(request: HttpRequest):
     from django.db.models import OuterRef, Subquery
     from .models import DeviceStatus as _DS
 
-    latest = _DS.objects.filter(device=OuterRef('pk')).order_by('-updated_at')
+    latest = _DS.objects.filter(device=OuterRef('pk')).order_by('-updated_at', '-id')
     qs = Device.objects.order_by('name').annotate(
         latest_online=Subquery(latest.values('online')[:1]),
+        latest_door_state=Subquery(latest.values('door_state')[:1]),
         latest_updated_at=Subquery(latest.values('updated_at')[:1])
     )
     flt = (request.GET.get('filter') or 'all').strip().lower()
@@ -1609,17 +3015,48 @@ def menu_device(request: HttpRequest):
     except Exception:
         pass
 
-    # Preload status summary for Monitorizare dispozitive tab
+    # Lightweight device index for UI actions (e.g., SYNC)
+    device_index_json = '{}'
+    try:
+        import json
+
+        idx = {}
+        for d in Device.objects.all().only('id', 'name', 'device_type', 'scanner_linked', 'ip_address', 'port', 'serial_number'):
+            try:
+                is_phys = bool(d.is_physical_controller())
+            except Exception:
+                is_phys = False
+            idx[int(d.id)] = {
+                'name': str(getattr(d, 'name', '') or ''),
+                'is_physical': bool(is_phys),
+            }
+        device_index_json = json.dumps(idx, ensure_ascii=False)
+    except Exception:
+        device_index_json = '{}'
+
+    # Preload status summary for Monitorizare dispozitive tab (latest-per-device)
     status_rows = []
-    for ds in DeviceStatus.objects.select_related('device').all():
-        status_rows.append({
-            'id': ds.device.id,
-            'name': ds.device.name,
-            'serial': ds.device.serial_number,
-            'online': ds.online,
-            'door_state': ds.door_state,
-            'updated_at': ds.updated_at,
-        })
+    try:
+        for dev in Device.objects.order_by('name').annotate(
+            latest_online=Subquery(latest.values('online')[:1]),
+            latest_door_state=Subquery(latest.values('door_state')[:1]),
+            latest_updated_at=Subquery(latest.values('updated_at')[:1]),
+        ):
+            try:
+                is_phys = bool(dev.is_physical_controller())
+            except Exception:
+                is_phys = False
+            status_rows.append({
+                'id': dev.id,
+                'name': dev.name,
+                'serial': dev.serial_number,
+                'online': bool(getattr(dev, 'latest_online', False)),
+                'door_state': getattr(dev, 'latest_door_state', '') or '',
+                'updated_at': getattr(dev, 'latest_updated_at', None),
+                'is_physical': bool(is_phys),
+            })
+    except Exception:
+        status_rows = []
     status_summary_data = {
         'total': len(status_rows),
         'online': sum(1 for r in status_rows if r['online']),
@@ -1631,6 +3068,7 @@ def menu_device(request: HttpRequest):
         'devices_filter': flt,
         'status_rows': status_rows,
         'status_summary': status_summary_data,
+        'device_index_json': device_index_json,
     })
 
 def menu_access_control(request: HttpRequest):
@@ -1946,16 +3384,48 @@ def menu_system(request: HttpRequest):
     except Exception:
         TimeZoneSetting = None  # type: ignore
 
-    # UI prefs (stored in SystemSettings)
+    # UI prefs + sync limits (stored in SystemSettings)
     ui_date_format = 'ro_short'
     ui_week_start = 'monday'
+    sync_limits = None
+    default_comm_password_db = ''
+    default_comm_password_env = ''
+    default_comm_password_effective = ''
+    default_comm_password_source = ''
     try:
         ss = SystemSettings.get_solo()
         ui_date_format = (getattr(ss, 'date_format', '') or '').strip() or 'ro_short'
         ui_week_start = (getattr(ss, 'week_start', '') or '').strip() or 'monday'
+        default_comm_password_db = str(getattr(ss, 'default_comm_password', '') or '').strip()
+        try:
+            from django.conf import settings as _dj_settings
+
+            default_comm_password_env = str(getattr(_dj_settings, 'ZKACCESS_DEFAULT_COMM_PASSWORD', '') or '').strip()
+        except Exception:
+            default_comm_password_env = ''
+
+        # DB wins over env so the in-app tab is authoritative.
+        default_comm_password_effective = default_comm_password_db or default_comm_password_env
+        default_comm_password_source = 'db' if default_comm_password_db else ('env' if default_comm_password_env else '')
+        try:
+            from agent.sync_limits import get_sync_personnel_limits
+
+            sync_limits = get_sync_personnel_limits(force_refresh=True)
+        except Exception:
+            sync_limits = None
     except Exception:
         ui_date_format = 'ro_short'
         ui_week_start = 'monday'
+        sync_limits = None
+        default_comm_password_db = ''
+        try:
+            from django.conf import settings as _dj_settings
+
+            default_comm_password_env = str(getattr(_dj_settings, 'ZKACCESS_DEFAULT_COMM_PASSWORD', '') or '').strip()
+        except Exception:
+            default_comm_password_env = ''
+        default_comm_password_effective = default_comm_password_env
+        default_comm_password_source = 'env' if default_comm_password_env else ''
 
     def _fmt_date_ui(dt, fmt: str) -> str:
         try:
@@ -2123,7 +3593,7 @@ def menu_system(request: HttpRequest):
         devices_rows = []
 
     # LOGS
-    system_modules = ['system-user', 'system-group', 'system-tz', 'system-time']
+    system_modules = ['system-user', 'system-group', 'system-tz', 'system-time', 'system']
     logs_all = []
     logs_users = []
     logs_groups = []
@@ -2161,8 +3631,105 @@ def menu_system(request: HttpRequest):
             'user_create_form': SystemUserForm(),
             'group_create_form': SystemGroupForm(),
             'tz_create_form': TimeZoneSettingForm(),
+            'sync_limits': sync_limits,
+            'default_comm_password_db': default_comm_password_db,
+            'default_comm_password_env': default_comm_password_env,
+            'default_comm_password_effective': default_comm_password_effective,
+            'default_comm_password_source': default_comm_password_source,
         },
     )
+
+
+def system_sync_limits_save(request: HttpRequest):
+    """Save SYNC_PERSONNEL limits to SystemSettings (DB-backed)."""
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'method_not_allowed'}, status=405)
+
+    from agent.models import SystemSettings
+
+    def _parse_int(name: str, default: int) -> int:
+        try:
+            return int((request.POST.get(name) or '').strip())
+        except Exception:
+            return default
+
+    def _parse_float(name: str, default: float) -> float:
+        try:
+            return float((request.POST.get(name) or '').strip())
+        except Exception:
+            return default
+
+    enabled_raw = (request.POST.get('sync_personnel_enabled') or '').strip()
+    enabled = (enabled_raw not in ('0', 'false', 'False', 'no', 'NO'))
+
+    dedupe_s = _parse_int('sync_personnel_dedupe_seconds', 60)
+    dedupe_s = max(5, min(600, dedupe_s))
+
+    reassert_s = _parse_int('sync_personnel_reassert_seconds', 21600)
+    reassert_s = max(60, min(7 * 24 * 3600, reassert_s))
+
+    batch_size = _parse_int('sync_personnel_batch_size', 200)
+    batch_size = max(20, min(2000, batch_size))
+
+    inter_sleep = _parse_float('sync_personnel_inter_batch_sleep', 0.02)
+    inter_sleep = max(0.0, min(0.25, inter_sleep))
+
+    max_per_min = _parse_int('sync_personnel_max_per_minute', 0)
+    max_per_min = max(0, min(600, max_per_min))
+
+    ss = SystemSettings.get_solo()
+    ss.sync_personnel_enabled = bool(enabled)
+    ss.sync_personnel_dedupe_seconds = int(dedupe_s)
+    ss.sync_personnel_reassert_seconds = int(reassert_s)
+    ss.sync_personnel_batch_size = int(batch_size)
+    ss.sync_personnel_inter_batch_sleep = float(inter_sleep)
+    ss.sync_personnel_max_per_minute = int(max_per_min)
+    ss.save(
+        update_fields=[
+            'sync_personnel_enabled',
+            'sync_personnel_dedupe_seconds',
+            'sync_personnel_reassert_seconds',
+            'sync_personnel_batch_size',
+            'sync_personnel_inter_batch_sleep',
+            'sync_personnel_max_per_minute',
+            'updated_at',
+        ]
+    )
+
+    try:
+        from agent.sync_limits import get_sync_personnel_limits
+
+        eff = get_sync_personnel_limits(force_refresh=True)
+        data = {
+            'enabled': eff.enabled,
+            'dedupe_seconds': eff.dedupe_seconds,
+            'reassert_seconds': eff.reassert_seconds,
+            'batch_size': eff.batch_size,
+            'inter_batch_sleep': eff.inter_batch_sleep,
+            'max_per_minute': eff.max_per_minute,
+        }
+    except Exception:
+        data = {
+            'enabled': bool(enabled),
+            'dedupe_seconds': int(dedupe_s),
+            'reassert_seconds': int(reassert_s),
+            'batch_size': int(batch_size),
+            'inter_batch_sleep': float(inter_sleep),
+            'max_per_minute': int(max_per_min),
+        }
+
+    _audit_log(
+        request,
+        module='system',
+        action='save_sync_limits',
+        entity_id=1,
+        entity_name='SystemSettings',
+        details=str(data),
+    )
+    return JsonResponse({'ok': True, 'data': data})
 
 
 def api_system_now(request: HttpRequest):
@@ -2204,8 +3771,168 @@ def api_system_now(request: HttpRequest):
             'ok': True,
             'epoch_ms_utc': int(now_utc.timestamp() * 1000),
             'offset_seconds': offset_seconds,
+            'tz_key': tz_key,
             'tz_label': f"{tz_key} (UTC{_fmt_offset_for_api(offset_seconds)})" if tz_key else f"UTC{_fmt_offset_for_api(offset_seconds)}",
             'formatted': formatted,
+        }
+    )
+
+
+def api_system_audit_latest(request: HttpRequest):
+    """Return latest system-module audit logs since a given ID.
+
+    This is used by System UI to refresh logs in near real-time, even when
+    running under runserver (no WebSockets).
+    """
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+
+    if AuditLog is None:
+        return JsonResponse({'ok': True, 'rows': [], 'latest_id': 0})
+
+    try:
+        since_id = int((request.GET.get('since_id') or '0').strip() or '0')
+    except Exception:
+        since_id = 0
+
+    # System module audit stream
+    system_modules = ['system-user', 'system-group', 'system-tz', 'system-time', 'system']
+
+    try:
+        qs = (
+            AuditLog.objects
+            .filter(module__in=system_modules, id__gt=int(since_id))
+            .order_by('id')
+        )
+        # Cap incremental delivery
+        rows = list(qs[:80])
+    except Exception:
+        rows = []
+
+    out = []
+    latest_id = int(since_id or 0)
+    for l in rows:
+        try:
+            lid = int(getattr(l, 'id'))
+        except Exception:
+            continue
+        latest_id = max(latest_id, lid)
+        try:
+            ts = getattr(l, 'timestamp', None)
+            ts_str = ts.strftime('%Y-%m-%d %H:%M:%S') if ts else ''
+        except Exception:
+            ts_str = ''
+        try:
+            details = getattr(l, 'details', '') or ''
+        except Exception:
+            details = ''
+        if len(details) > 2000:
+            details = details[:2000]
+        out.append(
+            {
+                'id': lid,
+                'timestamp': ts_str,
+                'user': (getattr(l, 'user', None) or ''),
+                'module': (getattr(l, 'module', None) or ''),
+                'action': (getattr(l, 'action', None) or ''),
+                'entity': (getattr(l, 'entity_name', None) or '') or str(getattr(l, 'entity_id', '') or ''),
+                'details': details,
+            }
+        )
+
+    return JsonResponse({'ok': True, 'rows': out, 'latest_id': latest_id})
+
+
+def api_system_time_check(request: HttpRequest):
+    """Return drift diagnostics between server clock and DB clock.
+
+    Goal: detect and eliminate discordances between app/server time and DB time
+    without relying on browser-local clocks.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+
+    from django.utils import timezone
+    from django.db import connection
+    from django.utils.dateparse import parse_datetime
+    import datetime as _dt
+
+    now_server_utc = timezone.now()
+    try:
+        now_server_local = timezone.localtime(now_server_utc)
+    except Exception:
+        now_server_local = now_server_utc
+
+    # DB current time (best-effort; format depends on backend)
+    db_raw = None
+    db_epoch_ms_utc = None
+    db_error = None
+    try:
+        vendor = getattr(connection, 'vendor', '')
+        sql = 'SELECT CURRENT_TIMESTAMP'
+        if vendor == 'sqlite':
+            # SQLite CURRENT_TIMESTAMP returns UTC as a string: YYYY-MM-DD HH:MM:SS
+            sql = 'SELECT CURRENT_TIMESTAMP'
+        cur = connection.cursor()
+        cur.execute(sql)
+        row = cur.fetchone()
+        db_raw = row[0] if row else None
+
+        dt = None
+        if isinstance(db_raw, _dt.datetime):
+            dt = db_raw
+        elif isinstance(db_raw, (int, float)):
+            dt = _dt.datetime.fromtimestamp(float(db_raw), tz=_dt.timezone.utc)
+        elif db_raw is not None:
+            # parse_datetime expects ISO-ish; SQLite uses space separator.
+            s = str(db_raw).strip().replace(' ', 'T', 1)
+            dt = parse_datetime(s)
+            if dt is None:
+                # last fallback: try without replacement
+                dt = parse_datetime(str(db_raw).strip())
+
+        if dt is not None:
+            if timezone.is_naive(dt):
+                # Assume UTC for DB timestamps (matches Django storage when USE_TZ=True).
+                dt = timezone.make_aware(dt, timezone=timezone.utc)
+            db_epoch_ms_utc = int(dt.astimezone(timezone.utc).timestamp() * 1000)
+    except Exception as e:
+        db_error = str(e)
+
+    server_epoch_ms_utc = int(now_server_utc.timestamp() * 1000)
+    drift_seconds = None
+    if db_epoch_ms_utc is not None:
+        drift_seconds = (db_epoch_ms_utc - server_epoch_ms_utc) / 1000.0
+
+    tz_key = ''
+    offset_seconds = 0
+    try:
+        tz_key = getattr(timezone.get_current_timezone(), 'key', None) or str(timezone.get_current_timezone())
+    except Exception:
+        tz_key = ''
+    try:
+        off = now_server_local.utcoffset()
+        offset_seconds = int(off.total_seconds()) if off else 0
+    except Exception:
+        offset_seconds = 0
+
+    return JsonResponse(
+        {
+            'ok': True,
+            'server': {
+                'now_utc': now_server_utc.isoformat(),
+                'now_local': now_server_local.isoformat(),
+                'epoch_ms_utc': server_epoch_ms_utc,
+                'tz_key': tz_key,
+                'offset_seconds': offset_seconds,
+            },
+            'db': {
+                'vendor': getattr(connection, 'vendor', None),
+                'current_timestamp_raw': db_raw,
+                'epoch_ms_utc': db_epoch_ms_utc,
+                'error': db_error,
+            },
+            'drift_seconds': drift_seconds,
         }
     )
 
@@ -3100,7 +4827,16 @@ def menu_reports(request: HttpRequest):
 
             # Keep it bounded for merge
             rows = list(qs[:800])
-            device_ids = sorted({getattr(r, 'device_id', None) for r in rows if getattr(r, 'device_id', None) is not None})
+            device_ids_set: set[int] = set()
+            for r in rows:
+                dev_id = getattr(r, 'device_id', None)
+                if dev_id is None:
+                    continue
+                try:
+                    device_ids_set.add(int(dev_id))
+                except Exception:
+                    continue
+            device_ids = sorted(device_ids_set)
             device_map = {d.id: d for d in _Device.objects.filter(id__in=device_ids)} if device_ids else {}
 
             door_keys = set()
@@ -3469,7 +5205,16 @@ def menu_reports(request: HttpRequest):
                         pass
 
                     rows = list(hw_qs[:400])
-                    device_ids = sorted({getattr(r, 'device_id', None) for r in rows if getattr(r, 'device_id', None) is not None})
+                    device_ids_set: set[int] = set()
+                    for r in rows:
+                        dev_id = getattr(r, 'device_id', None)
+                        if dev_id is None:
+                            continue
+                        try:
+                            device_ids_set.add(int(dev_id))
+                        except Exception:
+                            continue
+                    device_ids = sorted(device_ids_set)
                     device_map = {d.id: d for d in _Device.objects.filter(id__in=device_ids)} if device_ids else {}
 
                     door_keys = set()
@@ -3937,11 +5682,8 @@ def doors_list(request: HttpRequest):
             except Exception:
                 dev.doors_capacity = None
 
-    # Also show doors not assigned to any controller (imported/legacy leftovers).
-    try:
-        unassigned_doors = list(Door.objects.filter(device__isnull=True).order_by('name', 'id')[:50])
-    except Exception:
-        unassigned_doors = []
+    # Doors must belong to a controller; do not surface unassigned/orphan doors in UI.
+    unassigned_doors = []
 
     next_tab = 'doorconfig' if mode == 'config' else 'doors'
     tpl = 'agent/access_door_configuration_embed.html' if mode == 'config' else 'agent/access_doors_by_device_embed.html'
@@ -4044,6 +5786,8 @@ def device_edit_access(request: HttpRequest, pk: int):
         system_tz = ''
         system_now_local_str = ''
 
+    wizard = (request.GET.get('wizard') or '').strip() in ('1', 'true', 'yes', 'on')
+
     if request.method == 'POST':
         post_data = request.POST
         # For reader devices (ELATEC/APC), force device TZ to system TZ.
@@ -4055,7 +5799,7 @@ def device_edit_access(request: HttpRequest, pk: int):
         except Exception:
             post_data = request.POST
 
-        form = DeviceExtendedForm(post_data, instance=obj)
+        form = DeviceExtendedForm(post_data, instance=obj, wizard=wizard)
 
         if form.is_valid():
             saved = form.save()
@@ -4072,6 +5816,8 @@ def device_edit_access(request: HttpRequest, pk: int):
                 ensure_controller_doors(saved)
             except Exception:
                 pass
+
+            # Note: do NOT auto-seed "Implicit" access levels. Levels are user-defined.
             _audit_log(
                 request,
                 module='device',
@@ -4081,7 +5827,13 @@ def device_edit_access(request: HttpRequest, pk: int):
             )
             return render(request, 'agent/device_access_saved_inner.html', {'obj': saved})
     else:
-        form = DeviceExtendedForm(instance=obj)
+        initial = {}
+        try:
+            if system_tz and not (getattr(obj, 'time_zone', '') or '').strip():
+                initial['time_zone'] = system_tz
+        except Exception:
+            initial = {}
+        form = DeviceExtendedForm(instance=obj, initial=initial, wizard=wizard)
 
     controller_doors = []
     try:
@@ -4114,6 +5866,7 @@ def device_edit_access(request: HttpRequest, pk: int):
             'system_time_zone': system_tz,
             'system_time_now_local': system_now_local_str,
             'show_derived_doors': True,
+            'wizard': wizard,
         },
     )
 
@@ -4145,6 +5898,122 @@ def device_create_access(request: HttpRequest):
         system_now_local_str = ''
 
     obj = None
+    wizard = (request.GET.get('wizard') or '').strip() in ('1', 'true', 'yes', 'on')
+    wizard_token = (request.GET.get('wizard_token') or request.POST.get('wizard_token') or '').strip()
+    wizard_step = (request.GET.get('wizard_step') or request.POST.get('wizard_step') or '').strip().lower() or 'config'
+    if wizard_step not in ('identify', 'config'):
+        wizard_step = 'config'
+
+    wants_json = (request.headers.get('X-Requested-With') or '').lower() == 'xmlhttprequest'
+
+    def _wiz_get_store() -> dict:
+        try:
+            store = request.session.get('wizard_device_drafts')
+            return store if isinstance(store, dict) else {}
+        except Exception:
+            return {}
+
+    def _wiz_set_store(store: dict) -> None:
+        try:
+            request.session['wizard_device_drafts'] = store
+            try:
+                request.session.modified = True
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+    def _wiz_get_draft(token: str) -> dict:
+        if not token:
+            return {}
+        store = _wiz_get_store()
+        d = store.get(token)
+        return d if isinstance(d, dict) else {}
+
+    def _wiz_put_draft(token: str, draft: dict) -> None:
+        if not token:
+            return
+        store = _wiz_get_store()
+        store[token] = draft if isinstance(draft, dict) else {}
+        _wiz_set_store(store)
+
+    def _wiz_update_device_snapshot(token: str, data: dict) -> None:
+        if not token:
+            return
+        draft = _wiz_get_draft(token)
+        dev = draft.get('device') if isinstance(draft.get('device'), dict) else {}
+        dev = {**dev, **(data or {})}
+        draft['device'] = dev
+        _wiz_put_draft(token, draft)
+
+    def _wiz_set_meta(token: str, **kwargs) -> None:
+        if not token:
+            return
+        draft = _wiz_get_draft(token)
+        for k, v in (kwargs or {}).items():
+            draft[k] = v
+        _wiz_put_draft(token, draft)
+
+    def _infer_capacity(cleaned: dict) -> int:
+        # Prefer discovered capacity stored in wizard draft (from discovery modal).
+        try:
+            if wizard and wizard_token:
+                draft = _wiz_get_draft(wizard_token)
+                cap_raw = draft.get('doors_capacity')
+                cap = int(cap_raw or 0)
+                if cap > 0:
+                    return cap
+        except Exception:
+            pass
+        try:
+            from agent.door_provisioning import infer_controller_door_capacity
+
+            tmp = Device(
+                device_type=cleaned.get('device_type') or 'access_panel',
+                comm_mode=cleaned.get('comm_mode') or 'tcp',
+                ip_address=cleaned.get('ip_address'),
+                port=cleaned.get('port') or 4370,
+                hardware_version=cleaned.get('hardware_version') or '',
+            )
+            cap = int(infer_controller_door_capacity(tmp) or 0)
+            return cap if cap > 0 else 0
+        except Exception:
+            return 0
+
+    def _build_draft_controller_doors(cleaned: dict) -> list:
+        try:
+            cap = _infer_capacity(cleaned)
+            cap = cap if cap > 0 else 1
+            ip = str(cleaned.get('ip_address') or '').strip()
+
+            draft = _wiz_get_draft(wizard_token)
+            doors = draft.get('doors') if isinstance(draft.get('doors'), dict) else {}
+
+            out = []
+            for dn in range(1, cap + 1):
+                st = doors.get(str(dn)) if isinstance(doors.get(str(dn)), dict) else {}
+                name = str(st.get('name') or f'Ușă {dn}').strip()
+                rin = str(st.get('reader_in_custom_name') or (f'{ip}-{dn} In' if ip else '')).strip() or '—'
+                rout = str(st.get('reader_out_custom_name') or (f'{ip}-{dn} Out' if ip else '')).strip() or '—'
+                out.append(SimpleNamespace(
+                    id=dn,
+                    door_number=dn,
+                    name=name,
+                    reader_in_name=rin,
+                    reader_out_name=rout,
+                ))
+            return out
+        except Exception:
+            return []
+
+    def _wizard_clear_requested_ui() -> bool:
+        try:
+            if not (wizard and wizard_token):
+                return False
+            draft = _wiz_get_draft(wizard_token)
+            return bool(draft.get('clear_requested_ui')) or bool(draft.get('clear_requested'))
+        except Exception:
+            return False
     if request.method == 'POST':
         post_data = request.POST
         # For reader devices (ELATEC/APC), force device TZ to system TZ.
@@ -4156,8 +6025,195 @@ def device_create_access(request: HttpRequest):
         except Exception:
             post_data = request.POST
 
-        form = DeviceExtendedForm(post_data)
+        form = DeviceExtendedForm(post_data, wizard=wizard, wizard_step=wizard_step)
         if form.is_valid():
+            # Wizard discovery flow: when wizard_token is present, DO NOT create in DB
+            # until the final save is validated (doors + optional clear).
+            if wizard and wizard_token:
+                cleaned = dict(form.cleaned_data or {})
+
+                # Persist wizard meta (e.g., discovered capacity) even on identify step.
+                try:
+                    cap_post = request.POST.get('doors_capacity')
+                    cap = int(str(cap_post).strip() or '0') if cap_post is not None else 0
+                    if cap > 0:
+                        _wiz_set_meta(wizard_token, doors_capacity=cap)
+                except Exception:
+                    pass
+
+                # Identify step: only persist snapshot and move to next UI step.
+                if wizard_step == 'identify':
+                    try:
+                        _wiz_update_device_snapshot(wizard_token, {
+                            'name': str(cleaned.get('name') or ''),
+                            'serial_number': str(cleaned.get('serial_number') or ''),
+                            'hardware_version': str(cleaned.get('hardware_version') or ''),
+                            'ip_address': str(cleaned.get('ip_address') or ''),
+                            'port': int(cleaned.get('port') or 0) or 0,
+                            'comm_password': str(cleaned.get('comm_password') or ''),
+                        })
+                    except Exception:
+                        pass
+
+                    clear_ui = bool(cleaned.get('clear_on_add'))
+                    try:
+                        _wiz_set_meta(wizard_token, clear_requested_ui=clear_ui)
+                    except Exception:
+                        pass
+
+                    if wants_json:
+                        if clear_ui:
+                            return JsonResponse({
+                                'ok': True,
+                                'wizard_step': 'clear',
+                                'wizard_token': wizard_token,
+                                'device_ip': str(cleaned.get('ip_address') or '').strip(),
+                                'device_port': int(cleaned.get('port') or 0) or 4370,
+                                'comm_password': str(cleaned.get('comm_password') or '').strip(),
+                            })
+
+                        from django.template.loader import render_to_string
+                        controller_doors = _build_draft_controller_doors(cleaned)
+                        html = render_to_string('agent/device_access_form_inner.html', {
+                            'form': form,
+                            'obj': None,
+                            'action_url': request.path,
+                            'next_url': '/agent/menu/device/?tab=devices',
+                            'controller_doors': controller_doors,
+                            'system_time_zone': system_tz,
+                            'system_time_now_local': system_now_local_str,
+                            'show_derived_doors': True,
+                            'wizard': True,
+                            'wizard_token': wizard_token,
+                            'wizard_step': 'config',
+                            'wizard_doors_capacity': int((_wiz_get_draft(wizard_token) or {}).get('doors_capacity') or 0) or None,
+                            'wizard_clear_requested_ui': _wizard_clear_requested_ui(),
+                        }, request=request)
+                        return JsonResponse({'ok': True, 'html': html, 'wizard_step': 'config'})
+
+                    # Non-AJAX fallback: just render config step.
+                    controller_doors = _build_draft_controller_doors(cleaned)
+                    return render(request, 'agent/device_access_form_inner.html', {
+                        'form': form,
+                        'obj': None,
+                        'action_url': request.path,
+                        'next_url': '/agent/menu/device/?tab=devices',
+                        'controller_doors': controller_doors,
+                        'system_time_zone': system_tz,
+                        'system_time_now_local': system_now_local_str,
+                        'show_derived_doors': True,
+                        'wizard': True,
+                        'wizard_token': wizard_token,
+                        'wizard_step': 'config',
+                        'wizard_doors_capacity': int((_wiz_get_draft(wizard_token) or {}).get('doors_capacity') or 0) or None,
+                        'wizard_clear_requested_ui': _wizard_clear_requested_ui(),
+                    })
+
+                # Persist snapshot for door draft editor.
+                try:
+                    _wiz_update_device_snapshot(wizard_token, {
+                        'name': str(cleaned.get('name') or ''),
+                        'serial_number': str(cleaned.get('serial_number') or ''),
+                        'hardware_version': str(cleaned.get('hardware_version') or ''),
+                        'ip_address': str(cleaned.get('ip_address') or ''),
+                        'port': int(cleaned.get('port') or 0) or 0,
+                    })
+                except Exception:
+                    pass
+
+                # Validate clear prerequisite if requested.
+                draft = _wiz_get_draft(wizard_token)
+                clear_required = bool(draft.get('clear_requested')) or bool(draft.get('clear_requested_ui'))
+                clear_cmd_id = int(draft.get('clear_cmd_id') or 0) if str(draft.get('clear_cmd_id') or '').strip() else 0
+                if clear_required:
+                    row = CommandLog.objects.filter(id=clear_cmd_id).first() if clear_cmd_id else None
+                    if (not row) or (str(getattr(row, 'status', '')).upper() != 'OK'):
+                        form.add_error(None, 'Ștergerea datelor nu este confirmată ca finalizată. Reîncearcă ștergerea și apoi continuă.')
+                        controller_doors = _build_draft_controller_doors(cleaned)
+                        if wants_json:
+                            from django.template.loader import render_to_string
+
+                            html = render_to_string('agent/device_access_form_inner.html', {
+                                'form': form,
+                                'obj': None,
+                                'action_url': request.path,
+                                'next_url': '/agent/menu/device/?tab=devices',
+                                'controller_doors': controller_doors,
+                                'system_time_zone': system_tz,
+                                'system_time_now_local': system_now_local_str,
+                                'show_derived_doors': True,
+                                'wizard': wizard,
+                                'wizard_token': wizard_token,
+                                'wizard_step': 'config',
+                                'wizard_doors_capacity': int((draft or {}).get('doors_capacity') or 0) or None,
+                                'wizard_clear_requested_ui': _wizard_clear_requested_ui(),
+                            }, request=request)
+                            return JsonResponse({'ok': False, 'message': 'Ștergerea datelor nu este confirmată.', 'html': html})
+                        return render(request, 'agent/device_access_form_inner.html', {
+                            'form': form,
+                            'obj': None,
+                            'action_url': request.path,
+                            'next_url': '/agent/menu/device/?tab=devices',
+                            'controller_doors': controller_doors,
+                            'system_time_zone': system_tz,
+                            'system_time_now_local': system_now_local_str,
+                            'show_derived_doors': True,
+                            'wizard': wizard,
+                            'wizard_token': wizard_token,
+                            'wizard_step': 'config',
+                            'wizard_doors_capacity': int((draft or {}).get('doors_capacity') or 0) or None,
+                            'wizard_clear_requested_ui': _wizard_clear_requested_ui(),
+                        })
+
+                # Validate door drafts (all doors for inferred capacity).
+                cap = _infer_capacity(cleaned)
+                cap = cap if cap > 0 else 1
+                need = set(range(1, cap + 1))
+                doors = draft.get('doors') if isinstance(draft.get('doors'), dict) else {}
+                have = set()
+                for k in (doors or {}).keys():
+                    try:
+                        have.add(int(str(k)))
+                    except Exception:
+                        continue
+                if have != need:
+                    form.add_error(None, 'Configurează ușile înainte de a crea centrala (apasă Editează la fiecare ușă).')
+                    controller_doors = _build_draft_controller_doors(cleaned)
+                    if wants_json:
+                        from django.template.loader import render_to_string
+
+                        html = render_to_string('agent/device_access_form_inner.html', {
+                            'form': form,
+                            'obj': None,
+                            'action_url': request.path,
+                            'next_url': '/agent/menu/device/?tab=devices',
+                            'controller_doors': controller_doors,
+                            'system_time_zone': system_tz,
+                            'system_time_now_local': system_now_local_str,
+                            'show_derived_doors': True,
+                            'wizard': wizard,
+                            'wizard_token': wizard_token,
+                            'wizard_step': 'config',
+                            'wizard_doors_capacity': int((draft or {}).get('doors_capacity') or 0) or None,
+                            'wizard_clear_requested_ui': _wizard_clear_requested_ui(),
+                        }, request=request)
+                        return JsonResponse({'ok': False, 'message': 'Ușile nu sunt configurate complet.', 'html': html})
+                    return render(request, 'agent/device_access_form_inner.html', {
+                        'form': form,
+                        'obj': None,
+                        'action_url': request.path,
+                        'next_url': '/agent/menu/device/?tab=devices',
+                        'controller_doors': controller_doors,
+                        'system_time_zone': system_tz,
+                        'system_time_now_local': system_now_local_str,
+                        'show_derived_doors': True,
+                        'wizard': wizard,
+                        'wizard_token': wizard_token,
+                        'wizard_step': 'config',
+                        'wizard_doors_capacity': int((draft or {}).get('doors_capacity') or 0) or None,
+                        'wizard_clear_requested_ui': _wizard_clear_requested_ui(),
+                    })
+
             saved = form.save()
             # Safety: enforce system TZ for scanners.
             try:
@@ -4172,6 +6228,108 @@ def device_create_access(request: HttpRequest):
                 ensure_controller_doors(saved)
             except Exception:
                 pass
+
+            # Ensure a baseline status row exists so UI lists (that use latest_online)
+            # don't render brand new devices as OFFLINE before CommCenter/tray updates.
+            try:
+                from agent.models import DeviceStatus
+
+                if not DeviceStatus.objects.filter(device=saved).exists():
+                    DeviceStatus.objects.create(device=saved, online=True, door_state='CLOSED')
+            except Exception:
+                pass
+
+            # Wizard draft flow: apply draft door config onto provisioned doors, then clear draft.
+            if wizard and wizard_token:
+                try:
+                    draft = _wiz_get_draft(wizard_token)
+                    doors = draft.get('doors') if isinstance(draft.get('doors'), dict) else {}
+                    for k, v in (doors or {}).items():
+                        try:
+                            dn = int(str(k))
+                        except Exception:
+                            continue
+                        if not isinstance(v, dict):
+                            continue
+                        d = Door.objects.filter(device=saved, door_number=dn).first()
+                        if not d:
+                            continue
+                        if (v.get('name') or '').strip():
+                            d.name = str(v.get('name') or '').strip()[:128]
+                        if v.get('reader_in_custom_name') is not None:
+                            d.reader_in_custom_name = str(v.get('reader_in_custom_name') or '')[:128]
+                        if v.get('reader_out_custom_name') is not None:
+                            d.reader_out_custom_name = str(v.get('reader_out_custom_name') or '')[:128]
+                        if v.get('normally_open') is not None:
+                            d.normally_open = bool(v.get('normally_open'))
+                        if v.get('enabled') is not None:
+                            d.enabled = bool(v.get('enabled'))
+
+                        # Full legacy-like fields (optional in draft).
+                        if v.get('door_active_time_zone') is not None:
+                            try:
+                                d.door_active_time_zone_id = int(v.get('door_active_time_zone') or 0) or None
+                            except Exception:
+                                d.door_active_time_zone_id = None
+                        if v.get('door_passage_mode_time_zone') is not None:
+                            try:
+                                d.door_passage_mode_time_zone_id = int(v.get('door_passage_mode_time_zone') or 0) or None
+                            except Exception:
+                                d.door_passage_mode_time_zone_id = None
+                        if v.get('lock_open_duration') is not None:
+                            try:
+                                d.lock_open_duration = int(v.get('lock_open_duration') or 5)
+                            except Exception:
+                                pass
+                        if v.get('punch_interval') is not None:
+                            try:
+                                d.punch_interval = int(v.get('punch_interval') or 2)
+                            except Exception:
+                                pass
+                        if v.get('door_sensor_type') is not None:
+                            d.door_sensor_type = str(v.get('door_sensor_type') or '')[:20]
+                        if v.get('door_status_delay') is not None:
+                            try:
+                                d.door_status_delay = int(v.get('door_status_delay') or 15)
+                            except Exception:
+                                pass
+                        if v.get('close_and_reverse_state') is not None:
+                            d.close_and_reverse_state = bool(v.get('close_and_reverse_state'))
+                        if v.get('verify_mode') is not None:
+                            d.verify_mode = str(v.get('verify_mode') or '')[:32]
+                        if v.get('duress_password') is not None:
+                            d.duress_password = str(v.get('duress_password') or '')[:16]
+                        if v.get('emergency_password') is not None:
+                            d.emergency_password = str(v.get('emergency_password') or '')[:16]
+
+                        d.save(update_fields=[
+                            'name',
+                            'reader_in_custom_name',
+                            'reader_out_custom_name',
+                            'door_active_time_zone',
+                            'door_passage_mode_time_zone',
+                            'lock_open_duration',
+                            'punch_interval',
+                            'door_sensor_type',
+                            'door_status_delay',
+                            'close_and_reverse_state',
+                            'verify_mode',
+                            'duress_password',
+                            'emergency_password',
+                            'normally_open',
+                            'enabled',
+                        ])
+
+                    # Remove draft from session (commit completed)
+                    store = _wiz_get_store()
+                    if wizard_token in store:
+                        try:
+                            del store[wizard_token]
+                        except Exception:
+                            pass
+                        _wiz_set_store(store)
+                except Exception:
+                    pass
             _audit_log(
                 request,
                 module='device',
@@ -4179,12 +6337,138 @@ def device_create_access(request: HttpRequest):
                 entity_id=saved.id,
                 entity_name=getattr(saved, 'name', '') or '',
             )
-            return render(request, 'agent/device_access_saved_inner.html', {'obj': saved})
-    else:
-        form = DeviceExtendedForm()
+            clear_command_id = None
+            clear_requested = False
+            try:
+                # Wizard-only semantics: queue clear-on-add asynchronously after create.
+                # Always surface a command id when the checkbox is set so the UI can block
+                # continuation and show progress, even if controller detection is imperfect.
+                clear_requested = bool(wizard and bool(getattr(saved, 'clear_on_add', False)))
+                if clear_requested:
+                    row = CommandLog.objects.create(device=saved, command='CLEAR_DEVICE_DATA', status='PENDING')
+                    clear_command_id = int(row.id)
+            except Exception:
+                clear_command_id = None
+            if wants_json:
+                from django.template.loader import render_to_string
 
-    # In create mode, server-side derived doors list is not available yet.
+                html = render_to_string('agent/device_access_saved_inner.html', {
+                    'obj': saved,
+                    'clear_command_id': clear_command_id,
+                    'clear_requested': clear_requested,
+                }, request=request)
+                return JsonResponse({'ok': True, 'message': 'Centrala a fost creată.', 'html': html, 'device_id': int(saved.id)})
+
+            return render(request, 'agent/device_access_saved_inner.html', {'obj': saved, 'clear_command_id': clear_command_id, 'clear_requested': clear_requested})
+
+        # Invalid form (AJAX): return replacement HTML.
+        if wants_json:
+            from django.template.loader import render_to_string
+
+            controller_doors = []
+            try:
+                if wizard and wizard_token:
+                    cleaned = dict(getattr(form, 'data', {}) or {})
+                    controller_doors = _build_draft_controller_doors(cleaned)
+            except Exception:
+                controller_doors = []
+            html = render_to_string('agent/device_access_form_inner.html', {
+                'form': form,
+                'obj': None,
+                'action_url': request.path,
+                'next_url': '/agent/menu/device/?tab=devices',
+                'controller_doors': controller_doors,
+                'system_time_zone': system_tz,
+                'system_time_now_local': system_now_local_str,
+                'show_derived_doors': bool(wizard_step == 'config'),
+                'wizard': wizard,
+                'wizard_token': wizard_token,
+                'wizard_step': wizard_step,
+                'wizard_doors_capacity': int((_wiz_get_draft(wizard_token) or {}).get('doors_capacity') or 0) or None,
+                'wizard_clear_requested_ui': _wizard_clear_requested_ui(),
+            }, request=request)
+            return JsonResponse({'ok': False, 'message': 'Eroare validare.', 'html': html})
+    else:
+        initial = {}
+        try:
+            for k in ('name', 'serial_number', 'hardware_version', 'ip_address', 'comm_password'):
+                v = (request.GET.get(k) or '').strip()
+                if v:
+                    initial[k] = v
+            port_raw = (request.GET.get('port') or '').strip()
+            if port_raw:
+                try:
+                    initial['port'] = int(port_raw)
+                except Exception:
+                    pass
+            clear_raw = (request.GET.get('clear_on_add') or '').strip().lower()
+            if clear_raw in ('1', 'true', 'yes', 'on'):
+                initial['clear_on_add'] = True
+        except Exception:
+            initial = {}
+
+        # Legacy-like default: prefill device TZ with the system TZ for controllers too.
+        try:
+            if system_tz and (initial.get('time_zone') is None) and not (initial.get('time_zone') or '').strip():
+                initial['time_zone'] = system_tz
+        except Exception:
+            pass
+
+        form = DeviceExtendedForm(initial=initial, wizard=wizard, wizard_step=wizard_step)
+
+        # If wizard_token is present, merge any session draft snapshot as defaults.
+        if wizard and wizard_token:
+            try:
+                draft = _wiz_get_draft(wizard_token)
+                dev = draft.get('device') if isinstance(draft.get('device'), dict) else {}
+                for k in ('name', 'serial_number', 'hardware_version', 'ip_address', 'port'):
+                    if (not initial.get(k)) and dev.get(k):
+                        initial[k] = dev.get(k)
+                form = DeviceExtendedForm(initial=initial, wizard=wizard, wizard_step=wizard_step)
+            except Exception:
+                pass
+
+    # Persist snapshot so door draft editor shows context even before posting.
+    if wizard and wizard_token:
+        try:
+            snap = {
+                'name': str((form.initial.get('name') or '')).strip(),
+                'serial_number': str((form.initial.get('serial_number') or '')).strip(),
+                'hardware_version': str((form.initial.get('hardware_version') or '')).strip(),
+                'ip_address': str((form.initial.get('ip_address') or '')).strip(),
+                'port': int(form.initial.get('port') or 0) if str(form.initial.get('port') or '').strip() else 0,
+            }
+            _wiz_update_device_snapshot(wizard_token, snap)
+        except Exception:
+            pass
+
+        # Store discovered capacity (if provided by discovery modal).
+        try:
+            cap_raw = (request.GET.get('doors_capacity') or '').strip()
+            if cap_raw:
+                cap = int(cap_raw)
+                if cap > 0:
+                    _wiz_set_meta(wizard_token, doors_capacity=cap)
+        except Exception:
+            pass
+
+    # In create wizard draft mode, build a server-side derived doors list so we can
+    # render legacy-like per-door Edit buttons.
     controller_doors = []
+    if wizard and wizard_token and wizard_step == 'config':
+        try:
+            cleaned = dict(getattr(form, 'initial', {}) or {})
+            controller_doors = _build_draft_controller_doors(cleaned)
+        except Exception:
+            controller_doors = []
+
+    wizard_doors_capacity = None
+    try:
+        if wizard and wizard_token:
+            draft = _wiz_get_draft(wizard_token)
+            wizard_doors_capacity = int((draft or {}).get('doors_capacity') or 0) or None
+    except Exception:
+        wizard_doors_capacity = None
 
     return render(
         request,
@@ -4198,7 +6482,634 @@ def device_create_access(request: HttpRequest):
             'controller_doors': controller_doors,
             'system_time_zone': system_tz,
             'system_time_now_local': system_now_local_str,
-            'show_derived_doors': True,
+            'show_derived_doors': bool(wizard_step == 'config'),
+            'wizard': wizard,
+            'wizard_token': wizard_token,
+            'wizard_step': wizard_step,
+            'wizard_doors_capacity': wizard_doors_capacity,
+            'wizard_clear_requested_ui': _wizard_clear_requested_ui(),
+        },
+    )
+
+
+@csrf_exempt
+def wizard_clear_device(request: HttpRequest):
+    """Wizard-only clear operation executed before the Device exists in DB.
+
+    Creates a CommandLog row (device NULL) and updates its status asynchronously.
+    """
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'method-not-allowed'}, status=405)
+
+    try:
+        payload = json.loads((request.body or b'{}').decode('utf-8') or '{}')
+    except Exception:
+        payload = {}
+
+    ip = str(payload.get('ip') or '').strip()
+    port = int(payload.get('port') or 0) if str(payload.get('port') or '').strip() else 0
+    comm_password = str(payload.get('comm_password') or '').strip()
+    if not comm_password:
+        comm_password = _get_default_comm_password_cached()
+    wizard_token = str(payload.get('wizard_token') or '').strip()
+
+    if not ip:
+        return JsonResponse({'ok': False, 'error': 'missing-ip'}, status=400)
+    if not (port > 0 and port <= 65535):
+        return JsonResponse({'ok': False, 'error': 'missing-port'}, status=400)
+
+    row = CommandLog.objects.create(device=None, door=None, command=f'WIZARD_CLEAR_DEVICE {ip}:{port}', status='RUNNING')
+
+    # Link into wizard session so finalize can validate OK.
+    try:
+        if wizard_token:
+            store = request.session.get('wizard_device_drafts')
+            if not isinstance(store, dict):
+                store = {}
+            draft = store.get(wizard_token)
+            if not isinstance(draft, dict):
+                draft = {}
+            draft['clear_requested'] = True
+            draft['clear_cmd_id'] = int(row.id)
+            store[wizard_token] = draft
+            request.session['wizard_device_drafts'] = store
+            try:
+                request.session.modified = True
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    def _runner(cmd_id: int, ipaddr: str, p: int, pw: str) -> None:
+        import time
+        from pathlib import Path
+
+        try:
+            from django.db import close_old_connections
+
+            close_old_connections()
+        except Exception:
+            pass
+
+        started = time.time()
+        ok = True
+        parts: list[str] = []
+
+        def _mark_running() -> None:
+            info = (';'.join([x for x in parts if x]) or 'running')[:240]
+            try:
+                CommandLog.objects.filter(id=int(cmd_id)).update(
+                    status='RUNNING',
+                    result=info,
+                    executed_at=timezone.now(),
+                )
+            except Exception:
+                pass
+
+        # Validate that plcommpro can CONNECT to the controller.
+        # We try the user-selected port first, then known controller ports.
+        # This avoids common cases where a TCP bridge port is open (e.g. 14370) but does not
+        # speak the controller protocol.
+        probed_dll: str | None = None
+        pw_for_ops = str(pw or '')
+        port_for_ops = int(p)
+        proto_for_ops = 'TCP'
+
+        # Quick visibility: which common TCP ports are open right now?
+        try:
+            import socket
+
+            def _tcp_open(port_num: int) -> bool:
+                sock: socket.socket | None = None
+                try:
+                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                    sock.settimeout(0.4)
+                    sock.connect((str(ipaddr), int(port_num)))
+                    return True
+                except Exception:
+                    return False
+                finally:
+                    try:
+                        if sock:
+                            sock.close()
+                    except Exception:
+                        pass
+
+            scan_ports: list[int] = []
+            for cp in [int(p), 4370, 4371, 4372, 14370, 443, 80, 8080]:
+                try:
+                    if cp > 0 and cp <= 65535 and cp not in scan_ports:
+                        scan_ports.append(cp)
+                except Exception:
+                    pass
+            open_ports = [cp for cp in scan_ports if _tcp_open(int(cp))]
+            if open_ports:
+                parts.append('tcpopen=' + ','.join([str(x) for x in open_ports[:8]]))
+                _mark_running()
+        except Exception:
+            pass
+        try:
+            from agent.plcommpro_bridge import PlcommproConnInfo, connect_only
+
+            # For newer PRO controllers (commonly on TCP 14370), the Standalone SDK bundle
+            # tends to be more reliable than older PullSDK builds. Prefer the x86 DLL here:
+            # our bridge runner is proven stable for x86 operations (GetDeviceParam/DeleteDeviceData/etc).
+            sdk_x86_hint: str | None = None
+            try:
+                repo_root = Path(__file__).resolve().parents[2]
+                cand = repo_root / 'Resurse' / 'Standalone SDK-6.3.1.55' / 'SDK' / 'x86' / 'plcommpro.dll'
+                if cand.exists() and cand.is_file():
+                    sdk_x86_hint = str(cand)
+            except Exception:
+                sdk_x86_hint = None
+
+            # Candidate ports: selected + common controller ports.
+            cand_ports: list[int] = []
+            for cp in [int(p), 4370, 4371, 4372, 14370]:
+                try:
+                    if cp > 0 and cp <= 65535 and cp not in cand_ports:
+                        cand_ports.append(cp)
+                except Exception:
+                    pass
+
+            rr: dict | None = None
+            for try_port in cand_ports:
+                port_for_ops = int(try_port)
+                for try_proto in ('TCP', 'UDP'):
+                    proto_for_ops = str(try_proto)
+                    # attempt with provided/default password
+                    probe_conn = PlcommproConnInfo(
+                        ipaddress=str(ipaddr),
+                        ip_port=int(port_for_ops),
+                        password=str(pw_for_ops),
+                        timeout=1500,
+                        protocol=str(proto_for_ops),
+                    )
+                    rr_try = connect_only(
+                        probe_conn,
+                        process_timeout_s=8,
+                        dll_path=(sdk_x86_hint if int(port_for_ops) == 14370 else None),
+                    )
+                    if isinstance(rr_try, dict) and bool(rr_try.get('ok')):
+                        rr = rr_try
+                        break
+
+                    # retry once with blank password (common after reset)
+                    if pw_for_ops:
+                        try:
+                            probe_conn_blank = PlcommproConnInfo(
+                                ipaddress=str(ipaddr),
+                                ip_port=int(port_for_ops),
+                                password='',
+                                timeout=1500,
+                                protocol=str(proto_for_ops),
+                            )
+                            rr_blank = connect_only(
+                                probe_conn_blank,
+                                process_timeout_s=8,
+                                dll_path=(sdk_x86_hint if int(port_for_ops) == 14370 else None),
+                            )
+                            if isinstance(rr_blank, dict) and bool(rr_blank.get('ok')):
+                                rr = rr_blank
+                                pw_for_ops = ''
+                                parts.append('pw=blank')
+                                _mark_running()
+                                break
+                        except Exception:
+                            pass
+
+                    rr = rr_try if isinstance(rr_try, dict) else None
+                if isinstance(rr, dict) and bool(rr.get('ok')):
+                    break
+
+            if not (isinstance(rr, dict) and bool(rr.get('ok'))):
+                ok = False
+                try:
+                    rres = rr.get('result') if isinstance(rr, dict) else 'err'
+                    rle = rr.get('last_error') if isinstance(rr, dict) else None
+                    data = str(rr.get('data') or '') if isinstance(rr, dict) else ''
+                    data = data.replace('\r', ' ').replace('\n', ' ').strip()
+                    if len(data) > 120:
+                        data = data[:120] + '…'
+                    dll_used = str(rr.get('dll_path_used') or '').strip() if isinstance(rr, dict) else ''
+                    if dll_used:
+                        try:
+                            dll_used = os.path.basename(dll_used)
+                        except Exception:
+                            pass
+                    note = f"probe:sdk:fail@{str(proto_for_ops)}:{int(port_for_ops)}:{rres}" + (f":{rle}" if rle is not None else '')
+                    if dll_used:
+                        note += f":dll={dll_used}"
+                    if data:
+                        note += f":{data}"
+                    parts.append(note)
+                except Exception:
+                    parts.append(
+                        f"probe:sdk:fail@{str(proto_for_ops)}:{int(port_for_ops)}:{rr.get('result') if isinstance(rr, dict) else 'err'}"
+                        + (
+                            f":{rr.get('last_error')}" if isinstance(rr, dict) and rr.get('last_error') is not None else ''
+                        )
+                    )
+                _mark_running()
+            else:
+                try:
+                    probed_dll = str(rr.get('dll_path_used') or '').strip() or None
+                except Exception:
+                    probed_dll = None
+                parts.append(f'port={int(port_for_ops)}')
+                parts.append(f'proto={str(proto_for_ops).lower()}')
+                parts.append('probe:sdk:ok')
+                _mark_running()
+        except Exception as ex:
+            ok = False
+            parts.append(f'probe:sdk:exc:{ex}')
+            _mark_running()
+
+        if not ok:
+            info = (';'.join([x for x in parts if x]) or 'err')[:240]
+            try:
+                CommandLog.objects.filter(id=int(cmd_id)).update(
+                    status='ERR',
+                    result=info,
+                    executed_at=timezone.now(),
+                )
+            except Exception:
+                pass
+            return
+        try:
+            from agent.plcommpro_bridge import (
+                PlcommproConnInfo,
+                default_plcommpro_dll_path,
+                delete_device_data,
+                get_device_options,
+                query_data,
+            )
+
+            conn = PlcommproConnInfo(
+                ipaddress=str(ipaddr),
+                ip_port=int(port_for_ops),
+                password=str(pw_for_ops or ''),
+                # Clear runs in background; prefer reliability over short timeouts.
+                # C3-Pro controllers can take >60s for some DeleteDeviceData ops.
+                timeout=300000,
+                protocol=str(proto_for_ops),
+            )
+
+            # Determine a working plcommpro.dll once, then pin it for deletes.
+            pinned_dll: str | None = None
+            try:
+                pinned_dll = str(default_plcommpro_dll_path() or '').strip() or None
+                if pinned_dll:
+                    parts.append('dll:default')
+            except Exception:
+                pinned_dll = None
+
+            # If the SDK probe already picked a viable DLL, prefer it.
+            try:
+                if probed_dll:
+                    pinned_dll = probed_dll
+                    parts.append('dll:probe')
+            except Exception:
+                pass
+            try:
+                warm = get_device_options(conn, 'IPAddress', process_timeout_s=15, dll_path=pinned_dll)
+                if isinstance(warm, dict) and warm.get('ok'):
+                    warm_used = str(warm.get('dll_path_used') or '').strip() or None
+                    if warm_used:
+                        pinned_dll = warm_used
+                        parts.append('dll:ok')
+                else:
+                    parts.append('dll:skip')
+            except Exception:
+                parts.append('dll:skip')
+
+            _mark_running()
+
+            def _delete_filtered(table: str, filter_str: str, timeout_s: int) -> tuple[bool, str]:
+                try:
+                    r = delete_device_data(
+                        conn,
+                        table,
+                        filter_str,
+                        process_timeout_s=int(timeout_s),
+                        dll_path=pinned_dll,
+                    )
+                    res = int(r.get('result', -1) or -1)
+                    if res >= 0:
+                        return True, 'ok'
+                    le = r.get('last_error')
+                    return False, f'err{res}{":" + str(le) if le is not None else ""}'
+                except Exception as e:
+                    msg = str(e)
+                    if 'timed out' in msg.lower():
+                        return False, 'timeout'
+                    return False, 'exc'
+
+            _cached_pins: list[str] | None = None
+
+            def _get_user_pins() -> list[str]:
+                nonlocal _cached_pins
+                if _cached_pins is not None:
+                    return _cached_pins
+                pins: list[str] = []
+                try:
+                    qr = query_data(
+                        conn,
+                        'user',
+                        fields='Pin',
+                        filter='',
+                        option='',
+                        buffer_len=256 * 1024,
+                        process_timeout_s=120,
+                        dll_path=pinned_dll,
+                    )
+                    if qr.get('ok') and qr.get('data'):
+                        raw = str(qr.get('data') or '')
+                        # Formats seen in the wild:
+                        #  - key=value\tkey=value ...
+                        #  - CSV/tabular with header row (e.g. "Pin" then values)
+                        lines = [ln.strip() for ln in raw.replace('\r', '\n').split('\n') if ln.strip()]
+                        if lines:
+                            # Skip header if present.
+                            try:
+                                if '=' not in lines[0] and str(lines[0]).strip().lower() in ('pin', 'pin,', 'pin;'):
+                                    lines = lines[1:]
+                            except Exception:
+                                pass
+                        for ln in lines:
+                            if not ln:
+                                continue
+                            if '=' in ln:
+                                for part in ln.split('\t'):
+                                    if '=' not in part:
+                                        continue
+                                    k, v = part.split('=', 1)
+                                    if str(k).strip().lower() == 'pin':
+                                        pval = str(v or '').strip()
+                                        if pval:
+                                            pins.append(pval)
+                                continue
+                            # Plain values (single column)
+                            if ',' in ln:
+                                ln = ln.split(',', 1)[0].strip()
+                            if ln and ln.lower() != 'pin':
+                                pins.append(ln)
+                except Exception:
+                    pins = []
+                # De-dupe and keep stable order.
+                seen = set()
+                out: list[str] = []
+                for p in pins:
+                    if p in seen:
+                        continue
+                    seen.add(p)
+                    out.append(p)
+                _cached_pins = out
+                return out
+
+            def _delete_by_pins(table: str, pins: list[str], timeout_s: int, *, batch_size: int = 200) -> tuple[bool, str]:
+                if not pins:
+                    return True, 'empty'
+                total = (len(pins) + batch_size - 1) // batch_size
+                for idx in range(total):
+                    batch = pins[idx * batch_size : (idx + 1) * batch_size]
+                    filt = '\r\n'.join([f'Pin={p}' for p in batch if str(p).strip()])
+                    if not filt:
+                        continue
+                    ok_b, note_b = _delete_filtered(table, filt, timeout_s=int(timeout_s))
+                    # Keep only one progress marker per table.
+                    try:
+                        parts[:] = [pp for pp in parts if not str(pp).startswith(f'{table}:batch:')]
+                    except Exception:
+                        pass
+                    parts.append(f'{table}:batch:{idx + 1}/{total}')
+                    _mark_running()
+                    if not ok_b:
+                        return False, note_b
+                return True, 'ok'
+
+            def _del(table: str, timeout_s: int) -> tuple[bool, str]:
+                """Attempt a device table delete.
+
+                Returns (ok, note) where note is compact and safe to surface.
+                """
+                try:
+                    r = delete_device_data(
+                        conn,
+                        table,
+                        '',
+                        process_timeout_s=int(timeout_s),
+                        dll_path=pinned_dll,
+                    )
+                    res = int(r.get('result', -1) or -1)
+                    if res >= 0:
+                        return True, 'ok'
+                    le = r.get('last_error')
+                    dll_used = None
+                    try:
+                        dll_used = str(r.get('dll_path_used') or '').strip() or None
+                        if dll_used:
+                            dll_used = os.path.basename(dll_used)
+                    except Exception:
+                        dll_used = None
+
+                    # Some firmware/SDK combos can return a generic failure code even when
+                    # the table is already empty. Treat that as OK to prevent wizard dead-ends.
+                    try:
+                        from agent.plcommpro_bridge import data_count
+
+                        cnt = data_count(conn, table, process_timeout_s=30)
+                        if isinstance(cnt, dict) and cnt.get('ok') and int(cnt.get('result') or 0) == 0:
+                            return True, 'ok(empty)'
+                    except Exception:
+                        pass
+
+                    note = f'err{res}{":" + str(le) if le is not None else ""}'
+                    if dll_used:
+                        note += f':dll={dll_used}'
+                    return False, note
+                except Exception as e:
+                    msg = str(e)
+                    if 'timed out' in msg.lower():
+                        return False, 'timeout'
+                    return False, 'exc'
+
+            # Required data clear: auth then users.
+            # Runs in background; keep a generous but bounded total.
+            max_total_s = 900
+            required_groups: list[tuple[str, tuple[str, ...], int]] = [
+                ('auth', ('userauthorize', 'UserAuthorize', 'USERAUTHORIZE'), 600),
+                ('users', ('user', 'User', 'userinfo', 'UserInfo', 'USERINFO'), 600),
+            ]
+
+            for label, candidates, timeout_s in required_groups:
+                if time.time() - started > max_total_s:
+                    ok = False
+                    parts.append('err:deadline')
+                    _mark_running()
+                    break
+                chosen = None
+                last_note = None
+                for t in candidates:
+                    ok_t, note = _del(t, timeout_s=int(timeout_s))
+                    # Unsupported tables typically return err quickly; keep trying.
+                    if ok_t:
+                        chosen = t
+                        break
+                    last_note = note
+                    # Fallback: some controllers time out on full-table delete for auth/users.
+                    # When that happens, try per-Pin deletes (legacy filter format: one Pin=... per line).
+                    try:
+                        want_batch = label in ('auth', 'users') and (
+                            note in ('timeout', 'exc') or str(note).startswith('err-2') or 'err-2:' in str(note)
+                        )
+                    except Exception:
+                        want_batch = False
+                    if want_batch:
+                        pins = _get_user_pins()
+                        if pins:
+                            ok_b, note_b = _delete_by_pins(t, pins, timeout_s=int(timeout_s), batch_size=200)
+                            if ok_b:
+                                chosen = t
+                                break
+                            last_note = f'bat:{note_b}'
+                    if note in ('timeout', 'exc'):
+                        # Likely connectivity/SDK issue rather than a table name variant.
+                        break
+                if not chosen:
+                    ok = False
+                    parts.append(f'{label}:err:{last_note or "unknown"}')
+                    _mark_running()
+                    break
+                parts.append(f'{label}:{chosen}:ok')
+                _mark_running()
+
+            # Optional tables: best-effort.
+            if ok and (time.time() - started) <= max_total_s:
+                optional_tables = ('templatev10', 'template', 'usertype', 'UserType')
+                for t in optional_tables:
+                    if time.time() - started > max_total_s:
+                        parts.append('optional:skip:deadline')
+                        _mark_running()
+                        break
+                    ok_t, note = _del(t, timeout_s=20)
+                    parts.append(f'{t}:{"ok" if ok_t else "skip"}')
+                    _mark_running()
+                    if note in ('timeout', 'exc'):
+                        break
+        except Exception as e:
+            ok = False
+            parts.append(f'err:{e}')
+
+        info = (';'.join([x for x in parts if x]) or ('ok' if ok else 'err'))[:240]
+        try:
+            CommandLog.objects.filter(id=int(cmd_id)).update(
+                status='OK' if ok else 'ERR',
+                result=info,
+                executed_at=timezone.now(),
+            )
+        except Exception:
+            pass
+
+    threading.Thread(target=_runner, args=(int(row.id), ip, int(port), comm_password), daemon=True).start()
+    return JsonResponse({'ok': True, 'command_id': int(row.id)})
+
+
+def wizard_door_draft_edit(request: HttpRequest, door_no: int):
+    if not request.user.is_authenticated or not request.user.is_staff:
+        from django.contrib.auth.views import redirect_to_login
+        return redirect_to_login(request.get_full_path())
+
+    wizard_token = (request.GET.get('wizard_token') or request.POST.get('wizard_token') or '').strip()
+    if not wizard_token:
+        return JsonResponse({'ok': False, 'error': 'missing-wizard-token'}, status=400)
+
+    return_url = (request.GET.get('return_url') or request.POST.get('return_url') or '').strip()
+
+    try:
+        dn = int(door_no)
+    except Exception:
+        dn = 0
+    if dn < 1 or dn > 32:
+        return JsonResponse({'ok': False, 'error': 'invalid-door'}, status=400)
+
+    store = request.session.get('wizard_device_drafts')
+    if not isinstance(store, dict):
+        store = {}
+    draft = store.get(wizard_token)
+    if not isinstance(draft, dict):
+        draft = {}
+
+    dev = draft.get('device') if isinstance(draft.get('device'), dict) else {}
+    device_name = str((dev or {}).get('name') or '').strip()
+    device_ip = str((dev or {}).get('ip_address') or '').strip()
+
+    doors = draft.get('doors') if isinstance(draft.get('doors'), dict) else {}
+    door_state = doors.get(str(dn)) if isinstance(doors.get(str(dn)), dict) else {}
+
+    initial = {
+        'door_number': dn,
+        'name': str(door_state.get('name') or f'Ușă {dn}'),
+        'reader_in_custom_name': str(door_state.get('reader_in_custom_name') or ''),
+        'reader_out_custom_name': str(door_state.get('reader_out_custom_name') or ''),
+        'door_active_time_zone': door_state.get('door_active_time_zone') or None,
+        'door_passage_mode_time_zone': door_state.get('door_passage_mode_time_zone') or None,
+        'lock_open_duration': door_state.get('lock_open_duration', 5),
+        'punch_interval': door_state.get('punch_interval', 2),
+        'door_sensor_type': door_state.get('door_sensor_type', 'normal_close'),
+        'door_status_delay': door_state.get('door_status_delay', 15),
+        'close_and_reverse_state': bool(door_state.get('close_and_reverse_state', False)),
+        'verify_mode': door_state.get('verify_mode', 'only_card'),
+        'duress_password': str(door_state.get('duress_password') or ''),
+        'emergency_password': str(door_state.get('emergency_password') or ''),
+        'normally_open': bool(door_state.get('normally_open', True)),
+        'enabled': bool(door_state.get('enabled', True)),
+    }
+
+    if request.method == 'POST':
+        form = WizardDoorDraftForm(request.POST)
+        if form.is_valid():
+            cd = form.cleaned_data
+            doors[str(dn)] = {
+                'name': str(cd.get('name') or '').strip(),
+                'reader_in_custom_name': str(cd.get('reader_in_custom_name') or '').strip(),
+                'reader_out_custom_name': str(cd.get('reader_out_custom_name') or '').strip(),
+                'door_active_time_zone': int(getattr(cd.get('door_active_time_zone'), 'id', 0) or 0) or None,
+                'door_passage_mode_time_zone': int(getattr(cd.get('door_passage_mode_time_zone'), 'id', 0) or 0) or None,
+                'lock_open_duration': int(cd.get('lock_open_duration') or 5),
+                'punch_interval': int(cd.get('punch_interval') or 2),
+                'door_sensor_type': str(cd.get('door_sensor_type') or 'normal_close'),
+                'door_status_delay': int(cd.get('door_status_delay') or 15),
+                'close_and_reverse_state': bool(cd.get('close_and_reverse_state')),
+                'verify_mode': str(cd.get('verify_mode') or 'only_card'),
+                'duress_password': str(cd.get('duress_password') or '').strip(),
+                'emergency_password': str(cd.get('emergency_password') or '').strip(),
+                'normally_open': bool(cd.get('normally_open')),
+                'enabled': bool(cd.get('enabled')),
+            }
+            draft['doors'] = doors
+            store[wizard_token] = draft
+            request.session['wizard_device_drafts'] = store
+            try:
+                request.session.modified = True
+            except Exception:
+                pass
+            return render(request, 'agent/wizard_door_saved_inner.html', {'wizard_token': wizard_token, 'door_number': dn, 'return_url': return_url})
+    else:
+        form = WizardDoorDraftForm(initial=initial)
+
+    return render(
+        request,
+        'agent/wizard_door_form_inner.html',
+        {
+            'form': form,
+            'wizard_token': wizard_token,
+            'door_number': dn,
+            'device_name': device_name,
+            'device_ip': device_ip,
+            'return_url': return_url,
         },
     )
 
@@ -4213,15 +7124,20 @@ def device_operation_access(request: HttpRequest, pk: int, op: str):
     op = (op or '').strip().lower()
 
     OP_META = {
-        'change-ip': {'title': 'Modify IP address'},
-        'toggle-enabled': {'title': 'Enable / Disable device'},
-        'comm-password': {'title': 'Modify communication password'},
-        'sync-time': {'title': 'Synchronize time', 'command': 'SYNC_TIME'},
-        'get-events': {'title': 'Get events', 'command': 'GET_EVENTS'},
-        'get-personnel': {'title': 'Get information of personnel', 'command': 'GET_PERSONNEL'},
+        'change-ip': {'title': 'Modifică IP'},
+        'disable': {'title': 'Dezactivează centrală'},
+        'enable': {'title': 'Activează centrală'},
+        'toggle-enabled': {'title': 'Activare / Dezactivare centrală'},
+        'comm-password': {'title': 'Modifică parola de comunicare'},
+        'sync-time': {'title': 'Sincronizează ora', 'command': 'SYNC_TIME'},
+        # CommCenter supports DOWN_NEWLOG (immediate download + persist), which
+        # matches legacy "Get event entries" behavior better than a noop command.
+        'get-events': {'title': 'Preia evenimente', 'command': 'DOWN_NEWLOG'},
+        'get-personnel': {'title': 'Preia personal', 'command': 'GET_PERSONNEL'},
         'upgrade-firmware': {'title': 'Upgrade firmware'},
-        'disable-dst': {'title': 'Disable daylight saving time', 'command': 'DISABLE_DST'},
-        'fp-ident': {'title': 'Change fingerprint identification', 'command': 'CHANGE_FP_IDENT'},
+        'disable-dst': {'title': 'Dezactivează ora de vară', 'command': 'DISABLE_DST'},
+        'enable-dst': {'title': 'Activează ora de vară', 'command': 'ENABLE_DST'},
+        'fp-ident': {'title': 'Identificare amprentă', 'command': 'CHANGE_FP_IDENT'},
     }
 
     meta = OP_META.get(op)
@@ -4234,17 +7150,437 @@ def device_operation_access(request: HttpRequest, pk: int, op: str):
             'command_preview': '',
         })
 
+    def _read_recent_device_logs(*, max_items: int = 120) -> dict:
+        """Return recent persisted logs and command history for the device.
+
+        Keep it fast and DB-only: does not touch hardware.
+        """
+        try:
+            from agent.models import DeviceEventLog, DeviceRealtimeLog
+
+            event_rows = list(
+                DeviceEventLog.objects.filter(device_id=int(dev.id))
+                .only('timestamp_str', 'code', 'raw_line', 'created_at')
+                .order_by('-created_at')[: max_items]
+            )
+            rt_rows = list(
+                DeviceRealtimeLog.objects.filter(device_id=int(dev.id))
+                .only('raw', 'created_at')
+                .order_by('-created_at')[: max_items]
+            )
+        except Exception:
+            event_rows, rt_rows = [], []
+
+        try:
+            cmd_rows = list(
+                CommandLog.objects.filter(device_id=int(dev.id))
+                .only('command', 'status', 'result', 'created_at', 'executed_at')
+                .order_by('-created_at')[: max_items]
+            )
+        except Exception:
+            cmd_rows = []
+
+        audit_rows = []
+        try:
+            if AuditLog is not None:
+                audit_rows = list(
+                    AuditLog.objects.filter(entity_id=int(dev.id), module__in=['device', 'command', 'device-status'])
+                    .only('timestamp', 'module', 'action', 'entity_name', 'details', 'user')
+                    .order_by('-timestamp')[: max_items]
+                )
+        except Exception:
+            audit_rows = []
+
+        # Unified timeline (best-effort) for the device.
+        # Keep it bounded even when the modal is loaded with large limits.
+        timeline_limit = int(max_items or 0)
+        timeline_limit = max(50, min(10000, timeline_limit))
+
+        from datetime import datetime
+
+        def _safe_dt(v):
+            return v if hasattr(v, 'year') else None
+
+        def _parse_event_ts(s: str):
+            s = (s or '').strip()
+            if not s:
+                return None
+            # Common formats: "YYYY-MM-DD HH:MM:SS" or ISO-like
+            for fmt in ('%Y-%m-%d %H:%M:%S', '%Y/%m/%d %H:%M:%S', '%Y-%m-%dT%H:%M:%S'):
+                try:
+                    return datetime.strptime(s[:19], fmt)
+                except Exception:
+                    continue
+            return None
+
+        timeline = []
+        try:
+            for r in (event_rows or [])[:timeline_limit]:
+                ts = _parse_event_ts(getattr(r, 'timestamp_str', '') or '')
+                ts = ts or _safe_dt(getattr(r, 'created_at', None))
+                if not ts:
+                    continue
+                timeline.append({
+                    'ts': ts,
+                    'kind': 'EVENT',
+                    'summary': f"code={getattr(r, 'code', '') or ''}",
+                    'raw': getattr(r, 'raw_line', '') or '',
+                })
+        except Exception:
+            pass
+
+        try:
+            for r in (rt_rows or [])[:timeline_limit]:
+                ts = _safe_dt(getattr(r, 'created_at', None))
+                if not ts:
+                    continue
+                timeline.append({
+                    'ts': ts,
+                    'kind': 'RTLOG',
+                    'summary': 'rtlog',
+                    'raw': getattr(r, 'raw', '') or '',
+                })
+        except Exception:
+            pass
+
+        try:
+            for r in (cmd_rows or [])[:timeline_limit]:
+                ts = _safe_dt(getattr(r, 'executed_at', None)) or _safe_dt(getattr(r, 'created_at', None))
+                if not ts:
+                    continue
+                cmd = getattr(r, 'command', '') or ''
+                status = getattr(r, 'status', '') or ''
+                result = getattr(r, 'result', '') or ''
+                timeline.append({
+                    'ts': ts,
+                    'kind': 'CMD',
+                    'summary': f"{cmd} ({status})".strip(),
+                    'raw': result,
+                })
+        except Exception:
+            pass
+
+        try:
+            for a in (audit_rows or [])[:timeline_limit]:
+                ts = _safe_dt(getattr(a, 'timestamp', None))
+                if not ts:
+                    continue
+                module = getattr(a, 'module', '') or ''
+                action = getattr(a, 'action', '') or ''
+                details = getattr(a, 'details', '') or ''
+                timeline.append({
+                    'ts': ts,
+                    'kind': 'AUDIT',
+                    'summary': f"{module}:{action}",
+                    'raw': details,
+                })
+        except Exception:
+            pass
+
+        try:
+            timeline.sort(key=lambda x: x.get('ts'), reverse=True)
+        except Exception:
+            pass
+
+        timeline_rows = timeline[:timeline_limit]
+
+        counts = {'events': 0, 'rt': 0, 'cmd': 0, 'audit': 0}
+        try:
+            counts['events'] = int(DeviceEventLog.objects.filter(device_id=int(dev.id)).count())
+        except Exception:
+            pass
+        try:
+            counts['rt'] = int(DeviceRealtimeLog.objects.filter(device_id=int(dev.id)).count())
+        except Exception:
+            pass
+        try:
+            counts['cmd'] = int(CommandLog.objects.filter(device_id=int(dev.id)).count())
+        except Exception:
+            pass
+        try:
+            if AuditLog is not None:
+                counts['audit'] = int(
+                    AuditLog.objects.filter(entity_id=int(dev.id), module__in=['device', 'command', 'device-status']).count()
+                )
+        except Exception:
+            pass
+
+        return {
+            'event_rows': event_rows,
+            'rt_rows': rt_rows,
+            'cmd_rows': cmd_rows,
+            'audit_rows': audit_rows,
+            'timeline_rows': timeline_rows,
+            'timeline_limit': timeline_limit,
+            'counts': counts,
+        }
+
+    def _safe_now_local_str() -> str:
+        try:
+            from datetime import timedelta
+
+            from django.utils import timezone
+            return timezone.localtime(timezone.now()).strftime('%Y-%m-%d %H:%M:%S')
+        except Exception:
+            return ''
+
+    def _parse_plcommpro_rows(raw: str, field_order: list[str]) -> list[dict]:
+        """Parse plcommpro GetDeviceData response into a list of dicts.
+
+        Response is typically \r\n separated rows. Columns may be key=value\t...
+        or plain delimiter-separated (tab/comma).
+        """
+        if not raw:
+            return []
+        rows: list[dict] = []
+        lines = [ln.strip() for ln in raw.replace('\r', '\n').split('\n') if ln.strip()]
+        if not lines:
+            return []
+
+        # Detect header-based CSV/tabular format: first row contains column names.
+        header_map: dict[str, int] = {}
+        try:
+            first = lines[0]
+            if '=' not in first:
+                delim = '\t' if '\t' in first else ','
+                cols = [c.strip() for c in first.split(delim) if c.strip()]
+                if cols:
+                    want = {str(f).strip().lower() for f in (field_order or []) if str(f).strip()}
+                    got = {str(c).strip().lower() for c in cols}
+                    if want and len(want & got) >= 1:
+                        header_map = {str(c).strip().lower(): idx for idx, c in enumerate(cols)}
+                        lines = lines[1:]
+        except Exception:
+            header_map = {}
+
+        for ln in lines:
+            # Most common format: key=value\tkey=value...
+            parts = ln.split('\t') if '\t' in ln else ln.split(',')
+            kv = {}
+            for p in parts:
+                p = p.strip()
+                if not p:
+                    continue
+                if '=' in p:
+                    k, v = p.split('=', 1)
+                    kv[k.strip().lower()] = v.strip()
+            if kv:
+                out = {}
+                for f in field_order:
+                    out[f.lower()] = kv.get(f.lower(), '')
+                rows.append(out)
+                continue
+
+            vals = [p.strip() for p in parts if p.strip()]
+            if not vals:
+                continue
+
+            out = {}
+            # Prefer header-based mapping when available.
+            if header_map:
+                for f in field_order:
+                    idx = header_map.get(str(f).strip().lower())
+                    out[str(f).lower()] = vals[idx] if (idx is not None and idx < len(vals)) else ''
+                rows.append(out)
+                continue
+
+            # Fallback: positional mapping.
+            for idx, f in enumerate(field_order):
+                out[f.lower()] = vals[idx] if idx < len(vals) else ''
+            rows.append(out)
+        return rows
+
+    def _decode_door_mask(mask_val: object, doors_by_number: dict[int, object]) -> str:
+        try:
+            mv = int(str(mask_val).strip() or '0')
+        except Exception:
+            mv = 0
+        if mv <= 0:
+            return ''
+        nums: list[int] = []
+        for n in sorted(doors_by_number.keys()):
+            if n <= 0:
+                continue
+            if mv & (1 << (n - 1)):
+                nums.append(int(n))
+        # Render as "1,2,4" plus optional names.
+        if not nums:
+            return ''
+        out = []
+        for n in nums:
+            d = doors_by_number.get(n)
+            nm = (getattr(d, 'name', '') or '').strip()
+            out.append(f"{n}{(' ' + nm) if nm else ''}".strip())
+        return ', '.join(out)
+
+    def _enqueue_tracked(device_id: int, cmd: str) -> tuple[bool, int | None, str]:
+        """Create CommandLog and enqueue with LOGID prefix so CommCenter updates status."""
+        # De-dupe heavy sync commands to avoid generating high traffic / DoS.
+        try:
+            if (cmd or '').strip().upper().startswith('SYNC_PERSONNEL'):
+                try:
+                    from agent.sync_limits import get_sync_personnel_limits
+
+                    dedupe_s = int(get_sync_personnel_limits().dedupe_seconds)
+                except Exception:
+                    try:
+                        import os
+                        dedupe_s = int(os.getenv('SYNC_PERSONNEL_DEDUPE_SECONDS', '60'))
+                    except Exception:
+                        dedupe_s = 60
+                    dedupe_s = max(5, min(600, dedupe_s))
+                from datetime import timedelta
+                from django.utils import timezone as _tz
+                cutoff = _tz.now() - timedelta(seconds=dedupe_s)
+                existing = (
+                    CommandLog.objects.filter(device_id=int(device_id), command__startswith='SYNC_PERSONNEL', status='PENDING', created_at__gte=cutoff)
+                    .order_by('-created_at')
+                    .first()
+                )
+                if existing:
+                    return (True, int(existing.id), 'already_queued')
+        except Exception:
+            pass
+
+        try:
+            log = CommandLog.objects.create(device_id=int(device_id), command=(cmd or '')[:240], status='PENDING')
+        except Exception as e:
+            return (False, None, f"commandlog_create_failed:{e}")
+
+        # Similar safety gates as _enqueue()
+        try:
+            dev0 = Device.objects.filter(id=int(device_id)).first()
+            if dev0 is None:
+                log.status, log.result = 'ERR', 'device-not-found'
+                log.save(update_fields=['status', 'result'])
+                return (False, int(log.id), 'device-not-found')
+            if not getattr(dev0, 'enabled', True):
+                log.status, log.result = 'ERR', 'device-disabled'
+                log.save(update_fields=['status', 'result'])
+                return (False, int(log.id), 'device-disabled')
+            ds0 = DeviceStatus.objects.filter(device=dev0).first()
+            if ds0 is not None and not ds0.online:
+                log.status, log.result = 'ERR', 'device-offline'
+                log.save(update_fields=['status', 'result'])
+                return (False, int(log.id), 'device-offline')
+        except Exception:
+            pass
+
+        try:
+            from agent.modern_comm_center import build_and_run_stub  # avoid circular import
+            import agent.modern_comm_center as mcc
+            center = getattr(mcc, 'ACTIVE_CENTER', None)
+            if center is None:
+                center = build_and_run_stub(poll_interval=1.0, driver='auto')
+                mcc.ACTIVE_CENTER = center
+            center.enqueue_command(int(device_id), f"LOGID:{int(log.id)} {cmd}"[:240])
+            try:
+                _broadcast_command(log)
+            except Exception:
+                pass
+            return (True, int(log.id), 'queued')
+        except Exception as e:
+            try:
+                log.status = 'ERR'
+                log.result = 'enqueue-failed'
+                log.save(update_fields=['status', 'result'])
+            except Exception:
+                pass
+            return (False, int(log.id), f"enqueue_failed:{e}")
+
+    def _guess_net(ip_str: str) -> tuple[str, str]:
+        try:
+            import ipaddress
+
+            ip = ipaddress.ip_address((ip_str or '').strip())
+            if ip.version != 4:
+                return ('', '')
+            parts = str(ip).split('.')
+            if len(parts) != 4:
+                return ('', '')
+            gw = '.'.join(parts[:3] + ['254'])
+            return (gw, '255.255.255.0')
+        except Exception:
+            return ('', '')
+
+    ctx_error = None
     if request.method == 'POST':
         error = None
         message = None
+        action_state = 'success'
+        action_title = 'OK'
+        action_message = ''
+        close_delay_ms = 250
         try:
             if op == 'change-ip':
                 ip_address = (request.POST.get('ip_address') or '').strip()
                 port = int(request.POST.get('port') or dev.port or 4370)
+                gateway = (request.POST.get('gateway') or '').strip()
+                subnet_mask = (request.POST.get('subnet_mask') or '').strip()
                 if not ip_address:
-                    raise ValueError('missing-ip')
+                    raise ValueError('Please enter the new IP address.')
                 if port < 1 or port > 65535:
-                    raise ValueError('invalid-port')
+                    raise ValueError('Invalid port. Use 1-65535.')
+
+                if not dev.ip_address:
+                    raise ValueError('Device has no current IP address saved (original IP missing).')
+
+                # Guess defaults early (legacy screenshot: /24 + gateway .254)
+                guess_gw, guess_mask = _guess_net(str(dev.ip_address))
+                if not subnet_mask:
+                    subnet_mask = guess_mask
+                if not gateway:
+                    gateway = guess_gw
+
+                # Best-effort: if gateway/mask not provided, try to read from device.
+                if not gateway or not subnet_mask:
+                    try:
+                        from .plcommpro_bridge import PlcommproConnInfo, get_device_options
+
+                        conn = PlcommproConnInfo(
+                            ipaddress=str(dev.ip_address),
+                            ip_port=int(dev.port or 4370),
+                            password=str(dev.comm_password or ''),
+                            timeout=3000,
+                        )
+                        resp = get_device_options(conn, 'NetMask,GATEIPAddress')
+                        if resp.get('ok') and resp.get('data'):
+                            kv = {}
+                            for part in str(resp.get('data') or '').split(','):
+                                if '=' in part:
+                                    k, v = part.split('=', 1)
+                                    kv[k.strip()] = v.strip()
+                            if not subnet_mask:
+                                subnet_mask = kv.get('NetMask', '') or subnet_mask
+                            if not gateway:
+                                gateway = kv.get('GATEIPAddress', '') or gateway
+                    except Exception:
+                        pass
+
+                if not gateway:
+                    raise ValueError('Please enter the gateway address.')
+                if not subnet_mask:
+                    raise ValueError('Please enter the subnet mask.')
+
+                # Push the change to the hardware (legacy behavior: SET OPTION ...)
+                try:
+                    from .plcommpro_bridge import PlcommproConnInfo, set_device_options
+
+                    conn = PlcommproConnInfo(
+                        ipaddress=str(dev.ip_address),
+                        ip_port=int(dev.port or 4370),
+                        password=str(dev.comm_password or ''),
+                        timeout=3000,
+                    )
+                    items = f"IPAddress={ip_address},GATEIPAddress={gateway},NetMask={subnet_mask}"
+                    resp = set_device_options(conn, items)
+                    if not resp.get('ok'):
+                        raise RuntimeError(
+                            f"device rejected change-ip: result={resp.get('result')} last_error={resp.get('last_error')}"
+                        )
+                except Exception as ex:
+                    raise RuntimeError(f"hardware change-ip failed: {ex}")
+
                 old_ip = dev.ip_address
                 dev.ip_address = ip_address
                 dev.port = port
@@ -4255,7 +7591,7 @@ def device_operation_access(request: HttpRequest, pk: int, op: str):
                     action='update',
                     entity_id=int(dev.id),
                     entity_name=getattr(dev, 'name', '') or '',
-                    details=f"change_ip {old_ip} -> {ip_address} port={port}",
+                    details=f"change_ip {old_ip} -> {ip_address} port={port} gw={gateway} mask={subnet_mask}",
                 )
                 # Best-effort legacy sync
                 try:
@@ -4266,7 +7602,34 @@ def device_operation_access(request: HttpRequest, pk: int, op: str):
                         legacy.save(update_fields=['com_address'])
                 except Exception:
                     pass
-                message = f"IP updated to {ip_address}:{port}"
+                message = f"IP changed on device and updated to {ip_address}:{port}"
+                action_title = 'MODIFICARE IP'
+                action_message = 'Modificare IP realizată cu succes.'
+
+            elif op in ('disable', 'enable'):
+                # Legacy: separate menu items.
+                dev.enabled = bool(op == 'enable')
+                dev.save(update_fields=['enabled'])
+                _audit_log(
+                    request,
+                    module='device',
+                    action='toggle_enabled',
+                    entity_id=int(dev.id),
+                    entity_name=getattr(dev, 'name', '') or '',
+                    details=f"enabled={bool(dev.enabled)}",
+                )
+                if dev.enabled:
+                    message = 'Device enabled.'
+                    action_state = 'success'
+                    action_title = 'ACTIVARE CENTRALĂ'
+                    action_message = 'ACTIVARE CENTRALĂ REALIZATĂ CU SUCCES'
+                else:
+                    message = 'Device disabled.'
+                    # Use red palette in the action modal for DISABLE (legacy feel)
+                    action_state = 'error'
+                    action_title = 'DEZACTIVARE CENTRALĂ'
+                    action_message = 'DEZACTIVARE CENTRALĂ REALIZATĂ CU SUCCES'
+                close_delay_ms = 900
 
             elif op == 'toggle-enabled':
                 enabled_val = (request.POST.get('enabled') or '').strip()
@@ -4295,31 +7658,76 @@ def device_operation_access(request: HttpRequest, pk: int, op: str):
                     details='comm_password updated',
                 )
                 message = 'Communication password saved.'
+                action_title = 'PAROLĂ COMUNICARE'
+                action_message = 'Parola de comunicare a fost salvată.'
 
             elif op == 'upgrade-firmware':
                 fw = (request.POST.get('firmware') or '').strip()
                 cmd = 'UPGRADE_FIRMWARE'
                 if fw:
                     cmd = f"UPGRADE_FIRMWARE:{fw}"[:240]
-                log = CommandLog.objects.create(device=dev, command=cmd, status='PENDING')
-                _broadcast_command(log)
+                else:
+                    cmd = cmd[:240]
+                ok = _enqueue(int(dev.id), cmd)
+                if not ok:
+                    raise RuntimeError('Comandă refuzată (centrală offline/dezactivată).')
                 _audit_log(
                     request,
                     module='command',
                     action='create',
-                    entity_id=int(log.id),
+                    entity_id=int(dev.id),
                     entity_name=cmd,
                     details=f"device_id={dev.id}",
                 )
                 message = 'Firmware upgrade command queued.'
+                action_title = 'FIRMWARE'
+                action_message = 'Comanda de upgrade firmware a fost pusă în coadă.'
 
-            else:
-                cmd = (meta.get('command') or '').strip()
-                if not cmd:
-                    raise ValueError('missing-command')
-                # Legacy behavior: sync time uses the system time zone + system time.
-                # We encode the timestamp into the command so CommCenter can apply it.
-                if cmd == 'SYNC_TIME':
+            elif op == 'sync-time':
+                # Legacy behavior: sync device time with server time.
+                # Best-effort: if plcommpro bridge is available, push directly;
+                # fallback: queue SYNC_TIME for CommCenter.
+                ok_direct = False
+                direct_err = ''
+                try:
+                    from .plcommpro_bridge import PlcommproConnInfo, set_device_options, bridge_available
+
+                    if dev.ip_address and bridge_available():
+                        conn = PlcommproConnInfo(
+                            ipaddress=str(dev.ip_address),
+                            ip_port=int(dev.port or 4370),
+                            password=str(dev.comm_password or ''),
+                            timeout=3000,
+                            protocol='TCP',
+                        )
+                        # Most ZK panels accept SetDeviceOptions with DateTime.
+                        # Format: "YYYY-MM-DD HH:MM:SS"
+                        now_local = _safe_now_local_str()
+                        if now_local:
+                            resp = set_device_options(conn, f"DateTime={now_local}")
+                            if resp.get('ok'):
+                                ok_direct = True
+                            else:
+                                direct_err = f"result={resp.get('result')} last_error={resp.get('last_error')}"
+                except Exception as ex:
+                    direct_err = str(ex)
+
+                if ok_direct:
+                    _audit_log(
+                        request,
+                        module='device',
+                        action='sync_time',
+                        entity_id=int(dev.id),
+                        entity_name=getattr(dev, 'name', '') or '',
+                        details='direct',
+                    )
+                    message = 'Time synchronized directly.'
+                    action_title = 'SINCRONIZEAZĂ ORA'
+                    action_message = 'Timpul a fost sincronizat pe centrală.'
+                    close_delay_ms = 900
+                else:
+                    # Fallback: queue command.
+                    cmd = 'SYNC_TIME'
                     try:
                         from django.utils import timezone as _tz
                         from zoneinfo import ZoneInfo
@@ -4333,40 +7741,370 @@ def device_operation_access(request: HttpRequest, pk: int, op: str):
                         cmd = f"SYNC_TIME:{now_local.strftime('%Y-%m-%d %H:%M:%S')}"
                     except Exception:
                         cmd = 'SYNC_TIME'
-                log = CommandLog.objects.create(device=dev, command=cmd[:240], status='PENDING')
-                _broadcast_command(log)
+                    ok = _enqueue(int(dev.id), (cmd or '')[:240])
+                    if not ok:
+                        raise RuntimeError('Comandă refuzată (centrală offline/dezactivată).')
+                    _audit_log(
+                        request,
+                        module='command',
+                        action='create',
+                        entity_id=int(dev.id),
+                        entity_name=(cmd or '')[:120],
+                        details=f"device_id={dev.id} fallback={direct_err}"[:240],
+                    )
+                    message = f"Command queued: {cmd}"
+                    action_title = 'SINCRONIZEAZĂ ORA'
+                    action_message = 'Comanda de sincronizare a fost pusă în coadă.'
+                    close_delay_ms = 900
+
+            elif op == 'get-personnel':
+                do = (request.POST.get('do') or '').strip().lower()
+                if do == 'sync':
+                    # Reuse the same safety gates as /api/devices/<id>/sync-personnel/:
+                    # - only physical controllers
+                    # - require DB to have syncable employees
+                    try:
+                        if not bool(dev.is_physical_controller()):
+                            raise RuntimeError('device-not-physical')
+                    except Exception:
+                        raise RuntimeError('device-not-physical')
+
+                    try:
+                        doors = list(Door.objects.filter(device_id=int(dev.id)).exclude(door_number__isnull=True))
+                        levels = list(AccessLevel.objects.filter(doors__in=doors).distinct()) if doors else []
+                        emp_qs = Employee.objects.filter(active=True, access_levels__in=levels).distinct() if levels else Employee.objects.none()
+                        syncable_count = int(emp_qs.count())
+                    except Exception:
+                        syncable_count = 0
+                    if syncable_count <= 0:
+                        raise RuntimeError('no_syncable_employees')
+
+                    ok, cmdlog_id, info = _enqueue_tracked_cmd(int(dev.id), 'SYNC_PERSONNEL')
+                    if not ok:
+                        raise RuntimeError(f"Comandă refuzată/eroare: {info}")
+                    _audit_log(
+                        request,
+                        module='command',
+                        action='create',
+                        entity_id=int(dev.id),
+                        entity_name='SYNC_PERSONNEL',
+                        details=f"device_id={dev.id} cmdlog_id={cmdlog_id} syncable={syncable_count}",
+                    )
+                    message = 'SYNC_PERSONNEL queued.'
+                    action_title = 'SINCRONIZARE PERSONAL'
+                    action_message = 'Comanda de sincronizare (server → centrală) a fost pusă în coadă.'
+                    close_delay_ms = 900
+                else:
+                    # Non-destructive default: keep the modal open flow; user can use
+                    # "Citește din centrală" (GET) to view data.
+                    raise RuntimeError('Alege „SYNC SERVER → CENTRALĂ” sau folosește „CITEȘTE DIN CENTRALĂ”.')
+
+            else:
+                cmd = (meta.get('command') or '').strip()
+                if not cmd:
+                    raise ValueError('missing-command')
+                ok = _enqueue(int(dev.id), (cmd or '')[:240])
+                if not ok:
+                    raise RuntimeError('Comandă refuzată (centrală offline/dezactivată).')
                 _audit_log(
                     request,
                     module='command',
                     action='create',
-                    entity_id=int(log.id),
+                    entity_id=int(dev.id),
                     entity_name=(cmd or '')[:120],
                     details=f"device_id={dev.id}",
                 )
                 message = f"Command queued: {cmd}"
+                action_title = (meta.get('title') or 'Comandă').upper()
+                action_message = 'Comanda a fost pusă în coadă.'
         except Exception as ex:
             error = str(ex)
 
         if error:
-            return render(request, 'agent/device_operation_form_inner.html', {
-                'dev': dev,
-                'op': op,
-                'title': meta.get('title') or 'Operation',
-                'error': error,
-                'command_preview': (meta.get('command') or ''),
+            if op in ('get-events', 'get-personnel', 'sync-time'):
+                # Keep modal content visible; show the error inline.
+                ctx_error = error
+            else:
+                gateway_val = (request.POST.get('gateway') or '').strip() if op == 'change-ip' else ''
+                subnet_val = (request.POST.get('subnet_mask') or '').strip() if op == 'change-ip' else ''
+                new_ip_val = (request.POST.get('ip_address') or '').strip() if op == 'change-ip' else ''
+                port_val = (request.POST.get('port') or '').strip() if op == 'change-ip' else ''
+                return render(request, 'agent/device_operation_form_inner.html', {
+                    'dev': dev,
+                    'op': op,
+                    'title': meta.get('title') or 'Operation',
+                    'error': error,
+                    'gateway': gateway_val,
+                    'subnet_mask': subnet_val,
+                    'new_ip_address': new_ip_val,
+                    'new_port': port_val,
+                    'command_preview': (meta.get('command') or ''),
+                })
+
+        if not error:
+            return render(request, 'agent/device_operation_saved_inner.html', {
+                'message': message or 'OK',
+                'action_state': action_state,
+                'action_title': action_title,
+                'action_message': action_message or (message or 'OK'),
+                'close_delay_ms': close_delay_ms,
             })
 
-        return render(request, 'agent/device_operation_saved_inner.html', {
-            'message': message or 'OK',
-        })
+    gateway_prefill = ''
+    subnet_prefill = ''
+    if op == 'change-ip' and dev.ip_address:
+        guess_gw, guess_mask = _guess_net(str(dev.ip_address))
+        gateway_prefill = guess_gw
+        subnet_prefill = guess_mask
+        try:
+            from .plcommpro_bridge import PlcommproConnInfo, get_device_options
 
-    return render(request, 'agent/device_operation_form_inner.html', {
+            conn = PlcommproConnInfo(
+                ipaddress=str(dev.ip_address),
+                ip_port=int(dev.port or 4370),
+                password=str(dev.comm_password or ''),
+                timeout=3000,
+            )
+            resp = get_device_options(conn, 'NetMask,GATEIPAddress')
+            if resp.get('ok') and resp.get('data'):
+                kv = {}
+                for part in str(resp.get('data') or '').split(','):
+                    if '=' in part:
+                        k, v = part.split('=', 1)
+                        kv[k.strip()] = v.strip()
+                subnet_prefill = kv.get('NetMask', '') or ''
+                gateway_prefill = kv.get('GATEIPAddress', '') or ''
+        except Exception:
+            pass
+
+    ctx = {
         'dev': dev,
         'op': op,
         'title': meta.get('title') or 'Operation',
-        'error': None,
+        'error': ctx_error,
+        'gateway': gateway_prefill,
+        'subnet_mask': subnet_prefill,
+        'new_ip_address': '',
+        'new_port': '',
         'command_preview': (meta.get('command') or ''),
-    })
+    }
+
+    # Make these modals "real" (data-rich) without leaving the page.
+    if op in ('get-events', 'get-personnel', 'sync-time'):
+        try:
+            limit = int((request.GET.get('limit') or '').strip() or '0')
+        except Exception:
+            limit = 0
+        all_flag = (request.GET.get('all') or '').strip() in ('1', 'true', 'yes', 'on')
+        if all_flag:
+            limit = 20000
+        if limit <= 0:
+            limit = 5000 if op == 'get-events' else 400
+        limit = max(50, min(20000, limit))
+        ctx['limit'] = limit
+        ctx.update(_read_recent_device_logs(max_items=limit))
+        ctx['server_now_local'] = _safe_now_local_str()
+
+        # Best-effort personnel counts (device-side) if bridge is available.
+        ctx['personnel_counts'] = None
+        ctx['personnel_counts_error'] = ''
+        ctx['device_personnel_preview'] = None
+        ctx['device_personnel_preview_error'] = ''
+        ctx['device_personnel_preview_raw'] = ''
+        ctx['device_user_rows'] = None
+        ctx['device_userauthorize_rows'] = None
+        ctx['device_userauthorize_error'] = ''
+        ctx['device_access_rows'] = None
+        ctx['show_device_data'] = False
+        if op == 'get-personnel':
+            try:
+                from .plcommpro_bridge import PlcommproConnInfo, data_count, query_data, bridge_available
+
+                show_device = (request.GET.get('device') or '').strip() in ('1', 'true', 'yes', 'on')
+                ctx['show_device_data'] = bool(show_device)
+
+                if dev.ip_address and bridge_available():
+                    conn = PlcommproConnInfo(
+                        ipaddress=str(dev.ip_address),
+                        ip_port=int(dev.port or 4370),
+                        password=str(dev.comm_password or ''),
+                        timeout=3000,
+                        protocol='TCP',
+                    )
+                    # Table names vary by device/SDK; we try the common ones.
+                    counts = {}
+                    for table in ('user', 'userinfo', 'templatev10', 'template', 'fptemplate', 'holiday', 'timezone', 'acc_timezone'):
+                        try:
+                            resp = data_count(conn, table)
+                            if resp.get('ok'):
+                                counts[table] = resp.get('result')
+                        except Exception:
+                            continue
+                    ctx['personnel_counts'] = counts
+
+                    # Best-effort personnel list preview.
+                    # Common ZK table is "user". We request only the key fields.
+                    try:
+                        fields = 'Pin,CardNo,Name'
+                        resp = query_data(conn, 'user', fields=fields, filter='', option='', buffer_len=128 * 1024)
+                        if resp.get('ok') and resp.get('data'):
+                            parsed = _parse_plcommpro_rows(str(resp.get('data') or ''), ['Pin', 'CardNo', 'Name'])
+                            if parsed:
+                                ctx['device_personnel_preview'] = parsed[:50]
+                            else:
+                                ctx['device_personnel_preview_raw'] = str(resp.get('data') or '')[:2000]
+                        elif resp.get('data'):
+                            ctx['device_personnel_preview_raw'] = str(resp.get('data') or '')[:2000]
+                    except Exception as ex:
+                        ctx['device_personnel_preview_error'] = str(ex)
+
+                    # Optional deeper read: actual device-side personnel + access rights.
+                    if show_device:
+                        try:
+                            from agent.models import Door as DoorModel, TimeSegment as TimeSegmentModel  # type: ignore
+
+                            doors = list(DoorModel.objects.filter(device_id=int(dev.id)).exclude(door_number__isnull=True))
+                            doors_by_number = {}
+                            for d in doors:
+                                try:
+                                    dn = int(getattr(d, 'door_number') or 0)
+                                    if dn > 0:
+                                        doors_by_number[dn] = d
+                                except Exception:
+                                    continue
+
+                            user_fields = 'Pin,CardNo,Name,Group,Privilege,StartTime,EndTime,Password,SuperAuthorize'
+                            ur = query_data(conn, 'user', fields=user_fields, filter='', option='', buffer_len=512 * 1024)
+                            if ur.get('ok') and ur.get('data'):
+                                ctx['device_user_rows'] = _parse_plcommpro_rows(str(ur.get('data') or ''),
+                                                                              ['Pin','CardNo','Name','Group','Privilege','StartTime','EndTime','SuperAuthorize'])
+                            else:
+                                ctx['device_personnel_preview_error'] = ctx['device_personnel_preview_error'] or (
+                                    ur.get('data') or 'device_user_query_failed'
+                                )
+
+                            ar = query_data(conn, 'userauthorize', fields='Pin,AuthorizeTimezoneId,AuthorizeDoorId', filter='', option='', buffer_len=512 * 1024)
+                            if ar.get('ok') and ar.get('data'):
+                                ctx['device_userauthorize_rows'] = _parse_plcommpro_rows(str(ar.get('data') or ''),
+                                                                                        ['Pin','AuthorizeTimezoneId','AuthorizeDoorId'])
+                            else:
+                                ctx['device_userauthorize_error'] = (ar.get('data') or 'device_userauthorize_query_failed')
+
+                            # Build a correlated access view: Pin + Name + dept + timezone + doors
+                            tz_names = {}
+                            try:
+                                for seg in TimeSegmentModel.objects.all().only('id', 'name'):
+                                    tz_names[int(seg.id)] = str(getattr(seg, 'name', '') or '')
+                            except Exception:
+                                tz_names = {}
+
+                            ua_by_pin = {}
+                            try:
+                                for row in (ctx.get('device_userauthorize_rows') or []):
+                                    p = str(row.get('pin') or '').strip()
+                                    if p:
+                                        ua_by_pin[p] = row
+                            except Exception:
+                                ua_by_pin = {}
+
+                            access_rows = []
+                            for row in (ctx.get('device_user_rows') or [])[:800]:
+                                p = str(row.get('pin') or '').strip()
+                                ua = ua_by_pin.get(p) or {}
+                                tzid = ua.get('authorizetimezoneid') or ''
+                                doors_mask = ua.get('authorizedoorid') or ''
+                                door_list = _decode_door_mask(doors_mask, doors_by_number)
+                                tz_disp = ''
+                                try:
+                                    tz_int = int(str(tzid).strip() or '0')
+                                    tz_disp = tz_names.get(tz_int) or ''
+                                except Exception:
+                                    tz_disp = ''
+                                access_rows.append({
+                                    'pin': p,
+                                    'name': row.get('name') or '',
+                                    'cardno': row.get('cardno') or '',
+                                    'dept': row.get('group') or '',
+                                    'timezone_id': tzid,
+                                    'timezone_name': tz_disp,
+                                    'doors_mask': doors_mask,
+                                    'doors': door_list,
+                                })
+                            ctx['device_access_rows'] = access_rows
+                        except Exception as ex:
+                            ctx['device_userauthorize_error'] = str(ex)
+            except Exception as ex:
+                ctx['personnel_counts_error'] = str(ex)
+
+            # DB-side: personnel that would be synced to this device (active + access levels on this controller).
+            ctx['db_personnel_count'] = 0
+            ctx['db_personnel_preview'] = []
+            ctx['personnel_diff'] = None
+            ctx['personnel_sets_identical'] = False
+            ctx['personnel_diff_note'] = ''
+            ctx['can_sync_personnel'] = False
+            try:
+                doors = list(Door.objects.filter(device_id=int(dev.id)).exclude(door_number__isnull=True))
+                levels = list(AccessLevel.objects.filter(doors__in=doors).distinct()) if doors else []
+                emp_qs = Employee.objects.filter(active=True, access_levels__in=levels).distinct() if levels else Employee.objects.none()
+                ctx['db_personnel_count'] = int(emp_qs.count())
+                db_preview = []
+                for e in emp_qs.select_related(None).only('id', 'first_name', 'last_name', 'card_number').order_by('last_name', 'first_name')[:60]:
+                    cardno = str(getattr(e, 'card_number', '') or '').strip()
+                    name = (f"{getattr(e, 'last_name', '') or ''} {getattr(e, 'first_name', '') or ''}").strip()
+                    db_preview.append({'id': int(e.id), 'cardno': cardno, 'name': name})
+                ctx['db_personnel_preview'] = db_preview
+
+                # Diff (CardNo-based) between DB and device.
+                try:
+                    db_cards = set(
+                        [
+                            str(x or '').strip()
+                            for x in emp_qs.exclude(card_number__isnull=True).exclude(card_number='').values_list('card_number', flat=True)
+                        ]
+                    )
+                except Exception:
+                    db_cards = set([str(x.get('cardno') or '').strip() for x in db_preview if str(x.get('cardno') or '').strip()])
+
+                # Device side cards: prefer detailed list if requested; otherwise use preview.
+                device_cards = set()
+                if ctx.get('show_device_data') and ctx.get('device_user_rows'):
+                    for row in (ctx.get('device_user_rows') or []):
+                        cno = str((row or {}).get('cardno') or '').strip()
+                        if cno:
+                            device_cards.add(cno)
+                elif ctx.get('device_personnel_preview'):
+                    for row in (ctx.get('device_personnel_preview') or []):
+                        cno = str((row or {}).get('cardno') or (row or {}).get('CardNo') or '').strip()
+                        if cno:
+                            device_cards.add(cno)
+
+                missing_on_device = sorted(list(db_cards - device_cards))
+                extra_on_device = sorted(list(device_cards - db_cards))
+                identical = (db_cards == device_cards) and (len(db_cards) > 0 or len(device_cards) > 0)
+                ctx['personnel_sets_identical'] = bool(identical)
+                ctx['personnel_diff'] = {
+                    'db_count': int(len(db_cards)),
+                    'device_count': int(len(device_cards)),
+                    'missing_on_device': missing_on_device[:40],
+                    'extra_on_device': extra_on_device[:40],
+                    'missing_on_device_count': int(len(missing_on_device)),
+                    'extra_on_device_count': int(len(extra_on_device)),
+                }
+                if not ctx.get('show_device_data'):
+                    ctx['personnel_diff_note'] = 'Diferențele sunt calculate din preview (apasă „CITEȘTE DIN CENTRALĂ” pentru listă completă).'
+
+                can_sync = False
+                try:
+                    can_sync = bool(dev.is_physical_controller()) and int(ctx.get('db_personnel_count') or 0) > 0 and not bool(identical)
+                except Exception:
+                    can_sync = False
+                ctx['can_sync_personnel'] = bool(can_sync)
+            except Exception:
+                # Keep modal usable even if DB-side computation fails.
+                pass
+
+    return render(request, 'agent/device_operation_form_inner.html', ctx)
 
 def door_create(request: HttpRequest):
     if not request.user.is_authenticated or not request.user.is_staff:
@@ -4680,6 +8418,28 @@ def access_levels_list(request: HttpRequest):
         from django.shortcuts import redirect
         return redirect('/agent/menu/access/?tab=levels')
     qs = AccessLevel.objects.order_by('name')
+    try:
+        from django.db.models import Prefetch
+        from .models import Door, TimeSegment
+
+        qs = qs.prefetch_related(
+            Prefetch(
+                'doors',
+                queryset=(
+                    Door.objects.select_related('device', 'door_active_time_zone', 'door_passage_mode_time_zone')
+                    .prefetch_related('first_card_rules', 'multi_card_rules')
+                    .order_by('device__name', 'door_number', 'name', 'id')
+                ),
+                to_attr='prefetched_doors',
+            ),
+            Prefetch(
+                'time_segments',
+                queryset=TimeSegment.objects.order_by('name', 'id'),
+                to_attr='prefetched_time_segments',
+            ),
+        )
+    except Exception:
+        pass
     page = _paginate(qs, request)
     return render(request, 'agent/access_levels_embed.html', {'page': page, 'can_edit': bool(getattr(request.user, 'is_staff', False))})
 
@@ -4779,6 +8539,12 @@ def access_levels_personnel_add(request: HttpRequest, level_id: int):
     except Exception as ex:
         return JsonResponse({'ok': False, 'error': str(ex)}, status=400)
 
+    # Ensure immediate re-evaluation in monitor/API by clearing cached decisions.
+    try:
+        EmployeeAccessCache.objects.filter(employee=emp).delete()
+    except Exception:
+        pass
+
     try:
         _audit_log(
             request,
@@ -4827,6 +8593,12 @@ def access_levels_personnel_remove(request: HttpRequest, level_id: int):
     except Exception as ex:
         return JsonResponse({'ok': False, 'error': str(ex)}, status=400)
 
+    # Ensure immediate re-evaluation in monitor/API by clearing cached decisions.
+    try:
+        EmployeeAccessCache.objects.filter(employee_id__in=emp_ids).delete()
+    except Exception:
+        pass
+
     try:
         _audit_log(
             request,
@@ -4840,6 +8612,28 @@ def access_levels_personnel_remove(request: HttpRequest, level_id: int):
         pass
 
     return JsonResponse({'ok': True, 'removed': removed})
+
+
+def api_access_level_options(request: HttpRequest):
+    """JSON helper for UI: list access levels (optionally filtered by a door).
+
+    Used by the live Monitor "➕Acces" action to offer only relevant levels.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'items': []}, status=403)
+
+    door_id = _parse_int((request.GET.get('door_id') or '').strip(), default=None)
+    qs = AccessLevel.objects.order_by('name')
+    if door_id is not None:
+        try:
+            qs = qs.filter(doors__id=int(door_id)).distinct()
+        except Exception:
+            pass
+    try:
+        items = list(qs.values('id', 'name'))
+    except Exception:
+        items = []
+    return JsonResponse({'items': items})
 
 
 def employees_search_json(request: HttpRequest):
@@ -5190,7 +8984,7 @@ def areas_json(request: HttpRequest):
         m = meta_by_id.get(mid)
         parent_id = None
         try:
-            parent_id = int(getattr(m, 'parent_legacy_area_id', None)) if m and getattr(m, 'parent_legacy_area_id', None) else None
+            parent_id = _parse_int(getattr(m, 'parent_legacy_area_id', None), default=None) if m else None
         except Exception:
             parent_id = None
         items.append({
@@ -5215,17 +9009,17 @@ def area_save_json(request: HttpRequest):
         payload = json.loads(request.body.decode('utf-8'))
     except Exception:
         payload = request.POST.dict()
-    name = (payload.get('name') or '').strip()
-    code = (payload.get('code') or '').strip()
-    remarks = (payload.get('notes') or payload.get('remarks') or '').strip()
-    parent_id_raw = (payload.get('parent_id') or payload.get('parent') or '').strip()
+    name = _payload_get_str(payload, 'name', '').strip()
+    code = _payload_get_str(payload, 'code', '').strip()
+    remarks = (_payload_get_str(payload, 'notes', '') or _payload_get_str(payload, 'remarks', '')).strip()
+    parent_id_raw = (_payload_get_str(payload, 'parent_id', '') or _payload_get_str(payload, 'parent', '')).strip()
     parent_id = None
     if parent_id_raw:
         try:
             parent_id = int(parent_id_raw)
         except Exception:
             parent_id = None
-    pk = payload.get('id')
+    pk = _payload_get_str(payload, 'id', '')
     if not name:
         return JsonResponse({'ok': False, 'error': 'empty-name'}, status=400)
     if not code:
@@ -5432,25 +9226,25 @@ def dst_save_json(request: HttpRequest):
         payload = json.loads(request.body.decode('utf-8'))
     except Exception:
         payload = request.POST.dict()
-    name = (payload.get('name') or '').strip()
+    name = _payload_get_str(payload, 'name', '').strip()
     if not name:
         return JsonResponse({'ok': False, 'error': 'missing-name'}, status=400)
     try:
-        pk = payload.get('id')
+        pk = _payload_get_str(payload, 'id', '')
         is_update = bool(pk)
         obj = DSTime.objects.get(pk=int(pk)) if pk else DSTime()
         obj.name = name
-        obj.start_month = int(payload.get('start_month', 1))
-        obj.start_week = payload.get('start_week') or 'last'
-        obj.start_weekday = int(payload.get('start_weekday', 0))
-        obj.start_hour = int(payload.get('start_hour', 3))
-        obj.start_minute = int(payload.get('start_minute', 0))
-        obj.end_month = int(payload.get('end_month', 10))
-        obj.end_week = payload.get('end_week') or 'last'
-        obj.end_weekday = int(payload.get('end_weekday', 0))
-        obj.end_hour = int(payload.get('end_hour', 3))
-        obj.end_minute = int(payload.get('end_minute', 0))
-        obj.offset_minutes = int(payload.get('offset_minutes', 60))
+        obj.start_month = int(_payload_get_int(payload, 'start_month', 1) or 1)
+        obj.start_week = _payload_get_str(payload, 'start_week', 'last') or 'last'
+        obj.start_weekday = int(_payload_get_int(payload, 'start_weekday', 0) or 0)
+        obj.start_hour = int(_payload_get_int(payload, 'start_hour', 3) or 3)
+        obj.start_minute = int(_payload_get_int(payload, 'start_minute', 0) or 0)
+        obj.end_month = int(_payload_get_int(payload, 'end_month', 10) or 10)
+        obj.end_week = _payload_get_str(payload, 'end_week', 'last') or 'last'
+        obj.end_weekday = int(_payload_get_int(payload, 'end_weekday', 0) or 0)
+        obj.end_hour = int(_payload_get_int(payload, 'end_hour', 3) or 3)
+        obj.end_minute = int(_payload_get_int(payload, 'end_minute', 0) or 0)
+        obj.offset_minutes = int(_payload_get_int(payload, 'offset_minutes', 60) or 60)
         obj.save()
         try:
             _audit_log(
@@ -5867,11 +9661,11 @@ def _get_lock_map():
     except Exception:
         return {}
 
-def _set_lock_state(door_id, state: str):
+def _set_lock_state(door_id, state: Optional[str]):
     try:
         m = _get_lock_map()
         key = str(door_id)
-        if state and state.upper() == 'LOCKED':
+        if state and str(state).upper() == 'LOCKED':
             m[key] = 'LOCKED'
         else:
             if key in m:
@@ -5881,10 +9675,26 @@ def _set_lock_state(door_id, state: str):
         pass
 
 def _door_state_from_cache_or_model(door):
+    """Return a UI-friendly door state string.
+
+    IMPORTANT: `door.is_open` is a persisted *simulated* state updated by remote
+    commands. It can become stale when the controller is offline/powered down.
+    To avoid showing a door stuck as OPEN while the controller is offline, the
+    caller may pass `device_online=False` via attribute injection on the door
+    instance (see callers below).
+    """
     lock_map = _get_lock_map()
     lock_state = lock_map.get(str(getattr(door, 'id', '')))
     if lock_state == 'LOCKED':
         return 'LOCKED'
+    # Callers may attach a precomputed `__device_online` attribute to avoid
+    # extra DB queries.
+    try:
+        dev_online = getattr(door, '__device_online')
+    except Exception:
+        dev_online = None
+    if dev_online is False:
+        return 'CLOSED'
     return 'OPEN' if getattr(door, 'is_open', False) else 'CLOSED'
 
 def access_evaluate_and_open(request: HttpRequest):
@@ -5992,8 +9802,10 @@ def access_evaluate_and_open(request: HttpRequest):
                     return False
 
                 time_ok_any = False
+                door_ids_allowed_raw = set()
                 door_ids_allowed = set()
                 door_map = {}
+                door_schedule_reasons: list[str] = []
                 for al in levels:
                     seg_ok = _seg_allows(al)
                     if seg_ok:
@@ -6001,15 +9813,32 @@ def access_evaluate_and_open(request: HttpRequest):
                     for d in al.doors.all():
                         door_map[d.id] = d
                         if seg_ok:
-                            door_ids_allowed.add(d.id)
+                            door_ids_allowed_raw.add(d.id)
 
-                allowed_doors = [
-                    {'id': d_id, 'name': getattr(door_map[d_id], 'name', ''), 'device_id': getattr(door_map[d_id], 'device_id', None)}
-                    for d_id in door_ids_allowed
-                ]
+                # Apply door-level constraints (must be configured and inside its active time zone).
+                allowed_doors = []
+                for d_id in door_ids_allowed_raw:
+                    d_obj = door_map.get(d_id)
+                    can_open_now, tz_reason = _door_can_open_now(d_obj)
+                    if can_open_now:
+                        door_ids_allowed.add(d_id)
+                        allowed_doors.append({
+                            'id': d_id,
+                            'name': getattr(d_obj, 'name', ''),
+                            'device_id': getattr(d_obj, 'device_id', None),
+                        })
+                    else:
+                        if tz_reason and tz_reason not in door_schedule_reasons:
+                            door_schedule_reasons.append(tz_reason)
 
                 if not time_ok_any:
                     reasons.append('outside_time_segments')
+
+                # If employee has access-level time segments but all doors are blocked by door schedules,
+                # surface a meaningful reason.
+                if time_ok_any and door_ids_allowed_raw and not door_ids_allowed:
+                    if door_schedule_reasons:
+                        reasons.append(door_schedule_reasons[0])
 
                 # If door not resolved but employee has allowed doors, pick first
                 if door is None and allowed_doors:
@@ -6020,7 +9849,12 @@ def access_evaluate_and_open(request: HttpRequest):
 
                 if door:
                     if door.id not in door_ids_allowed:
-                        reasons.append('door_not_in_access_levels')
+                        if door.id not in door_ids_allowed_raw:
+                            reasons.append('door_not_in_access_levels')
+                        else:
+                            # Door is in access levels, but blocked by door constraints.
+                            can_open_now, tz_reason = _door_can_open_now(door)
+                            reasons.append(tz_reason or 'outside_time_zone')
                     elif not time_ok_any:
                         pass
                     else:
@@ -6262,11 +10096,22 @@ def test_read_card(request: HttpRequest):
         if door_pk:
             door = Door.objects.filter(pk=int(door_pk)).first()
         else:
-            door = Door.objects.order_by('id').first()
+            # Default to the first configured door (assigned + has door_number)
+            door = (
+                Door.objects.exclude(device__isnull=True)
+                .exclude(door_number__isnull=True)
+                .order_by('device_id', 'door_number', 'id')
+                .first()
+            )
     except Exception:
-        door = Door.objects.order_by('id').first()
+        door = (
+            Door.objects.exclude(device__isnull=True)
+            .exclude(door_number__isnull=True)
+            .order_by('device_id', 'door_number', 'id')
+            .first()
+        )
     if not door:
-        return JsonResponse({'ok': False, 'error': 'no-door', 'card_number': card}, status=400)
+        return JsonResponse({'ok': False, 'error': 'no-configured-door', 'card_number': card}, status=400)
     # Call existing evaluator
     try:
         import json
@@ -6274,7 +10119,7 @@ def test_read_card(request: HttpRequest):
         # Build a faux POST request using current request as base
         req = request
         req.method = 'POST'
-        req._body = payload.encode('utf-8')
+        cast(Any, req)._body = payload.encode('utf-8')
         resp = access_evaluate_and_open(req)
         # Ensure card_number is present in response
         try:
@@ -6326,28 +10171,46 @@ def doors_json_list(request: HttpRequest):
     if not request.user.is_authenticated:
         return JsonResponse({'items': []}, status=403)
     try:
-        from .models import Door
+        from .models import Door, DeviceStatus
+        include_unassigned = str(request.GET.get('include_unassigned', '') or '').strip().lower() in ('1', 'true', 'yes')
+        include_unconfigured = str(request.GET.get('include_unconfigured', '') or '').strip().lower() in ('1', 'true', 'yes')
+        include_non_controllers = str(request.GET.get('include_non_controllers', '') or '').strip().lower() in ('1', 'true', 'yes')
         qs = Door.objects.select_related('device').order_by('id')
+        if not include_unassigned:
+            qs = qs.exclude(device__isnull=True)
+        if not include_unconfigured:
+            qs = qs.exclude(door_number__isnull=True)
+        if not include_non_controllers:
+            # Live monitor: doors belong to controllers only; exclude doors linked to readers/scanners.
+            qs = qs.exclude(device__scanner_linked=True).exclude(device__device_type='biometric_reader')
         items = []
-        # Preload DeviceStatus for all devices referenced to minimize queries
+        # Preload latest DeviceStatus for all devices referenced to minimize queries
         device_ids = [getattr(d.device, 'id', None) for d in qs if getattr(d.device, 'id', None) is not None]
         status_map = {}
         if device_ids:
-            for ds in DeviceStatus.objects.filter(device_id__in=device_ids):
-                status_map[ds.device_id] = ds
+            for ds in DeviceStatus.objects.filter(device_id__in=device_ids).order_by('device_id', '-updated_at', '-id'):
+                if ds.device_id not in status_map:
+                    status_map[ds.device_id] = ds
         for d in qs:
-            # Map is_open boolean to state string for UI
-            state = _door_state_from_cache_or_model(d)
             dev = getattr(d, 'device', None)
             dev_id = getattr(dev, 'id', None) if dev else None
             ds = status_map.get(dev_id)
+            # Attach precomputed online flag for state helper (avoid OPEN when offline)
+            try:
+                setattr(d, '__device_online', bool(ds.online) if ds is not None else False)
+            except Exception:
+                pass
+            # Map is_open boolean to state string for UI
+            state = _door_state_from_cache_or_model(d)
             items.append({
                 'id': d.id,
                 'name': d.name or f"Door {d.id}",
                 'device_id': dev_id,
                 'device_name': getattr(dev, 'name', None) if dev else None,
+                'door_number': getattr(d, 'door_number', None),
                 'state': state,
                 'enabled': bool(d.enabled),
+                'lock_open_duration': int(getattr(d, 'lock_open_duration', 5) or 5),
                 'device_enabled': bool(getattr(dev, 'enabled', False)) if dev else False,
                 'device_online': bool(ds.online) if ds is not None else False,
             })
@@ -6732,10 +10595,72 @@ def access_level_create(request: HttpRequest):
         from django.contrib.auth.views import redirect_to_login
         return redirect_to_login(request.get_full_path())
     is_modal = (request.GET.get('modal') == '1') or (request.headers.get('x-requested-with') == 'XMLHttpRequest')
+
+    def _queue_sync_for_device_ids(device_ids: set[int], *, reason: str) -> tuple[int, int]:
+        try:
+            from datetime import timedelta
+            from django.utils import timezone
+
+            from agent.models import CommandLog, Device
+            from agent.sync_limits import get_sync_personnel_limits
+
+            limits = get_sync_personnel_limits()
+            if not bool(getattr(limits, 'enabled', True)):
+                return 0, 0
+
+            dedupe_s = int(getattr(limits, 'dedupe_seconds', 60) or 60)
+            cutoff = timezone.now() - timedelta(seconds=max(1, dedupe_s))
+        except Exception:
+            CommandLog = None  # type: ignore
+            Device = None  # type: ignore
+            cutoff = None
+
+        queued = 0
+        already = 0
+        if not device_ids:
+            return 0, 0
+        try:
+            qs = Device.objects.filter(id__in=sorted(device_ids), enabled=True)
+        except Exception:
+            return 0, 0
+
+        for dev in qs:
+            try:
+                if cutoff is not None:
+                    exists_recent = (
+                        CommandLog.objects.filter(
+                            device=dev,
+                            command__startswith='SYNC_PERSONNEL',
+                            created_at__gte=cutoff,
+                        )
+                        .exclude(status='ERR')
+                        .exists()
+                    )
+                    if exists_recent:
+                        already += 1
+                        continue
+                log = CommandLog.objects.create(device=dev, command='SYNC_PERSONNEL', status='PENDING')
+                _broadcast_command(log)
+                queued += 1
+            except Exception:
+                continue
+        return queued, already
     if request.method == 'POST':
         form = AccessLevelForm(request.POST)
         if form.is_valid():
             form.save()
+
+            # Sync controllers covered by this level.
+            try:
+                dev_ids = set(
+                    form.instance.doors.exclude(device__isnull=True)
+                    .values_list('device_id', flat=True)
+                    .distinct()
+                )
+            except Exception:
+                dev_ids = set()
+            queued_sync, already_sync = _queue_sync_for_device_ids({int(x) for x in dev_ids if x}, reason='access_level_created')
+
             _broadcast_access_level_change('created', form.instance)
             _audit_log(
                 request,
@@ -6745,10 +10670,34 @@ def access_level_create(request: HttpRequest):
                 entity_name=getattr(form.instance, 'name', '') or '',
             )
             tpl = 'agent/access_level_saved_inner.html' if is_modal else 'agent/access_level_saved.html'
-            return render(request, tpl, {'obj': form.instance, 'created': True})
+            return render(request, tpl, {'obj': form.instance, 'created': True, 'queued_sync': queued_sync, 'already_sync': already_sync})
     else: form = AccessLevelForm()
     tpl = 'agent/access_level_form_inner.html' if is_modal else 'agent/access_level_form.html'
-    return render(request, tpl, {'form': form})
+    # For modal UI controller picker.
+    devices_all = []
+    devices_selected = []
+    devices_available = []
+    try:
+        devices_all = list(form.fields['devices'].queryset)
+        if form.is_bound:
+            raw_ids = list(form.data.getlist('devices'))
+        else:
+            raw_ids = list(form.initial.get('devices') or [])
+        sel_ids = []
+        for v in raw_ids:
+            try:
+                sel_ids.append(int(v))
+            except Exception:
+                continue
+        sel_ids = sorted({int(x) for x in sel_ids if int(x) > 0})
+        devices_selected = [d for d in devices_all if int(getattr(d, 'id', 0) or 0) in set(sel_ids)]
+        sel_set = {int(getattr(d, 'id', 0) or 0) for d in devices_selected if int(getattr(d, 'id', 0) or 0) > 0}
+        devices_available = [d for d in devices_all if int(getattr(d, 'id', 0) or 0) not in sel_set]
+    except Exception:
+        devices_all = []
+        devices_selected = []
+        devices_available = []
+    return render(request, tpl, {'form': form, 'devices_all': devices_all, 'devices_selected': devices_selected, 'devices_available': devices_available})
 
 def access_level_edit(request: HttpRequest, pk: int):
     if not request.user.is_authenticated or not request.user.is_staff:
@@ -6756,10 +10705,80 @@ def access_level_edit(request: HttpRequest, pk: int):
         return redirect_to_login(request.get_full_path())
     is_modal = (request.GET.get('modal') == '1') or (request.headers.get('x-requested-with') == 'XMLHttpRequest')
     lvl = AccessLevel.objects.get(pk=pk)
+
+    def _queue_sync_for_device_ids(device_ids: set[int], *, reason: str) -> tuple[int, int]:
+        try:
+            from datetime import timedelta
+
+            from django.utils import timezone
+
+            from agent.models import CommandLog, Device
+            from agent.sync_limits import get_sync_personnel_limits
+
+            limits = get_sync_personnel_limits()
+            if not bool(getattr(limits, 'enabled', True)):
+                return 0, 0
+
+            dedupe_s = int(getattr(limits, 'dedupe_seconds', 60) or 60)
+            cutoff = timezone.now() - timedelta(seconds=max(1, dedupe_s))
+        except Exception:
+            CommandLog = None  # type: ignore
+            Device = None  # type: ignore
+            cutoff = None
+
+        queued = 0
+        already = 0
+        if not device_ids:
+            return 0, 0
+        try:
+            qs = Device.objects.filter(id__in=sorted(device_ids), enabled=True)
+        except Exception:
+            return 0, 0
+
+        for dev in qs:
+            try:
+                if cutoff is not None:
+                    exists_recent = (
+                        CommandLog.objects.filter(
+                            device=dev,
+                            command__startswith='SYNC_PERSONNEL',
+                            created_at__gte=cutoff,
+                        )
+                        .exclude(status='ERR')
+                        .exists()
+                    )
+                    if exists_recent:
+                        already += 1
+                        continue
+                log = CommandLog.objects.create(device=dev, command='SYNC_PERSONNEL', status='PENDING')
+                _broadcast_command(log)
+                queued += 1
+            except Exception:
+                continue
+        return queued, already
     if request.method == 'POST':
+        try:
+            old_dev_ids = set(
+                lvl.doors.exclude(device__isnull=True)
+                .values_list('device_id', flat=True)
+                .distinct()
+            )
+        except Exception:
+            old_dev_ids = set()
         form = AccessLevelForm(request.POST, instance=lvl)
         if form.is_valid():
             form.save()
+
+            try:
+                new_dev_ids = set(
+                    form.instance.doors.exclude(device__isnull=True)
+                    .values_list('device_id', flat=True)
+                    .distinct()
+                )
+            except Exception:
+                new_dev_ids = set()
+            queued_sync, already_sync = _queue_sync_for_device_ids({int(x) for x in (set(old_dev_ids) | set(new_dev_ids)) if x}, reason='access_level_updated')
+
             _broadcast_access_level_change('updated', form.instance)
             _audit_log(
                 request,
@@ -6769,16 +10788,80 @@ def access_level_edit(request: HttpRequest, pk: int):
                 entity_name=getattr(form.instance, 'name', '') or '',
             )
             tpl = 'agent/access_level_saved_inner.html' if is_modal else 'agent/access_level_saved.html'
-            return render(request, tpl, {'obj': form.instance, 'created': False})
+            return render(request, tpl, {'obj': form.instance, 'created': False, 'queued_sync': queued_sync, 'already_sync': already_sync})
     else: form = AccessLevelForm(instance=lvl)
     tpl = 'agent/access_level_form_inner.html' if is_modal else 'agent/access_level_form.html'
-    return render(request, tpl, {'form': form, 'obj': lvl})
+    devices_all = []
+    devices_selected = []
+    devices_available = []
+    try:
+        devices_all = list(form.fields['devices'].queryset)
+        if form.is_bound:
+            raw_ids = list(form.data.getlist('devices'))
+        else:
+            raw_ids = list(form.initial.get('devices') or [])
+        sel_ids = []
+        for v in raw_ids:
+            try:
+                sel_ids.append(int(v))
+            except Exception:
+                continue
+        sel_ids = sorted({int(x) for x in sel_ids if int(x) > 0})
+        devices_selected = [d for d in devices_all if int(getattr(d, 'id', 0) or 0) in set(sel_ids)]
+        sel_set = {int(getattr(d, 'id', 0) or 0) for d in devices_selected if int(getattr(d, 'id', 0) or 0) > 0}
+        devices_available = [d for d in devices_all if int(getattr(d, 'id', 0) or 0) not in sel_set]
+    except Exception:
+        devices_all = []
+        devices_selected = []
+        devices_available = []
+    return render(request, tpl, {'form': form, 'obj': lvl, 'devices_all': devices_all, 'devices_selected': devices_selected, 'devices_available': devices_available})
 
 def access_level_delete(request: HttpRequest, pk: int):
     if not request.user.is_authenticated or not request.user.is_staff or request.method != 'POST': return JsonResponse({'ok': False,'error':'unauthorized'}, status=403)
     try:
         obj = AccessLevel.objects.get(pk=pk)
+
+        # Capture affected devices before delete.
+        try:
+            dev_ids = set(
+                obj.doors.exclude(device__isnull=True)
+                .values_list('device_id', flat=True)
+                .distinct()
+            )
+        except Exception:
+            dev_ids = set()
+
         obj.delete()
+
+        # Queue sync so controllers drop the level's authorizations.
+        try:
+            from datetime import timedelta
+
+            from django.utils import timezone
+
+            from agent.models import CommandLog, Device
+            from agent.sync_limits import get_sync_personnel_limits
+
+            limits = get_sync_personnel_limits()
+            if bool(getattr(limits, 'enabled', True)):
+                dedupe_s = int(getattr(limits, 'dedupe_seconds', 60) or 60)
+                cutoff = timezone.now() - timedelta(seconds=max(1, dedupe_s))
+                for dev in Device.objects.filter(id__in=sorted({int(x) for x in dev_ids if x}), enabled=True):
+                    try:
+                        exists_recent = (
+                            CommandLog.objects.filter(device=dev, command__startswith='SYNC_PERSONNEL', created_at__gte=cutoff)
+                            .exclude(status='ERR')
+                            .exists()
+                        )
+                        if exists_recent:
+                            continue
+                        log = CommandLog.objects.create(device=dev, command='SYNC_PERSONNEL', status='PENDING')
+                        _broadcast_command(log)
+                    except Exception:
+                        continue
+        except Exception:
+            pass
+
         _broadcast_access_level_change('deleted', obj, deleted=True)
         _audit_log(
             request,
@@ -6966,7 +11049,7 @@ def recent_events_json(request: HttpRequest):
 # ---------------- Door Control API -----------------
 def _enqueue(device_id: int, cmd: str, door: Door | None = None) -> bool:
     # Always persist a CommandLog even if CommCenter unavailable
-    log = CommandLog.objects.create(device_id=device_id, door=door, command=cmd, status='PENDING')
+    log = CommandLog.objects.create(device_id=device_id, door=door, command=(cmd or '')[:240], status='PENDING')
     # Protect actuations: do not enqueue commands for devices that are disabled
     # or whose persisted DeviceStatus reports offline. This ensures that
     # doors cannot be opened when the centrală is offline/disabled.
@@ -6982,7 +11065,21 @@ def _enqueue(device_id: int, cmd: str, door: Door | None = None) -> bool:
             log.result = 'device-disabled'
             log.save(update_fields=['status','result'])
             return False
-        ds = DeviceStatus.objects.filter(device=dev).first()
+        ds = DeviceStatus.objects.filter(device=dev).order_by('-updated_at', '-id').first()
+
+        # Door actuations are blocked when offline/missing status, but we allow
+        # a fast best-effort probe to repair stale status (common after discovery).
+        if door is not None and (ds is None or (ds is not None and not ds.online)):
+            try:
+                if _maybe_set_device_online_from_probe(dev):
+                    # Refresh local instance
+                    try:
+                        ds = DeviceStatus.objects.filter(device=dev).order_by('-updated_at', '-id').first()
+                    except Exception:
+                        ds = ds
+            except Exception:
+                pass
+
         if ds is not None and not ds.online:
             log.status = 'ERR'
             log.result = 'device-offline'
@@ -7002,48 +11099,24 @@ def _enqueue(device_id: int, cmd: str, door: Door | None = None) -> bool:
         except Exception:
             pass
         return False
-    # Immediate success for door control commands to satisfy synchronous expectations
-    if cmd.startswith("DOOR_"):
-        from django.utils import timezone as _tz
-        log.status = 'OK'
-        log.result = 'ack'
-        log.executed_at = _tz.now()
-        log.save(update_fields=['status','result','executed_at'])
-        _broadcast_command(log)
     try:
-        from agent.modern_comm_center import build_and_run_stub  # avoid circular import
         import agent.modern_comm_center as mcc
         center = getattr(mcc, 'ACTIVE_CENTER', None)
-        if center is None:
-            # Use 'auto' driver detection so we don't poll stub data with stale timestamps.
-            center = build_and_run_stub(poll_interval=1.0, driver='auto')
-            mcc.ACTIVE_CENTER = center
-        try:
-            center.enqueue_command(device_id, cmd)
-        except Exception:
-            pass
-        # Schedule async acknowledgement (simulated) after short delay
-        import threading, random
-        from django.utils import timezone
-        def _ack():
+        # If CommCenter is running in this same process, enqueue via in-memory queue
+        # and prefix with LOGID so CommCenter can update this CommandLog row.
+        if center is not None:
             try:
-                success = random.random() > 0.05
-                # Reload within thread to ensure fresh state post-commit
-                fresh = CommandLog.objects.get(pk=log.pk)
-                fresh.status = 'OK' if success else 'ERR'
-                fresh.result = 'ack' if success else 'timeout'
-                fresh.executed_at = timezone.now()
-                fresh.save(update_fields=['status','result','executed_at'])
-                _broadcast_command(fresh)
+                center.enqueue_command(device_id, f"LOGID:{int(log.id)} {cmd}"[:240])
+                try:
+                    log.status = 'RUNNING'
+                    log.result = 'queued'
+                    log.save(update_fields=['status', 'result'])
+                except Exception:
+                    pass
+                _broadcast_command(log)
             except Exception:
+                # Fallback to DB-only queue (external CommCenter may consume it)
                 pass
-        from django.db import transaction
-        import sys as _sys
-        if 'test' in _sys.argv:
-            # Already synchronously updated for DOOR_ commands above; non-door commands remain async.
-            pass
-        else:
-            transaction.on_commit(lambda: threading.Timer(0.05 if 'test' in cmd.lower() else 0.15, _ack).start())
         return True
     except Exception:
         return True
@@ -7051,26 +11124,195 @@ def _enqueue(device_id: int, cmd: str, door: Door | None = None) -> bool:
 def _persist_and_broadcast_status(device_id: int, door_state: str, online: bool = True):
     try:
         from channels.layers import get_channel_layer
-        import asyncio
+        from asgiref.sync import async_to_sync
+
         layer = get_channel_layer()
+        ds = None
+
         # Persist status
         try:
             dev = Device.objects.get(id=device_id)
-            ds, _ = DeviceStatus.objects.get_or_create(device=dev)
-            ds.door_state = door_state
-            ds.online = online
+            ds = _latest_device_status_row(dev)
+            if ds is None:
+                ds = DeviceStatus.objects.create(device=dev, online=bool(online), door_state=str(door_state or '')[:32])
+            else:
+                ds.door_state = door_state
+                ds.online = online
             ds.save(update_fields=["door_state", "online", "updated_at"])
         except Exception:
-            pass
+            ds = None
+
         if layer:
             # Include the exact updated_at timestamp so clients can render the true state-change time
             try:
                 ua = ds.updated_at.isoformat() if ds and getattr(ds, 'updated_at', None) is not None else None
             except Exception:
                 ua = None
-            asyncio.get_event_loop().create_task(layer.group_send("monitor", {"type": "monitor_event", "payload": {"type": "device.status", "device_id": device_id, "door_state": door_state, "online": online, "updated_at": ua}}))
+            try:
+                async_to_sync(layer.group_send)(
+                    "monitor",
+                    {
+                        "type": "monitor_event",
+                        "payload": {
+                            "type": "device.status",
+                            "device_id": int(device_id),
+                            "door_state": door_state,
+                            "online": bool(online),
+                            "updated_at": ua,
+                        },
+                    },
+                )
+            except Exception:
+                pass
     except Exception:
         pass
+
+
+def _broadcast_door_event(device_id: int, door_obj, event_type: str, verify_mode: str = '') -> None:
+    """Best-effort broadcast for monitor UI so operators always see door open/close lines."""
+    try:
+        from channels.layers import get_channel_layer
+        from asgiref.sync import async_to_sync
+
+        layer = get_channel_layer()
+        if not layer:
+            return
+        door_id_val = int(getattr(door_obj, 'id', 0) or 0) if door_obj is not None else 0
+        payload = {
+            "type": str(event_type or ''),
+            "device_id": int(device_id),
+            "door_id": door_id_val,
+            "point_id": door_id_val,
+            "event_description": str(event_type or ''),
+            "verify_mode": str(verify_mode or ''),
+        }
+        try:
+            nm = getattr(door_obj, 'name', '') if door_obj is not None else ''
+            if nm:
+                payload["door_name"] = nm
+        except Exception:
+            pass
+        async_to_sync(layer.group_send)("monitor", {"type": "monitor_event", "payload": payload})
+    except Exception:
+        return
+
+
+def _time_segment_is_active(seg, now_dt) -> bool:
+    try:
+        if seg is None or now_dt is None:
+            return False
+        # days_mask: bit 0 = Monday .. bit 6 = Sunday
+        wd = int(getattr(now_dt, 'weekday')())
+        mask = int(getattr(seg, 'days_mask', 0) or 0)
+        if not (mask & (1 << wd)):
+            return False
+        t = getattr(now_dt, 'time')()
+        st = getattr(seg, 'start_time', None)
+        en = getattr(seg, 'end_time', None)
+        if st is None or en is None:
+            return False
+        return bool(st <= t < en)
+    except Exception:
+        return False
+
+
+def _door_can_open_now(door_obj) -> tuple[bool, str]:
+    """Return (ok, reason). Enforces that a door must be assigned and in active time zone."""
+    try:
+        if door_obj is None:
+            return (False, 'door_not_found')
+        if getattr(door_obj, 'device_id', None) is None:
+            return (False, 'door_unassigned')
+        if getattr(door_obj, 'door_number', None) in (None, 0, ''):
+            return (False, 'door_not_configured')
+        seg = getattr(door_obj, 'door_active_time_zone', None)
+        if seg is None:
+            return (False, 'door_time_zone_not_set')
+        from django.utils import timezone
+
+        now_local = timezone.localtime(timezone.now())
+        if not _time_segment_is_active(seg, now_local):
+            return (False, 'outside_time_zone')
+        return (True, '')
+    except Exception:
+        return (False, 'schedule_check_failed')
+
+
+# Best-effort server-side auto-close scheduling.
+# Purpose: if a door is configured with lock_open_duration, ensure we always
+# transition back to CLOSED and emit a close command/event path for Monitor.
+_AUTO_CLOSE_TIMERS = {}
+
+
+def _schedule_door_auto_close(device_id: int, door_pk: int, cmd_door_arg: str, seconds: int) -> None:
+    try:
+        seconds = int(seconds or 0)
+        if seconds <= 0:
+            return
+        if int(door_pk or 0) <= 0:
+            return
+        import threading
+
+        # Cancel previous timer for this door (avoid stacking).
+        prev = _AUTO_CLOSE_TIMERS.get(int(door_pk))
+        if prev is not None:
+            try:
+                prev.cancel()
+            except Exception:
+                pass
+
+        def _fire() -> None:
+            try:
+                door_obj = Door.objects.filter(pk=int(door_pk)).select_related('device').first()
+            except Exception:
+                door_obj = None
+
+            # If the door is already closed, do not emit duplicate close commands/events.
+            try:
+                if door_obj is None or not bool(getattr(door_obj, 'is_open', False)):
+                    return
+            except Exception:
+                return
+
+            # Persist CLOSED in DB so other pages don't keep showing OPEN.
+            try:
+                from django.utils import timezone
+
+                if door_obj is not None and bool(getattr(door_obj, 'is_open', False)):
+                    door_obj.is_open = False
+                    door_obj.last_state_change = timezone.now()
+                    door_obj.save(update_fields=['is_open', 'last_state_change'])
+                    try:
+                        _set_lock_state(door_obj.id, None)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+            # Enqueue an explicit close so CommCenter can publish `door.close`.
+            try:
+                _enqueue(int(device_id), f"DOOR_CLOSE:{cmd_door_arg}", door=door_obj)
+            except Exception:
+                pass
+
+            try:
+                _persist_and_broadcast_status(int(device_id), "CLOSED")
+            except Exception:
+                pass
+
+            # Ensure the monitor shows a real-time close line even if the controller
+            # doesn't emit an explicit close event.
+            try:
+                _broadcast_door_event(int(device_id), door_obj, 'door.close', verify_mode=f'AUTO({int(seconds)}s)')
+            except Exception:
+                pass
+
+        t = threading.Timer(seconds, _fire)
+        t.daemon = True
+        _AUTO_CLOSE_TIMERS[int(door_pk)] = t
+        t.start()
+    except Exception:
+        return
 
 def door_open(request: HttpRequest, device_id: int, door_id: str):
     if not request.user.is_authenticated or not request.user.is_staff:
@@ -7083,6 +11325,15 @@ def door_open(request: HttpRequest, device_id: int, door_id: str):
                 door_obj = Door.objects.filter(device_id=int(device_id), door_number=int(door_id)).first()
     except Exception:
         door_obj = None
+
+    # Enforce that door belongs to the requested controller and is allowed by schedule
+    if door_obj is None:
+        return JsonResponse({"ok": False, "error": "door_not_found"}, status=404)
+    if int(getattr(door_obj, 'device_id', 0) or 0) != int(device_id):
+        return JsonResponse({"ok": False, "error": "door_device_mismatch"}, status=409)
+    can_open, reason = _door_can_open_now(door_obj)
+    if not can_open:
+        return JsonResponse({"ok": False, "error": reason}, status=409)
     cmd_door_arg = str(getattr(door_obj, 'door_number', None) or door_id)
     ok = _enqueue(device_id, f"DOOR_OPEN:{cmd_door_arg}", door=door_obj)
     if not ok:
@@ -7096,6 +11347,21 @@ def door_open(request: HttpRequest, device_id: int, door_id: str):
     except Exception:
         pass
     _persist_and_broadcast_status(device_id, "OPEN")
+
+    # Broadcast a door.open line for real-time monitor log.
+    try:
+        _broadcast_door_event(int(device_id), door_obj, 'door.open', verify_mode='API')
+    except Exception:
+        pass
+
+    # Auto-close (server-side): after lock_open_duration seconds, mark CLOSED and
+    # enqueue a DOOR_CLOSE to drive a real-time close event in Monitor.
+    try:
+        secs = int(getattr(door_obj, 'lock_open_duration', 0) or 0)
+        if secs > 0 and door_obj is not None:
+            _schedule_door_auto_close(int(device_id), int(getattr(door_obj, 'id', 0) or 0), str(cmd_door_arg), secs)
+    except Exception:
+        pass
     try:
         import json as _json
         from .event_codes import describe_door_event_type as _door_desc
@@ -7147,6 +11413,12 @@ def door_close(request: HttpRequest, device_id: int, door_id: str):
     except Exception:
         pass
     _persist_and_broadcast_status(device_id, "CLOSED")
+
+    # Broadcast a door.close line for real-time monitor log.
+    try:
+        _broadcast_door_event(int(device_id), door_obj, 'door.close', verify_mode='API')
+    except Exception:
+        pass
     try:
         import json as _json
         from .event_codes import describe_door_event_type as _door_desc
@@ -7310,7 +11582,20 @@ def door_unlock(request: HttpRequest, device_id: int, door_id: str):
 def door_cancel_alarm(request: HttpRequest, device_id: int, door_id: str):
     if not request.user.is_authenticated or not request.user.is_staff:
         return JsonResponse({"ok": False, "error": "unauthorized"}, status=403)
-    ok = _enqueue(device_id, f"DOOR_CANCEL_ALARM:{door_id}")
+    door_obj = None
+    try:
+        if str(door_id).isdigit():
+            door_obj = Door.objects.filter(pk=int(door_id)).first()
+            if door_obj is None:
+                door_obj = Door.objects.filter(device_id=int(device_id), door_number=int(door_id)).first()
+    except Exception:
+        door_obj = None
+
+    if door_obj is not None and int(getattr(door_obj, 'device_id', 0) or 0) != int(device_id):
+        return JsonResponse({"ok": False, "error": "door_device_mismatch"}, status=409)
+
+    cmd_door_arg = str(getattr(door_obj, 'door_number', None) or door_id)
+    ok = _enqueue(device_id, f"DOOR_CANCEL_ALARM:{cmd_door_arg}", door=door_obj)
     if not ok:
         return JsonResponse({"ok": False, "error": "device_unavailable"}, status=409)
     _persist_and_broadcast_status(device_id, "ALARM_CLEARED")
@@ -7391,7 +11676,11 @@ def device_toggle(request: HttpRequest, device_id: int):
                 for devlink in linked_qs:
                     try:
                         # Ensure a DeviceStatus exists for each linked device when user explicitly toggles
-                        ds_link, created_ds = _DS.objects.get_or_create(device=devlink)
+                        ds_link = _DS.objects.filter(device=devlink).order_by('-updated_at', '-id').first()
+                        created_ds = False
+                        if ds_link is None:
+                            ds_link = _DS.objects.create(device=devlink, online=bool(target), door_state='')
+                            created_ds = True
                         if target:
                             # bring online
                             if not ds_link.online or created_ds:
@@ -7414,9 +11703,9 @@ def device_toggle(request: HttpRequest, device_id: int):
                     for did in affected:
                         try:
                             ds2 = _DS.objects.filter(device_id=did).first()
-                            ua = ds2.updated_at.isoformat() if ds2 and ds2.updated_at else None
+                            ua = ds2.updated_at.isoformat() if ds2 and ds2.updated_at else ''
                         except Exception:
-                            ua = None
+                            ua = ''
                         try:
                             broadcast_device_status(did, bool(target), updated_at=ua)
                         except Exception:
@@ -7424,8 +11713,8 @@ def device_toggle(request: HttpRequest, device_id: int):
                 except Exception:
                     pass
                 # Return the status for the specific device_id (if we have a row)
-                ds = DeviceStatus.objects.filter(device=dev).first()
-                ua = ds.updated_at.isoformat() if ds and ds.updated_at else None
+                ds = DeviceStatus.objects.filter(device=dev).order_by('-updated_at', '-id').first()
+                ua = ds.updated_at.isoformat() if ds and ds.updated_at else ''
                 _audit_log(
                     request,
                     module='device',
@@ -7437,9 +11726,25 @@ def device_toggle(request: HttpRequest, device_id: int):
                 return JsonResponse({'ok': True, 'online': bool(ds.online) if ds else bool(target), 'updated_at': ua})
 
         # Default: update single device status
-        ds, created = DeviceStatus.objects.get_or_create(device=dev)
-        ds.online = bool(target)
-        ds.save(update_fields=['online', 'updated_at'])
+        ds = DeviceStatus.objects.filter(device=dev).order_by('-updated_at', '-id').first()
+        if ds is None:
+            ds = DeviceStatus.objects.create(device=dev, online=bool(target), door_state='')
+        else:
+            ds.online = bool(target)
+            # When forcing offline, clear any persisted OPEN-like state so UIs
+            # don't show doors stuck open while the controller is powered down.
+            if not bool(target):
+                try:
+                    ds.door_state = ''
+                except Exception:
+                    pass
+            ds.save(update_fields=['online', 'door_state', 'updated_at'] if not bool(target) else ['online', 'updated_at'])
+        # Also clear simulated per-door open state when forcing offline.
+        if not bool(target):
+            try:
+                Door.objects.filter(device=dev).update(is_open=False)
+            except Exception:
+                pass
         try:
             ua = ds.updated_at.isoformat() if ds.updated_at else None
         except Exception:
@@ -7543,8 +11848,14 @@ def door_pk_open(request: HttpRequest, pk: int):
         return JsonResponse({'ok': False,'error':'unauthorized'}, status=403)
     try:
         door = Door.objects.get(pk=pk)
+        if not door.device:
+            return JsonResponse({'ok': False, 'error': 'door_unassigned'}, status=409)
+        can_open, reason = _door_can_open_now(door)
+        if not can_open:
+            return JsonResponse({'ok': False, 'error': reason}, status=409)
         if door.device:
-            ok = _enqueue(door.device.id, f"DOOR_OPEN:{door.id}", door=door)
+            cmd_door_arg = str(getattr(door, 'door_number', None) or getattr(door, 'id', pk))
+            ok = _enqueue(door.device.id, f"DOOR_OPEN:{cmd_door_arg}", door=door)
             if not ok:
                 return JsonResponse({'ok': False, 'error': 'device_unavailable'}, status=409)
             door.is_open = True
@@ -7585,7 +11896,8 @@ def door_pk_close(request: HttpRequest, pk: int):
     try:
         door = Door.objects.get(pk=pk)
         if door.device:
-            ok = _enqueue(door.device.id, f"DOOR_CLOSE:{door.id}", door=door)
+            cmd_door_arg = str(getattr(door, 'door_number', None) or getattr(door, 'id', pk))
+            ok = _enqueue(door.device.id, f"DOOR_CLOSE:{cmd_door_arg}", door=door)
             if not ok:
                 return JsonResponse({'ok': False, 'error': 'device_unavailable'}, status=409)
             door.is_open = False
@@ -7805,9 +12117,15 @@ ACCESS_CACHE_TTL_SECONDS = 60
 def access_check(request: HttpRequest):
     if not request.user.is_authenticated:
         return JsonResponse({'ok': False,'error':'unauthorized'}, status=403)
-    emp_id = request.GET.get('employee'); door_id = request.GET.get('door')
+    emp_id = request.GET.get('employee')
+    door_id = request.GET.get('door')
+    emp_pk = _parse_int(emp_id, default=None)
+    door_pk = _parse_int(door_id, default=None)
+    if emp_pk is None or door_pk is None:
+        return JsonResponse({'ok': False, 'error': 'invalid-args'}, status=400)
     try:
-        emp = Employee.objects.get(pk=int(emp_id)); door = Door.objects.get(pk=int(door_id))
+        emp = Employee.objects.get(pk=int(emp_pk))
+        door = Door.objects.get(pk=int(door_pk))
     except Exception:
         return JsonResponse({'ok': False,'error':'not-found'}, status=404)
     # Check cache first
@@ -7848,6 +12166,176 @@ def command_recent(request: HttpRequest):
     return JsonResponse({'ok': True,'items': items,'commands': items})
 
 
+def _enqueue_tracked_cmd(device_id: int, cmd: str) -> tuple[bool, int | None, str]:
+    """Create CommandLog and enqueue with LOGID prefix so CommCenter updates status.
+
+    Starts an in-process CommCenter (driver=auto) if none is active, so UI actions
+    remain functional even when tray/daemon isn't running.
+    """
+    # De-dupe heavy sync commands to avoid generating high traffic / DoS.
+    try:
+        if (cmd or '').strip().upper().startswith('SYNC_PERSONNEL'):
+            try:
+                from agent.sync_limits import get_sync_personnel_limits
+
+                dedupe_s = int(get_sync_personnel_limits().dedupe_seconds)
+            except Exception:
+                try:
+                    dedupe_s = int(os.getenv('SYNC_PERSONNEL_DEDUPE_SECONDS', '60'))
+                except Exception:
+                    dedupe_s = 60
+                dedupe_s = max(5, min(600, dedupe_s))
+            from datetime import timedelta
+            from django.utils import timezone as _tz
+
+            cutoff = _tz.now() - timedelta(seconds=int(dedupe_s))
+            existing = (
+                CommandLog.objects.filter(
+                    device_id=int(device_id),
+                    command__startswith='SYNC_PERSONNEL',
+                    status='PENDING',
+                    created_at__gte=cutoff,
+                )
+                .order_by('-created_at')
+                .first()
+            )
+            if existing:
+                return (True, int(existing.id), 'already_queued')
+    except Exception:
+        pass
+
+    try:
+        log = CommandLog.objects.create(device_id=int(device_id), command=(cmd or '')[:240], status='PENDING')
+    except Exception as e:
+        return (False, None, f"commandlog_create_failed:{e}")
+
+    # Safety gates
+    try:
+        dev0 = Device.objects.filter(id=int(device_id)).first()
+        if dev0 is None:
+            log.status, log.result = 'ERR', 'device-not-found'
+            log.save(update_fields=['status', 'result'])
+            return (False, int(log.id), 'device-not-found')
+        if not getattr(dev0, 'enabled', True):
+            log.status, log.result = 'ERR', 'device-disabled'
+            log.save(update_fields=['status', 'result'])
+            return (False, int(log.id), 'device-disabled')
+        ds0 = DeviceStatus.objects.filter(device=dev0).first()
+        if ds0 is not None and not ds0.online:
+            log.status, log.result = 'ERR', 'device-offline'
+            log.save(update_fields=['status', 'result'])
+            return (False, int(log.id), 'device-offline')
+    except Exception:
+        pass
+
+    try:
+        import agent.modern_comm_center as mcc
+
+        center = getattr(mcc, 'ACTIVE_CENTER', None)
+        if center is None:
+            # Best-effort: in web-only mode there may be no active center.
+            # We start one so the command can execute without tray/daemon.
+            center = getattr(mcc, 'build_and_run_stub')(poll_interval=1.0, driver='auto')
+            mcc.ACTIVE_CENTER = center
+        center.enqueue_command(int(device_id), f"LOGID:{int(log.id)} {cmd}"[:240])
+        try:
+            log.status = 'RUNNING'
+            log.result = 'queued'
+            log.save(update_fields=['status', 'result'])
+        except Exception:
+            pass
+        try:
+            _broadcast_command(log)
+        except Exception:
+            pass
+        return (True, int(log.id), 'queued')
+    except Exception as e:
+        # Keep DB queue as source of truth; external CommCenter/tray can consume.
+        try:
+            if not (log.result or '').strip():
+                log.result = 'queued-db-only'
+                log.save(update_fields=['result'])
+        except Exception:
+            pass
+        return (True, int(log.id), f"queued_db_only:{e}")
+
+
+@csrf_exempt
+def device_sync_personnel(request: HttpRequest, device_id: int):
+    """Queue SYNC_PERSONNEL for a physical controller and return command id."""
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'method-not-allowed'}, status=405)
+
+    dev = Device.objects.filter(id=int(device_id)).first()
+    if dev is None:
+        return JsonResponse({'ok': False, 'error': 'not-found'}, status=404)
+
+    try:
+        if not bool(dev.is_physical_controller()):
+            return JsonResponse({'ok': False, 'error': 'device-not-physical'}, status=400)
+    except Exception:
+        return JsonResponse({'ok': False, 'error': 'device-not-physical'}, status=400)
+
+    # Ensure DB contains syncable employees for this device (active + access levels on this controller).
+    try:
+        doors = list(Door.objects.filter(device_id=int(dev.id)).exclude(door_number__isnull=True))
+        levels = list(AccessLevel.objects.filter(doors__in=doors).distinct()) if doors else []
+        emp_qs = Employee.objects.filter(active=True, access_levels__in=levels).distinct() if levels else Employee.objects.none()
+        syncable_count = int(emp_qs.count())
+    except Exception:
+        syncable_count = 0
+
+    if syncable_count <= 0:
+        return JsonResponse({'ok': False, 'error': 'no_syncable_employees'}, status=400)
+
+    ok, cmdlog_id, info = _enqueue_tracked_cmd(int(dev.id), 'SYNC_PERSONNEL')
+    if not ok or not cmdlog_id:
+        return JsonResponse({'ok': False, 'error': info or 'enqueue-failed'}, status=500)
+
+    try:
+        _audit_log(
+            request,
+            module='command',
+            action='create',
+            entity_id=int(dev.id),
+            entity_name='SYNC_PERSONNEL',
+            details=f"device_id={dev.id} cmdlog_id={cmdlog_id} syncable={syncable_count}",
+        )
+    except Exception:
+        pass
+
+    return JsonResponse({'ok': True, 'command_id': int(cmdlog_id), 'info': info, 'syncable_employees': syncable_count})
+
+
+def command_status(request: HttpRequest, command_id: int):
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    try:
+        cid = int(command_id)
+    except Exception:
+        return JsonResponse({'ok': False, 'error': 'invalid-id'}, status=400)
+    try:
+        l = CommandLog.objects.get(pk=cid)
+    except CommandLog.DoesNotExist:
+        return JsonResponse({'ok': False, 'error': 'not-found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': f'db-error:{e}'}, status=500)
+
+    item = {
+        'id': l.id,
+        'command': (l.command or '')[:240],
+        'status': l.status,
+        'result': l.result,
+        'device_id': l.device_id,
+        'door_id': l.door_id,
+        'created_at': l.created_at.isoformat() if l.created_at else None,
+        'executed_at': l.executed_at.isoformat() if l.executed_at else None,
+    }
+    return JsonResponse({'ok': True, 'item': item, **item})
+
+
 def commands_full_list(request: HttpRequest):
     if not request.user.is_authenticated:
         return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
@@ -7857,6 +12345,7 @@ def commands_full_list(request: HttpRequest):
     for l in logs:
         rows.append({
             'id': l.id,
+            'device_id': l.device_id,
             'device': getattr(l.device, 'name', None),
             'serial': getattr(l.device, 'serial_number', ''),
             'door': getattr(l.door, 'name', None),
@@ -8135,7 +12624,7 @@ def csv_export(request: HttpRequest, module: str):
             remarks = (getattr(m, 'remarks', None) if m else None) or ''
             parent_id = None
             try:
-                parent_id = int(getattr(m, 'parent_legacy_area_id', None)) if m and getattr(m, 'parent_legacy_area_id', None) else None
+                parent_id = _parse_int(getattr(m, 'parent_legacy_area_id', None), default=None) if m else None
             except Exception:
                 parent_id = None
             parent_code = code_by_id.get(parent_id or 0, '') if parent_id else ''
@@ -8158,10 +12647,11 @@ def csv_export(request: HttpRequest, module: str):
 
     # ===== PERSONAL MODULES =====
     if mod in ('department', 'departments', 'dept', 'depts'):
-        if not Dept:
+        if Dept is None:
             return JsonResponse({'ok': False, 'error': 'missing-model:Dept'}, status=400)
+        DeptModel = cast(Any, Dept)
         w.writerow(['id', 'name', 'code'])
-        for d in Dept.objects.order_by('DeptName'):
+        for d in DeptModel.objects.order_by('DeptName'):
             w.writerow([int(d.id), getattr(d, 'DeptName', '') or '', getattr(d, 'code', '') or ''])
         return _csv_http_response('departments.csv', buf.getvalue())
 
@@ -8273,6 +12763,16 @@ def csv_import(request: HttpRequest, module: str):
                     dev = Device.objects.filter(serial_number=dev_serial).first()
                 if dev is None and dev_name:
                     dev = Device.objects.filter(name=dev_name).first()
+                if dev is None:
+                    _fail(i, 'missing-or-unknown-device (device_serial/device_name required)')
+                    continue
+                try:
+                    if not (getattr(dev, 'is_controller', None) and dev.is_controller()):
+                        _fail(i, 'invalid-device (not a controller)')
+                        continue
+                except Exception:
+                    _fail(i, 'invalid-device (controller check failed)')
+                    continue
                 obj.device = dev
                 obj.door_number = door_number
                 obj.save()
@@ -8386,8 +12886,9 @@ def csv_import(request: HttpRequest, module: str):
 
     # ===== PERSONAL MODULES =====
     if mod in ('department', 'departments', 'dept', 'depts'):
-        if not Dept:
+        if Dept is None:
             return JsonResponse({'ok': False, 'error': 'missing-model:Dept'}, status=400)
+        DeptModel = cast(Any, Dept)
         for i, r in enumerate(rows, start=2):
             try:
                 name = (r.get('name') or r.get('deptname') or '').strip()
@@ -8396,18 +12897,18 @@ def csv_import(request: HttpRequest, module: str):
 
                 obj = None
                 if pk:
-                    obj = Dept.objects.filter(pk=int(pk)).first()
+                    obj = DeptModel.objects.filter(pk=int(pk)).first()
                 if obj is None and code:
-                    obj = Dept.objects.filter(code=code).first()
+                    obj = DeptModel.objects.filter(code=code).first()
                 if obj is None and name:
-                    obj = Dept.objects.filter(DeptName=name).first()
+                    obj = DeptModel.objects.filter(DeptName=name).first()
 
                 is_new = obj is None
                 if obj is None:
                     if not name:
                         _fail(i, 'missing-name')
                         continue
-                    obj = Dept()
+                    obj = DeptModel()
                     if pk:
                         try:
                             setattr(obj, 'id', int(pk))
@@ -8435,9 +12936,10 @@ def csv_import(request: HttpRequest, module: str):
 
     if mod in ('employee', 'employees'):
         dept_by_name = {}
-        if Dept:
+        if Dept is not None:
             try:
-                dept_by_name = {str(getattr(d, 'DeptName', '') or '').strip().lower(): int(d.id) for d in Dept.objects.all()}
+                DeptModel = cast(Any, Dept)
+                dept_by_name = {str(getattr(d, 'DeptName', '') or '').strip().lower(): int(d.id) for d in DeptModel.objects.all()}
             except Exception:
                 dept_by_name = {}
 
@@ -8810,16 +13312,30 @@ def employee_create(request: HttpRequest):
     
     # AJAX request for modal fragment
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    ui = (request.GET.get('ui') or request.POST.get('ui') or '').strip().lower()
+    wants_modal = ui in ('modal', '1', 'true', 'yes')
     
     if request.method == 'POST':
         form = EmployeeExtendedForm(request.POST)
         if form.is_valid():
             emp = form.save()
             if is_ajax:
+                if wants_modal:
+                    # Return HTML so the Personnel modal can behave like Access modal.
+                    return render(request, 'agent/employee_modal_saved.html', {'obj': emp, 'created': True})
                 return JsonResponse({'ok': True, 'id': emp.id, 'name': str(emp)})
             return render(request,'agent/employee_saved.html',{'obj': emp,'created': True})
         else:
             if is_ajax:
+                if wants_modal:
+                    resp = render(request, 'agent/employee_form_modal.html', {
+                        'form': form,
+                        'obj': None,
+                        'action_url': '/agent/crud/employees/new/?ui=modal',
+                        'available_access_levels': AccessLevel.objects.all(),
+                    })
+                    resp.status_code = 400
+                    return resp
                 return JsonResponse({'ok': False, 'errors': form.errors})
     else:
         # Prefill from query for quick add via Test Read
@@ -8839,16 +13355,25 @@ def employee_create(request: HttpRequest):
             except Exception:
                 pass
         form = EmployeeExtendedForm(initial=init)
-    
-    # Return ultra-compact fragment for AJAX modal, full page otherwise
-    template = 'agent/employee_form_fragment.html' if is_ajax else 'agent/employee_form.html'
-    
-    # Get available access levels for the fragment
-    available_access_levels = AccessLevel.objects.all()
-    
-    return render(request, template, {
+
+    if is_ajax:
+        if wants_modal:
+            return render(request, 'agent/employee_form_modal.html', {
+                'form': form,
+                'obj': None,
+                'action_url': '/agent/crud/employees/new/?ui=modal',
+                'available_access_levels': AccessLevel.objects.all(),
+            })
+        # Legacy XHR fragment used by Dashboard/Monitor quick-add flows
+        return render(request, 'agent/employee_form_fragment.html', {
+            'form': form,
+            'available_access_levels': AccessLevel.objects.all(),
+        })
+
+    # Legacy full-page (archive)
+    return render(request, 'agent/employee_form.html', {
         'form': form,
-        'available_access_levels': available_access_levels
+        'available_access_levels': AccessLevel.objects.all(),
     })
 
 def check_personnel_no(request: HttpRequest):
@@ -8881,7 +13406,7 @@ def check_personnel_no(request: HttpRequest):
     
     existing_nums = set(existing.values_list('legacy_userid', flat=True))
     
-    response_data = {'ok': True}
+    response_data: dict[str, Any] = {'ok': True}
     
     # Dacă se verifică un număr specific
     if check_num:
@@ -8932,7 +13457,7 @@ def check_card_numbers(request: HttpRequest):
         import sys
         print(f'DEBUG check_card_numbers: primary={primary}, secondary={secondary}, exclude_id={exclude_id}', file=sys.stderr)
         
-        response_data = {'ok': True}
+        response_data: dict[str, Any] = {'ok': True}
         
         # Verifică dacă primary și secondary sunt aceeași
         if primary and secondary and primary == secondary:
@@ -8987,13 +13512,7 @@ def check_card_numbers(request: HttpRequest):
         return JsonResponse(response_data)
     
     except Exception as e:
-        import traceback
-        return JsonResponse({
-            'ok': False, 
-            'error': str(e),
-            'trace': traceback.format_exc()
-        }, status=500)
-
+        return JsonResponse({'ok': False, 'error': str(e)}, status=500)
 
 def employee_edit(request: HttpRequest, pk: int):
     if not request.user.is_authenticated or not request.user.is_staff:
@@ -9001,11 +13520,19 @@ def employee_edit(request: HttpRequest, pk: int):
         return redirect_to_login(request.get_full_path())
     emp = Employee.objects.get(pk=pk)
     from .forms import EmployeeExtendedForm
+    is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+    ui = (request.GET.get('ui') or request.POST.get('ui') or '').strip().lower()
+    wants_modal = ui in ('modal', '1', 'true', 'yes')
     if request.method == 'POST':
         form = EmployeeExtendedForm(request.POST, instance=emp)
         if form.is_valid():
             if form.has_changed():
                 saved_emp = form.save()
+                if is_ajax:
+                    if wants_modal:
+                        return render(request, 'agent/employee_modal_saved.html', {'obj': saved_emp, 'created': False})
+                    return JsonResponse({'ok': True, 'id': saved_emp.id, 'name': str(saved_emp)})
+
                 # Reîncarcă obiectul fresh din DB pentru a afișa datele actualizate
                 saved_emp.refresh_from_db()
                 # Recreează formularul cu obiectul fresh
@@ -9017,11 +13544,37 @@ def employee_edit(request: HttpRequest, pk: int):
                 response['Expires'] = '0'
                 return response
             else:
+                if is_ajax:
+                    if wants_modal:
+                        return render(request, 'agent/employee_modal_saved.html', {'obj': emp, 'created': False})
+                    return JsonResponse({'ok': True, 'id': emp.id, 'name': str(emp)})
+
                 from django.shortcuts import redirect
                 return_url = request.POST.get('return_url', '/agent/menu/personnel/')
                 return redirect(return_url)
+        else:
+            if is_ajax:
+                if wants_modal:
+                    resp = render(request, 'agent/employee_form_modal.html', {
+                        'form': form,
+                        'obj': emp,
+                        'action_url': f'/agent/crud/employees/{pk}/edit/?ui=modal',
+                        'available_access_levels': AccessLevel.objects.all(),
+                    })
+                    resp.status_code = 400
+                    return resp
+                return JsonResponse({'ok': False, 'errors': form.errors}, status=400)
     else:
         form = EmployeeExtendedForm(instance=emp)
+
+    if is_ajax and wants_modal:
+        return render(request, 'agent/employee_form_modal.html', {
+            'form': form,
+            'obj': emp,
+            'action_url': f'/agent/crud/employees/{pk}/edit/?ui=modal',
+            'available_access_levels': AccessLevel.objects.all(),
+        })
+
     response = render(request,'agent/employee_form.html',{'form': form,'obj': emp})
     # Previne cache-ul și pentru GET
     response['Cache-Control'] = 'no-cache, no-store, must-revalidate'
@@ -9064,7 +13617,7 @@ def comm_center_status(request: HttpRequest):
     if not request.user.is_authenticated or not request.user.is_staff:
         return JsonResponse({'ok': False,'error':'unauthorized'}, status=403)
     center = _get_active_center()
-    data = {
+    data: dict[str, Any] = {
         'running': bool(center),
     }
     if center:

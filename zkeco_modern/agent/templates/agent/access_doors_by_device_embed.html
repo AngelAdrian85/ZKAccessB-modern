@@ -8,9 +8,13 @@
     .doors-dev-table tbody tr:hover{background:#1e4a6b;}
 
     .doors-dev-actions{display:flex;gap:6px;align-items:center;}
+    .doors-dev-actions{justify-content:center;flex-wrap:wrap;}
     .doors-link{color:#9fd2f1;text-decoration:none;font-weight:800;border:1px solid rgba(61,165,217,0.35);background:rgba(61,165,217,0.12);padding:2px 6px;border-radius:2px;}
     .doors-link:hover{background:rgba(61,165,217,0.22);}
     .doors-muted{color:#a8c5d8;}
+
+    .doors-actions-cell{white-space:normal;overflow:visible;text-overflow:clip;}
+    .doors-dev-table th.col-actions,.doors-dev-table td.col-actions{text-align:center;}
 
     .doors-detail{padding:6px;background:#0f2433;border:1px solid rgba(61,106,139,0.55);border-radius:2px;}
     .doors-detail h4{margin:0 0 6px 0;color:#9fd2f1;font-size:11px;}
@@ -54,7 +58,7 @@
         <col style="width:280px;" />
         <col style="width:140px;" />
         <col />
-        <col style="width:200px;" />
+        <col style="width:320px;" />
       </colgroup>
       <thead>
         <tr>
@@ -62,7 +66,7 @@
           <th>Centrală</th>
           <th>IP</th>
           <th>Uși</th>
-          <th>Acțiuni</th>
+          <th class="col-actions">Acțiuni</th>
         </tr>
       </thead>
       <tbody>
@@ -89,7 +93,7 @@
                 <span class="doors-muted">—</span>
               {% endif %}
             </td>
-            <td>
+            <td class="col-actions doors-actions-cell">
               <div class="doors-dev-actions">
                 <button type="button" class="btn-secondary btn-small" data-doors-toggle="1" data-device-id="{{ dev.id }}" title="Arată/ascunde ușile">Detalii</button>
                 {% if can_edit %}

@@ -100,9 +100,10 @@ class Command(BaseCommand):
         time.sleep(1.5)
 
         # Collect log lines in the window around now
-        start_ts = (now - timezone.timedelta(seconds=2)).isoformat()
-        begin = now - timezone.timedelta(seconds=window)
-        end = now + timezone.timedelta(seconds=window)
+        from datetime import timedelta
+        start_ts = (now - timedelta(seconds=2)).isoformat()
+        begin = now - timedelta(seconds=window)
+        end = now + timedelta(seconds=window)
 
         self.stdout.write('\n=== Correlation results ===')
         self.stdout.write('Time window: %s -> %s' % (begin.isoformat(), end.isoformat()))
