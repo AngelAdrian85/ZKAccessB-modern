@@ -1,6 +1,6 @@
 # Changelog — latest save
 
-Commit: (pending) — "Major update: ZKTech integration + bridge + provisioning + docs"
+Commit: fbeddc0a — "Major update: ZKTech integration + bridge + provisioning + docs"
 Merged into: main
 Date: 2026-02-23
 Author: local workspace
