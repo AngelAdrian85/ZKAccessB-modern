@@ -1889,10 +1889,11 @@ class ModernCommCenter(object):
                                 code = parts[3] if len(parts) > 3 else ''
                                 verify = parts[1] if len(parts) > 1 else ''
                                 card = parts[7] if len(parts) > 7 else (parts[6] if len(parts) > 6 else '')
-                                # Only consider the 7th field as a CardNo candidate in the
-                                # 8-field variant (no Index). In the 9-field variant, parts[6]
-                                # is the Index and must not be treated as a CardNo.
-                                if (not str(card or '').strip()) and len(parts) > 6 and len(parts) < 9:
+                                # When Cardno (parts[7]) is empty, fall back to parts[6] if it
+                                # looks like a card number: non-purely-numeric (e.g. hex "04EEFF11")
+                                # or a long decimal (>= 7 digits). Short numeric values are
+                                # likely Index fields and should not be treated as CardNo.
+                                if (not str(card or '').strip()) and len(parts) > 6:
                                     cand = str(parts[6] or '').strip()
                                     if cand:
                                         is_numeric = cand.isdigit()
@@ -2094,6 +2095,14 @@ class ModernCommCenter(object):
                     # Cardno is at index 7 when 9+ parts (with index field) or index 6 for 8 parts.
                     card_idx = 7 if len(parts) >= 9 else 6
                     card_b = str(parts[card_idx]).strip() if len(parts) > card_idx else ''
+                    # When Cardno is empty, fall back to parts[6] if it looks like a card:
+                    # non-purely-numeric (e.g. hex "04EEFF11") or long decimal (>= 7 digits).
+                    if (not card_b) and len(parts) > 6:
+                        cand = str(parts[6] or '').strip()
+                        if cand:
+                            is_numeric = cand.isdigit()
+                            if (not is_numeric) or (is_numeric and len(cand) >= 7):
+                                card_b = cand
                     # Deduplicate Format B by a stable per-event fingerprint.
                     # IMPORTANT: many firmwares only provide second-resolution time;
                     # repeated scans within the same second may still be unique via the 'Index' field.

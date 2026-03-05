@@ -305,8 +305,67 @@ class ZKTechSocketDriver:
         return {"result": 0}
     
     def get_options(self, items: str) -> Dict[str, Any]:
-        """Get device options (placeholder)."""
-        return {"result": 0, "data": ""}
+        """Get device options via CMD_GETOPTIONS."""
+        if not self._is_connected():
+            return {"result": 0, "data": ""}
+
+        try:
+            with self._lock:
+                payload = (items or '').encode('utf-8')
+                cmd_packet = self._build_command(self.CMD_GETOPTIONS, payload, expect_reply=1)
+                self.socket.send(cmd_packet)
+
+                data = self._recv_all(4096)
+                if not data:
+                    return {"result": 0, "data": ""}
+
+                # Response payload follows the 10-byte header
+                text = data[10:].decode('utf-8', errors='ignore').strip()
+                return {"result": 1, "data": text}
+        except Exception as e:
+            LOG.warning("get_options error: %s", e)
+            return {"result": 0, "data": ""}
+
+    def get_panel_user_card_map(self) -> Dict[str, str]:
+        """Return a PIN → CardNo mapping downloaded from the panel's user table.
+
+        The socket driver requests all user records via CMD_QUERYLOG (user table)
+        and parses the Pin/CardNo fields.  Returns an empty dict when the device
+        is unreachable or the table is unavailable.
+        """
+        mapping: Dict[str, str] = {}
+        if not self._is_connected():
+            return mapping
+        try:
+            with self._lock:
+                # Query the user table for Pin and CardNo fields.
+                # Payload format mirrors the plcommpro query convention.
+                query_payload = b"user\x00Pin,CardNo\x00\x00\x00"
+                cmd_packet = self._build_command(self.CMD_QUERYLOG, query_payload, expect_reply=1)
+                self.socket.send(cmd_packet)
+
+                data = self._recv_all(65536)
+                if not data or len(data) < 10:
+                    return mapping
+
+                text = data[10:].decode('utf-8', errors='ignore')
+                for line in text.replace('\r\n', '\n').split('\n'):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    pin_val = ''
+                    card_val = ''
+                    for part in line.split(','):
+                        part = part.strip()
+                        if part.upper().startswith('PIN='):
+                            pin_val = part[4:].strip()
+                        elif part.upper().startswith('CARDNO='):
+                            card_val = part[7:].strip()
+                    if pin_val and card_val and card_val not in ('0', '00000000'):
+                        mapping[pin_val] = card_val
+        except Exception as e:
+            LOG.debug("get_panel_user_card_map error: %s", e)
+        return mapping
     
     def set_options(self, items: str) -> Dict[str, Any]:
         """Set device options via CMD_SETOPTIONS (e.g. ServerAddr, ServerPort, CLOUDSERVICEFLAG)."""

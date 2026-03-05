@@ -1976,7 +1976,9 @@ class Command(BaseCommand):
         # that devices should push to (/iclock/*). Default to enabled unless
         # explicitly disabled by env.
         try:
-            os.environ.setdefault('ZKACCESS_ADMS_PORT', str(int(port)))
+            # Always update ZKACCESS_ADMS_PORT to the currently configured port so
+            # CommCenter auto-configures devices with the correct server address.
+            os.environ['ZKACCESS_ADMS_PORT'] = str(int(port))
         except Exception:
             pass
         try:

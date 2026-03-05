@@ -180,6 +180,36 @@ try {
   }
 } catch {}
 
+# Kill ALL duplicate ZKAccessB processes (both venv and system Python) to avoid
+# port conflicts and inconsistent status reporting.
+Write-Host "[TRAY] Cleaning up duplicate tray_agent / daphne / CommCenter processes"
+try {
+  $selfPid = $PID
+  $stalePatterns = @('tray_agent', 'daphne', 'run_commcenter', 'card_reader_acp', 'card_reader_elatec')
+  $allProcs = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessId -ne $selfPid }
+  foreach($proc in $allProcs){
+    try {
+      $cmdLine = [string]($proc.CommandLine)
+      if(-not $cmdLine){ continue }
+      $isZkProcess = $false
+      foreach($pat in $stalePatterns){
+        if($cmdLine -like "*$pat*"){
+          $isZkProcess = $true
+          break
+        }
+      }
+      if($isZkProcess){
+        try {
+          Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+          Write-Host "[TRAY] Stopped duplicate process PID=$($proc.ProcessId): $($cmdLine.Substring(0, [Math]::Min(80, $cmdLine.Length)))"
+        } catch {}
+      }
+    } catch {}
+  }
+} catch {
+  Write-Warning "[TRAY] Process cleanup error: $_"
+}
+
 # Ensure tray_agent will use the port/mode requested by this launch.
 try {
   if($env:USERPROFILE){
@@ -862,25 +892,6 @@ try {
   }
   Set-Content -Path (Join-Path $PWD 'tray_status.json') -Value ($statusRun | ConvertTo-Json -Depth 3) -Encoding UTF8
 } catch {}
-
-try {
-  $selfPid = $PID
-  $existingTray = Get-CimInstance Win32_Process | Where-Object {
-    try {
-      $_.ProcessId -ne $selfPid -and $_.CommandLine -and ($_.CommandLine -like '*manage.py* tray_agent*')
-    } catch {
-      $false
-    }
-  }
-  foreach($proc in $existingTray){
-    try {
-      Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
-      Write-Host "[TRAY] Stopped previous tray_agent PID $($proc.ProcessId)"
-    } catch {}
-  }
-} catch {
-  Write-Warning "[TRAY] Could not pre-clean tray_agent processes: $_"
-}
 
 try {
   $stdout = Join-Path $PWD 'tray_agent_stdout.log'
