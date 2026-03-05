@@ -1,0 +1,187 @@
+{# ADMS Push configuration form — opened as inline modal in menu_device.html #}
+<style>
+.adms-form { font-family: Tahoma,Arial,sans-serif; font-size:12px; color:#e8f0f8; padding:12px; }
+.adms-form h3 { color:#9fd2f1; font-size:13px; margin:0 0 10px 0; border-bottom:1px solid #2d5a7b; padding-bottom:6px; }
+.adms-form .info-box { background:#0f2a47; border:1px solid #2d5a7b; border-radius:4px; padding:9px 12px; margin-bottom:12px; color:#7db3d9; font-size:11px; line-height:1.45; }
+.adms-form .info-box strong { color:#9fd2f1; }
+.adms-form .form-row { display:flex; gap:12px; flex-wrap:wrap; margin-bottom:8px; }
+.adms-form .form-group { flex:1; min-width:180px; display:flex; flex-direction:column; gap:3px; }
+.adms-form label { font-size:11px; color:#9fd2f1; font-weight:700; }
+.adms-form .hint { font-size:10px; color:#5a8aaa; margin-top:1px; }
+.adms-form input[type=text], .adms-form input[type=number] {
+  background:#0f2a47; border:1px solid #2d5a7b; border-radius:4px;
+  color:#e8f0f8; padding:6px 8px; font-size:12px; outline:none;
+  transition: border-color 120ms;
+}
+.adms-form input[type=text]:focus, .adms-form input[type=number]:focus { border-color:#3da5d9; }
+.adms-form .status-row { display:flex; gap:8px; margin-top:4px; align-items:center; }
+.adms-form .current-val { background:#0a1e33; border:1px solid #1d3a55; border-radius:3px; padding:3px 7px; font-size:10px; color:#7db3d9; font-family:monospace; }
+.adms-form .btn-row { display:flex; gap:8px; margin-top:14px; flex-wrap:wrap; }
+.adms-form .btn { padding:7px 16px; border:none; border-radius:4px; cursor:pointer; font-size:12px; font-weight:700; transition:all 120ms; }
+.adms-form .btn-apply { background:#2da44e; color:#fff; }
+.adms-form .btn-apply:hover { background:#238636; }
+.adms-form .btn-clear { background:#5a3020; color:#ffa07a; border:1px solid #7a4030; }
+.adms-form .btn-clear:hover { background:#7a4030; }
+.adms-form .btn-read  { background:#1e4a6b; color:#9fd2f1; border:1px solid #2d5a7b; }
+.adms-form .btn-read:hover { background:#2d5a7b; }
+.adms-form .result-box { display:none; margin-top:10px; border-radius:4px; padding:8px 12px; font-size:11px; }
+.adms-form .result-ok   { background:#0a2a15; border:1px solid #2da44e; color:#56d98a; display:block; }
+.adms-form .result-warn { background:#2a1e0a; border:1px solid #d9943d; color:#ffcc66; display:block; }
+.adms-form .result-err  { background:#2a0a0a; border:1px solid #d94a3d; color:#ff8c99; display:block; }
+.adms-form .auto-ok  { background:#0a2a15; border:1px solid #2da44e; color:#56d98a; border-radius:4px; padding:9px 12px; margin-bottom:12px; font-size:12px; font-weight:700; }
+.adms-form .auto-warn{ background:#2a1e0a; border:1px solid #d9943d; color:#ffcc66; border-radius:4px; padding:9px 12px; margin-bottom:12px; font-size:12px; font-weight:700; }
+.adms-form .auto-err { background:#2a0a0a; border:1px solid #d94a3d; color:#ff8c99; border-radius:4px; padding:9px 12px; margin-bottom:12px; font-size:12px; }
+.adms-form .section-sep { border:none; border-top:1px solid #1d3a55; margin:12px 0; }
+</style>
+
+<div class="adms-form">
+  <h3>⚡ ADMS Push — {{ device.name }}</h3>
+
+  {# ── Auto-apply status banner ── #}
+  {% if auto_queued %}
+    <div class="auto-ok">
+      ✅ Configurat automat: centrala va trimite carduri la <strong>{{ suggested_ip }}:{{ suggested_port }}/iclock/cdata</strong>.<br>
+      <span style="font-weight:normal;font-size:11px;">CommCenter aplică setările la următorul ciclu de poll (~1-2s). Dacă cardurile nu apar în monitor după 30s, apasă <em>Reconfigurează</em>.</span>
+    </div>
+  {% elif auto_error %}
+    <div class="auto-err">⚠️ Nu s-a putut aplica automat: {{ auto_error }}<br>Verifică IP-ul și apasă manual <em>Reconfigurează</em>.</div>
+  {% elif not suggested_ip or suggested_ip|slice:":3" == "127" %}
+    <div class="auto-warn">⚠️ Nu s-a detectat automat IP-ul LAN al serverului. Completează manual IP-ul și apasă <em>Reconfigurează</em>.</div>
+  {% endif %}
+
+  <div class="info-box">
+    Centrala trimite automat fiecare scanare de card (inclusiv carduri <em>neînregistrate</em>) via HTTP POST la
+    <code>http://{{ suggested_ip }}:{{ suggested_port }}/iclock/cdata</code>.<br>
+    Numărul complet de card apare în <strong>Monitorizare live</strong> fără înregistrare prealabilă.
+  </div>
+
+  <form id="admsForm" autocomplete="off">
+    {% csrf_token %}
+    <input type="hidden" name="device_id" value="{{ device.id }}" />
+
+    <div class="form-row">
+      <div class="form-group">
+        <label for="admsServerAddr">IP Server (acest PC)</label>
+        <input type="text" id="admsServerAddr" name="server_addr"
+               value="{{ suggested_ip }}" placeholder="ex: 192.168.1.100" maxlength="64" />
+        <span class="hint">Detectat automat din interfața de rețea spre centrală</span>
+      </div>
+      <div class="form-group" style="max-width:130px;">
+        <label for="admsServerPort">Port Server</label>
+        <input type="number" id="admsServerPort" name="server_port"
+               value="{{ suggested_port }}" min="1" max="65535" />
+        <span class="hint">Citit din configurația curentă a serverului</span>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>Valori curente pe centrală{% if current_params %} — citite live{% endif %}</label>
+        <div class="status-row">
+          {% if current_params %}
+            {% for k,v in current_params.items %}
+              <span class="current-val">{{ k }}={{ v|default:"(gol)" }}</span>
+            {% endfor %}
+          {% else %}
+            <span class="current-val" style="color:#5a8aaa;">Nu s-au putut citi parametrii (plcommpro indisponibil)</span>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <hr class="section-sep" />
+
+    <div class="btn-row">
+      <button type="button" class="btn btn-apply" id="btnAdmsApply">🔄 Reconfigurează</button>
+      <button type="button" class="btn btn-read"  id="btnAdmsRead">📖 Recitește parametri</button>
+      <button type="button" class="btn btn-clear" id="btnAdmsClear">✕ Dezactivează ADMS push</button>
+    </div>
+
+    <div id="admsResult" class="result-box"></div>
+  </form>
+</div>
+
+<script>
+(function(){
+  const deviceId = {{ device.id }};
+  const baseUrl  = '/agent/api/devices/' + deviceId + '/configure-adms/';
+  const csrf     = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+
+  function showResult(msg, ok, warn){
+    const el = document.getElementById('admsResult');
+    el.className = 'result-box ' + (warn ? 'result-warn' : (ok ? 'result-ok' : 'result-err'));
+    el.textContent = msg;
+  }
+
+  function doApply(){
+    const addr = document.getElementById('admsServerAddr').value.trim();
+    const port = document.getElementById('admsServerPort').value.trim();
+    if(!addr){ showResult('Completați adresa IP a serverului.', false); return; }
+    const btn = document.getElementById('btnAdmsApply');
+    btn.disabled = true; btn.textContent = '⏳ Se trimite...';
+    fetch(baseUrl, {
+      method: 'POST',
+      headers: {'Content-Type':'application/x-www-form-urlencoded','X-CSRFToken': csrf},
+      body: 'action=set&server_addr=' + encodeURIComponent(addr) + '&server_port=' + encodeURIComponent(port)
+    })
+    .then(r=>r.json())
+    .then(d=>{
+      btn.disabled = false; btn.textContent = '🔄 Reconfigurează';
+      if(d.ok){
+        if(d.queued){
+          showResult('⏳ ' + (d.note || 'Comanda a fost pusă în coadă pentru CommCenter.'), true, true);
+        } else {
+          showResult('✅ ADMS configurat! Centrala va trimite carduri la ' + addr + ':' + port + '/iclock/cdata', true, false);
+        }
+      } else {
+        showResult('❌ Eroare: ' + (d.error || JSON.stringify(d)), false);
+      }
+    })
+    .catch(e=>{ btn.disabled=false; btn.textContent='🔄 Reconfigurează'; showResult('❌ Eroare rețea: '+e, false); });
+  }
+
+  function doRead(){
+    const btn = document.getElementById('btnAdmsRead');
+    btn.disabled = true; btn.textContent = '⏳...';
+    fetch(baseUrl + '?action=read')
+    .then(r=>r.json())
+    .then(d=>{
+      btn.disabled = false; btn.textContent = '� Recitește parametri';
+      if(d.ok){
+        const params = d.params || {};
+        const keys = ['ServerAddr','ServerPort','CLOUDSERVICEFLAG'];
+        let html = '';
+        keys.forEach(k=> html += '<span class="current-val">' + k + '=' + (params[k]||'(gol)') + '</span> ');
+        const container = document.querySelector('.adms-form .status-row');
+        if(container) container.innerHTML = html;
+        showResult('Parametri actualizați.', true);
+      } else {
+        showResult('❌ Nu s-au putut citi parametrii: ' + (d.error||''), false);
+      }
+    })
+    .catch(e=>{ btn.disabled=false; btn.textContent='� Recitește parametri'; showResult('❌ '+e, false); });
+  }
+
+  function doClear(){
+    if(!confirm('Dezactivezi ADMS push pe această centrală? Cardurile NU vor mai fi transmise la server.')) return;
+    const btn = document.getElementById('btnAdmsClear');
+    btn.disabled = true; btn.textContent = '⏳...';
+    fetch(baseUrl, {
+      method: 'POST',
+      headers: {'Content-Type':'application/x-www-form-urlencoded','X-CSRFToken': csrf},
+      body: 'action=clear'
+    })
+    .then(r=>r.json())
+    .then(d=>{
+      btn.disabled = false; btn.textContent = '✕ Dezactivează ADMS push';
+      if(d.ok){ showResult('ADMS dezactivat pe centrală.', true); }
+      else { showResult('❌ ' + (d.error||''), false); }
+    })
+    .catch(e=>{ btn.disabled=false; btn.textContent='✕ Dezactivează ADMS push'; showResult('❌ '+e, false); });
+  }
+
+  document.getElementById('btnAdmsApply').addEventListener('click', doApply);
+  document.getElementById('btnAdmsRead').addEventListener('click', doRead);
+  document.getElementById('btnAdmsClear').addEventListener('click', doClear);
+})();
+</script>

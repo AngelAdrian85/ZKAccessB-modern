@@ -23,7 +23,9 @@ class DoorForm(forms.ModelForm):
         try:
             if (not self.is_bound) and (not getattr(getattr(self, 'instance', None), 'pk', None)):
                 self.initial.setdefault('enabled', True)
-                self.initial.setdefault('normally_open', True)
+                self.initial.setdefault('normally_open', False)
+                self.initial.setdefault('lock_open_duration', 5)
+                self.initial.setdefault('door_status_delay', 15)
         except Exception:
             pass
 

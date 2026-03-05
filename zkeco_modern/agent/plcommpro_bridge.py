@@ -425,6 +425,29 @@ def _bridge_exe_for_request(request: Dict[str, Any]) -> Optional[Path]:
         p = Path(env)
         try:
             if p.exists() and p.is_file() and p.suffix.lower() == ".exe":
+                # Safety: if caller pins an x64 plcommpro.dll but the env override
+                # points to an x86 bridge EXE (or vice-versa), fail with a clear
+                # message instead of the opaque 0x8007000B “incorrect format”.
+                dll_path = str(request.get("dll_path") or "").strip()
+                if dll_path and os.path.exists(dll_path):
+                    try:
+                        if _is_x64_pe(dll_path) and _is_x86_pe(str(p)):
+                            raise PlcommproBridgeError(
+                                "ZKACCESS_BRIDGE_EXE points to a 32-bit (win-x86) bridge, "
+                                "but a 64-bit plcommpro.dll was pinned. "
+                                "Unset ZKACCESS_BRIDGE_EXE or point it to the win-x64 publish."
+                            )
+                        if _is_x86_pe(dll_path) and _is_x64_pe(str(p)):
+                            raise PlcommproBridgeError(
+                                "ZKACCESS_BRIDGE_EXE points to a 64-bit (win-x64) bridge, "
+                                "but a 32-bit plcommpro.dll was pinned. "
+                                "Unset ZKACCESS_BRIDGE_EXE or point it to the win-x86 publish."
+                            )
+                    except PlcommproBridgeError:
+                        raise
+                    except Exception:
+                        # If PE detection fails, still honor env override.
+                        pass
                 return p
         except Exception:
             pass
@@ -751,6 +774,40 @@ def connect_only(
                 "password": conn.password,
                 "timeout": int(conn.timeout),
             },
+        }
+    )
+
+
+def get_rtlog(
+    conn: PlcommproConnInfo,
+    buffer_len: int = 65536,
+    *,
+    process_timeout_s: Optional[int] = None,
+    dll_path: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Read real-time log via plcommpro.GetRTLog.
+
+    Unlike GetDeviceData(table="transaction", option="NewRecord"), GetRTLog
+    returns the device's real-time event buffer which includes the actual
+    Wiegand card number even for unregistered / access-denied card scans.
+
+    Returns:
+        {"ok": True, "result": <event_count>, "data": "<csv_lines>"}
+    """
+    return _run_bridge(
+        {
+            "action": "get_rtlog",
+            **({"process_timeout_s": int(process_timeout_s)} if process_timeout_s is not None else {}),
+            **({"dll_path": str(dll_path)} if dll_path else {}),
+            "comminfo": {
+                "comm_type": conn.comm_type,
+                "protocol": conn.protocol,
+                "ipaddress": conn.ipaddress,
+                "ip_port": int(conn.ip_port),
+                "password": conn.password,
+                "timeout": int(conn.timeout),
+            },
+            "buffer_len": int(buffer_len),
         }
     )
 

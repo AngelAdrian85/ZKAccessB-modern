@@ -3,12 +3,18 @@
                 "enabled":  true,
                 "port":  "9001",
                 "name":  "ACP TCP",
-                "mode":  "virtual"
+                "mode":  "tcp",
+                "device_id": 22,
+                "door_id": 1,
+                "door_pk": 27
             },
     "elatec":  {
                    "enabled":  true,
                    "port":  "COM3",
                    "name":  "Elatec Serial",
-                   "mode":  "virtual"
+                   "mode":  "serial",
+                   "device_id": 22,
+                   "door_id": 1,
+                   "door_pk": 27
                }
 }

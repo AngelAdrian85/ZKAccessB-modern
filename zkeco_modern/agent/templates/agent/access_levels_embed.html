@@ -133,6 +133,7 @@
                       <th style="width:140px;">Tip dispozitiv</th>
                       <th style="width:120px;">Model</th>
                       <th style="width:90px;">Uși</th>
+                      <th style="width:140px;">Sincronizare</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -156,9 +157,16 @@
                         <td>{{ g.grouper.get_device_type_display|default:g.grouper.device_type|default:'—' }}</td>
                         <td>{{ g.grouper.hardware_version|default:'—' }}</td>
                         <td><span class="pill">{{ g.list|length }}</span></td>
+                        <td>
+                          {% if g.grouper.is_physical_controller %}
+                            <button type="button" class="dc-link" data-access-sync="1" data-sync-kind="access-levels" data-device-id="{{ g.grouper.id }}" data-device-name="{{ g.grouper.name|default:'' }}" title="Sincronizează datele către centrală">SYNC</button>
+                          {% else %}
+                            <span class="al-muted">—</span>
+                          {% endif %}
+                        </td>
                       </tr>
                       <tr data-level-device-detail-row="1" data-level-id="{{ l.id }}" data-device-id="{{ g.grouper.id }}" style="display:none;">
-                        <td colspan="10">
+                        <td colspan="11">
                           <div class="dc-detail">
                             <table class="dc-subtable" aria-label="Doors">
                               <thead>
@@ -209,7 +217,7 @@
                         </td>
                       </tr>
                     {% empty %}
-                      <tr><td colspan="10" class="td-center-muted">Nu există centrale</td></tr>
+                      <tr><td colspan="11" class="td-center-muted">Nu există centrale</td></tr>
                     {% endfor %}
                   </tbody>
                 </table>

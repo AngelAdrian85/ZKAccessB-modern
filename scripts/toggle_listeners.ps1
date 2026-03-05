@@ -8,7 +8,19 @@ if(!(Test-Path $cfgPath)){
   Write-Host "[TOGGLE] Config not found, creating default"
   '{"acp":{"enabled":true,"port":9001},"elatec":{"enabled":true,"port":"COM3"}}' | Set-Content -Path $cfgPath -Encoding UTF8
 }
-$cfg = Get-Content $cfgPath -Raw | ConvertFrom-Json
+try {
+  $cfg = Get-Content $cfgPath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+} catch {
+  $msg = $_.Exception.Message
+  Write-Warning "[TOGGLE] Invalid JSON in $cfgPath ($msg)"
+  try {
+    $ts = Get-Date -Format 'yyyyMMdd_HHmmss'
+    Copy-Item -LiteralPath $cfgPath -Destination "${cfgPath}.badjson.${ts}" -Force
+  } catch {}
+  Write-Host "[TOGGLE] Recreating default card_readers.json" -ForegroundColor Yellow
+  '{"acp":{"enabled":true,"port":9001},"elatec":{"enabled":true,"port":"COM3"}}' | Set-Content -Path $cfgPath -Encoding UTF8
+  $cfg = Get-Content $cfgPath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+}
 if($null -eq $cfg.$Target){ $cfg | Add-Member -NotePropertyName $Target -NotePropertyValue (@{}) }
 if($Action -eq 'enable'){ $cfg.$Target.enabled = $true }
 elseif($Action -eq 'disable'){ $cfg.$Target.enabled = $false }

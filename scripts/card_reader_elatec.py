@@ -12,7 +12,6 @@ except Exception:
     serial = None
 
 PUSH_URL = None
-EVAL_URL = None
 ERROR_URL = None
 SERIAL_PORT = 'COM3'  # change as needed
 BAUDRATE = 9600
@@ -22,26 +21,28 @@ try:
     import os, json as _json
     cfg_path = os.path.join(os.path.dirname(__file__), 'card_readers.json')
     if os.path.exists(cfg_path):
-        with open(cfg_path,'r',encoding='utf-8') as f:
+        with open(cfg_path,'r',encoding='utf-8-sig') as f:
             CFG = _json.load(f)
+except Exception:
+    CFG = None
+
+try:
     # Read tray port from zkeco_tray_config.ini in user home
     ini_path = os.path.join(os.path.expanduser('~'), 'zkeco_tray_config.ini')
     if os.path.exists(ini_path):
         import configparser
-        cp = configparser.ConfigParser(); cp.read(ini_path)
+        cp = configparser.ConfigParser(strict=False); cp.read(ini_path, encoding='utf-8-sig')
         if cp.has_section('tray') and cp.has_option('tray','port'):
             try:
                 INI_PORT = int(cp.get('tray','port'))
             except Exception:
                 INI_PORT = None
 except Exception:
-    CFG = None
     INI_PORT = None
 
 # Build URLs using detected port, default to 8000
 BASE = f"http://127.0.0.1:{INI_PORT or 8000}"
 PUSH_URL = BASE + '/agent/api/cards/read/push/'
-EVAL_URL = BASE + '/agent/api/access/evaluate-open/'
 ERROR_URL = BASE + '/agent/api/listeners/error/'
 
 # Elatec readers often output hex or decimal card numbers followed by newline
@@ -49,19 +50,33 @@ ERROR_URL = BASE + '/agent/api/listeners/error/'
 # Virtual mode: when CFG.elatec.mode == "virtual", simulate heartbeat and optional card without opening serial.
 
 def push_card(card_number: str, source: str='elatec'):
+    payload = None
     try:
-        payload = { 'card_number': card_number, 'source': source }
+        payload = { 'card_number': card_number, 'source': source, 'verify_access': True, 'remote_open': True }
         el_cfg = (CFG or {}).get('elatec') or {}
         if 'device_id' in el_cfg: payload['device_id'] = el_cfg['device_id']
         if 'door_id' in el_cfg: payload['door_id'] = el_cfg['door_id']
         if 'door_pk' in el_cfg: payload['door_pk'] = el_cfg['door_pk']
-        requests.post(PUSH_URL, json=payload, timeout=2)
+        r = requests.post(PUSH_URL, json=payload, timeout=2)
+        if not r.ok:
+            try:
+                msg = f'push failed http={r.status_code} body={(r.text or "")[:200]}'
+                requests.post(ERROR_URL, json={'name':'elatec','message': msg}, timeout=2)
+            except Exception:
+                pass
+        # IMPORTANT: avoid a second evaluate-open request.
+        # /cards/read/push already handles evaluate+open and duplicate requests
+        # can create repeated remote opening/closing events.
+    except Exception as e:
         try:
-            requests.post(EVAL_URL, json=payload, timeout=2)
+            msg = f'push exception: {e.__class__.__name__}: {e}'
+            requests.post(ERROR_URL, json={'name':'elatec','message': msg}, timeout=2)
         except Exception:
             pass
-    except Exception:
-        pass
+        try:
+            print(f"[ELATEC] Push error for card={card_number}: {e}")
+        except Exception:
+            pass
 
 def run_serial():
     if (CFG or {}).get('elatec', {}).get('mode') == 'virtual':
@@ -131,27 +146,8 @@ def run_serial():
                 requests.post(ERROR_URL, json={'name':'elatec','message': f'port open failed: {SERIAL_PORT}'}, timeout=2)
             except Exception:
                 pass
-            # Auto-disable after 3 consecutive failures
-            if failures >= 3:
-                try:
-                    import os, json as _json
-                    cfg_path = os.path.join(os.path.dirname(__file__), 'card_readers.json')
-                    cfg = {}
-                    if os.path.exists(cfg_path):
-                        with open(cfg_path,'r',encoding='utf-8') as f:
-                            cfg = _json.load(f)
-                    el = cfg.get('elatec') or {}
-                    el['enabled'] = False
-                    cfg['elatec'] = el
-                    with open(cfg_path,'w',encoding='utf-8') as f:
-                        _json.dump(cfg, f, indent=2)
-                    print('[ELATEC] Auto-disabled after repeated failures')
-                    # Report disabled state
-                    try:
-                        requests.post(ERROR_URL, json={'name':'elatec','message': 'auto-disabled after port open failures'}, timeout=2)
-                    except Exception:
-                        pass
-                    break
+            # Keep service alive even when the serial port is temporarily missing.
+            # Do not auto-disable configuration; continue retry loop.
             # Exponential backoff before retrying open
             time.sleep(backoff)
             backoff = min(backoff * 2, 5.0)

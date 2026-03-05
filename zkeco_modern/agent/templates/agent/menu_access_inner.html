@@ -288,22 +288,122 @@
     wireModalBody();
   }
 
+  let _accessSyncPollTimer = null;
+  function _stopAccessSyncPoll(){
+    try{ if(_accessSyncPollTimer){ clearInterval(_accessSyncPollTimer); _accessSyncPollTimer = null; } }catch(_e){}
+  }
+
+  function _actionModalAvailable(){
+    return Boolean(window.zkActionModal && typeof window.zkActionModal.open === 'function' && typeof window.zkActionModal.setState === 'function');
+  }
+
+  function _actionModalOpen(title, subtitle){
+    if(!_actionModalAvailable()) return;
+    try{ window.zkActionModal.open({mode:'', module:'device', title: String(title||'ACȚIUNE'), subtitle: String(subtitle||'')}); }catch(_e){}
+  }
+
+  function _actionModalSet(state, bigTitle, message){
+    if(!_actionModalAvailable()) return;
+    try{ window.zkActionModal.setState(String(state||'loading'), String(bigTitle||''), String(message||'')); }catch(_e){}
+  }
+
+  async function syncDeviceAccessLevelsFromAccessModule(deviceId, deviceName){
+    const devId = parseInt(String(deviceId||0), 10) || 0;
+    const devName = String(deviceName || ('#' + String(devId)));
+    if(!(devId > 0)) return;
+
+    _stopAccessSyncPoll();
+
+    const endpoint = `/agent/api/devices/${encodeURIComponent(String(devId))}/sync/`;
+    _actionModalOpen('SINCRONIZARE', 'Centrală');
+    _actionModalSet('loading', 'SYNC', `Se pune în coadă sincronizarea către centrală (${devName})...`);
+
+    let data = null;
+    try{
+      const resp = await fetch(endpoint, {
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json',
+          'X-Requested-With':'XMLHttpRequest',
+          'X-CSRFToken': getCSRF(),
+        },
+        body: '{}'
+      });
+      try{ data = await resp.json(); }catch(_e){ data = null; }
+      if(!resp.ok || !data || data.ok !== true){
+        const msg = (data && (data.error || data.message)) ? (data.error || data.message) : `HTTP ${resp.status}`;
+        _actionModalSet('error', 'SYNC EȘUAT', String(msg || 'Eroare necunoscută.'));
+        try{ window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1800); }catch(_e){}
+        return;
+      }
+    }catch(err){
+      _actionModalSet('error', 'SYNC EȘUAT', (err && err.message) ? err.message : String(err));
+      try{ window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1800); }catch(_e){}
+      return;
+    }
+
+    const cmdId = parseInt(String(data.command_id || 0), 10) || 0;
+    if(!(cmdId > 0)){
+      _actionModalSet('error', 'SYNC EȘUAT', 'Nu am primit command_id de la server.');
+      try{ window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1800); }catch(_e){}
+      return;
+    }
+
+    const startTs = Date.now();
+    const statusUrl = `/agent/api/commands/${encodeURIComponent(String(cmdId))}/status/`;
+
+    _actionModalSet('loading', 'SYNC ÎN COADĂ', `Comanda #${cmdId} (centrală ${devName})...`);
+
+    async function pollOnce(){
+      try{
+        const r = await fetch(statusUrl, {headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}});
+        const j = await r.json();
+        const status = String((j && (j.status || (j.item && j.item.status))) || '').toUpperCase();
+        const result = String((j && (j.result || (j.item && j.item.result))) || '');
+        if(status === 'OK'){
+          _stopAccessSyncPoll();
+          _actionModalSet('success', 'SYNC REALIZAT', `Centrală ${devName}. ${result || ''}`.trim());
+          try{ window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1200); }catch(_e){}
+          return;
+        }
+        if(status === 'ERR'){
+          _stopAccessSyncPoll();
+          _actionModalSet('error', 'SYNC EȘUAT', `Centrală ${devName}. ${result || ''}`.trim());
+          try{ window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 1800); }catch(_e){}
+          return;
+        }
+
+        const elapsed = (Date.now() - startTs);
+        if(elapsed > 120000){
+          _stopAccessSyncPoll();
+          _actionModalSet('success', 'SYNC ÎN CURS', `Comanda #${cmdId} încă rulează (centrală ${devName}). Verifică „Comenzi către centrale”.`);
+          try{ window.setTimeout(()=>{ try{ window.zkActionModal.close(); }catch(_e){} }, 2400); }catch(_e){}
+        }
+      }catch(_e){
+        // Keep polling on transient errors.
+      }
+    }
+
+    try{ await pollOnce(); }catch(_e){}
+    _accessSyncPollTimer = window.setInterval(pollOnce, 1000);
+  }
+
   function _h(s){
     return String(s || '').replace(/[&<>\"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c] || c));
   }
 
   // Door Configuration: legacy-like "More..." dropdown menu
   const MORE_OPS = [
-    {op:'fp-ident',         label:'Change the fingerprint identification', title:'Fingerprint identification'},
-    {op:'disable',          label:'Disable', title:'Disable device'},
-    {op:'enable',           label:'Enable', title:'Enable device'},
-    {op:'disable-dst',      label:'Disable daylight saving time', title:'Disable DST'},
-    {op:'enable-dst',       label:'Enable daylight saving time', title:'Enable DST'},
-    {op:'upgrade-firmware', label:'Upgrade firmware', title:'Upgrade firmware'},
-    {op:'comm-password',    label:'Modify communication password', title:'Communication password'},
-    {op:'sync-time',        label:'Synchronize time', title:'Synchronize time'},
-    {op:'get-events',       label:'Get events', title:'Get events'},
-    {op:'get-personnel',    label:'Get information of personnel', title:'Personnel'}
+    {op:'fp-ident',         label:'Schimbă identificarea pe bază de amprentă', title:'Identificare amprentă'},
+    {op:'disable',          label:'Dezactivează', title:'Dezactivare centrală'},
+    {op:'enable',           label:'Activează', title:'Activare centrală'},
+    {op:'disable-dst',      label:'Dezactivează ora de vară', title:'Dezactivează DST'},
+    {op:'enable-dst',       label:'Activează ora de vară', title:'Activează DST'},
+    {op:'upgrade-firmware', label:'Actualizare firmware', title:'Actualizare firmware'},
+    {op:'comm-password',    label:'Modifică parola de comunicare', title:'Parolă comunicare'},
+    {op:'sync-time',        label:'Sincronizează ora', title:'Sincronizare oră'},
+    {op:'get-events',       label:'Preia evenimente', title:'Evenimente'},
+    {op:'get-personnel',    label:'Preia informații personal', title:'Personal'}
   ];
 
   let moreMenuEl = null;
@@ -1276,6 +1376,16 @@
           }
         })
         .catch(err => { if(msg) msg.textContent = (err && err.message) ? err.message : String(err); });
+      return;
+    }
+
+    // Niveluri: SYNC NIVELURI (per-centrală)
+    const alSyncBtn = e.target && e.target.closest ? e.target.closest('[data-access-sync="1"][data-sync-kind="access-levels"]') : null;
+    if(alSyncBtn){
+      try{ e.preventDefault(); }catch(_e){}
+      const devId = alSyncBtn.getAttribute('data-device-id');
+      const devName = alSyncBtn.getAttribute('data-device-name') || '';
+      syncDeviceAccessLevelsFromAccessModule(devId, devName);
       return;
     }
 

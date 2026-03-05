@@ -11,7 +11,7 @@ Why this exists:
 
 Request format (JSON, passed via --request):
 {
-    "action": "get_options"|"set_options"|"query_data"|"data_count"|"delete_data"|"set_data"|"search_device"|"modify_ip"|"control_device"|"cancel_alarm"|"reboot"|"control_normal_open",
+    "action": "get_options"|"set_options"|"query_data"|"data_count"|"delete_data"|"set_data"|"search_device"|"modify_ip"|"control_device"|"cancel_alarm"|"reboot"|"control_normal_open"|"get_rtlog",
   "dll_path": "C:\\Windows\\SysWOW64\\plcommpro.dll" (optional),
   "comminfo": {
     "comm_type": 1,
@@ -259,6 +259,22 @@ def main(argv: list[str]) -> int:
                 ret = -1
             last_error = _pull_last_error(dll)
             sys.stdout.write(json.dumps({"ok": ret >= 0, "result": ret, "data": "", "last_error": last_error}))
+            return 0
+
+        if action == "get_rtlog":
+            buf_len = int(req.get("buffer_len") or 65536)
+            str_buf = create_string_buffer(b"", buf_len)
+            # GetRTLog(handle, pBuffer, bufferSize) returns count of events
+            # or negative on error.  Unlike GetDeviceData(transaction/NewRecord),
+            # GetRTLog returns the raw real-time event buffer which includes the
+            # actual Wiegand card number even for unregistered / denied cards.
+            ret = int(dll.GetRTLog(int(handle), str_buf, int(buf_len)))
+            last_error = _pull_last_error(dll)
+            data = ""
+            if ret >= 0:
+                raw = bytes(str_buf.raw).split(b"\x00", 1)[0]
+                data = raw.decode("latin-1", "ignore")
+            sys.stdout.write(json.dumps({"ok": ret >= 0, "result": ret, "data": data, "last_error": last_error}))
             return 0
 
         if action in {"control_device", "cancel_alarm", "reboot", "control_normal_open"}:

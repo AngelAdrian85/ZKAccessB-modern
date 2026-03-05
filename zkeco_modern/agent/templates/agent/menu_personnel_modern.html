@@ -1736,9 +1736,9 @@ function startCardAutoFill(inputId){
         }
       })
       .catch(()=>{})
-      .finally(()=>{ _autoFillTimers[inputId] = setTimeout(tick, 2500); });
+        .finally(()=>{ _autoFillTimers[inputId] = setTimeout(tick, 500); });
   };
-  _autoFillTimers[inputId] = setTimeout(tick, 500);
+      _autoFillTimers[inputId] = setTimeout(tick, 100);
 }
 function stopCardAutoFill(inputId){
   const t = _autoFillTimers[inputId];

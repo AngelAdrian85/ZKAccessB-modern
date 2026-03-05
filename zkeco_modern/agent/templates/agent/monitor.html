@@ -48,6 +48,8 @@
   <input id="testCardInput" placeholder="Card nr (opțional)" style="background:#152a38;border:1px solid #1e303d;color:#cfe9f8;padding:4px 8px;border-radius:4px;font-size:12px;width:160px;" />
   <button onclick="testReadCard()" style="background:#2da44e;" data-tip="Generează o citire de test (8 cifre)">🪪 Test Citire Card</button>
   <button onclick="openLogsModalFromMonitor()" style="background:#1e3e55;" data-tip="Deschide loguri acces într-un modal">📋 Loguri</button>
+  <span id="integrityBadge" style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid #1e303d;background:#4b5563;color:#fff;font-size:11px;font-weight:700;">Integritate: verificare...</span>
+  <span title="Integritate monitor: OK = sync/clear/evenimente în regulă; WARN = evenimente cu card lipsă; ERR = problemă sync/clear sau health indisponibil." style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:999px;border:1px solid #1e303d;background:#152a38;color:#cfe9f8;font-size:11px;font-weight:900;cursor:help;">?</span>
 </div>
 
 <div class="device-grid" id="devices"></div>
@@ -61,38 +63,27 @@
        <input id="eventFilter" placeholder="Filtrează evenimente..." style="padding:4px 8px;background:#152a38;border:1px solid #1e303d;border-radius:4px;max-width:220px;color:#cfe9f8;font-size:12px;" oninput="filterEvents()" />
       </span>
   </h3>
-  <div style="overflow:auto;max-height:520px;border:1px solid #1e303d;border-radius:6px;margin-top:4px;">
-    <table id="event-grid">
-      <thead>
-        <tr>
-          <th>Time</th>
-          <th>Event point</th>
-          <th>Event Description</th>
-          <th>Card Number</th>
-          <th>Nume Ușă/Dispozitiv</th>
-          <th>Posesor card</th>
-          <th>Status</th>
-          <th>Verify Mode</th>
-          <th>Acțiune</th>
-        </tr>
-      </thead>
-      <tbody id="events"></tbody>
-    </table>
-  </div>
+
+  <table id="event-grid">
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>Event point</th>
+        <th>Event Description</th>
+        <th>Card Number</th>
+        <th>Nume Ușă/Dispozitiv</th>
+        <th>Posesor card</th>
+        <th>Status</th>
+        <th>Verify Mode</th>
+        <th>Acțiune</th>
+      </tr>
+    </thead>
+    <tbody id="events"></tbody>
+  </table>
 </div>
 
-<div id="monitor-footer" style="margin-top:8px;margin-bottom:-10px;padding:6px 10px;background:#0d3a63;border-top:1px solid #1e303d;color:#e8f0f8;font-size:11px;display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;">
-  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-    <span style="font-weight:600;">🚪 Door Status Monitoring</span>
-    <a href="#" onclick="bulkOpen(); return false;" style="color:#8bd8ff;">▶Open all</a>
-    <a href="#" onclick="bulkClose(); return false;" style="color:#8bd8ff;">▶Close all</a>
-    <a href="#" onclick="cancelAllAlarms(); return false;" style="color:#f0c674;">▶Cancel alarms</a>
-  </div>
-  <span style="opacity:0.85;">UI v2025-12-10.4 · Physical Reader</span>
-</div>
 <script>
-console.log('Monitor UI template loaded: v2025-12-10.3 + Physical Card Reader');
-window.__lastPhysicalCard = window.__lastPhysicalCard || '';
+window.__monitorPageLoadTs = window.__monitorPageLoadTs || Date.now();
 
 function openLogsModalFromMonitor(){
   const url = '/agent/menu/access/?tab=logs&embed=1';
@@ -109,6 +100,37 @@ function openLogsModalFromMonitor(){
   let lastKeyTime = 0;
   const READER_TIMEOUT = 100; // ms between keypresses from card reader
   const CARD_MIN_LENGTH = 4;  // minimum card number length
+
+  // ZKTeco C3-series epoch decoder.
+  // The panel stores time_second as seconds since 2000-01-01 00:00:00 LOCAL TIME.
+  // new Date(2000, 0, 1) gives midnight Jan 1 2000 in the BROWSER's local timezone,
+  // which matches the panel's local clock when both are in the same TZ (Romania).
+  function _zkDecodeTimeSecond(sec) {
+    try {
+      const epochMs = new Date(2000, 0, 1).getTime();
+      return new Date(epochMs + parseInt(sec, 10) * 1000);
+    } catch (_e) { return null; }
+  }
+  window._zkDecodeTimeSecond = _zkDecodeTimeSecond;
+
+  function normalizeCardNumber(value){
+    const raw = String(value||'').trim();
+    if(!raw){ return ''; }
+    const compact = raw.replace(/^0x/i,'').replace(/[^0-9A-Za-z]+/g,'').toUpperCase();
+    if(!compact){ return ''; }
+    if(/^\d+$/.test(compact)){
+      const trimmed = compact.replace(/^0+/, '');
+      return trimmed || '0';
+    }
+    if(/^[0-9A-F]+$/.test(compact)){
+      try{
+        const dec = BigInt(`0x${compact}`).toString(10);
+        if(dec){ return dec; }
+      }catch(_e){}
+    }
+    return compact;
+  }
+  window.__normalizeCardNumber = normalizeCardNumber;
   
   document.addEventListener('keypress', function(e){
     const now = Date.now();
@@ -144,9 +166,10 @@ function openLogsModalFromMonitor(){
   });
   
   async function processPhysicalCard(cardNumber){
-    const normalizedCard = String(cardNumber||'').trim();
+    const normalizedCard = normalizeCardNumber(cardNumber);
     if(!normalizedCard){ return; }
     window.__lastPhysicalCard = normalizedCard;
+    window.__lastPhysicalCardTs = Date.now();
     console.log('🪪 Physical card detected:', normalizedCard);
     
     // Visual feedback - Tech animation centered on screen
@@ -348,7 +371,7 @@ function openLogsModalFromMonitor(){
       const statusCellHtml = statusBadge(isOk, data.status_text);
       // Build row with 9 columns including empty Acțiune column
       tr.innerHTML = [
-        new Date().toLocaleTimeString(),
+        new Date().toLocaleString('ro-RO', { hour12:false }),
         eventPoint,
         eventDesc,
         normalizedCard,
@@ -523,6 +546,8 @@ function renderDevices(){
         <div class='device-actions'>
           <button onclick='event.stopPropagation(); onDoorAction("open", ${deviceId||"null"}, ${d.id})'>Open</button>
           <button onclick='event.stopPropagation(); onDoorAction("close", ${deviceId||"null"}, ${d.id})'>Close</button>
+          <button onclick='event.stopPropagation(); onDoorAction("normal-open", ${deviceId||"null"}, ${d.id})'>Normal Open</button>
+          <button onclick='event.stopPropagation(); onDoorAction("normal-close", ${deviceId||"null"}, ${d.id})'>Normal Close</button>
           <button onclick='event.stopPropagation(); onDoorAction("cancel-alarm", ${deviceId||"null"}, ${d.id})'>Cancel Alarm</button>
           <button onclick='event.stopPropagation(); onDoorAction("lock", ${deviceId||"null"}, ${d.id})'>Lock</button>
           <button onclick='event.stopPropagation(); onDoorAction("unlock", ${deviceId||"null"}, ${d.id})'>Unlock</button>
@@ -541,15 +566,15 @@ function normalizeEvent(e){
     if(ne.time){
       const dt = new Date(ne.time);
       if(!isNaN(dt.getTime())){
-        ne.time = dt.toLocaleTimeString('ro-RO',{hour12:false});
+        ne.time = dt.toLocaleString('ro-RO',{hour12:false});
       }
     }
   } catch{}
-  ne.time = ne.time || new Date().toLocaleTimeString('ro-RO',{hour12:false});
+  ne.time = ne.time || new Date().toLocaleString('ro-RO',{hour12:false});
   ne.point = ne.point || ne.event_point_id || ne.point_id || ne.door_id || '';
   // prefer explicit description over generic event/code
   ne.description = ne.description || ne.event_description || ne.event || (Array.isArray(ne.descriptions)? ne.descriptions.join(', ') : '') || '';
-  ne.card_no = (ne.card_no || ne.card || ne.card_number || '').toString().trim();
+  ne.card_no = (window.__normalizeCardNumber ? window.__normalizeCardNumber(ne.card_no || ne.card || ne.card_number || '') : (ne.card_no || ne.card || ne.card_number || '').toString().trim());
   ne.name = ne.name || ne.employee_name || ne.emp_name || '-';
   ne.cardholder = ne.cardholder || ne.employee_fullname || ne.employee_name || ne.emp_name || '';
   ne.status = ne.status || ne.status_text || '';
@@ -558,15 +583,105 @@ function normalizeEvent(e){
 }
 function addEvent(obj){
   const e = normalizeEvent(obj);
-  // Lightweight de-duplication: if identical event arrives twice within ~1.2s, skip.
-  // This happens when we do a local auto-close and also receive a device close event.
+  // Strict Live Monitor: show only access-relevant events (card scans + open/close).
+  // Everything else can still exist in logs, but should not spam the operator UI.
   try{
-    window.__evtDedup = window.__evtDedup || {};
-    const k = `${String(e._source||obj._source||'')}|${String(e.point||'')}|${String(e.description||'')}|${String(e.status||'')}`;
+    const src = String(e._source||obj._source||'').toLowerCase();
+    const desc = String(e.description||'').toLowerCase();
+    const card = String(e.card_no||'').trim();
+    const hasCard = !!(card && card !== '0' && !/^0+$/.test(card));
+    const isTxn = !!(e._isTxn||obj._isTxn);
+    const fromPhysical = !!(e._fromPhysicalReader||obj._fromPhysicalReader);
+    const verifyMode = String(e.verify_mode||obj.verify_mode||'').toLowerCase();
+    const doorNum = String(e.door_number||obj.door_number||'').trim();
+
+    // Any event with a card number is considered access-relevant.
+    if(hasCard){
+      // allow
+    } else
+
+    if(src.startsWith('door.')){
+      if(!(src === 'door.open' || src === 'door.close')){ return; }
+    } else if(src === 'rtlog.scan' || src === 'reader.scan'){
+      // Allow transaction events from panel (isTxn=true) even without card number so
+      // door-open, access-denied and power-on events are visible to the operator.
+      // Only hide non-transaction no-card entries (e.g. ghost/noise lines).
+      if(!hasCard && !isTxn){ return; }
+    } else if(src === 'event.batch'){
+      // Same logic: allow isTxn events even when Cardno is missing in firmware.
+      if(!hasCard && !isTxn){ return; }
+    } else if(src === 'audit.poll'){
+      if(!(desc.includes('door.open') || desc.includes('door.close') || desc.includes('remote opening') || desc.includes('remote closing'))){ return; }
+      // Hide auto-generated close churn from monitor timeline.
+      if(!hasCard && verifyMode.startsWith('auto(')){ return; }
+    } else {
+      return;
+    }
+  }catch(_e){ /* ignore filter errors */ }
+  // Lightweight de-duplication: if identical non-access event arrives twice within ~1.2s, skip.
+  // Important: do NOT dedupe access attempts/scans here, because controllers often omit Cardno;
+  // rapid consecutive scans would otherwise be dropped as "identical".
+  try{
+    const src0 = String(e._source||obj._source||'').toLowerCase();
+    if(src0 !== 'rtlog.scan' && src0 !== 'reader.scan' && src0 !== 'event.batch'){
+      window.__evtDedup = window.__evtDedup || {};
+      const k = `${String(e._source||obj._source||'')}|${String(e.point||'')}|${String(e.description||'')}|${String(e.status||'')}`;
+      const now = Date.now();
+      const last = window.__evtDedup[k] || 0;
+      if(now - last < 1200){ return; }
+      window.__evtDedup[k] = now;
+    }
+  }catch(_e){}
+
+  // Cross-source de-duplication:
+  // - If the same scan arrives via both RTLOG and event.batch, keep only one row.
+  // - If a door.open event follows immediately after a card-granted row for the same door,
+  //   suppress the door.open row (operators want ONE entry per scan).
+  try{
     const now = Date.now();
-    const last = window.__evtDedup[k] || 0;
-    if(now - last < 1200){ return; }
-    window.__evtDedup[k] = now;
+    const src = String(e._source||obj._source||'').toLowerCase();
+    const card = String(e.card_no||'').trim();
+    const point = String(e.point||'').trim();
+    const hasCard = !!(card && card !== '0' && !/^0+$/.test(card));
+
+    window.__evtCardDoorDedup = window.__evtCardDoorDedup || {};
+    window.__evtCardDoorDedupSrc = window.__evtCardDoorDedupSrc || {};
+    window.__lastCardOnDoor = window.__lastCardOnDoor || {};
+
+    if(hasCard && point){
+      const k2 = `${card}|${point}`;
+      const last2 = window.__evtCardDoorDedup[k2] || 0;
+      const lastSrc2 = String(window.__evtCardDoorDedupSrc[k2] || '').toLowerCase();
+      // Only dedupe if the same (card,door) arrives from a DIFFERENT source within a short window
+      // (e.g. RTLOG + event.batch). Two real consecutive scans from the same stream should show.
+      if(last2 && (now - last2) < 1200 && lastSrc2 && lastSrc2 !== src){ return; }
+      window.__evtCardDoorDedup[k2] = now;
+      window.__evtCardDoorDedupSrc[k2] = src;
+      window.__lastCardOnDoor[point] = now;
+    }
+
+    if(src === 'door.open' && !hasCard && point){
+      const lastCard = window.__lastCardOnDoor[point] || 0;
+      if(lastCard && (now - lastCard) < 1200){ return; }
+    }
+
+    // Cross-source dedup for EMPTY-CARD scan events (phantom/ghost entries).
+    // A single physical card scan generates BOTH an rtlog.batch AND an event.batch
+    // entry in the same CommCenter cycle. If card_no is absent we can't use the
+    // card-based key above, so we fall back to device+door+event_code within 5 s.
+    if(!hasCard && (src === 'rtlog.batch' || src === 'rtlog.scan' || src === 'event.batch') && point){
+      const devId = String(e.device_id || e.deviceId || '').trim();
+      const evCode = String(e.event_code || e.major || e.code || '').trim();
+      const k3 = `${devId}|${point}|${evCode}`;
+      window.__evtNoCDDedup = window.__evtNoCDDedup || {};
+      window.__evtNoCDDedupSrc = window.__evtNoCDDedupSrc || {};
+      const prevT = window.__evtNoCDDedup[k3] || 0;
+      const prevS = String(window.__evtNoCDDedupSrc[k3] || '').toLowerCase();
+      // Suppress duplicate only when: same key, different source, within 5 s
+      if(prevT && (now - prevT) < 5000 && prevS && prevS !== src){ return; }
+      window.__evtNoCDDedup[k3] = now;
+      window.__evtNoCDDedupSrc[k3] = src;
+    }
   }catch(_e){}
   // e._source may be set by the WebSocket handler to indicate origin/type
   const body=document.getElementById('events');
@@ -622,6 +737,9 @@ function addEvent(obj){
   // preserve source/type for client-side filtering (e.g. 'rtlog.batch' or 'door.open')
   try{ tr.dataset.eventSource = (e._source || obj._source || '').toString(); }catch{};
   tr.dataset.cardNo = e.card_no || '';
+  // Mark panel transaction rows
+  if(e._isTxn || e.isTxn || obj._isTxn){ tr.dataset.isTxn = '1'; }
+  try{ tr.dataset.insertedAt = String(Date.now()); }catch{};
   
   // Create cells - action button will be in the last column (Acțiune)
   const cells = [
@@ -635,8 +753,10 @@ function addEvent(obj){
     e.verify_mode||'',
     '' // Empty for action column - will be filled below
   ].map((val, idx) => {
-    // Last column (index 8) is the action button column
-    if(idx === 8 && e.card_no){
+    if(idx === 8 && (e.card_no && String(e.card_no).trim())){
+      return `<td><button data-action-btn style="padding:2px 6px;background:#15803d;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:11px;font-weight:500;">+Adaugă Card</button></td>`;
+    }
+    if(idx === 8 && (e._isTxn || e.isTxn || obj._isTxn)) {
       return `<td><button data-action-btn style="padding:2px 6px;background:#15803d;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:11px;font-weight:500;">+Adaugă Card</button></td>`;
     }
     return `<td>${val}</td>`;
@@ -652,10 +772,21 @@ function addEvent(obj){
     }
     // Check if card belongs to employee (async, non-blocking)
     checkAndUpdateCardRow(tr, e.card_no);
+  } else if(e._isTxn || e.isTxn || obj._isTxn) {
+    const btn = tr.querySelector('[data-action-btn]');
+    if(btn) {
+      // Always open modal; if no card, the capture interstitial will show first
+      btn.onclick = () => openAddCardModal('', '');
+    }
   }
   
   body.insertBefore(tr, body.firstChild);
   while(body.rows.length>500){ body.deleteRow(500); }
+}
+
+// No bridging between PC reader scans and controller events.
+function _tryAttachCardToRecentRow(cardNumber){
+  return;
 }
 
 // --- RTLOG / door events client-side filter helpers ---
@@ -799,10 +930,19 @@ function _rtlogPollStart(){
   try{
     if(window.__rtlogPollTimer){ return; }
     window.__rtlogLastId = window.__rtlogLastId || 0;
+    window.__auditLastId = window.__auditLastId || 0;
+    window.__rtlogPrimed = window.__rtlogPrimed || false;
     window.__rtlogPollInFlight = false;
-    window.__wsStatus = 'offline (polling)'; updateDiagnostics();
+    try{
+      const w = window.__monitorWs;
+      const wsOnline = !!(w && w.readyState === 1);
+      window.__wsStatus = wsOnline ? 'online (polling)' : 'offline (polling)';
+    }catch(_e){
+      window.__wsStatus = 'polling';
+    }
+    updateDiagnostics();
     _rtlogPollOnce();
-    window.__rtlogPollTimer = setInterval(_rtlogPollOnce, 1500);
+    window.__rtlogPollTimer = setInterval(_rtlogPollOnce, 500);
   }catch(e){ /* ignore */ }
 }
 function _rtlogPollStop(){
@@ -817,12 +957,59 @@ async function _rtlogPollOnce(){
   window.__rtlogPollInFlight = true;
   try{
     const afterId = window.__rtlogLastId || 0;
-    const url = `/agent/api/monitor/rtlog/?after_id=${encodeURIComponent(afterId)}&limit=200`;
+    const afterAuditId = window.__auditLastId || 0;
+    const url = `/agent/api/monitor/rtlog/?after_id=${encodeURIComponent(afterId)}&limit=200&after_audit_id=${encodeURIComponent(afterAuditId)}&audit_limit=200`;
     const r = await fetch(url, {headers: {'X-Requested-With':'XMLHttpRequest'}, credentials: 'same-origin'});
     if(!r.ok){ throw new Error(`http ${r.status}`); }
     const j = await r.json();
     if(!j || j.ok !== true){ throw new Error((j && j.error) ? j.error : 'poll-failed'); }
     const rows = Array.isArray(j.rows) ? j.rows : [];
+
+    // Prime cursors on first poll so we don't dump historical rows into the Live Monitor.
+    // Keep fresh rows created around/after page load (otherwise first scan can be lost).
+    if(!window.__rtlogPrimed && afterId === 0 && afterAuditId === 0){
+      const pageStartTs = parseInt(String(window.__monitorPageLoadTs || '0'), 10) || Date.now();
+      const warmupMs = 4000;
+      const minTs = pageStartTs - warmupMs;
+
+      for(const row of rows){
+        const createdAt = row && (row.created_at||row.createdAt) ? String(row.created_at||row.createdAt) : '';
+        const createdMs = createdAt ? Date.parse(createdAt) : NaN;
+        const raw = row && row.raw ? String(row.raw) : '';
+        const isPhysicalReader = /cititor\s*fizic|physical\s*reader|elatec|acp/i.test(raw);
+        const isFresh = (!Number.isNaN(createdMs) && createdMs >= minTs) || (Number.isNaN(createdMs) && isPhysicalReader);
+        if(!isFresh){ continue; }
+        const devId = (row && (row.device_id||row.deviceId||row.device)) ? (row.device_id||row.deviceId||row.device) : '';
+        const evt = _parseRtlogLineToEvent(devId, raw, createdAt);
+        if(evt){ addEvent(evt); }
+      }
+
+      try{
+        const arows = Array.isArray(j.audit_rows) ? j.audit_rows : [];
+        for(const a of arows){
+          const ts = (a && (a.timestamp||a.created_at||a.createdAt)) ? String(a.timestamp||a.created_at||a.createdAt) : '';
+          const aMs = ts ? Date.parse(ts) : NaN;
+          if(!Number.isNaN(aMs) && aMs < minTs){ continue; }
+          const mod = (a && a.module) ? String(a.module) : '';
+          const act = (a && a.action) ? String(a.action) : '';
+          const detailsRaw = (a && a.details) ? String(a.details) : '';
+          let pl = {};
+          try{ pl = (detailsRaw && detailsRaw.trim().startsWith('{')) ? JSON.parse(detailsRaw) : {}; }catch(_e){ pl = {}; }
+          const desc = (pl && pl.event_description) ? String(pl.event_description) : (mod && act ? `${mod}.${act}` : (mod||act||'event'));
+          const point = (pl && (pl.door_id||pl.point_id)) ? (pl.door_id||pl.point_id) : (a && a.entity_id ? a.entity_id : '');
+          const name = (pl && (pl.door_name||pl.device_name)) ? (pl.door_name||pl.device_name) : ((a && a.entity_name) ? a.entity_name : '');
+          const status = (pl && pl.status_text) ? String(pl.status_text) : '';
+          const vm = (pl && pl.verify_mode) ? String(pl.verify_mode) : '';
+          addEvent({ description: desc, point: point, name: name, status: status, verify_mode: vm, created_at: ts, _source: 'audit.poll' });
+        }
+      }catch(_e){ /* ignore */ }
+
+      window.__rtlogPrimed = true;
+      if(typeof j.last_id === 'number'){ window.__rtlogLastId = j.last_id; }
+      if(typeof j.last_audit_id === 'number'){ window.__auditLastId = j.last_audit_id; }
+      return;
+    }
+
     let shown = 0;
     for(const row of rows){
       const devId = (row && (row.device_id||row.deviceId||row.device)) ? (row.device_id||row.deviceId||row.device) : '';
@@ -836,9 +1023,32 @@ async function _rtlogPollOnce(){
     } else if(rows.length && rows[rows.length-1] && rows[rows.length-1].id){
       try{ window.__rtlogLastId = parseInt(rows[rows.length-1].id) || window.__rtlogLastId; }catch(e){}
     }
-    if(getShowRtlog() && rows.length && shown === 0){
-      addEvent({ description:`RTLOG x${rows.length} (poll)`, _source: 'rtlog.batch' });
-    }
+
+    // Also ingest AuditLog door/device-status rows when polling.
+    try{
+      const arows = Array.isArray(j.audit_rows) ? j.audit_rows : [];
+      for(const a of arows){
+        const mod = (a && a.module) ? String(a.module) : '';
+        const act = (a && a.action) ? String(a.action) : '';
+        const detailsRaw = (a && a.details) ? String(a.details) : '';
+        const ts = (a && (a.timestamp||a.created_at||a.createdAt)) ? (a.timestamp||a.created_at||a.createdAt) : '';
+
+        let pl = {};
+        try{ pl = (detailsRaw && detailsRaw.trim().startsWith('{')) ? JSON.parse(detailsRaw) : {}; }catch(_e){ pl = {}; }
+
+        const desc = (pl && pl.event_description) ? String(pl.event_description) : (mod && act ? `${mod}.${act}` : (mod||act||'event'));
+        const point = (pl && (pl.door_id||pl.point_id)) ? (pl.door_id||pl.point_id) : (a && a.entity_id ? a.entity_id : '');
+        const name = (pl && (pl.door_name||pl.device_name)) ? (pl.door_name||pl.device_name) : ((a && a.entity_name) ? a.entity_name : '');
+        const status = (pl && pl.status_text) ? String(pl.status_text) : '';
+        const vm = (pl && pl.verify_mode) ? String(pl.verify_mode) : '';
+        addEvent({ description: desc, point: point, name: name, status: status, verify_mode: vm, created_at: ts, _source: 'audit.poll' });
+      }
+      if(arows.length && typeof j.last_audit_id === 'number'){
+        window.__auditLastId = j.last_audit_id;
+      } else if(arows.length && arows[arows.length-1] && arows[arows.length-1].id){
+        try{ window.__auditLastId = parseInt(arows[arows.length-1].id) || window.__auditLastId; }catch(_e){}
+      }
+    }catch(_e){ /* ignore */ }
   }catch(e){
     window.__wsStatus = `polling error`; updateDiagnostics();
   }finally{
@@ -858,6 +1068,27 @@ function wsConnect(){
   window.__monitorWs = ws;
   window.__wsStatus = 'connecting…'; updateDiagnostics();
 
+  // Watchdog: if WS is "online" but receives no messages at all (common when
+  // using InMemoryChannelLayer without Redis across processes), fall back to DB polling.
+  window.__wsLastMsgTs = 0;
+  try{
+    if(!window.__wsWatchdogTimer){
+      window.__wsWatchdogTimer = setInterval(()=>{
+        try{
+          const w = window.__monitorWs;
+          if(!w || w.readyState !== 1){ return; }
+          const connectedAt = window.__wsConnectedAt || 0;
+          const lastMsg = window.__wsLastMsgTs || 0;
+          const now = Date.now();
+          if(connectedAt && (now - connectedAt) < 1000){ return; }
+          if(lastMsg === 0 || (now - lastMsg) > 2000){
+            _rtlogPollStart();
+          }
+        }catch(_e){ /* ignore */ }
+      }, 1000);
+    }
+  }catch(e){ /* ignore */ }
+
   try{
     if(window.__wsConnectTimeout){ clearTimeout(window.__wsConnectTimeout); }
   }catch(e){}
@@ -873,7 +1104,11 @@ function wsConnect(){
   ws.onopen = ()=>{
     try{ if(window.__wsConnectTimeout){ clearTimeout(window.__wsConnectTimeout); } }catch(e){}
     window.__wsStatus = 'online'; updateDiagnostics();
-    _rtlogPollStop();
+    window.__wsConnectedAt = Date.now();
+    // Keep polling active even when WS is online.
+    // In multi-process deployments (no Redis channel layer), WS can stay connected
+    // while missing rtlog/event batches from other processes.
+    _rtlogPollStart();
   };
   ws.onerror = ()=>{
     window.__wsStatus = 'ws error (polling)'; updateDiagnostics();
@@ -890,6 +1125,7 @@ function wsConnect(){
   };
   ws.onmessage=(e)=>{
     let data; try{data=JSON.parse(e.data);}catch(err){return;}
+    try{ window.__wsLastMsgTs = Date.now(); }catch(_e){}
     if(data.type==='device.status'||data.type==='device.online'){
       const isOnline = (data.online!==false);
       devs[data.device_id]=Object.assign(devs[data.device_id]||{id:data.device_id},{online:isOnline,sn:data.serial||data.sn,name:data.name||data.device_name||'',door_state:data.door_state||'CLOSED'});
@@ -905,15 +1141,6 @@ function wsConnect(){
                 const prevState = d.state;
                 const locked = !!(window.__doorLockMap && window.__doorLockMap[d.id]);
                 d.state = locked ? 'LOCKED' : 'CLOSED';
-                // If the device just went offline and the UI still had the door open,
-                // emit an explicit close line so operators don't see a stuck OPEN.
-                try{
-                  if(prevState === 'OPEN' && !locked){
-                    const map = window.__doorMap || {};
-                    const nm = (d.id && map[d.id] && map[d.id].name) ? map[d.id].name : (d.name||'-');
-                    addEvent({ description:'door.close (device offline)', point: d.id, name: nm, status:'OK', verify_mode:'OFFLINE', _source:'door.close.offline' });
-                  }
-                }catch(_e){}
                 if(window.__doorAutoCloseTimers[d.id]){
                   try{ clearTimeout(window.__doorAutoCloseTimers[d.id]); }catch(e){}
                   delete window.__doorAutoCloseTimers[d.id];
@@ -937,17 +1164,22 @@ function wsConnect(){
           if(evt){ shown += 1; addEvent(evt); }
         }
       }catch(err){ console.warn('rtlog parse failed', err); }
-
-      if(getShowRtlog() && (lineCount > 0) && shown === 0){
-        addEvent({ point:data.point_id||'', description:`RTLOG x${lineCount}`, _source: 'rtlog.batch' });
-      }
     } else if(data.type==='event.batch'){
       if(data.descriptions && data.codes){
         data.descriptions.forEach((desc,i)=>{
           const vm = (data.verify_modes && data.verify_modes[i]) ? data.verify_modes[i] : '';
-          addEvent({ point:data.point_id||'', description:desc, code:data.codes[i], verify_mode: vm, _source: 'event.batch' });
+          const did = data.device_id || data.deviceId || data.device || '';
+          const doorNum = (data.door_numbers && data.door_numbers[i]) ? String(data.door_numbers[i]) : '';
+          const cardNo = (data.card_nos && data.card_nos[i]) ? String(data.card_nos[i]) : '';
+          let point = data.point_id||'';
+          try{
+            const km = window.__doorKeyMap || {};
+            const k = `${String(did)}:${String(doorNum)}`;
+            if(km[k]){ point = String(km[k]); }
+          }catch(_e){}
+          addEvent({ point: point, description:desc, code:data.codes[i], card_no: cardNo, verify_mode: vm, _source: 'event.batch' });
         });
-      } else { addEvent({ point:data.point_id||'', description:`Events x${data.count||0}`}); }
+      }
     } else if(data.type==='legacy.event'){
       addEvent({
         point: data.point_id||data.point||'',
@@ -961,6 +1193,7 @@ function wsConnect(){
       if(data.type==='door.open'){ ds.door_state='OPEN'; newState='OPEN'; }
       else if(data.type==='door.close'){ ds.door_state='CLOSED'; newState='CLOSED'; }
       else if(data.type==='door.normal_open'){ ds.door_state='NORMAL_OPEN'; newState='UNLOCKED'; }
+      else if(data.type==='door.normal_close'){ ds.door_state='NORMAL_CLOSE'; newState='CLOSED'; }
       else if(data.type==='door.cancel_alarm'){ ds.door_state='ALARM_CLEARED'; newState='CLOSED'; }
       else if(data.type==='door.lock'){ ds.door_state='LOCKED'; newState='LOCKED'; window.__doorLockMap = window.__doorLockMap || {}; window.__doorLockMap[data.door_id] = true; }
       else if(data.type==='door.unlock'){ ds.door_state='UNLOCKED'; newState='UNLOCKED'; window.__doorLockMap = window.__doorLockMap || {}; window.__doorLockMap[data.door_id] = false; }
@@ -985,8 +1218,10 @@ function wsConnect(){
         const pid = (data.point_id||data.door_id||'');
         const map = window.__doorMap || {};
         const nm = (pid && map[pid] && map[pid].name) ? map[pid].name : '-';
-        // Always log door events (open/close/lock/unlock) in real-time.
-        addEvent({ description:(data.event_description||data.description||data.type), point: pid, name: nm, verify_mode:(data.verify_mode||''), _source: data.type });
+        // Live monitor shows only explicit remote door transitions.
+        if(data.type==='door.open' || data.type==='door.close' || data.type==='door.normal_open' || data.type==='door.normal_close'){
+          addEvent({ description:(data.event_description||data.description||data.type), point: pid, name: nm, verify_mode:(data.verify_mode||''), _source: data.type });
+        }
       } catch { addEvent({ description:data.type, point: (data.point_id||data.door_id||'') }); }
     } else { addEvent(data); }
   };
@@ -1030,6 +1265,7 @@ function doorAction(id,door,action){
       else if(action==='lock'){ newState = 'LOCKED'; window.__doorLockMap[doorId] = true; }
       else if(action==='unlock'){ newState = 'UNLOCKED'; window.__doorLockMap[doorId] = false; }
       else if(action==='normal-open'){ newState = 'OPEN'; }
+      else if(action==='normal-close'){ newState = 'CLOSED'; }
       if(newState){
         console.log('[Door Action] ✅ IMMEDIATELY setting door state to:', newState, '(prev:', prevState, ')');
         window.__doorsCache[doorIdx].state = newState;
@@ -1259,7 +1495,7 @@ async function testReadCard(){
     const statusCellHtml = statusBadge(isOk, data.status_text);
     // Build row with 9 cells; last cell starts with Add button having data-action-btn for later upgrade
     tr.innerHTML = [
-      new Date().toLocaleTimeString(),     // Time (col 0)
+      new Date().toLocaleString('ro-RO', { hour12:false }),     // Time (col 0)
       eventPoint,                          // Event point (col 1)
       eventDesc,                           // Event Description (col 2)
       cardNum,                             // Card Number (col 3)
@@ -1317,47 +1553,300 @@ async function testReadCard(){
     }
   }catch(e){ console.error(e); }
 }
-function openAddCardModal(card){
+function openAddCardModal(card, pin){
+  pin = String(pin || '').trim();
+  const esc = (s)=>String(s||'').replace(/[&<>"']/g, (ch)=>({
+    '&':'&amp;',
+    '<':'&lt;',
+    '>':'&gt;',
+    '"':'&quot;',
+    "'":'&#39;'
+  }[ch]||ch));
+
   // Create a lightweight modal host
   let host = document.getElementById('monitorAddCardModal');
   if(!host){
-    host = document.createElement('div'); host.id='monitorAddCardModal';
-    host.style.position='fixed'; host.style.inset='0'; host.style.background='rgba(0,0,0,0.6)'; host.style.zIndex='1000'; host.style.display='none';
-    const panel = document.createElement('div'); panel.style.margin='60px auto'; panel.style.maxWidth='900px'; panel.style.background='#2d5a7b'; panel.style.border='1px solid #3d6a8b'; panel.style.borderRadius='6px'; panel.style.padding='10px';
-    panel.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;color:#fff;margin-bottom:8px;"><strong>Adaugă Angajat / Card</strong><button onclick="document.getElementById('monitorAddCardModal').style.display='none'" style="background:rgba(15,42,71,0.55);color:#fff;border:1px solid rgba(255,255,255,0.22);border-radius:9px;width:30px;height:30px;cursor:pointer;">×</button></div><div id="employeeModalBody" style="background:transparent;border-radius:8px;overflow:auto;max-height:70vh;"><div style="padding:20px;text-align:center;color:#7db3d9;font-weight:700;">Loading...</div></div>`;
-    host.appendChild(panel); document.body.appendChild(host);
+    host = document.createElement('div');
+    host.id='monitorAddCardModal';
+    host.style.position='fixed';
+    host.style.inset='0';
+    host.style.background='rgba(0,0,0,0.6)';
+    host.style.zIndex='1000';
+    host.style.display='none';
 
-    // Compatibility for the injected employee fragment
+    const panel = document.createElement('div');
+    panel.style.margin='60px auto';
+    panel.style.maxWidth='900px';
+    panel.style.background='#2d5a7b';
+    panel.style.border='1px solid #3d6a8b';
+    panel.style.borderRadius='6px';
+    panel.style.padding='10px';
+    panel.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;color:#fff;margin-bottom:8px;gap:10px;">
+        <div>
+          <strong>Adaugă Angajat / Card</strong>
+          <span id="monitorAddCardTitle" style="margin-left:10px;color:#cfe9ff;font-weight:600;"></span>
+        </div>
+        <button type="button" data-addcard-close="1" style="background:rgba(15,42,71,0.55);color:#fff;border:1px solid rgba(255,255,255,0.22);border-radius:9px;width:30px;height:30px;cursor:pointer;">×</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:10px;">
+        <button type="button" data-addcard-tab="new" style="padding:6px 10px;background:rgba(15,42,71,0.55);color:#fff;border:1px solid rgba(255,255,255,0.22);border-radius:6px;cursor:pointer;font-weight:700;">Angajat nou</button>
+        <button type="button" data-addcard-tab="assign" style="padding:6px 10px;background:rgba(15,42,71,0.25);color:#fff;border:1px solid rgba(255,255,255,0.22);border-radius:6px;cursor:pointer;font-weight:700;">Atribuie la angajat existent</button>
+      </div>
+      <div id="monitorAddCardBody" style="background:transparent;border-radius:8px;overflow:auto;max-height:70vh;">
+        <div style="padding:20px;text-align:center;color:#7db3d9;font-weight:700;">Loading...</div>
+      </div>
+    `;
+    host.appendChild(panel);
+    document.body.appendChild(host);
+
     window.closeEmployeeModal = function(){
       try{ document.getElementById('monitorAddCardModal').style.display='none'; }catch(e){}
     };
   }
+
   host.style.display='block';
-  fetch('{% url "crud-employee-create" %}?card_number='+encodeURIComponent(card)+'&suggested_id=next', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-    .then(r=>r.text()).then(html=>{
-      const body = document.getElementById('employeeModalBody');
-      if(!body) return;
-      body.innerHTML = html;
 
-      // Execute inline scripts from the fragment (same as Dashboard quick-add)
-      const scripts = body.querySelectorAll('script');
-      scripts.forEach(script => {
-        const newScript = document.createElement('script');
-        newScript.textContent = script.textContent;
-        document.body.appendChild(newScript);
-        document.body.removeChild(newScript);
-      });
+  try{
+    const closeBtn = host.querySelector('[data-addcard-close="1"]');
+    if(closeBtn && !closeBtn.__bound){
+      closeBtn.__bound = true;
+      closeBtn.addEventListener('click', ()=>{ host.style.display='none'; });
+    }
+  }catch(_e){}
 
-      const form = body.querySelector('#employeeQuickForm');
-      if(form){
-        form.addEventListener('submit', function(e){
-          e.preventDefault();
-          if(typeof window.submitEmployeeForm === 'function') window.submitEmployeeForm(form);
+  const normalizedCard = window.__normalizeCardNumber ? window.__normalizeCardNumber(card) : String(card||'').trim();
+  try{ host.dataset.cardNumber = String(normalizedCard||'').trim(); }catch(_e){}
+  try{ host.dataset.pinNumber = pin; }catch(_e){}
+  try{
+    const t = host.querySelector('#monitorAddCardTitle');
+    if(t){
+      if(normalizedCard){ t.textContent = `Card: ${normalizedCard}`; }
+      else if(pin){ t.textContent = `PIN angajat: ${pin} — atribuiți un card`; }
+      else { t.textContent = ''; }
+    }
+  }catch(_e){}
+
+  function loadEmployeeCreate(curCard){
+    const body = document.getElementById('monitorAddCardBody');
+    if(body){ body.innerHTML = '<div style="padding:20px;text-align:center;color:#7db3d9;font-weight:700;">Loading...</div>'; }
+    fetch('{% url "crud-employee-create" %}?card_number='+encodeURIComponent(curCard)+'&suggested_id=next', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(r=>r.text())
+      .then(html=>{
+        const b=document.getElementById('monitorAddCardBody');
+        if(!b){ return; }
+        b.innerHTML = html;
+        const scripts = b.querySelectorAll('script');
+        scripts.forEach(script => {
+          const newScript = document.createElement('script');
+          newScript.textContent = script.textContent;
+          document.body.appendChild(newScript);
+          document.body.removeChild(newScript);
         });
+        const form = b.querySelector('#employeeQuickForm');
+        if(form){
+          form.addEventListener('submit', function(e){
+            e.preventDefault();
+            if(typeof window.submitEmployeeForm === 'function') window.submitEmployeeForm(form);
+          });
+        }
+      })
+      .catch(e=>{ const b=document.getElementById('monitorAddCardBody'); if(b){ b.innerHTML = 'Error: '+esc(e.message); } });
+  }
+
+  function renderAssignCard(curCard){
+    const body = document.getElementById('monitorAddCardBody');
+    if(!body){ return; }
+    body.innerHTML = `
+      <div style="padding:12px;color:#fff;">
+        <div style="margin-bottom:10px;color:#cfe9ff;font-weight:700;">Atribuie cardul către un angajat existent</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px;">
+          <div style="min-width:260px;flex:1;">
+            <label style="display:block;font-size:12px;color:#cfe9ff;margin-bottom:4px;">Caută angajat</label>
+            <input id="assignEmpSearch" type="text" placeholder="Nume / card / ID" style="width:100%;padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.22);background:rgba(15,42,71,0.35);color:#fff;outline:none;" />
+          </div>
+          <div style="min-width:220px;">
+            <label style="display:block;font-size:12px;color:#cfe9ff;margin-bottom:4px;">Slot</label>
+            <select id="assignCardSlot" style="width:100%;padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.22);background:rgba(15,42,71,0.35);color:#fff;outline:none;">
+              <option value="primary">Principal</option>
+              <option value="secondary">Secundar</option>
+              <option value="additional">Suplimentar</option>
+            </select>
+          </div>
+          <button id="assignCardBtn" type="button" style="padding:8px 12px;background:#15803d;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:800;">Atribuie</button>
+        </div>
+        <select id="assignEmpSelect" size="10" style="width:100%;padding:8px;border-radius:6px;border:1px solid rgba(255,255,255,0.22);background:rgba(15,42,71,0.25);color:#fff;outline:none;"></select>
+        <div id="assignCardMsg" style="margin-top:10px;color:#cfe9ff;font-weight:700;"></div>
+        <div style="margin-top:10px;color:#a9d3f2;font-size:12px;">Card: <strong>${esc(curCard||'')}</strong></div>
+      </div>
+    `;
+
+    const input = body.querySelector('#assignEmpSearch');
+    const sel = body.querySelector('#assignEmpSelect');
+    const msg = body.querySelector('#assignCardMsg');
+    const slotSel = body.querySelector('#assignCardSlot');
+    const btn = body.querySelector('#assignCardBtn');
+    let timer = null;
+
+    async function doSearch(){
+      const q = (input && input.value ? input.value : '').trim();
+      if(!sel){ return; }
+      if(!q){ sel.innerHTML = ''; return; }
+      try{
+        const url = '{% url "api-employees-search" %}?q='+encodeURIComponent(q)+'&limit=25';
+        const r = await fetch(url);
+        const j = await r.json();
+        const items = Array.isArray(j.items) ? j.items : [];
+        sel.innerHTML = items.map(it => `<option value="${esc(it.id)}">${esc(it.label||'')}</option>`).join('');
+        if(items.length === 0){ sel.innerHTML = '<option value="">(niciun rezultat)</option>'; }
+      }catch(_e){
+        sel.innerHTML = '<option value="">(eroare la căutare)</option>';
       }
-    })
-    .catch(e=>{ const body = document.getElementById('employeeModalBody'); if(body) body.innerHTML = 'Error: '+e.message; });
+    }
+
+    if(input){
+      input.addEventListener('input', ()=>{
+        if(timer){ try{ clearTimeout(timer); }catch(_e){} }
+        timer = setTimeout(doSearch, 250);
+      });
+      try{ input.focus(); }catch(_e){}
+    }
+    try{
+      const hostEl = document.getElementById('monitorAddCardModal');
+      const storedPin = hostEl ? (hostEl.dataset.pinNumber||'') : '';
+      if(input){
+        if(curCard && curCard.length >= 3){ input.value = curCard; }
+        else if(storedPin){ input.value = storedPin; } // pre-fill with PIN for panel events
+      }
+    }catch(_e){}
+    doSearch();
+
+    if(btn){
+      btn.addEventListener('click', async ()=>{
+        const empId = sel && sel.value ? String(sel.value).trim() : '';
+        const slot = slotSel && slotSel.value ? String(slotSel.value).trim() : 'primary';
+        const cn = String(curCard||'').trim();
+        if(!cn){ if(msg){ msg.textContent = 'Card invalid.'; } return; }
+        if(!empId || empId === '(niciun rezultat)'){
+          if(msg){ msg.textContent = 'Selectează un angajat din listă.'; }
+          return;
+        }
+        if(msg){ msg.textContent = 'Se salvează…'; }
+        try{
+          const r = await fetch('{% url "crud-issuecard-create" %}', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-CSRFToken': getCSRF(),
+              'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify({ employee_id: parseInt(empId,10), card_number: cn, slot: slot })
+          });
+          const j = await r.json();
+          if(!r.ok || !j || j.ok !== true){
+            const err = (j && j.error) ? j.error : 'save-failed';
+            if(msg){ msg.textContent = 'Eroare: ' + err; }
+            return;
+          }
+          if(msg){ msg.textContent = 'Card atribuit cu succes.'; }
+          try{ addEvent({ description: `Card ${cn} atribuit unui angajat (slot=${slot})`, card_no: cn, status: 'OK', verify_mode: 'UI', _source:'issuecard.create' }); }catch(_e){}
+          try{
+            document.querySelectorAll('#events tr').forEach(rw=>{
+              if((rw.dataset.cardNo||'') === cn){ checkAndUpdateCardRow(rw, cn); }
+            });
+          }catch(_e){}
+          setTimeout(()=>{ try{ host.style.display='none'; }catch(_e){} }, 350);
+        }catch(e){
+          if(msg){ msg.textContent = 'Eroare: ' + (e && e.message ? e.message : 'request-failed'); }
+        }
+      });
+    }
+  }
+
+  function setTab(tab){
+    const btnNew = host.querySelector('[data-addcard-tab="new"]');
+    const btnAssign = host.querySelector('[data-addcard-tab="assign"]');
+    if(btnNew && btnAssign){
+      if(tab==='assign'){
+        btnAssign.style.background='rgba(15,42,71,0.55)';
+        btnNew.style.background='rgba(15,42,71,0.25)';
+      } else {
+        btnNew.style.background='rgba(15,42,71,0.55)';
+        btnAssign.style.background='rgba(15,42,71,0.25)';
+      }
+    }
+    const curCard = (host.dataset.cardNumber||'').trim();
+    if(tab==='assign') renderAssignCard(curCard);
+    else loadEmployeeCreate(curCard);
+  }
+
+  try{
+    const btnNew = host.querySelector('[data-addcard-tab="new"]');
+    const btnAssign = host.querySelector('[data-addcard-tab="assign"]');
+    if(btnNew && !btnNew.__bound){ btnNew.__bound = true; btnNew.addEventListener('click', ()=>setTab('new')); }
+    if(btnAssign && !btnAssign.__bound){ btnAssign.__bound = true; btnAssign.addEventListener('click', ()=>setTab('assign')); }
+  }catch(_e){}
+
+  // When no card available, show a card-capture interstitial before the tabs.
+  // The operator presents the card to the PC card reader (ACP/Elatec) or types manually.
+  if(!normalizedCard){
+    const body2 = document.getElementById('monitorAddCardBody');
+    const pinNote = pin && pin !== '0' ? `Eveniment PIN: ${pin}` : '';
+    if(body2) body2.innerHTML = `
+      <div style="padding:24px;color:#fff;text-align:center;">
+        <div style="font-size:16px;font-weight:700;color:#cfe9ff;margin-bottom:8px;">&#128246; Scan\u0103\u021bi cardul la cititorul PC</div>
+        <div style="color:#7db3d9;margin-bottom:16px;font-size:12px;">Apropia\u021bi cardul de cititorul USB conectat la PC sau introduce\u021bi manual num\u0103rul</div>
+        <input id="captureCardInput" type="text" maxlength="32" autocomplete="off"
+          placeholder="Nr. card (automat sau manual)"
+          style="width:100%;max-width:340px;padding:12px 14px;font-size:16px;border-radius:8px;
+            border:2px solid #4a9aba;background:rgba(15,42,71,0.6);color:#fff;outline:none;
+            text-align:center;box-sizing:border-box;letter-spacing:3px;font-family:monospace;"/>
+        <br/><br/>
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+          <button type="button" id="captureCardOk"
+            style="padding:9px 22px;background:#15803d;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:700;">\u2713 Continu\u0103</button>
+          <button type="button" id="captureCardSkip"
+            style="padding:9px 22px;background:rgba(255,255,255,0.08);color:#aaa;border:1px solid rgba(255,255,255,0.18);border-radius:6px;cursor:pointer;">F\u0103r\u0103 card</button>
+        </div>
+        <div style="margin-top:10px;color:#5a8aaa;font-size:11px;">${pinNote}</div>
+      </div>
+    `;
+    const inp = document.getElementById('captureCardInput');
+    try{ inp.focus(); }catch(_e){}
+    function _confirmCapture(){
+      const val = (document.getElementById('captureCardInput')?.value || '').trim();
+      const norm2 = window.__normalizeCardNumber ? window.__normalizeCardNumber(val) : val;
+      if(norm2){
+        host.dataset.cardNumber = norm2;
+        try{ const t2=host.querySelector('#monitorAddCardTitle'); if(t2) t2.textContent='Card: '+norm2; }catch(_e){}
+      }
+      setTab('new');
+    }
+    try{ document.getElementById('captureCardOk').onclick = _confirmCapture; }catch(_e){}
+    try{ document.getElementById('captureCardSkip').onclick = ()=>setTab('new'); }catch(_e){}
+    if(inp){
+      inp.addEventListener('keydown', (ev)=>{ if(ev.key==='Enter'){ _confirmCapture(); } });
+      let _capTimer = null;
+      const _prevPC = window.__lastPhysicalCard || '';
+      inp.addEventListener('input', ()=>{
+        clearTimeout(_capTimer);
+        if((inp.value||'').trim().length >= CARD_MIN_LENGTH){ _capTimer = setTimeout(_confirmCapture, 180); }
+      });
+      // Also watch for PC physical reader updating __lastPhysicalCard
+      const _pollPc = setInterval(()=>{
+        if(!host || host.style.display==='none'){ clearInterval(_pollPc); return; }
+        if(!document.getElementById('captureCardInput')){ clearInterval(_pollPc); return; }
+        const now = window.__lastPhysicalCard || '';
+        if(now && now !== _prevPC){ clearInterval(_pollPc); inp.value=now; _confirmCapture(); }
+      }, 300);
+    }
+  } else {
+    setTab('new');
+  }
 }
+// Start DB polling immediately so scans appear even when WebSocket is connected
+// but not receiving (e.g. InMemoryChannelLayer without Redis across processes).
+try{ _rtlogPollStart(); }catch(_e){}
 wsConnect();
 // Guarded binding in case element doesn't exist
 try {
@@ -1449,7 +1938,9 @@ function _parseRtlogLineToEvent(deviceId, rawLine, createdAtFallback){
   if(!raw){ return null; }
   const low = raw.toLowerCase().replace(/\s+/g,'');
   if(low.startsWith('pin,verified,doorid')){ return null; }
-  const parts = raw.split(',').map(p=>String(p||'').trim());
+  // Some firmwares use ';' or tab separators in RTLOG-ish dumps.
+  const normalizedRaw = raw.replace(/[;\t]/g, ',');
+  const parts = normalizedRaw.split(',').map(p=>String(p||'').trim());
   if(parts.length < 3){ return null; }
 
   let ts = '';
@@ -1457,6 +1948,9 @@ function _parseRtlogLineToEvent(deviceId, rawLine, createdAtFallback){
   let doorNum = '';
   let code = '';
   let verify = '';
+  let pin = '';
+  let isPhysicalReaderLine = false;
+  let isExternalReaderLine = false;
 
   // Format A (standard rtlog): ts,pin,card,door,code,verify,...
   // Example: 2026-02-19 10:00:00,0,123456,1,0,0
@@ -1464,6 +1958,7 @@ function _parseRtlogLineToEvent(deviceId, rawLine, createdAtFallback){
   let isTxn = false;
   if(looksLikeTs){
     ts = parts[0] || '';
+    pin = (parts[1] || '').trim();
     card = (parts[2] || '').trim();
     doorNum = (parts[3] || '').trim();
     code = (parts[4] || '').trim();
@@ -1471,10 +1966,17 @@ function _parseRtlogLineToEvent(deviceId, rawLine, createdAtFallback){
   } else {
     // Format B (ZK transaction push/poll): pin,verified,door,eventType,inOut,time_second,index,cardno,sitecode
     // Example: 0,4,1,27,0,840045753,203,,0
+    // Some firmwares omit the `index` field: pin,verified,door,eventType,inOut,time_second,cardno,sitecode
     if(parts.length >= 8 && /^\d+$/.test(parts[5]||'')){
       isTxn = true;
-      ts = String(createdAtFallback||'').replace('T',' ').replace('Z','').slice(0,19);
-      card = (parts[7] || '').trim();
+      // Always use server receipt time (createdAtFallback) for display.
+      // Panel's time_second reflects the panel's internal clock which can drift or
+      // be wrong (e.g., when the panel had incorrect date set). The server received
+      // this event NOW, so created_at is always accurate.
+      ts = String(createdAtFallback || '');
+      pin = (parts[0] || '').trim();
+      // With index (9 parts): cardno is parts[7]; without index (8 parts): cardno is parts[6]
+      card = (parts.length >= 9 ? (parts[7] || '') : (parts[6] || '')).trim();
       doorNum = (parts[2] || '').trim();
       code = (parts[3] || '').trim();
       verify = (parts[1] || '').trim();
@@ -1484,7 +1986,35 @@ function _parseRtlogLineToEvent(deviceId, rawLine, createdAtFallback){
     }
   }
 
+  // Controller-only policy: never infer CardNo from PIN/user id.
+  const cardLooksInvalid = (!card || card === '0' || /^0+$/.test(card) || card === '000000' || card === '00000000');
+
+  // Some devices shift Cardno into the "Index" field and leave Cardno blank.
+  if(isTxn && (!card || card === '0' || /^0+$/.test(card) || card === '000000' || card === '00000000')){
+    const minLen = (typeof CARD_MIN_LENGTH !== 'undefined' ? CARD_MIN_LENGTH : 4);
+    const idxMaybe = (parts.length >= 9 ? String(parts[6]||'').trim() : '');
+    if(idxMaybe && /^\d+$/.test(idxMaybe) && idxMaybe.length >= minLen){
+      card = idxMaybe;
+    }
+  }
+
+  // Last-resort key=value extraction for odd RTLOG formats.
+  if((!card || card === '0' || /^0+$/.test(card))){
+    const m = raw.match(/(?:cardno|card_number|cardnumber|card)\s*[:=]\s*([0-9A-Za-z]+)/i);
+    if(m && m[1]){ card = String(m[1]).trim(); }
+  }
+
+  // Detect external (PC) reader lines for labeling only; do NOT bridge PC-reader cards into controller events.
+  try{
+    const vlow = String(verify||'').toLowerCase();
+    const sourceTag = String(parts[6] || '').toLowerCase();
+    const rawLow = raw.toLowerCase();
+    isPhysicalReaderLine = vlow.includes('cititor') || vlow.includes('reader') || vlow.includes('elatec') || vlow.includes('acp') || rawLow.includes('cititor fizic') || rawLow.includes('cititor extern');
+    isExternalReaderLine = isPhysicalReaderLine || sourceTag.includes('acp') || sourceTag.includes('elatec') || sourceTag.includes('reader') || sourceTag.includes('cititor');
+  }catch(_e){}
+
   // Only surface lines that look like real card scans unless RTLOG debug toggle is enabled.
+  card = window.__normalizeCardNumber ? window.__normalizeCardNumber(card) : String(card||'').trim();
   const invalidCard = (!card || card === '0' || /^0+$/.test(card) || card === '000000' || card === '00000000');
   if(invalidCard && !isTxn && !getShowRtlog()){
     return null;
@@ -1502,19 +2032,28 @@ function _parseRtlogLineToEvent(deviceId, rawLine, createdAtFallback){
   }catch(_e){}
   if((!doorName || doorName==='-') && doorNum){ doorName = `Ușă ${doorNum}`; }
 
-  let desc = invalidCard ? 'Eveniment centrală' : 'Scanare card';
+  let desc = '';
+  if(invalidCard){
+    desc = isTxn ? 'Încercare acces' : (isExternalReaderLine ? 'Eveniment cititor extern' : 'Eveniment centrală');
+  } else {
+    desc = isExternalReaderLine ? 'Scanare card cititor extern' : 'Scanare card';
+  }
   if(doorNum){ desc += ` (ușa ${doorNum})`; }
   if(code){ desc += ` [cod ${code}]`; }
 
   return {
     time: ts,
     point: doorId,
+    door_number: doorNum,
     description: desc,
     card_no: card,
     name: doorName,
     status: '',
-    verify_mode: verify || 'CITITOR FIZIC',
-    _source: 'rtlog.scan',
+    verify_mode: verify || (isExternalReaderLine ? 'CITITOR EXTERN' : 'CENTRALĂ'),
+    _isTxn: isTxn,
+    _fromPhysicalReader: isExternalReaderLine,
+    _event_code: code,
+    _source: isExternalReaderLine ? 'reader.scan' : 'rtlog.scan',
   };
 }
 async function testDoorOpen(){
@@ -1608,7 +2147,7 @@ async function testDoorOpen(){
       ? `door.open BLOCKED (LOCK active) (id=${doorPk} name=${nm||'-'})`
       : (data.ok ? 'DESCHIDERE UȘĂ ACCEPTATĂ' : ('DESCHIDERE UȘĂ RESPINSĂ: '+ translateReasons(Array.isArray(data.reasons)? data.reasons.join(', '):(data.reasons||data.error||''))));
     addEvent({
-      time: new Date().toLocaleTimeString(),
+      time: new Date().toLocaleString('ro-RO', { hour12:false }),
       point: (data.event_point_id || doorPk),
       description: desc,
       card_no: cardNum,
@@ -1619,7 +2158,29 @@ async function testDoorOpen(){
     });
   }catch(e){ console.error(e); addEvent({ description:'door.open ERR', status:'ERR', verify_mode:'API', point: doorPk }); }
 }
+async function startCardReadWaitLoop(){
+  if(window.__cardReadWaitLoopStarted){ return; }
+  window.__cardReadWaitLoopStarted = true;
+  while(true){
+    try{
+      const r = await fetch('/agent/api/cards/read/wait/', {headers: {'X-Requested-With':'XMLHttpRequest'}, credentials: 'same-origin'});
+      if(r.ok){
+        const j = await r.json();
+        if(j && j.ok && j.card_number){
+          const card = String(j.card_number||'').trim();
+          if(card){
+            window.__lastPhysicalCard = card;
+            window.__lastPhysicalCardTs = Date.now();
+          }
+        }
+      }
+    }catch(_e){ }
+    await new Promise(resolve => setTimeout(resolve, 200));
+  }
+}
+
 populateDoors();
+if(!window.__bridgeOnlyComm){ startCardReadWaitLoop(); }
 // Wire up panel filter to limit doors per controller
 try {
   const panelSel = document.getElementById('panelFilter');
@@ -1645,5 +2206,49 @@ function statusBadge(ok, statusText){
   const color = ok ? '#2da44e' : '#cf222e';
   return `<span style="display:inline-block;padding:2px 8px;border-radius:12px;background:${color};color:#fff;font-weight:600;">${statusText||label}</span>`;
 }
+
+function _setIntegrityBadge(kind, text){
+  const el = document.getElementById('integrityBadge');
+  if(!el){ return; }
+  let bg = '#4b5563';
+  let border = '#1e303d';
+  if(kind === 'ok'){ bg = '#2da44e'; border = '#1f7a39'; }
+  else if(kind === 'warn'){ bg = '#b08900'; border = '#815f00'; }
+  else if(kind === 'err'){ bg = '#cf222e'; border = '#8f1a22'; }
+  el.style.background = bg;
+  el.style.borderColor = border;
+  el.textContent = text || 'Integritate: necunoscut';
+}
+
+async function refreshIntegrityBadge(){
+  try{
+    const r = await fetch('/agent/health/', { headers: { 'X-Requested-With':'XMLHttpRequest' }, credentials: 'same-origin' });
+    if(!r.ok){ _setIntegrityBadge('err', 'Integritate: health indisponibil'); return; }
+    const j = await r.json();
+    const mi = (j && j.monitor_integrity) ? j.monitor_integrity : null;
+    if(!mi){ _setIntegrityBadge('warn', 'Integritate: fără diagnostic'); return; }
+    const syncOk = !!(mi.sync && mi.sync.ok);
+    const clearOk = !!(mi.clear && mi.clear.ok);
+    const ev = (mi.events || {});
+    const evState = String(ev.state || 'warn').toLowerCase();
+    const miss = Number(ev.tx_missing_card_recent || 0);
+    const total = Number(ev.tx_rows_recent || 0);
+    const ratio = Number(ev.tx_missing_ratio || 0);
+    if(syncOk && clearOk && evState === 'ok'){
+      _setIntegrityBadge('ok', `Integritate: OK (sync/clear + evenimente)`);
+      return;
+    }
+    if((!syncOk) || (!clearOk)){
+      _setIntegrityBadge('err', `Integritate: sync/clear problemă`);
+      return;
+    }
+    _setIntegrityBadge('warn', `Integritate: card lipsă ${miss}/${total} (${Math.round(ratio*100)}%)`);
+  }catch(_e){
+    _setIntegrityBadge('err', 'Integritate: eroare diagnostic');
+  }
+}
+
+refreshIntegrityBadge();
+setInterval(refreshIntegrityBadge, 7000);
 </script>
 {% endblock %}

@@ -41,7 +41,7 @@ _LAST_CONTACT_LAST = {}
 
 # CommCenter defaults (populated from CLI options in Command.handle)
 _COMM_DEFAULT_DRIVER = 'auto'
-_COMM_DEFAULT_POLL = 1.5
+_COMM_DEFAULT_POLL = 0.25
 _COMM_LAST_DRIVER = None
 _COMM_LAST_BACKEND = None
 
@@ -75,6 +75,7 @@ def _save_config():
             _CONFIG.write(fp)
     except Exception:
         pass
+
 
 def _derive_key() -> bytes:
     base = (settings.SECRET_KEY + '::TRAY_SALT').encode()
@@ -959,7 +960,7 @@ def _stop_listener(name: str):
             attempts = 3
             remaining = None
             for attempt in range(attempts):
-                out = subprocess.run(['powershell','-ExecutionPolicy','Bypass','-Command', f"Get-CimInstance Win32_Process | Where-Object {{ $_.CommandLine -like '*{target}*' }} | Select-Object -ExpandProperty ProcessId"], capture_output=True, text=True)
+                out = subprocess.run(['powershell','-ExecutionPolicy','Bypass','-Command', f"Get-CimInstance Win32_Process | Where-Object {{ ($_.Name -match 'python|pyw') -and $_.CommandLine -like '*{target}*' }} | Select-Object -ExpandProperty ProcessId"], capture_output=True, text=True)
                 pids = [l.strip() for l in (out.stdout or '').splitlines() if l.strip()]
                 if not pids:
                     remaining = []
@@ -972,7 +973,7 @@ def _stop_listener(name: str):
                         pass
                 time.sleep(0.5 + attempt * 0.2)
             # final check
-            out = subprocess.run(['powershell','-ExecutionPolicy','Bypass','-Command', f"Get-CimInstance Win32_Process | Where-Object {{ $_.CommandLine -like '*{target}*' }} | Select-Object -ExpandProperty ProcessId"], capture_output=True, text=True)
+            out = subprocess.run(['powershell','-ExecutionPolicy','Bypass','-Command', f"Get-CimInstance Win32_Process | Where-Object {{ ($_.Name -match 'python|pyw') -and $_.CommandLine -like '*{target}*' }} | Select-Object -ExpandProperty ProcessId"], capture_output=True, text=True)
             remaining = [l.strip() for l in (out.stdout or '').splitlines() if l.strip()]
             if remaining:
                 logging.warning('Processes still present for %s after final stop attempts: %s', target, remaining)
@@ -1048,7 +1049,7 @@ def _stop_listeners():
         # Fallback: taskkill by filter on script name strings
         for name in ['card_reader_acp.py','card_reader_elatec.py']:
             try:
-                subprocess.run(['powershell','-ExecutionPolicy','Bypass','-Command', f"Get-CimInstance Win32_Process | Where-Object { '{' } $_.CommandLine -like '*{name}*' { '}' } | ForEach-Object { '{' } Stop-Process -Id $_.ProcessId -Force { '}' }"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run(['powershell','-ExecutionPolicy','Bypass','-Command', f"Get-CimInstance Win32_Process | Where-Object {{ ($_.Name -match 'python|pyw') -and $_.CommandLine -like '*{name}*' }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force }}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception:
                 pass
     except Exception:
@@ -1057,7 +1058,7 @@ def _stop_listeners():
 def _listener_running(name: str, hb_threshold: float = 15.0, startup_grace: float = 30.0) -> bool:
     target = 'card_reader_acp.py' if name == 'acp' else 'card_reader_elatec.py'
     try:
-        out = subprocess.run(['powershell','-ExecutionPolicy','Bypass','-Command', f"Get-CimInstance Win32_Process | Where-Object {{ $_.CommandLine -like '*{target}*' }} | Select-Object -First 1 -ExpandProperty ProcessId"], capture_output=True, text=True)
+        out = subprocess.run(['powershell','-ExecutionPolicy','Bypass','-Command', f"Get-CimInstance Win32_Process | Where-Object {{ ($_.Name -match 'python|pyw') -and $_.CommandLine -like '*{target}*' }} | Select-Object -First 1 -ExpandProperty ProcessId"], capture_output=True, text=True)
         pid = (out.stdout or '').strip()
         if not pid:
             return False
@@ -1329,9 +1330,50 @@ def _shutdown(icon):
 
     killed: list[dict] = []  # [{pid,label,ok}]
 
+    def _enqueue_close_all_doors_before_shutdown() -> None:
+        """Best-effort: queue DOOR_CLOSE for active doors before stopping CommCenter."""
+        try:
+            from agent.models import Door, CommandLog
+        except Exception as e:
+            _emit(f"[TRAY] Could not import models for close-on-shutdown: {e}", level='warn')
+            return
+        try:
+            doors = list(
+                Door.objects
+                .filter(enabled=True, device__enabled=True)
+                .exclude(door_number__isnull=True)
+                .exclude(door_number=0)
+                .values('id', 'device_id', 'door_number', 'name')
+            )
+        except Exception as e:
+            _emit(f"[TRAY] Could not query doors for close-on-shutdown: {e}", level='warn')
+            return
+
+        queued = 0
+        for d in doors:
+            try:
+                dev_id = int(d.get('device_id') or 0)
+                door_no = int(d.get('door_number') or 0)
+                if dev_id <= 0 or door_no <= 0:
+                    continue
+                CommandLog.objects.create(device_id=dev_id, command=f'DOOR_CLOSE:{door_no}', status='PENDING')
+                queued += 1
+            except Exception:
+                continue
+
+        if queued:
+            _emit(f"[TRAY] Queued {queued} DOOR_CLOSE command(s) before shutdown")
+            # Give CommCenter a short window to flush pending close commands.
+            try:
+                time.sleep(1.2)
+            except Exception:
+                pass
+
     try:
         _emit('Stopping server...')
         _stop_server()
+        _emit('Queueing door close commands...')
+        _enqueue_close_all_doors_before_shutdown()
         _emit('Stopping commcenter...')
         _stop_comm_center()
         _emit('Stopping card listeners...')
@@ -1757,7 +1799,7 @@ class Command(BaseCommand):
         parser.add_argument('--asgi', action='store_true', help='Auto start Daphne ASGI server (WebSockets)')
         parser.add_argument('--host', type=str, default=DEFAULT_HOST, help='Bind host')
         parser.add_argument('--port', type=int, default=DEFAULT_PORT, help='Bind port')
-        parser.add_argument('--poll', type=float, default=1.5, help='CommCenter poll interval seconds')
+        parser.add_argument('--poll', type=float, default=0.25, help='CommCenter poll interval seconds')
         parser.add_argument(
             '--driver',
             type=str,
@@ -1778,7 +1820,48 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         if pystray is None:
             self.stderr.write('pystray not available; install Pillow + pystray.')
-            return 1
+            return
+
+        # Hard guard against running under the wrong interpreter.
+        # This project MUST run under the workspace venv to avoid legacy Python26/ZKTeco paths
+        # and to keep a single consistent tray/CommCenter/server stack.
+        try:
+            from pathlib import Path
+
+            workspace_root = Path(__file__).resolve().parents[4]
+            allowed_venv_pys: list[Path] = []
+            for venv_name in ('.venv', '.venv_clean', '.venv_new'):
+                p = (workspace_root / venv_name / 'Scripts' / 'python.exe')
+                if p.exists():
+                    allowed_venv_pys.append(p.resolve())
+            if allowed_venv_pys and Path(sys.executable).resolve() not in allowed_venv_pys:
+                self.stderr.write(
+                    'tray_agent must be launched from the workspace virtualenv.\n'
+                    f"Current: {sys.executable}\n"
+                    f"Allowed: {', '.join(str(p) for p in allowed_venv_pys)}\n"
+                    'Tip: run tray_launch.ps1 (it activates the venv and starts everything).'
+                )
+                raise SystemExit(2)
+        except Exception:
+            pass
+
+        # Single-instance guard for Windows.
+        # The PID-file based guard is not reliable on Windows (os.kill(pid, 0) semantics differ).
+        try:
+            if os.name == 'nt':
+                import ctypes
+
+                # Use a global named mutex so scheduled tasks / startup scripts can't spawn a second instance.
+                mutex_name = 'Global\\ZKAccessB_Modern_TrayAgent'
+                handle = ctypes.windll.kernel32.CreateMutexW(None, True, mutex_name)
+                if handle:
+                    already_exists = int(ctypes.windll.kernel32.GetLastError() or 0) == 183
+                    if already_exists:
+                        self.stdout.write('Tray agent already running (mutex); exiting.')
+                        return
+        except Exception:
+            pass
+
         # Singleton guard: avoid multiple tray_agent instances
         try:
             if _PID_FILE.exists():
@@ -1807,9 +1890,9 @@ class Command(BaseCommand):
         except Exception:
             _COMM_DEFAULT_DRIVER = 'auto'
         try:
-            _COMM_DEFAULT_POLL = float(options.get('poll') or 1.5)
+            _COMM_DEFAULT_POLL = max(0.1, float(options.get('poll') or 0.25))
         except Exception:
-            _COMM_DEFAULT_POLL = 1.5
+            _COMM_DEFAULT_POLL = 0.25
         _COMM_LAST_DRIVER = _COMM_DEFAULT_DRIVER
         _COMM_LAST_BACKEND = None
         host = options['host']; port = options['port']
@@ -1828,6 +1911,79 @@ class Command(BaseCommand):
             except Exception:
                 options['asgi'] = False
                 self.stdout.write('Daphne not found; starting WSGI instead.')
+
+        # Channels channel layer: Redis is required for WebSocket group events across processes.
+        # In tray mode, the web server runs in a separate subprocess, while CommCenter runs in
+        # this process; without Redis, in-memory Channels will not deliver CommCenter group_send
+        # messages to the WebSocket consumer.
+        try:
+            redis_url = (os.environ.get('REDIS_URL') or '').strip()
+            if not redis_url and options.get('asgi') and (not options.get('no_server')) and (not options.get('no_commcenter')):
+                import socket as _socket
+
+                sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+                try:
+                    sock.settimeout(0.2)
+                    sock.connect(('127.0.0.1', 6379))
+                    os.environ['REDIS_URL'] = 'redis://127.0.0.1:6379/0'
+                    logging.info('Redis detected on 127.0.0.1:6379; enabling REDIS_URL for cross-process WebSocket events')
+                except Exception:
+                    logging.warning(
+                        'Redis not detected (127.0.0.1:6379). Running multi-process without REDIS_URL: '
+                        'WebSocket may be connected but silent; monitor polling fallback will still work. '
+                        'Start Redis and set REDIS_URL=redis://127.0.0.1:6379/0 for ideal live WS.'
+                    )
+                finally:
+                    try:
+                        sock.close()
+                    except Exception:
+                        pass
+            elif redis_url and options.get('asgi') and (not options.get('no_server')) and (not options.get('no_commcenter')):
+                # Best-effort check that Redis is actually reachable.
+                try:
+                    import socket as _socket
+
+                    host = '127.0.0.1'
+                    port = 6379
+                    # Only parse host/port for simple redis://host:port/ forms.
+                    if redis_url.startswith('redis://'):
+                        rest = redis_url[len('redis://'):]
+                        hp = rest.split('/', 1)[0]
+                        if ':' in hp:
+                            host, port_s = hp.rsplit(':', 1)
+                            try:
+                                port = int(port_s)
+                            except Exception:
+                                port = 6379
+                        else:
+                            host = hp
+
+                    sock = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM)
+                    try:
+                        sock.settimeout(0.2)
+                        sock.connect((host, int(port)))
+                    finally:
+                        try:
+                            sock.close()
+                        except Exception:
+                            pass
+                except Exception:
+                    logging.warning('REDIS_URL is set but Redis is not reachable (%s). WebSocket delivery may be unreliable.', redis_url)
+        except Exception:
+            pass
+
+        # ADMS/iClock push auto-config: CommCenter needs to know the HTTP port
+        # that devices should push to (/iclock/*). Default to enabled unless
+        # explicitly disabled by env.
+        try:
+            os.environ.setdefault('ZKACCESS_ADMS_PORT', str(int(port)))
+        except Exception:
+            pass
+        try:
+            if os.environ.get('ZKACCESS_ADMS_AUTOCONFIG') is None:
+                os.environ['ZKACCESS_ADMS_AUTOCONFIG'] = '1'
+        except Exception:
+            pass
         if not options.get('no_server'):
             # Always stop any orphaned previous server first, so the manual port can be re-used.
             try:

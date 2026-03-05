@@ -7,7 +7,7 @@ from django.http import JsonResponse, HttpRequest, HttpResponse
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from django.shortcuts import render
 from django.utils import timezone
-from django.db.models import Max
+from django.db.models import Max, Q
 from django.db import transaction
 
 from .models import DeviceRealtimeLog, DeviceEventLog, DeviceStatus, Device, DSTime
@@ -288,7 +288,276 @@ def health(request: HttpRequest):
     except Exception:
         pass
 
+    # Monitor integrity diagnostics (best-effort): sync/clear results + recent txn card quality.
+    try:
+        from agent.models import CommandLog, DeviceRealtimeLog
+
+        def _norm_card(v: object) -> str:
+            try:
+                import re
+
+                s = str(v or '').strip().replace('0x', '').replace('0X', '')
+                if not s:
+                    return ''
+                return re.sub(r'[^0-9A-Za-z]+', '', s).upper()
+            except Exception:
+                return ''
+
+        latest_sync = (
+            CommandLog.objects
+            .filter(Q(command__startswith='SYNC_ALL') | Q(command__startswith='SYNC_PERSONNEL') | Q(command__startswith='SYNC_ACCESS_LEVELS'))
+            .order_by('-id')
+            .first()
+        )
+        latest_clear = (
+            CommandLog.objects
+            .filter(command__startswith='CLEAR_DEVICE_DATA')
+            .order_by('-id')
+            .first()
+        )
+
+        sync_ok = bool(latest_sync and str(getattr(latest_sync, 'status', '') or '').upper() == 'OK')
+        clear_ok = bool(latest_clear and str(getattr(latest_clear, 'status', '') or '').upper() == 'OK')
+
+        tx_total = 0
+        tx_missing_card = 0
+        for row in DeviceRealtimeLog.objects.only('raw').order_by('-id')[:120]:
+            raw = str(getattr(row, 'raw', '') or '').strip()
+            if not raw:
+                continue
+            normalized = raw
+            if "\t" in normalized and "," not in normalized:
+                normalized = normalized.replace("\t", ",")
+            if ";" in normalized and "," not in normalized and normalized.count(';') >= 2:
+                normalized = normalized.replace(';', ',')
+            parts = [p.strip() for p in normalized.split(',')]
+            if len(parts) < 7:
+                continue
+            looks_like_ts = bool(parts and len(parts[0]) >= 10 and '-' in parts[0] and str(parts[0])[:4].isdigit())
+            if looks_like_ts:
+                continue
+
+            tx_total += 1
+            card = ''
+            if len(parts) > 7:
+                card = _norm_card(parts[7])
+            elif len(parts) == 7:
+                card = _norm_card(parts[6])
+            if not card:
+                tx_missing_card += 1
+
+        miss_ratio = (float(tx_missing_card) / float(tx_total)) if tx_total > 0 else 0.0
+        stream_state = 'ok'
+        if tx_total >= 5 and miss_ratio >= 0.60:
+            stream_state = 'warn'
+
+        payload['monitor_integrity'] = {
+            'sync': {
+                'ok': sync_ok,
+                'status': str(getattr(latest_sync, 'status', '') or ''),
+                'result': str(getattr(latest_sync, 'result', '') or '')[:160],
+                'command_id': int(getattr(latest_sync, 'id', 0) or 0),
+            },
+            'clear': {
+                'ok': clear_ok,
+                'status': str(getattr(latest_clear, 'status', '') or ''),
+                'result': str(getattr(latest_clear, 'result', '') or '')[:160],
+                'command_id': int(getattr(latest_clear, 'id', 0) or 0),
+            },
+            'events': {
+                'state': stream_state,
+                'tx_rows_recent': int(tx_total),
+                'tx_missing_card_recent': int(tx_missing_card),
+                'tx_missing_ratio': round(miss_ratio, 3),
+            },
+        }
+    except Exception:
+        pass
+
     return JsonResponse(payload)
+
+
+def _normalize_persistent_card_code(value: str) -> str:
+    """Normalize card-like values for DB persistence and matching."""
+    try:
+        import re
+
+        s = str(value or '').strip()
+        if not s:
+            return ''
+        s = s.replace('0x', '').replace('0X', '')
+        s = re.sub(r'[^0-9A-Za-z]+', '', s)
+        return s.upper()
+    except Exception:
+        try:
+            return str(value or '').strip().upper()
+        except Exception:
+            return ''
+
+
+def _expand_card_lookup_variants(value: str) -> list[str]:
+    """Build tolerant card variants (decimal/hex/endianness) for matching."""
+    try:
+        import re
+
+        base = _normalize_persistent_card_code(value)
+        if not base:
+            return []
+
+        variants: list[str] = []
+
+        def _add(v: object) -> None:
+            s = str(v or '').strip()
+            if not s:
+                return
+            if s.isdigit():
+                s = s.lstrip('0') or '0'
+            variants.append(s)
+
+        _add(base)
+
+        compact = base.replace(' ', '')
+        _add(compact)
+        _add(compact.upper())
+        _add(compact.lower())
+
+        if compact.isdigit():
+            _add(compact.lstrip('0') or '0')
+
+        digits_only = re.sub(r'\D+', '', compact)
+        if digits_only:
+            _add(digits_only)
+
+        if re.fullmatch(r'[0-9A-F]+', compact):
+            try:
+                _add(str(int(compact, 16)))
+            except Exception:
+                pass
+            try:
+                hx = compact if (len(compact) % 2 == 0) else ('0' + compact)
+                raw = bytes.fromhex(hx)
+                _add(str(int.from_bytes(raw, byteorder='big', signed=False)))
+                _add(str(int.from_bytes(raw, byteorder='little', signed=False)))
+            except Exception:
+                pass
+
+        seen = set()
+        ordered: list[str] = []
+        for v in variants:
+            if not v:
+                continue
+            key = v.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            ordered.append(v)
+        return ordered
+    except Exception:
+        try:
+            s = _normalize_persistent_card_code(value)
+            return [s] if s else []
+        except Exception:
+            return []
+
+
+def _prefer_numeric_card_code(value: str) -> str:
+    """Return numeric-decoded card when possible, otherwise normalized original."""
+    base = _normalize_persistent_card_code(value)
+    if not base:
+        return ''
+    if base.isdigit():
+        return base.lstrip('0') or '0'
+
+    variants = _expand_card_lookup_variants(base)
+    for cand in variants:
+        if cand.isdigit() and cand not in ('', '0'):
+            return cand
+    return base
+
+
+def system_normalize_cards(request: HttpRequest):
+    """Normalize card codes in Employee/EmployeeCard without destructive merges.
+
+    Staff-only, POST. Supports dry run via ?dry_run=1.
+    """
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'method_not_allowed'}, status=405)
+
+    dry_run = str(request.GET.get('dry_run') or '').strip().lower() in ('1', 'true', 'yes')
+    try:
+        from .models import Employee, EmployeeCard
+
+        emp_updates: list[Any] = []
+        card_updates: list[Any] = []
+        emp_changed = 0
+        card_changed = 0
+        secondary_cleared = 0
+
+        emp_qs = Employee.objects.only('id', 'card_number', 'secondary_card_number').order_by('id')
+        for emp in emp_qs:
+            old_primary = str(getattr(emp, 'card_number', '') or '')
+            old_secondary = str(getattr(emp, 'secondary_card_number', '') or '')
+            new_primary = _normalize_persistent_card_code(old_primary)
+            new_secondary = _normalize_persistent_card_code(old_secondary)
+            if new_primary and new_secondary and new_primary == new_secondary:
+                new_secondary = ''
+                secondary_cleared += 1
+
+            if old_primary != new_primary or old_secondary != new_secondary:
+                emp.card_number = new_primary
+                emp.secondary_card_number = (new_secondary or None)
+                emp_updates.append(emp)
+                emp_changed += 1
+
+        ec_qs = EmployeeCard.objects.only('id', 'card_number').order_by('id')
+        for ec in ec_qs:
+            old_num = str(getattr(ec, 'card_number', '') or '')
+            new_num = _normalize_persistent_card_code(old_num)
+            if old_num != new_num:
+                ec.card_number = new_num
+                card_updates.append(ec)
+                card_changed += 1
+
+        if (not dry_run) and emp_updates:
+            Employee.objects.bulk_update(emp_updates, ['card_number', 'secondary_card_number'])
+        if (not dry_run) and card_updates:
+            EmployeeCard.objects.bulk_update(card_updates, ['card_number'])
+
+        # Post-normalization conflict report (non-destructive, informational only)
+        owners: dict[str, list[str]] = {}
+        for emp in Employee.objects.only('id', 'card_number', 'secondary_card_number').order_by('id')[:5000]:
+            p = _normalize_persistent_card_code(getattr(emp, 'card_number', ''))
+            s = _normalize_persistent_card_code(getattr(emp, 'secondary_card_number', ''))
+            if p:
+                owners.setdefault(p, []).append(f"employee:{int(emp.id)}:primary")
+            if s:
+                owners.setdefault(s, []).append(f"employee:{int(emp.id)}:secondary")
+        for ec in EmployeeCard.objects.only('id', 'employee_id', 'card_number').order_by('id')[:5000]:
+            c = _normalize_persistent_card_code(getattr(ec, 'card_number', ''))
+            if c:
+                owners.setdefault(c, []).append(f"employeecard:{int(ec.id)}:employee:{int(getattr(ec, 'employee_id', 0) or 0)}")
+
+        conflicts = []
+        for cno, refs in owners.items():
+            uniq = sorted(set(refs))
+            if len(uniq) > 1:
+                conflicts.append({'card_number': cno, 'owners': uniq[:6], 'owner_count': len(uniq)})
+            if len(conflicts) >= 30:
+                break
+
+        return JsonResponse({
+            'ok': True,
+            'dry_run': bool(dry_run),
+            'employees_changed': int(emp_changed),
+            'employee_cards_changed': int(card_changed),
+            'secondary_cleared': int(secondary_cleared),
+            'conflicts': conflicts,
+            'conflict_count': int(len(conflicts)),
+        })
+    except Exception as e:
+        return JsonResponse({'ok': False, 'error': str(e)}, status=500)
 
 
 def system_comm_password_save(request: HttpRequest):
@@ -610,6 +879,17 @@ def monitor_rtlog_json(request: HttpRequest):
         limit = 200
     limit = max(1, min(limit, 500))
 
+    # Audit stream (door/device-status) for polling fallback when WS is unavailable.
+    try:
+        after_audit_id = int(request.GET.get('after_audit_id') or 0)
+    except Exception:
+        after_audit_id = 0
+    try:
+        audit_limit = int(request.GET.get('audit_limit') or 200)
+    except Exception:
+        audit_limit = 200
+    audit_limit = max(0, min(audit_limit, 500))
+
     if after_id:
         qs = DeviceRealtimeLog.objects.filter(id__gt=after_id).order_by('id')[:limit]
     else:
@@ -633,7 +913,41 @@ def monitor_rtlog_json(request: HttpRequest):
             'created_at': created,
         })
         last_id = r.id
-    return JsonResponse({'ok': True, 'rows': rows, 'last_id': last_id})
+
+    audit_rows = []
+    last_audit_id = after_audit_id
+    if audit_limit:
+        try:
+            from .models import AuditLog
+
+            audit_modules = ['door', 'device-status']
+            if after_audit_id:
+                aqs = AuditLog.objects.filter(id__gt=after_audit_id, module__in=audit_modules).order_by('id')[:audit_limit]
+            else:
+                newest_a = list(AuditLog.objects.filter(module__in=audit_modules).order_by('-id')[:audit_limit])
+                newest_a.reverse()
+                aqs = newest_a
+
+            for a in aqs:
+                try:
+                    ts = a.timestamp.isoformat() if getattr(a, 'timestamp', None) else None
+                except Exception:
+                    ts = None
+                audit_rows.append({
+                    'id': a.id,
+                    'timestamp': ts,
+                    'module': a.module or '',
+                    'action': a.action or '',
+                    'entity_id': a.entity_id,
+                    'entity_name': a.entity_name or '',
+                    'details': a.details or '',
+                })
+                last_audit_id = a.id
+        except Exception:
+            audit_rows = []
+            last_audit_id = after_audit_id
+
+    return JsonResponse({'ok': True, 'rows': rows, 'last_id': last_id, 'audit_rows': audit_rows, 'last_audit_id': last_audit_id})
 
 def status_summary(request: HttpRequest):
     if not request.user.is_authenticated:
@@ -1464,6 +1778,293 @@ def device_admin_test(request: HttpRequest):
         )
     except Exception as e:
         return JsonResponse({'ok': False, 'ip': ip, 'port': port, 'error': f'admin-test-exception: {e}'}, status=200)
+
+
+def device_configure_adms(request: HttpRequest, device_id: int):
+    """GET: show ADMS push configuration form for a device.
+    POST action=set:   push ServerAddr/ServerPort/CLOUDSERVICEFLAG via SetDeviceParam.
+    POST action=clear: clear ADMS params (disable push).
+    GET  ?action=read: return current ADMS params as JSON.
+
+    Returns JSON for POST/read, HTML fragment for GET (for modal embedding).
+    Requires staff.
+    """
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'unauth'}, status=403)
+
+    try:
+        dev = Device.objects.get(pk=device_id)
+    except Device.DoesNotExist:
+        return JsonResponse({'ok': False, 'error': 'device-not-found'}, status=404)
+
+    # ── helpers ──────────────────────────────────────────────────────────────
+    def _conn():
+        from .plcommpro_bridge import PlcommproConnInfo
+        return PlcommproConnInfo(
+            ipaddress=str(dev.ip_address or ''),
+            ip_port=int(dev.port or 4370),
+            password=str(dev.comm_password or ''),
+            timeout=4000,
+        )
+
+    def _read_adms_params():
+        try:
+            from .plcommpro_bridge import get_device_options
+            resp = get_device_options(_conn(), 'ServerAddr,ServerPort,CLOUDSERVICEFLAG,ADMSServerIP')
+            if not resp.get('ok'):
+                return None, resp.get('last_error') or 'read-failed'
+            raw = resp.get('data') or ''
+            params: dict = {}
+            for pair in raw.replace('\r\n', '\n').replace('\r', '\n').split('\n'):
+                pair = pair.strip()
+                if '=' in pair:
+                    k, _, v = pair.partition('=')
+                    params[k.strip()] = v.strip()
+            return params, None
+        except Exception as e:
+            return None, str(e)
+
+    def _queue_adms_getrequest(items: str, note: str) -> tuple[bool, str]:
+        """Best-effort fallback: queue iClock/ADMS commands to be served via /iclock/getrequest.
+
+        This path works even when plcommpro can't connect (e.g. panel blocks SDK port)
+        as long as the device is polling our /iclock/getrequest endpoint.
+        """
+        try:
+            from .models import CommandLog
+
+            # Try a conservative command shape commonly accepted by iClock devices.
+            # Use one line to keep device parsing simple.
+            payload = f"SET OPTION {items}".strip()
+            if not payload:
+                return False, 'empty-payload'
+
+            CommandLog.objects.create(
+                device=dev,
+                command=f"ADMS_RAW:{payload}\n",
+                status='PENDING',
+            )
+            _audit_log(
+                request, module='device', action='adms_configure_getrequest',
+                entity_id=dev.id, entity_name=dev.name or '',
+                details=(note or '')[:500],
+            )
+            return True, ''
+        except Exception as e:
+            return False, str(e)
+
+    # ── JSON actions ─────────────────────────────────────────────────────────
+    action = (request.GET.get('action') or request.POST.get('action') or '').strip()
+
+    if action == 'read':
+        params, err = _read_adms_params()
+        if err:
+            return JsonResponse({'ok': False, 'error': err})
+        return JsonResponse({'ok': True, 'params': params})
+
+    if request.method == 'POST':
+        if action == 'set':
+            server_addr = (request.POST.get('server_addr') or '').strip()
+            server_port = (request.POST.get('server_port') or '8000').strip()
+            if not server_addr:
+                return JsonResponse({'ok': False, 'error': 'server_addr-required'}, status=400)
+            try:
+                server_port_int = int(server_port)
+            except ValueError:
+                server_port_int = 8000
+
+            web_url = f'http://{server_addr}:{server_port_int}'
+            items = (
+                f'ServerAddr={server_addr}'
+                f',ServerPort={server_port_int}'
+                f',CLOUDSERVICEFLAG=1'
+                f',ADMSServerIP={server_addr}'
+                f',WebServerURL={web_url}'
+            )
+
+            # Also enable common realtime flags (some firmwares require these for /iclock/cdata uploads).
+            # Safe if ignored.
+            items_with_flags = items + ',TransFlag=1,Realtime=1,RTLog=1,TransInterval=1'
+
+            # Try direct bridge first.  This works when CommCenter is NOT running.
+            bridge_ok = False
+            try:
+                from .plcommpro_bridge import set_device_options
+                resp = set_device_options(_conn(), items_with_flags)
+                bridge_ok = bool(resp.get('ok'))
+            except Exception:
+                resp = {}
+
+            if bridge_ok:
+                _audit_log(
+                    request, module='device', action='adms_configure',
+                    entity_id=dev.id, entity_name=dev.name or '',
+                    details=f'ServerAddr={server_addr} ServerPort={server_port_int} (direct)',
+                )
+                return JsonResponse({'ok': True, 'items_sent': items_with_flags, 'result': resp.get('result')})
+
+            # Bridge unavailable (CommCenter holds the connection) — queue via CommandLog.
+            # CommCenter's _process_one_command handles SET_OPTION: using the open driver.
+            try:
+                from .models import CommandLog
+                CommandLog.objects.create(
+                    device=dev,
+                    command=f'SET_OPTION:{items_with_flags}',
+                    status='PENDING',
+                )
+            except Exception as e:
+                return JsonResponse({'ok': False, 'error': f'queue-failed: {e}'}, status=500)
+
+            # Fallback: also queue a getrequest-delivered command (works when plcommpro is dead).
+            _queue_adms_getrequest(
+                items_with_flags,
+                note=f'GETREQUEST fallback ServerAddr={server_addr} ServerPort={server_port_int}',
+            )
+
+            _audit_log(
+                request, module='device', action='adms_configure',
+                entity_id=dev.id, entity_name=dev.name or '',
+                details=f'ServerAddr={server_addr} ServerPort={server_port_int} (queued via CommCenter)',
+            )
+            return JsonResponse({
+                'ok': True,
+                'queued': True,
+                'note': (
+                    f'CommCenter este ocupat cu conexiunea. '
+                    f'Comanda a fost pusă în coadă — centrala va primi parametrii '
+                    f'({server_addr}:{server_port_int}) la următorul ciclu de poll.'
+                ),
+            })
+
+        if action == 'clear':
+            items = 'ServerAddr=,ServerPort=,CLOUDSERVICEFLAG=0,ADMSServerIP=,WebServerURL=,TransFlag=0,Realtime=0,RTLog=0'
+
+            # Try direct bridge first.
+            bridge_ok = False
+            try:
+                from .plcommpro_bridge import set_device_options
+                resp = set_device_options(_conn(), items)
+                bridge_ok = bool(resp.get('ok'))
+            except Exception:
+                resp = {}
+
+            if bridge_ok:
+                return JsonResponse({'ok': True})
+
+            # Queue via CommandLog fallback.
+            try:
+                from .models import CommandLog
+                CommandLog.objects.create(
+                    device=dev,
+                    command=f'SET_OPTION:{items}',
+                    status='PENDING',
+                )
+            except Exception as e:
+                return JsonResponse({'ok': False, 'error': f'queue-failed: {e}'}, status=500)
+
+            _queue_adms_getrequest(items, note='GETREQUEST fallback clear ADMS params')
+
+            return JsonResponse({
+                'ok': True,
+                'queued': True,
+                'note': 'Comanda de ștergere ADMS a fost pusă în coadă.',
+            })
+
+        return JsonResponse({'ok': False, 'error': 'unknown-action'}, status=400)
+
+    # ── GET — HTML form fragment ──────────────────────────────────────────────
+    current_params, _ = _read_adms_params()
+
+    # Detect server IP visible from the device's subnet.
+    # Use multiple methods and prefer non-loopback LAN addresses.
+    import socket as _socket
+    _lan_ips: list = []
+    try:
+        # Method 1: routing-based (SOCK_DGRAM doesn't send packets, just uses routing table)
+        _s = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
+        _s.connect((str(dev.ip_address or '192.168.1.1'), 4370))
+        _lan_ips.append(_s.getsockname()[0])
+        _s.close()
+    except Exception:
+        pass
+    try:
+        # Method 2: enumerate interfaces via hostname resolution
+        for _info in _socket.getaddrinfo(_socket.gethostname(), None, _socket.AF_INET):
+            _ip = _info[4][0]
+            if _ip not in _lan_ips:
+                _lan_ips.append(_ip)
+    except Exception:
+        pass
+    # Prefer first non-loopback IP; fall back to loopback only if nothing else found
+    suggested_ip = next((_ip for _ip in _lan_ips if not _ip.startswith('127.')), _lan_ips[0] if _lan_ips else '')
+
+    # Port: use the actual port from the incoming HTTP request — always correct,
+    # works with runserver, Daphne, or any other server regardless of INI state.
+    suggested_port = str(request.META.get('SERVER_PORT', '8000'))
+
+    # ── Auto-apply: queue SET_OPTION command via CommCenter immediately on GET ──
+    # This means just opening the ⚡ ADMS modal configures the device automatically.
+    auto_queued = False
+    auto_error = ''
+    if suggested_ip and not suggested_ip.startswith('127.'):
+        _web_url = f'http://{suggested_ip}:{suggested_port}'
+        _items = (
+            f'ServerAddr={suggested_ip}'
+            f',ServerPort={suggested_port}'
+            f',CLOUDSERVICEFLAG=1'
+            f',ADMSServerIP={suggested_ip}'
+            f',WebServerURL={_web_url}'
+            f',TransFlag=1,Realtime=1,RTLog=1,TransInterval=1'
+        )
+        # Try direct bridge first (works when CommCenter is stopped)
+        _bridge_ok = False
+        try:
+            from .plcommpro_bridge import set_device_options as _sdo
+            _resp = _sdo(_conn(), _items)
+            _bridge_ok = bool(_resp.get('ok'))
+        except Exception:
+            pass
+
+        if _bridge_ok:
+            auto_queued = True
+            _audit_log(
+                request, module='device', action='adms_configure_auto',
+                entity_id=dev.id, entity_name=dev.name or '',
+                details=f'AUTO ServerAddr={suggested_ip} ServerPort={suggested_port} (direct)',
+            )
+        else:
+            # Fallback: queue via CommandLog for CommCenter to process
+            try:
+                from .models import CommandLog
+                # Remove any older pending ADMS SET_OPTION commands for this device to avoid duplicates
+                CommandLog.objects.filter(
+                    device=dev,
+                    status='PENDING',
+                    command__startswith='SET_OPTION:ServerAddr=',
+                ).delete()
+                CommandLog.objects.create(
+                    device=dev,
+                    command=f'SET_OPTION:{_items}',
+                    status='PENDING',
+                )
+                auto_queued = True
+                _audit_log(
+                    request, module='device', action='adms_configure_auto',
+                    entity_id=dev.id, entity_name=dev.name or '',
+                    details=f'AUTO QUEUED ServerAddr={suggested_ip} ServerPort={suggested_port}',
+                )
+            except Exception as _e:
+                auto_error = str(_e)
+
+    ctx = {
+        'device': dev,
+        'current_params': current_params or {},
+        'suggested_ip': suggested_ip,
+        'suggested_port': str(suggested_port),
+        'auto_queued': auto_queued,
+        'auto_error': auto_error,
+    }
+    return render(request, 'agent/device_adms_form_inner.html', ctx)
 
 
 def device_discover(request: HttpRequest):
@@ -7064,7 +7665,7 @@ def wizard_door_draft_edit(request: HttpRequest, door_no: int):
         'verify_mode': door_state.get('verify_mode', 'only_card'),
         'duress_password': str(door_state.get('duress_password') or ''),
         'emergency_password': str(door_state.get('emergency_password') or ''),
-        'normally_open': bool(door_state.get('normally_open', True)),
+        'normally_open': bool(door_state.get('normally_open', False)),
         'enabled': bool(door_state.get('enabled', True)),
     }
 
@@ -7537,10 +8138,11 @@ def device_operation_access(request: HttpRequest, pk: int, op: str):
                     try:
                         from .plcommpro_bridge import PlcommproConnInfo, get_device_options
 
+                        eff_pw = (str(dev.comm_password or '').strip() or _get_default_comm_password_cached())
                         conn = PlcommproConnInfo(
                             ipaddress=str(dev.ip_address),
                             ip_port=int(dev.port or 4370),
-                            password=str(dev.comm_password or ''),
+                            password=eff_pw,
                             timeout=3000,
                         )
                         resp = get_device_options(conn, 'NetMask,GATEIPAddress')
@@ -7566,10 +8168,11 @@ def device_operation_access(request: HttpRequest, pk: int, op: str):
                 try:
                     from .plcommpro_bridge import PlcommproConnInfo, set_device_options
 
+                    eff_pw = (str(dev.comm_password or '').strip() or _get_default_comm_password_cached())
                     conn = PlcommproConnInfo(
                         ipaddress=str(dev.ip_address),
                         ip_port=int(dev.port or 4370),
-                        password=str(dev.comm_password or ''),
+                        password=eff_pw,
                         timeout=3000,
                     )
                     items = f"IPAddress={ip_address},GATEIPAddress={gateway},NetMask={subnet_mask}"
@@ -7693,10 +8296,11 @@ def device_operation_access(request: HttpRequest, pk: int, op: str):
                     from .plcommpro_bridge import PlcommproConnInfo, set_device_options, bridge_available
 
                     if dev.ip_address and bridge_available():
+                        eff_pw = (str(dev.comm_password or '').strip() or _get_default_comm_password_cached())
                         conn = PlcommproConnInfo(
                             ipaddress=str(dev.ip_address),
                             ip_port=int(dev.port or 4370),
-                            password=str(dev.comm_password or ''),
+                            password=eff_pw,
                             timeout=3000,
                             protocol='TCP',
                         )
@@ -7862,7 +8466,7 @@ def device_operation_access(request: HttpRequest, pk: int, op: str):
             conn = PlcommproConnInfo(
                 ipaddress=str(dev.ip_address),
                 ip_port=int(dev.port or 4370),
-                password=str(dev.comm_password or ''),
+                password=(str(dev.comm_password or '').strip() or _get_default_comm_password_cached()),
                 timeout=3000,
             )
             resp = get_device_options(conn, 'NetMask,GATEIPAddress')
@@ -7924,10 +8528,11 @@ def device_operation_access(request: HttpRequest, pk: int, op: str):
                 ctx['show_device_data'] = bool(show_device)
 
                 if dev.ip_address and bridge_available():
+                    eff_pw = (str(dev.comm_password or '').strip() or _get_default_comm_password_cached())
                     conn = PlcommproConnInfo(
                         ipaddress=str(dev.ip_address),
                         ip_port=int(dev.port or 4370),
-                        password=str(dev.comm_password or ''),
+                        password=eff_pw,
                         timeout=3000,
                         protocol='TCP',
                     )
@@ -9359,6 +9964,7 @@ def issuecard_json_create(request: HttpRequest):
         from .models import Employee as AgentEmployee
         emp = AgentEmployee.objects.get(pk=emp_id)
         num = payload.get('card_number','').strip()
+        num = _normalize_persistent_card_code(num)
         if not num:
             return JsonResponse({'ok': False,'error':'card_number required'}, status=400)
         slot = (payload.get('slot') or 'additional').lower().strip()
@@ -9554,6 +10160,22 @@ def issuecard_json_delete(request: HttpRequest, pk: str):
 
 from django.core.cache import cache
 
+
+def _normalize_reader_card_code(value: str) -> str:
+    """Normalize a raw reader value into a stable alphanumeric card code.
+
+    Readers can emit decimal, hex, or delimited UID strings. We keep only
+    letters/digits and uppercase so the code is stable and safe to compare.
+    """
+    try:
+        return _prefer_numeric_card_code(value)
+    except Exception:
+        try:
+            return str(value or "").strip()
+        except Exception:
+            return ""
+
+@csrf_exempt
 def card_read_push(request: HttpRequest):
     # Hardware or external services POST here the latest read card
     if request.method != 'POST':
@@ -9561,26 +10183,262 @@ def card_read_push(request: HttpRequest):
     import json
     try:
         payload = json.loads(request.body.decode('utf-8'))
-        card_number = (payload.get('card_number') or '').strip()
+        card_number_raw = (payload.get('card_number') or '').strip()
         source = (payload.get('source') or 'unknown').strip()
+        card_number = _normalize_reader_card_code(card_number_raw)
         if not card_number:
             return JsonResponse({'ok': False, 'error': 'card_number required'}, status=400)
-        cache.set('agent:last_card_read', {'card_number': card_number, 'source': source}, timeout=60)
-        return JsonResponse({'ok': True})
+
+        # Best-effort: resolve door/device context for nicer monitor rendering.
+        resolved_device_id = 0
+        resolved_door_pk = 0
+        resolved_sn = ''
+        door_number = ''
+        try:
+            from .models import Door, Device
+
+            door_pk = payload.get('door_pk')
+            device_id = payload.get('device_id')
+            door_id = payload.get('door_id')
+
+            door_obj = None
+            if door_pk:
+                try:
+                    door_obj = Door.objects.select_related('device').filter(pk=int(door_pk)).first()
+                except Exception:
+                    door_obj = None
+            elif device_id and door_id:
+                # `door_id` from config is typically the door_number on the controller.
+                try:
+                    dn = int(str(door_id))
+                    door_obj = Door.objects.select_related('device').filter(device_id=int(device_id), door_number=dn).first()
+                except Exception:
+                    door_obj = None
+
+            if door_obj is not None:
+                resolved_door_pk = int(getattr(door_obj, 'id', 0) or 0)
+                resolved_device_id = int(getattr(door_obj, 'device_id', 0) or 0)
+                door_number = str(getattr(door_obj, 'door_number', '') or '')
+                dev = getattr(door_obj, 'device', None)
+                if dev is not None:
+                    resolved_sn = str(getattr(dev, 'serial_number', '') or '')
+            else:
+                if device_id:
+                    try:
+                        resolved_device_id = int(device_id)
+                    except Exception:
+                        resolved_device_id = 0
+                if resolved_device_id:
+                    try:
+                        dev = Device.objects.filter(pk=int(resolved_device_id)).first()
+                        if dev is not None:
+                            resolved_sn = str(getattr(dev, 'serial_number', '') or '')
+                    except Exception:
+                        resolved_sn = resolved_sn
+                # Try to keep door_number even if we can't resolve a Door row.
+                if door_id and str(door_id).strip().isdigit():
+                    door_number = str(int(str(door_id).strip()))
+                elif resolved_device_id:
+                    # Fallback: if the controller has exactly one configured door,
+                    # use it so access_evaluate_and_open can issue a remote open command.
+                    try:
+                        one = (
+                            Door.objects
+                            .filter(device_id=int(resolved_device_id))
+                            .exclude(door_number__isnull=True)
+                            .exclude(door_number=0)
+                            .only('door_number')
+                            .order_by('id')[:2]
+                        )
+                        if len(one) == 1:
+                            door_number = str(getattr(one[0], 'door_number', '') or '')
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        # Persist into the same stream used by controller RTLOG so polling fallback works.
+        try:
+            from django.utils import timezone
+            ts = timezone.localtime().strftime('%Y-%m-%d %H:%M:%S')
+            dn = door_number if door_number else '0'
+            raw_line = f"{ts},0,{card_number},{dn},0,CITITOR EXTERN,{source}"
+            DeviceRealtimeLog.objects.create(device_id=int(resolved_device_id or 0), sn=str(resolved_sn or ''), raw=raw_line)
+        except Exception:
+            raw_line = None
+
+        # Cache for simple UI workflows that poll last-card-read.
+        cache.set(
+            'agent:last_card_read',
+            {
+                'card_number': card_number,
+                'card_number_raw': card_number_raw,
+                'source': source,
+                'device_id': int(resolved_device_id or 0),
+                'door_number': door_number,
+            },
+            timeout=60,
+        )
+
+        # Instant: broadcast to Live Monitor WebSocket group.
+        try:
+            from asgiref.sync import async_to_sync
+            from channels.layers import get_channel_layer
+
+            if raw_line:
+                layer = get_channel_layer()
+                if layer:
+                    async_to_sync(layer.group_send)(
+                        'monitor',
+                        {
+                            'type': 'monitor_event',
+                            'payload': {
+                                'type': 'rtlog.batch',
+                                'device_id': int(resolved_device_id or 0),
+                                'lines': [raw_line],
+                            },
+                        },
+                    )
+        except Exception:
+            pass
+
+        eval_data = None
+        # Optional evaluation path. Keep monitor broadcast above so operators
+        # see the scan immediately even if evaluate/open takes longer.
+        try:
+            verify_raw = str(payload.get('verify_access') or '').strip().lower()
+            do_verify = verify_raw not in ('0', 'false', 'no', 'off')
+            if do_verify:
+                open_all = str(payload.get('open_all') or '').strip().lower() in ('1', 'true', 'yes', 'all')
+                # Remote open must be explicit in payload to avoid unintended
+                # auto-open behavior from generic integrations.
+                remote_open = str(payload.get('remote_open') or '').strip().lower() in ('1', 'true', 'yes', 'on')
+
+                eval_payload = {
+                    'card_number': card_number,
+                    'source': source,
+                    'device_id': int(resolved_device_id or 0),
+                    'door_id': str(door_number or ''),
+                    'door_pk': int(payload.get('door_pk') or resolved_door_pk or 0) or None,
+                    'open_all': open_all,
+                    'remote_open': remote_open,
+                }
+
+                eval_req = SimpleNamespace(
+                    method='POST',
+                    body=json.dumps(eval_payload).encode('utf-8'),
+                    user=(
+                        request.user
+                        if (hasattr(request, 'user') and bool(getattr(request.user, 'is_authenticated', False)))
+                        else SimpleNamespace(
+                            is_authenticated=True,
+                            is_staff=True,
+                            is_superuser=False,
+                            username='card_reader',
+                        )
+                    ),
+                    META={
+                        'REMOTE_ADDR': request.META.get('REMOTE_ADDR') if hasattr(request, 'META') else '127.0.0.1',
+                    },
+                    GET={},
+                )
+
+                eval_resp = access_evaluate_and_open(cast(HttpRequest, eval_req))
+                try:
+                    eval_data = json.loads(eval_resp.content.decode('utf-8')) if hasattr(eval_resp, 'content') else None
+                except Exception:
+                    eval_data = None
+        except Exception:
+            eval_data = None
+        return JsonResponse({'ok': True, 'access_eval': eval_data})
     except Exception as e:
         return JsonResponse({'ok': False, 'error': str(e)}, status=400)
 
 def card_read_wait(request: HttpRequest):
     # UI polls this for up to a short timeout to get the last card read
     from time import sleep
-    tries = 10
+    import re
+    # 0.1s granularity to keep scan-to-UI latency under ~1s.
+    tries = 50
     while tries > 0:
         data = cache.get('agent:last_card_read')
         if data:
             # Clear after read
             cache.delete('agent:last_card_read')
-            return JsonResponse({'ok': True, 'card_number': data.get('card_number'), 'source': data.get('source')})
-        sleep(1)
+            return JsonResponse({
+                'ok': True,
+                'card_number': data.get('card_number'),
+                'card_number_raw': data.get('card_number_raw'),
+                'source': data.get('source'),
+                'device_id': data.get('device_id'),
+                'door_number': data.get('door_number'),
+            })
+
+        # Controller-only fallback: read latest DeviceRealtimeLog lines coming
+        # from CommCenter polling (GetRTLog / transaction / rtlog tables).
+        # This enables card enrollment using ONLY the controller readers.
+        # Legacy/controller fallback: if cache isn't being set for any reason,
+        # attempt a lightweight DB scan occasionally.
+        # (Only every ~1s to avoid hammering the DB at 10Hz.)
+        if tries % 10 != 0:
+            sleep(0.1)
+            tries -= 1
+            continue
+
+        try:
+            from agent.models import DeviceRealtimeLog
+
+            last_sent_id = int(cache.get('agent:last_card_read_rtlog_id') or 0)
+            qs = DeviceRealtimeLog.objects.filter(id__gt=last_sent_id).order_by('-id')[:50]
+
+            def _extract_from_raw(raw_line: str):
+                raw_line = (raw_line or '').strip()
+                if not raw_line:
+                    return None
+                # Normalize separators for parsing
+                normalized = raw_line
+                if "\t" in normalized and "," not in normalized:
+                    normalized = normalized.replace("\t", ",")
+                if ";" in normalized and "," not in normalized and normalized.count(';') >= 2:
+                    normalized = normalized.replace(";", ",")
+                parts = [p.strip() for p in normalized.split(',')]
+
+                # Format A: ts,pin,card,door,code,verify,...
+                looks_ts = bool(parts and (len(parts[0]) >= 10) and ('-' in parts[0]) and parts[0][:4].isdigit())
+                if looks_ts:
+                    card = parts[2] if len(parts) > 2 else ''
+                    door = parts[3] if len(parts) > 3 else ''
+                else:
+                    # Format B: pin,verified,door,eventType,inOut,time_second[,index],cardno,sitecode
+                    door = parts[2] if len(parts) > 2 else ''
+                    if len(parts) >= 9:
+                        card = parts[7] if len(parts) > 7 else ''
+                    else:
+                        card = parts[6] if len(parts) > 6 else ''
+
+                card = re.sub(r'[^0-9A-Za-z]+', '', str(card or '')).upper()
+                if not card or card in {'0', '000000', '0000000', '00000000'}:
+                    return None
+                return card, door
+
+            for row in qs:
+                extracted = _extract_from_raw(getattr(row, 'raw', ''))
+                if not extracted:
+                    continue
+                card_number, door_number = extracted
+                cache.set('agent:last_card_read_rtlog_id', int(row.id), timeout=3600)
+                return JsonResponse({
+                    'ok': True,
+                    'card_number': card_number,
+                    'card_number_raw': card_number,
+                    'source': 'controller_rtlog',
+                    'device_id': getattr(row, 'device_id', None),
+                    'door_number': door_number,
+                })
+        except Exception:
+            pass
+
+        sleep(0.1)
         tries -= 1
     return JsonResponse({'ok': False, 'error': 'timeout'}, status=408)
 
@@ -9725,17 +10583,9 @@ def access_evaluate_and_open(request: HttpRequest):
         from django.utils import timezone
         from .models import Employee as AgentEmployee, EmployeeCard, Door, AccessLevel, TimeSegment, Holiday, EmployeeAccessCache
 
+        card_number = _prefer_numeric_card_code(card_number)
         base_card = str(card_number or '').strip()
-        variants = []
-        compact = base_card.replace(' ', '')
-        variants.extend([base_card, base_card.upper(), base_card.lower(), compact, compact.upper(), compact.lower()])
-        if base_card.isdigit():
-            trimmed = base_card.lstrip('0') or '0'
-            variants.extend([trimmed, trimmed.upper(), trimmed.lower()])
-        seen = set(); card_candidates = []
-        for v in variants:
-            if v and v not in seen:
-                seen.add(v); card_candidates.append(v)
+        card_candidates = _expand_card_lookup_variants(base_card)
 
         emp = None
         matched_card = base_card
@@ -9811,6 +10661,12 @@ def access_evaluate_and_open(request: HttpRequest):
                     if seg_ok:
                         time_ok_any = True
                     for d in al.doors.all():
+                        try:
+                            dev = getattr(d, 'device', None)
+                            if dev is not None and not bool(getattr(dev, 'enabled', True)):
+                                continue
+                        except Exception:
+                            pass
                         door_map[d.id] = d
                         if seg_ok:
                             door_ids_allowed_raw.add(d.id)
@@ -9888,13 +10744,17 @@ def access_evaluate_and_open(request: HttpRequest):
             try:
                 # Prevent door command AuditLog spam for evaluate-driven opens.
                 setattr(request, '_agent_suppress_door_audit', True)
-                if door_pk:
+                if door is not None and getattr(door, 'id', None):
+                    resp = door_pk_open(request, int(getattr(door, 'id')))
+                elif door_pk:
                     resp = door_pk_open(request, int(door_pk))
                 elif device_id and door_id:
                     resp = door_open(request, int(device_id), str(door_id))
                 else:
                     resp = None
                 door_open_ok = bool(resp is None or getattr(resp, 'status_code', 200) < 400)
+                if not door_open_ok and 'door_open_failed' not in reasons:
+                    reasons.append('door_open_failed')
             except Exception:
                 door_open_ok = False
                 reasons.append('door_open_failed')
@@ -11102,11 +11962,21 @@ def _enqueue(device_id: int, cmd: str, door: Door | None = None) -> bool:
     try:
         import agent.modern_comm_center as mcc
         center = getattr(mcc, 'ACTIVE_CENTER', None)
+        if center is None:
+            try:
+                center = getattr(mcc, 'build_and_run_stub')(poll_interval=0.25, driver='auto')
+                mcc.ACTIVE_CENTER = center
+            except Exception:
+                center = None
         # If CommCenter is running in this same process, enqueue via in-memory queue
         # and prefix with LOGID so CommCenter can update this CommandLog row.
         if center is not None:
             try:
                 center.enqueue_command(device_id, f"LOGID:{int(log.id)} {cmd}"[:240])
+                try:
+                    center._process_one_command()
+                except Exception:
+                    pass
                 try:
                     log.status = 'RUNNING'
                     log.result = 'queued'
@@ -11169,15 +12039,86 @@ def _persist_and_broadcast_status(device_id: int, door_state: str, online: bool 
 
 
 def _broadcast_door_event(device_id: int, door_obj, event_type: str, verify_mode: str = '') -> None:
-    """Best-effort broadcast for monitor UI so operators always see door open/close lines."""
+    """Best-effort broadcast for monitor UI so operators always see door lines.
+
+    Also persists the event to AuditLog (module='door') so door operations are
+    always recorded even when triggered internally (timers/CommCenter) and
+    WebSockets are unavailable.
+    """
     try:
+        import json as _json
+        from django.utils import timezone
         from channels.layers import get_channel_layer
         from asgiref.sync import async_to_sync
+
+        # Prepare identifiers early; persistence should not depend on WS.
+        door_id_val = int(getattr(door_obj, 'id', 0) or 0) if door_obj is not None else 0
+        door_name = ''
+        try:
+            door_name = getattr(door_obj, 'name', '') if door_obj is not None else ''
+        except Exception:
+            door_name = ''
+
+        # Persist to durable AuditLog (best-effort, de-duped).
+        try:
+            from agent.models import AuditLog
+            from .event_codes import describe_door_event_type as _door_desc
+
+            et = str(event_type or '').strip()
+            action = et.split('.', 1)[1] if '.' in et else et
+            # Normalize action names to match existing log consumers.
+            action_map = {
+                'open': 'open',
+                'close': 'close',
+                'lock': 'lock',
+                'unlock': 'unlock',
+                'normal_open': 'normal-open',
+                'normal_close': 'normal-close',
+                'cancel_alarm': 'cancel-alarm',
+                'normal-open': 'normal-open',
+                'normal-close': 'normal-close',
+                'cancel-alarm': 'cancel-alarm',
+            }
+            action_norm = action_map.get(action, action or 'event')
+
+            now = timezone.now()
+            try:
+                last = (
+                    AuditLog.objects.filter(module='door', action=action_norm, entity_id=int(door_id_val))
+                    .only('timestamp')
+                    .order_by('-timestamp')
+                    .first()
+                )
+            except Exception:
+                last = None
+            if last is None or abs((now - getattr(last, 'timestamp', now)).total_seconds()) > 2:
+                details = _json.dumps(
+                    {
+                        'door_id': int(door_id_val),
+                        'door_name': str(door_name or ''),
+                        'device_id': int(device_id),
+                        'event_description': _door_desc(et) if et else et,
+                        'status_text': 'OK',
+                        'verify_mode': str(verify_mode or ''),
+                        'remote_open': True,
+                    },
+                    ensure_ascii=False,
+                )
+                AuditLog.objects.create(
+                    module='door',
+                    action=str(action_norm)[:32],
+                    entity_id=int(door_id_val),
+                    entity_name=(door_name or f"door_id={door_id_val} device_id={int(device_id)}")[:256],
+                    user=None,
+                    ip_address=None,
+                    details=details,
+                )
+        except Exception:
+            pass
 
         layer = get_channel_layer()
         if not layer:
             return
-        door_id_val = int(getattr(door_obj, 'id', 0) or 0) if door_obj is not None else 0
         payload = {
             "type": str(event_type or ''),
             "device_id": int(device_id),
@@ -11187,9 +12128,8 @@ def _broadcast_door_event(device_id: int, door_obj, event_type: str, verify_mode
             "verify_mode": str(verify_mode or ''),
         }
         try:
-            nm = getattr(door_obj, 'name', '') if door_obj is not None else ''
-            if nm:
-                payload["door_name"] = nm
+            if door_name:
+                payload["door_name"] = door_name
         except Exception:
             pass
         async_to_sync(layer.group_send)("monitor", {"type": "monitor_event", "payload": payload})
@@ -11223,6 +12163,12 @@ def _door_can_open_now(door_obj) -> tuple[bool, str]:
             return (False, 'door_not_found')
         if getattr(door_obj, 'device_id', None) is None:
             return (False, 'door_unassigned')
+        try:
+            dev = getattr(door_obj, 'device', None)
+            if dev is not None and not bool(getattr(dev, 'enabled', True)):
+                return (False, 'device_disabled')
+        except Exception:
+            pass
         if getattr(door_obj, 'door_number', None) in (None, 0, ''):
             return (False, 'door_not_configured')
         seg = getattr(door_obj, 'door_active_time_zone', None)
@@ -11236,6 +12182,26 @@ def _door_can_open_now(door_obj) -> tuple[bool, str]:
         return (True, '')
     except Exception:
         return (False, 'schedule_check_failed')
+
+
+def _door_effective_mode(door_obj) -> str:
+    """Return effective command mode for a door: 'normal' or 'pulse'."""
+    try:
+        if door_obj is not None and bool(getattr(door_obj, 'normally_open', False)):
+            return 'normal'
+    except Exception:
+        pass
+    return 'pulse'
+
+
+def _door_command_for_action(door_obj, action: str) -> str:
+    mode = _door_effective_mode(door_obj)
+    action = str(action or '').strip().lower()
+    if action == 'open':
+        return 'DOOR_NORMAL_OPEN' if mode == 'normal' else 'DOOR_OPEN'
+    if action == 'close':
+        return 'DOOR_NORMAL_CLOSE' if mode == 'normal' else 'DOOR_CLOSE'
+    return 'DOOR_OPEN'
 
 
 # Best-effort server-side auto-close scheduling.
@@ -11335,7 +12301,11 @@ def door_open(request: HttpRequest, device_id: int, door_id: str):
     if not can_open:
         return JsonResponse({"ok": False, "error": reason}, status=409)
     cmd_door_arg = str(getattr(door_obj, 'door_number', None) or door_id)
-    ok = _enqueue(device_id, f"DOOR_OPEN:{cmd_door_arg}", door=door_obj)
+    open_cmd = _door_command_for_action(door_obj, 'open')
+    event_type = 'door.normal_open' if open_cmd == 'DOOR_NORMAL_OPEN' else 'door.open'
+    door_state = 'NORMAL_OPEN' if open_cmd == 'DOOR_NORMAL_OPEN' else 'OPEN'
+    audit_action = 'normal-open' if open_cmd == 'DOOR_NORMAL_OPEN' else 'open'
+    ok = _enqueue(device_id, f"{open_cmd}:{cmd_door_arg}", door=door_obj)
     if not ok:
         return JsonResponse({"ok": False, "error": "device_unavailable"}, status=409)
     # Update door.is_open state in database
@@ -11346,11 +12316,11 @@ def door_open(request: HttpRequest, device_id: int, door_id: str):
             _set_lock_state(door_obj.id, None)
     except Exception:
         pass
-    _persist_and_broadcast_status(device_id, "OPEN")
+    _persist_and_broadcast_status(device_id, door_state)
 
     # Broadcast a door.open line for real-time monitor log.
     try:
-        _broadcast_door_event(int(device_id), door_obj, 'door.open', verify_mode='API')
+        _broadcast_door_event(int(device_id), door_obj, event_type, verify_mode='API')
     except Exception:
         pass
 
@@ -11358,7 +12328,7 @@ def door_open(request: HttpRequest, device_id: int, door_id: str):
     # enqueue a DOOR_CLOSE to drive a real-time close event in Monitor.
     try:
         secs = int(getattr(door_obj, 'lock_open_duration', 0) or 0)
-        if secs > 0 and door_obj is not None:
+        if open_cmd == 'DOOR_OPEN' and secs > 0 and door_obj is not None:
             _schedule_door_auto_close(int(device_id), int(getattr(door_obj, 'id', 0) or 0), str(cmd_door_arg), secs)
     except Exception:
         pass
@@ -11372,7 +12342,7 @@ def door_open(request: HttpRequest, device_id: int, door_id: str):
             'device_id': device_id,
             'device_name': getattr(dev, 'name', '') if dev else '',
             'area_name': getattr(dev, 'area_name', '') if dev else '',
-            'event_description': _door_desc('door.open'),
+            'event_description': _door_desc(event_type),
             'status_text': 'OK',
             'verify_mode': 'Others',
         }, ensure_ascii=False)
@@ -11382,12 +12352,12 @@ def door_open(request: HttpRequest, device_id: int, door_id: str):
         _audit_log(
             request,
             module='door',
-            action='open',
+            action=audit_action,
             entity_id=int(door_id) if str(door_id).isdigit() else 0,
             entity_name=f"door_id={door_id} device_id={device_id}",
             details=details,
         )
-    return JsonResponse({"ok": True})
+    return JsonResponse({"ok": True, "mode": _door_effective_mode(door_obj), "command": open_cmd})
 
 def door_close(request: HttpRequest, device_id: int, door_id: str):
     if not request.user.is_authenticated or not request.user.is_staff:
@@ -11400,8 +12370,16 @@ def door_close(request: HttpRequest, device_id: int, door_id: str):
                 door_obj = Door.objects.filter(device_id=int(device_id), door_number=int(door_id)).first()
     except Exception:
         door_obj = None
+    if door_obj is None:
+        return JsonResponse({"ok": False, "error": "door_not_found"}, status=404)
+    if int(getattr(door_obj, 'device_id', 0) or 0) != int(device_id):
+        return JsonResponse({"ok": False, "error": "door_device_mismatch"}, status=409)
     cmd_door_arg = str(getattr(door_obj, 'door_number', None) or door_id)
-    ok = _enqueue(device_id, f"DOOR_CLOSE:{cmd_door_arg}", door=door_obj)
+    close_cmd = _door_command_for_action(door_obj, 'close')
+    event_type = 'door.normal_close' if close_cmd == 'DOOR_NORMAL_CLOSE' else 'door.close'
+    door_state = 'NORMAL_CLOSE' if close_cmd == 'DOOR_NORMAL_CLOSE' else 'CLOSED'
+    audit_action = 'normal-close' if close_cmd == 'DOOR_NORMAL_CLOSE' else 'close'
+    ok = _enqueue(device_id, f"{close_cmd}:{cmd_door_arg}", door=door_obj)
     if not ok:
         return JsonResponse({"ok": False, "error": "device_unavailable"}, status=409)
     # Update door.is_open state in database
@@ -11412,11 +12390,11 @@ def door_close(request: HttpRequest, device_id: int, door_id: str):
             _set_lock_state(door_obj.id, None)
     except Exception:
         pass
-    _persist_and_broadcast_status(device_id, "CLOSED")
+    _persist_and_broadcast_status(device_id, door_state)
 
     # Broadcast a door.close line for real-time monitor log.
     try:
-        _broadcast_door_event(int(device_id), door_obj, 'door.close', verify_mode='API')
+        _broadcast_door_event(int(device_id), door_obj, event_type, verify_mode='API')
     except Exception:
         pass
     try:
@@ -11429,7 +12407,7 @@ def door_close(request: HttpRequest, device_id: int, door_id: str):
             'device_id': device_id,
             'device_name': getattr(dev, 'name', '') if dev else '',
             'area_name': getattr(dev, 'area_name', '') if dev else '',
-            'event_description': _door_desc('door.close'),
+            'event_description': _door_desc(event_type),
             'status_text': 'OK',
             'verify_mode': 'Others',
         }, ensure_ascii=False)
@@ -11439,12 +12417,12 @@ def door_close(request: HttpRequest, device_id: int, door_id: str):
         _audit_log(
             request,
             module='door',
-            action='close',
+            action=audit_action,
             entity_id=int(door_id) if str(door_id).isdigit() else 0,
             entity_name=f"door_id={door_id} device_id={device_id}",
             details=details,
         )
-    return JsonResponse({"ok": True})
+    return JsonResponse({"ok": True, "mode": _door_effective_mode(door_obj), "command": close_cmd})
 
 def door_normal_open(request: HttpRequest, device_id: int, door_id: str):
     if not request.user.is_authenticated or not request.user.is_staff:
@@ -11490,6 +12468,58 @@ def door_normal_open(request: HttpRequest, device_id: int, door_id: str):
             request,
             module='door',
             action='normal-open',
+            entity_id=int(door_id) if str(door_id).isdigit() else 0,
+            entity_name=f"door_id={door_id} device_id={device_id}",
+            details=details,
+        )
+    return JsonResponse({"ok": True})
+
+def door_normal_close(request: HttpRequest, device_id: int, door_id: str):
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({"ok": False, "error": "unauthorized"}, status=403)
+    door_obj = None
+    try:
+        if str(door_id).isdigit():
+            door_obj = Door.objects.filter(pk=int(door_id)).first()
+            if door_obj is None:
+                door_obj = Door.objects.filter(device_id=int(device_id), door_number=int(door_id)).first()
+    except Exception:
+        door_obj = None
+    cmd_door_arg = str(getattr(door_obj, 'door_number', None) or door_id)
+    ok = _enqueue(device_id, f"DOOR_NORMAL_CLOSE:{cmd_door_arg}", door=door_obj)
+    if not ok:
+        return JsonResponse({"ok": False, "error": "device_unavailable"}, status=409)
+    try:
+        if door_obj is not None:
+            door_obj.is_open = False
+            door_obj.save(update_fields=['is_open', 'last_state_change'])
+            _set_lock_state(door_obj.id, None)
+        else:
+            _set_lock_state(door_id, None)
+    except Exception:
+        pass
+    _persist_and_broadcast_status(device_id, "NORMAL_CLOSE")
+    try:
+        import json as _json
+        from .event_codes import describe_door_event_type as _door_desc
+        dev = getattr(door_obj, 'device', None) if door_obj else None
+        details = _json.dumps({
+            'door_id': int(getattr(door_obj, 'id', 0) or 0) if door_obj else (int(door_id) if str(door_id).isdigit() else door_id),
+            'door_name': getattr(door_obj, 'name', '') if door_obj else '',
+            'device_id': device_id,
+            'device_name': getattr(dev, 'name', '') if dev else '',
+            'area_name': getattr(dev, 'area_name', '') if dev else '',
+            'event_description': _door_desc('door.normal_close'),
+            'status_text': 'OK',
+            'verify_mode': 'Others',
+        }, ensure_ascii=False)
+    except Exception:
+        details = ''
+    if not getattr(request, '_agent_suppress_door_audit', False):
+        _audit_log(
+            request,
+            module='door',
+            action='normal-close',
             entity_id=int(door_id) if str(door_id).isdigit() else 0,
             entity_name=f"door_id={door_id} device_id={device_id}",
             details=details,
@@ -12131,6 +13161,21 @@ def access_check(request: HttpRequest):
     # Check cache first
     from django.utils import timezone
     now = timezone.now()
+
+    # Holiday must override any cached decision.
+    try:
+        from .models import Holiday
+        if Holiday.objects.filter(date=now.date()).exists():
+            EmployeeAccessCache.objects.update_or_create(
+                employee=emp,
+                door=door,
+                defaults={'allowed': False, 'reason': 'holiday'},
+            )
+            return JsonResponse({'ok': True, 'allowed': False, 'reason': 'holiday', 'cached': False})
+    except Exception:
+        # If holiday table is unavailable for any reason, fall back to evaluation.
+        pass
+
     try:
         cache = EmployeeAccessCache.objects.get(employee=emp, door=door)
         age = (now - cache.updated_at).total_seconds()
@@ -12169,12 +13214,20 @@ def command_recent(request: HttpRequest):
 def _enqueue_tracked_cmd(device_id: int, cmd: str) -> tuple[bool, int | None, str]:
     """Create CommandLog and enqueue with LOGID prefix so CommCenter updates status.
 
-    Starts an in-process CommCenter (driver=auto) if none is active, so UI actions
-    remain functional even when tray/daemon isn't running.
+        Notes:
+        - The DB row (status=PENDING) is the source of truth for cross-process CommCenter.
+        - We only enqueue into an in-process ACTIVE_CENTER if one is already running,
+            or if explicitly allowed via env (WEB_START_COMMCENTER=1).
     """
     # De-dupe heavy sync commands to avoid generating high traffic / DoS.
     try:
-        if (cmd or '').strip().upper().startswith('SYNC_PERSONNEL'):
+        SYNC_HEAVY_PREFIXES = (
+            'SYNC_ALL',
+            'SYNC_PERSONNEL',
+            'SYNC_ACCESS_LEVELS',
+        )
+        cmd_up = (cmd or '').strip().upper()
+        if cmd_up.startswith(SYNC_HEAVY_PREFIXES):
             try:
                 from agent.sync_limits import get_sync_personnel_limits
 
@@ -12189,13 +13242,16 @@ def _enqueue_tracked_cmd(device_id: int, cmd: str) -> tuple[bool, int | None, st
             from django.utils import timezone as _tz
 
             cutoff = _tz.now() - timedelta(seconds=int(dedupe_s))
+            q = Q()
+            for pfx in SYNC_HEAVY_PREFIXES:
+                q |= Q(command__startswith=pfx)
             existing = (
                 CommandLog.objects.filter(
                     device_id=int(device_id),
-                    command__startswith='SYNC_PERSONNEL',
                     status='PENDING',
                     created_at__gte=cutoff,
                 )
+                .filter(q)
                 .order_by('-created_at')
                 .first()
             )
@@ -12228,41 +13284,55 @@ def _enqueue_tracked_cmd(device_id: int, cmd: str) -> tuple[bool, int | None, st
     except Exception:
         pass
 
+    # Best-effort: if there's an in-process CommCenter, enqueue to memory queue too.
+    # Otherwise, leave the row as PENDING so an external CommCenter process can pop it.
     try:
         import agent.modern_comm_center as mcc
 
         center = getattr(mcc, 'ACTIVE_CENTER', None)
         if center is None:
-            # Best-effort: in web-only mode there may be no active center.
-            # We start one so the command can execute without tray/daemon.
-            center = getattr(mcc, 'build_and_run_stub')(poll_interval=1.0, driver='auto')
-            mcc.ACTIVE_CENTER = center
-        center.enqueue_command(int(device_id), f"LOGID:{int(log.id)} {cmd}"[:240])
-        try:
-            log.status = 'RUNNING'
-            log.result = 'queued'
-            log.save(update_fields=['status', 'result'])
-        except Exception:
-            pass
-        try:
-            _broadcast_command(log)
-        except Exception:
-            pass
-        return (True, int(log.id), 'queued')
-    except Exception as e:
-        # Keep DB queue as source of truth; external CommCenter/tray can consume.
-        try:
-            if not (log.result or '').strip():
-                log.result = 'queued-db-only'
-                log.save(update_fields=['result'])
-        except Exception:
-            pass
-        return (True, int(log.id), f"queued_db_only:{e}")
+            allow_start = (str(os.getenv('WEB_START_COMMCENTER', '0') or '').strip().lower() in ('1', 'true', 'yes', 'on'))
+            if allow_start:
+                center = getattr(mcc, 'build_and_run_stub')(poll_interval=1.0, driver='auto')
+                mcc.ACTIVE_CENTER = center
+
+        if center is not None:
+            center.enqueue_command(int(device_id), f"LOGID:{int(log.id)} {cmd}"[:240])
+            try:
+                if not (log.result or '').strip():
+                    log.result = 'queued'
+                    log.save(update_fields=['result'])
+            except Exception:
+                pass
+            try:
+                _broadcast_command(log)
+            except Exception:
+                pass
+            return (True, int(log.id), 'queued')
+    except Exception:
+        # Fall back to DB-only queue.
+        pass
+
+    try:
+        if not (log.result or '').strip():
+            log.result = 'queued-db-only'
+            log.save(update_fields=['result'])
+    except Exception:
+        pass
+    try:
+        _broadcast_command(log)
+    except Exception:
+        pass
+    return (True, int(log.id), 'queued-db-only')
 
 
 @csrf_exempt
 def device_sync_personnel(request: HttpRequest, device_id: int):
-    """Queue SYNC_PERSONNEL for a physical controller and return command id."""
+    """Queue a full SYNC (alias endpoint kept for compatibility).
+
+    Historically this endpoint enqueued SYNC_PERSONNEL.
+    In practice controllers need users + authorizations, so the default sync is full.
+    """
     if not request.user.is_authenticated or not request.user.is_staff:
         return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
     if request.method != 'POST':
@@ -12290,7 +13360,7 @@ def device_sync_personnel(request: HttpRequest, device_id: int):
     if syncable_count <= 0:
         return JsonResponse({'ok': False, 'error': 'no_syncable_employees'}, status=400)
 
-    ok, cmdlog_id, info = _enqueue_tracked_cmd(int(dev.id), 'SYNC_PERSONNEL')
+    ok, cmdlog_id, info = _enqueue_tracked_cmd(int(dev.id), 'SYNC_ALL')
     if not ok or not cmdlog_id:
         return JsonResponse({'ok': False, 'error': info or 'enqueue-failed'}, status=500)
 
@@ -12300,7 +13370,109 @@ def device_sync_personnel(request: HttpRequest, device_id: int):
             module='command',
             action='create',
             entity_id=int(dev.id),
-            entity_name='SYNC_PERSONNEL',
+            entity_name='SYNC_ALL',
+            details=f"device_id={dev.id} cmdlog_id={cmdlog_id} syncable={syncable_count} alias=sync-personnel",
+        )
+    except Exception:
+        pass
+
+    return JsonResponse({'ok': True, 'command_id': int(cmdlog_id), 'info': info, 'syncable_employees': syncable_count})
+
+
+@csrf_exempt
+def device_sync_all(request: HttpRequest, device_id: int):
+    """Queue SYNC_ALL for a physical controller and return command id."""
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'method-not-allowed'}, status=405)
+
+    dev = Device.objects.filter(id=int(device_id)).first()
+    if dev is None:
+        return JsonResponse({'ok': False, 'error': 'not-found'}, status=404)
+
+    try:
+        if not bool(dev.is_physical_controller()):
+            return JsonResponse({'ok': False, 'error': 'device-not-physical'}, status=400)
+    except Exception:
+        return JsonResponse({'ok': False, 'error': 'device-not-physical'}, status=400)
+
+    # Same safety gate: require syncable employees for this device.
+    try:
+        doors = list(Door.objects.filter(device_id=int(dev.id)).exclude(door_number__isnull=True))
+        levels = list(AccessLevel.objects.filter(doors__in=doors).distinct()) if doors else []
+        emp_qs = Employee.objects.filter(active=True, access_levels__in=levels).distinct() if levels else Employee.objects.none()
+        syncable_count = int(emp_qs.count())
+    except Exception:
+        syncable_count = 0
+
+    if syncable_count <= 0:
+        return JsonResponse({'ok': False, 'error': 'no_syncable_employees'}, status=400)
+
+    ok, cmdlog_id, info = _enqueue_tracked_cmd(int(dev.id), 'SYNC_ALL')
+    if not ok or not cmdlog_id:
+        return JsonResponse({'ok': False, 'error': info or 'enqueue-failed'}, status=500)
+
+    try:
+        _audit_log(
+            request,
+            module='command',
+            action='create',
+            entity_id=int(dev.id),
+            entity_name='SYNC_ALL',
+            details=f"device_id={dev.id} cmdlog_id={cmdlog_id} syncable={syncable_count}",
+        )
+    except Exception:
+        pass
+
+    return JsonResponse({'ok': True, 'command_id': int(cmdlog_id), 'info': info, 'syncable_employees': syncable_count})
+
+
+@csrf_exempt
+def device_sync_access_levels(request: HttpRequest, device_id: int):
+    """Queue SYNC_ACCESS_LEVELS for a physical controller and return command id.
+
+    Note: for current devices, this is executed by the same CommCenter sync pipeline
+    as SYNC_PERSONNEL (device stores authorizations per-user).
+    """
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'method-not-allowed'}, status=405)
+
+    dev = Device.objects.filter(id=int(device_id)).first()
+    if dev is None:
+        return JsonResponse({'ok': False, 'error': 'not-found'}, status=404)
+
+    try:
+        if not bool(dev.is_physical_controller()):
+            return JsonResponse({'ok': False, 'error': 'device-not-physical'}, status=400)
+    except Exception:
+        return JsonResponse({'ok': False, 'error': 'device-not-physical'}, status=400)
+
+    # Same safety gate: syncing access levels implies per-user authorizations.
+    try:
+        doors = list(Door.objects.filter(device_id=int(dev.id)).exclude(door_number__isnull=True))
+        levels = list(AccessLevel.objects.filter(doors__in=doors).distinct()) if doors else []
+        emp_qs = Employee.objects.filter(active=True, access_levels__in=levels).distinct() if levels else Employee.objects.none()
+        syncable_count = int(emp_qs.count())
+    except Exception:
+        syncable_count = 0
+
+    if syncable_count <= 0:
+        return JsonResponse({'ok': False, 'error': 'no_syncable_employees'}, status=400)
+
+    ok, cmdlog_id, info = _enqueue_tracked_cmd(int(dev.id), 'SYNC_ACCESS_LEVELS')
+    if not ok or not cmdlog_id:
+        return JsonResponse({'ok': False, 'error': info or 'enqueue-failed'}, status=500)
+
+    try:
+        _audit_log(
+            request,
+            module='command',
+            action='create',
+            entity_id=int(dev.id),
+            entity_name='SYNC_ACCESS_LEVELS',
             details=f"device_id={dev.id} cmdlog_id={cmdlog_id} syncable={syncable_count}",
         )
     except Exception:
@@ -12339,14 +13511,50 @@ def command_status(request: HttpRequest, command_id: int):
 def commands_full_list(request: HttpRequest):
     if not request.user.is_authenticated:
         return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
-    limit = min(int(request.GET.get('limit', '200') or 200), 500)
-    logs = CommandLog.objects.select_related('device', 'door').order_by('-created_at')[:limit]
+
+    # Filters (legacy parity for "Server Sent Commands")
+    device_q = (request.GET.get('device') or request.GET.get('device_name') or '').strip()
+    serial_q = (request.GET.get('serial') or request.GET.get('serial_number') or '').strip()
+    q = (request.GET.get('q') or request.GET.get('command') or '').strip()
+    result_q = (request.GET.get('result') or request.GET.get('returned') or '').strip()
+    status_q = (request.GET.get('status') or '').strip().upper()
+
+    try:
+        limit = int(request.GET.get('limit', '200') or 200)
+    except Exception:
+        limit = 200
+    limit = max(1, min(limit, 500))
+
+    logs = CommandLog.objects.select_related('device', 'door').order_by('-created_at')
+    if device_q:
+        logs = logs.filter(
+            Q(device__name__icontains=device_q)
+            | Q(device__device_name__icontains=device_q)
+        )
+    if serial_q:
+        logs = logs.filter(device__serial_number__icontains=serial_q)
+    if q:
+        logs = logs.filter(command__icontains=q)
+    if result_q:
+        logs = logs.filter(result__icontains=result_q)
+    if status_q:
+        logs = logs.filter(status__iexact=status_q)
+
+    logs = logs[:limit]
     rows = []
     for l in logs:
+        try:
+            device_name = (
+                getattr(l.device, 'name', None)
+                or getattr(l.device, 'device_name', None)
+                or ''
+            )
+        except Exception:
+            device_name = ''
         rows.append({
             'id': l.id,
             'device_id': l.device_id,
-            'device': getattr(l.device, 'name', None),
+            'device': device_name,
             'serial': getattr(l.device, 'serial_number', ''),
             'door': getattr(l.door, 'name', None),
             'command': l.command,
@@ -13677,20 +14885,7 @@ def check_card_owner(request: HttpRequest):
     if not card_number:
         return JsonResponse({'exists': False, 'error': 'no-card-number'}, status=400)
 
-    # Normalize comparisons to be case-insensitive and spacing-tolerant
-    base = card_number.strip()
-    variants = []
-    compact = base.replace(' ', '')
-    variants.extend([base, base.upper(), base.lower(), compact, compact.upper(), compact.lower()])
-    # Strip leading zeros for numeric cards
-    if base.isdigit():
-        trimmed = base.lstrip('0') or '0'
-        variants.extend([trimmed, trimmed.upper(), trimmed.lower()])
-    # Remove duplicate variants while preserving order
-    seen = set(); normalized = []
-    for v in variants:
-        if v and v not in seen:
-            seen.add(v); normalized.append(v)
+    normalized = _expand_card_lookup_variants(card_number)
 
     for num in normalized:
         emp = Employee.objects.filter(card_number__iexact=num).first()

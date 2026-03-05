@@ -121,7 +121,7 @@
     </td>
   <td><div class="action-buttons">
     {% if device.is_physical_controller %}
-      <button class="btn-sync" title="Sincronizează personalul din server către centrală" onclick="syncDevicePersonnel({{ device.id }}, '{{ device.name|escapejs }}');">🔄 Sync</button>
+      <button class="btn-sync" title="Sincronizează datele (server → centrală)" onclick="syncDevicePersonnel({{ device.id }}, '{{ device.name|escapejs }}');">🔄 SYNC</button>
     {% endif %}
     <a href="{% url 'crud-device-edit' device.id %}?next={{ request.get_full_path|urlencode }}" class="btn-edit" onclick="openDeviceModal(this.href, '✏️ Editează Dispozitiv #{{ device.id }}'); return false;">✏️ Edit</a>
     <button class="btn-delete" onclick="(window.zkConfirmDialog ? zkConfirmDialog({title:'Confirmare',message:'Ștergi dispozitivul?',okText:'Șterge',cancelText:'Renunță',variant:'danger'}).then(ok=>{ if(ok) deleteDevice({{ device.id }}); }) : (confirm('Ești sigur?') && deleteDevice({{ device.id }})));">🗑️ Șterge</button>
@@ -192,8 +192,8 @@ let _syncPollTimer = null;
 function syncDevicePersonnel(deviceId, deviceName){
   try{ if(_syncPollTimer) { clearInterval(_syncPollTimer); _syncPollTimer = null; } }catch(e){}
   const dn = (deviceName || ('#'+deviceId));
-  showPageActionLoading('Sincronizare', `Se sincronizează server → centrală (${dn})...`);
-  fetch(`/agent/api/devices/${deviceId}/sync-personnel/`, {
+  showPageActionLoading('Sincronizare', `Se sincronizează datele (server → centrală) (${dn})...`);
+  fetch(`/agent/api/devices/${deviceId}/sync/`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',

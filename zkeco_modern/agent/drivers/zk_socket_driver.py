@@ -309,8 +309,28 @@ class ZKTechSocketDriver:
         return {"result": 0, "data": ""}
     
     def set_options(self, items: str) -> Dict[str, Any]:
-        """Set device options (placeholder)."""
-        return {"result": 1}
+        """Set device options via CMD_SETOPTIONS (e.g. ServerAddr, ServerPort, CLOUDSERVICEFLAG)."""
+        if not self._is_connected():
+            return {"result": -1, "error": "not_connected"}
+
+        try:
+            with self._lock:
+                payload = (items or '').encode('utf-8')
+                cmd_packet = self._build_command(self.CMD_SETOPTIONS, payload, expect_reply=1)
+                self.socket.send(cmd_packet)
+
+                response = self.socket.recv(1024)
+                result_code = self._parse_response_result(response)
+
+                if result_code >= 0:
+                    LOG.info("set_options OK: %s", (items or '')[:80])
+                    return {"result": 1}
+                else:
+                    LOG.warning("set_options result=%d for: %s", result_code, (items or '')[:80])
+                    return {"result": result_code, "error": f"set_options result={result_code}"}
+        except Exception as e:
+            LOG.error("set_options error: %s", e)
+            return {"result": -1, "error": str(e)}
     
     # ====== Protocol Implementation Details ======
     

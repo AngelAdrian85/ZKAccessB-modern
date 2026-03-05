@@ -68,6 +68,8 @@
       <input id="testCardInput" placeholder="Card nr (opțional)" style="width:160px;" />
       <button class="action" onclick="testReadCard()" data-tip="Generează o citire de test (8 cifre)">🪪 Test Citire Card</button>
     </div>
+    <span id="integrityBadge" style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid rgba(61,165,217,0.22);background:#4b5563;color:#fff;font-size:11px;font-weight:800;">Integritate: verificare...</span>
+    <span title="Integritate monitor: OK = sync/clear/evenimente în regulă; WARN = evenimente cu card lipsă; ERR = problemă sync/clear sau health indisponibil." style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:999px;border:1px solid rgba(61,165,217,0.22);background:rgba(10,26,39,0.65);color:#cfe9f8;font-size:11px;font-weight:900;cursor:help;">?</span>
   </div>
 
   <div class="monitor-body">
@@ -107,7 +109,10 @@
 
 <script>
 console.log('Monitor UI template loaded: v2025-12-10.3 + Physical Card Reader');
+window.__bridgeOnlyComm = false;
 window.__lastPhysicalCard = window.__lastPhysicalCard || '';
+window.__lastPhysicalCardTs = window.__lastPhysicalCardTs || 0;
+window.__monitorPageLoadTs = window.__monitorPageLoadTs || Date.now();
 
 // Toolbar: collapse advanced actions by default to save vertical space
 (function initMonitorToolbarToggle(){
@@ -137,6 +142,25 @@ window.__lastPhysicalCard = window.__lastPhysicalCard || '';
   let lastKeyTime = 0;
   const READER_TIMEOUT = 100; // ms between keypresses from card reader
   const CARD_MIN_LENGTH = 4;  // minimum card number length
+
+  function normalizeCardNumber(value){
+    const raw = String(value||'').trim();
+    if(!raw){ return ''; }
+    const compact = raw.replace(/^0x/i,'').replace(/[^0-9A-Za-z]+/g,'').toUpperCase();
+    if(!compact){ return ''; }
+    if(/^\d+$/.test(compact)){
+      const trimmed = compact.replace(/^0+/, '');
+      return trimmed || '0';
+    }
+    if(/^[0-9A-F]+$/.test(compact)){
+      try{
+        const dec = BigInt(`0x${compact}`).toString(10);
+        if(dec){ return dec; }
+      }catch(_e){}
+    }
+    return compact;
+  }
+  window.__normalizeCardNumber = normalizeCardNumber;
   
   document.addEventListener('keypress', function(e){
     const now = Date.now();
@@ -172,10 +196,12 @@ window.__lastPhysicalCard = window.__lastPhysicalCard || '';
   });
   
   async function processPhysicalCard(cardNumber){
-    const normalizedCard = String(cardNumber||'').trim();
+    const normalizedCard = normalizeCardNumber(cardNumber);
     if(!normalizedCard){ return; }
     window.__lastPhysicalCard = normalizedCard;
+    window.__lastPhysicalCardTs = Date.now();
     console.log('🪪 Physical card detected:', normalizedCard);
+    if(!window.__bridgeOnlyComm){ try{ _tryAttachCardToRecentRow(normalizedCard); }catch(_e){} }
     
     // Visual feedback - Tech animation centered on screen
     const overlay = document.createElement('div');
@@ -376,7 +402,7 @@ window.__lastPhysicalCard = window.__lastPhysicalCard || '';
       const statusCellHtml = statusBadge(isOk, data.status_text);
       // Build row with 9 columns including empty Acțiune column
       tr.innerHTML = [
-        new Date().toLocaleTimeString(),
+        new Date().toLocaleString('ro-RO', { hour12:false }),
         eventPoint,
         eventDesc,
         normalizedCard,
@@ -566,6 +592,8 @@ function renderDevices(){
         <div class='device-actions'>
           <button onclick='event.stopPropagation(); onDoorAction("open", ${deviceId||"null"}, ${d.id})'>Open</button>
           <button onclick='event.stopPropagation(); onDoorAction("close", ${deviceId||"null"}, ${d.id})'>Close</button>
+          <button onclick='event.stopPropagation(); onDoorAction("normal-open", ${deviceId||"null"}, ${d.id})'>Normal Open</button>
+          <button onclick='event.stopPropagation(); onDoorAction("normal-close", ${deviceId||"null"}, ${d.id})'>Normal Close</button>
           <button onclick='event.stopPropagation(); onDoorAction("cancel-alarm", ${deviceId||"null"}, ${d.id})'>Cancel Alarm</button>
           <button onclick='event.stopPropagation(); onDoorAction("lock", ${deviceId||"null"}, ${d.id})'>Lock</button>
           <button onclick='event.stopPropagation(); onDoorAction("unlock", ${deviceId||"null"}, ${d.id})'>Unlock</button>
@@ -584,15 +612,15 @@ function normalizeEvent(e){
     if(ne.time){
       const dt = new Date(ne.time);
       if(!isNaN(dt.getTime())){
-        ne.time = dt.toLocaleTimeString('ro-RO',{hour12:false});
+        ne.time = dt.toLocaleString('ro-RO',{hour12:false});
       }
     }
   } catch{}
-  ne.time = ne.time || new Date().toLocaleTimeString('ro-RO',{hour12:false});
+  ne.time = ne.time || new Date().toLocaleString('ro-RO',{hour12:false});
   ne.point = ne.point || ne.event_point_id || ne.point_id || ne.door_id || '';
   // prefer explicit description over generic event/code
   ne.description = ne.description || ne.event_description || ne.event || (Array.isArray(ne.descriptions)? ne.descriptions.join(', ') : '') || '';
-  ne.card_no = (ne.card_no || ne.card || ne.card_number || '').toString().trim();
+  ne.card_no = (window.__normalizeCardNumber ? window.__normalizeCardNumber(ne.card_no || ne.card || ne.card_number || '') : (ne.card_no || ne.card || ne.card_number || '').toString().trim());
   ne.name = ne.name || ne.employee_name || ne.emp_name || '-';
   ne.cardholder = ne.cardholder || ne.employee_fullname || ne.employee_name || ne.emp_name || '';
   ne.status = ne.status || ne.status_text || '';
@@ -601,14 +629,81 @@ function normalizeEvent(e){
 }
 function addEvent(obj){
   const e = normalizeEvent(obj);
-  // Lightweight de-duplication: if identical event arrives twice within ~1.2s, skip.
+  // Strict Live Monitor: show only access-relevant events (card scans + open/close).
   try{
-    window.__evtDedup = window.__evtDedup || {};
-    const k = `${String(e._source||obj._source||'')}|${String(e.point||'')}|${String(e.description||'')}|${String(e.status||'')}`;
+    const src = String(e._source||obj._source||'').toLowerCase();
+    const desc = String(e.description||'').toLowerCase();
+    const card = String(e.card_no||'').trim();
+    const hasCard = !!(card && card !== '0' && !/^0+$/.test(card));
+    const isTxn = !!(e._isTxn||obj._isTxn);
+    const fromPhysical = !!(e._fromPhysicalReader||obj._fromPhysicalReader);
+    const verifyMode = String(e.verify_mode||obj.verify_mode||'').toLowerCase();
+    const doorNum = String(e.door_number||obj.door_number||'').trim();
+
+    // Any event with a card number is considered access-relevant.
+    if(hasCard){
+      // allow
+    } else
+
+    if(src.startsWith('door.')){
+      if(!(src === 'door.open' || src === 'door.close')){ return; }
+    } else if(src === 'rtlog.scan' || src === 'reader.scan'){
+      // Allow transaction events from panel (isTxn=true) even without card number so
+      // access-denied/unknown attempts remain visible and can be paired with a
+      // physical reader scan.
+      if(!hasCard && !isTxn){ return; }
+    } else if(src === 'event.batch'){
+      if(!hasCard && !isTxn){ return; }
+    } else if(src === 'audit.poll'){
+      if(!(desc.includes('door.open') || desc.includes('door.close') || desc.includes('remote opening') || desc.includes('remote closing'))){ return; }
+      if(!hasCard && verifyMode.startsWith('auto(')){ return; }
+    } else {
+      return;
+    }
+  }catch(_e){ /* ignore filter errors */ }
+  // Lightweight de-duplication: if identical non-access event arrives twice within ~1.2s, skip.
+  // Important: do NOT dedupe access attempts/scans here, because controllers often omit Cardno;
+  // rapid consecutive scans would otherwise be dropped as "identical".
+  try{
+    const src0 = String(e._source||obj._source||'').toLowerCase();
+    if(src0 !== 'rtlog.scan' && src0 !== 'reader.scan' && src0 !== 'event.batch'){
+      window.__evtDedup = window.__evtDedup || {};
+      const k = `${String(e._source||obj._source||'')}|${String(e.point||'')}|${String(e.description||'')}|${String(e.status||'')}`;
+      const now = Date.now();
+      const last = window.__evtDedup[k] || 0;
+      if(now - last < 1200){ return; }
+      window.__evtDedup[k] = now;
+    }
+  }catch(_e){}
+
+  // Cross-source de-duplication (see monitor.html for rationale).
+  try{
     const now = Date.now();
-    const last = window.__evtDedup[k] || 0;
-    if(now - last < 1200){ return; }
-    window.__evtDedup[k] = now;
+    const src = String(e._source||obj._source||'').toLowerCase();
+    const card = String(e.card_no||'').trim();
+    const point = String(e.point||'').trim();
+    const hasCard = !!(card && card !== '0' && !/^0+$/.test(card));
+
+    window.__evtCardDoorDedup = window.__evtCardDoorDedup || {};
+    window.__evtCardDoorDedupSrc = window.__evtCardDoorDedupSrc || {};
+    window.__lastCardOnDoor = window.__lastCardOnDoor || {};
+
+    if(hasCard && point){
+      const k2 = `${card}|${point}`;
+      const last2 = window.__evtCardDoorDedup[k2] || 0;
+      const lastSrc2 = String(window.__evtCardDoorDedupSrc[k2] || '').toLowerCase();
+      // Only dedupe if the same (card,door) arrives from a DIFFERENT source within a short window
+      // (e.g. RTLOG + event.batch). Two real consecutive scans from the same stream should show.
+      if(last2 && (now - last2) < 1200 && lastSrc2 && lastSrc2 !== src){ return; }
+      window.__evtCardDoorDedup[k2] = now;
+      window.__evtCardDoorDedupSrc[k2] = src;
+      window.__lastCardOnDoor[point] = now;
+    }
+
+    if(src === 'door.open' && !hasCard && point){
+      const lastCard = window.__lastCardOnDoor[point] || 0;
+      if(lastCard && (now - lastCard) < 1200){ return; }
+    }
   }catch(_e){}
   // e._source may be set by the WebSocket handler to indicate origin/type
   const body=document.getElementById('events');
@@ -664,6 +759,7 @@ function addEvent(obj){
   // preserve source/type for client-side filtering (e.g. 'rtlog.batch' or 'door.open')
   try{ tr.dataset.eventSource = (e._source || obj._source || '').toString(); }catch{};
   tr.dataset.cardNo = e.card_no || '';
+  try{ tr.dataset.insertedAt = String(Date.now()); }catch{};
   
   // Create cells - action button will be in the last column (Acțiune)
   const cells = [
@@ -698,6 +794,11 @@ function addEvent(obj){
   
   body.insertBefore(tr, body.firstChild);
   while(body.rows.length>500){ body.deleteRow(500); }
+}
+
+// No bridging between PC reader scans and controller events.
+function _tryAttachCardToRecentRow(cardNumber){
+  return;
 }
 
 // --- RTLOG / door events client-side filter helpers ---
@@ -879,10 +980,19 @@ function _rtlogPollStart(){
   try{
     if(window.__rtlogPollTimer){ return; }
     window.__rtlogLastId = window.__rtlogLastId || 0;
+    window.__auditLastId = window.__auditLastId || 0;
+    window.__rtlogPrimed = window.__rtlogPrimed || false;
     window.__rtlogPollInFlight = false;
-    window.__wsStatus = 'offline (polling)'; updateDiagnostics();
+    try{
+      const w = window.__monitorWs;
+      const wsOnline = !!(w && w.readyState === 1);
+      window.__wsStatus = wsOnline ? 'online (polling)' : 'offline (polling)';
+    }catch(_e){
+      window.__wsStatus = 'polling';
+    }
+    updateDiagnostics();
     _rtlogPollOnce();
-    window.__rtlogPollTimer = setInterval(_rtlogPollOnce, 1500);
+    window.__rtlogPollTimer = setInterval(_rtlogPollOnce, 500);
   }catch(e){ /* ignore */ }
 }
 function _rtlogPollStop(){
@@ -897,12 +1007,59 @@ async function _rtlogPollOnce(){
   window.__rtlogPollInFlight = true;
   try{
     const afterId = window.__rtlogLastId || 0;
-    const url = `/agent/api/monitor/rtlog/?after_id=${encodeURIComponent(afterId)}&limit=200`;
+    const afterAuditId = window.__auditLastId || 0;
+    const url = `/agent/api/monitor/rtlog/?after_id=${encodeURIComponent(afterId)}&limit=200&after_audit_id=${encodeURIComponent(afterAuditId)}&audit_limit=200`;
     const r = await fetch(url, {headers: {'X-Requested-With':'XMLHttpRequest'}, credentials: 'same-origin'});
     if(!r.ok){ throw new Error(`http ${r.status}`); }
     const j = await r.json();
     if(!j || j.ok !== true){ throw new Error((j && j.error) ? j.error : 'poll-failed'); }
     const rows = Array.isArray(j.rows) ? j.rows : [];
+
+    // Prime cursors on first poll so we don't dump historical rows into the Live Monitor.
+    // Keep fresh rows created around/after page load (otherwise first scan can be lost).
+    if(!window.__rtlogPrimed && afterId === 0 && afterAuditId === 0){
+      const pageStartTs = parseInt(String(window.__monitorPageLoadTs || '0'), 10) || Date.now();
+      const warmupMs = 4000;
+      const minTs = pageStartTs - warmupMs;
+
+      for(const row of rows){
+        const createdAt = row && (row.created_at||row.createdAt) ? String(row.created_at||row.createdAt) : '';
+        const createdMs = createdAt ? Date.parse(createdAt) : NaN;
+        const raw = row && row.raw ? String(row.raw) : '';
+        const isPhysicalReader = /cititor\s*fizic|physical\s*reader|elatec|acp/i.test(raw);
+        const isFresh = (!Number.isNaN(createdMs) && createdMs >= minTs) || (Number.isNaN(createdMs) && isPhysicalReader);
+        if(!isFresh){ continue; }
+        const devId = (row && (row.device_id||row.deviceId||row.device)) ? (row.device_id||row.deviceId||row.device) : '';
+        const evt = _parseRtlogLineToEvent(devId, raw, createdAt);
+        if(evt){ addEvent(evt); }
+      }
+
+      try{
+        const arows = Array.isArray(j.audit_rows) ? j.audit_rows : [];
+        for(const a of arows){
+          const ts = (a && (a.timestamp||a.created_at||a.createdAt)) ? String(a.timestamp||a.created_at||a.createdAt) : '';
+          const aMs = ts ? Date.parse(ts) : NaN;
+          if(!Number.isNaN(aMs) && aMs < minTs){ continue; }
+          const mod = (a && a.module) ? String(a.module) : '';
+          const act = (a && a.action) ? String(a.action) : '';
+          const detailsRaw = (a && a.details) ? String(a.details) : '';
+          let pl = {};
+          try{ pl = (detailsRaw && detailsRaw.trim().startsWith('{')) ? JSON.parse(detailsRaw) : {}; }catch(_e){ pl = {}; }
+          const desc = (pl && pl.event_description) ? String(pl.event_description) : (mod && act ? `${mod}.${act}` : (mod||act||'event'));
+          const point = (pl && (pl.door_id||pl.point_id)) ? (pl.door_id||pl.point_id) : (a && a.entity_id ? a.entity_id : '');
+          const name = (pl && (pl.door_name||pl.device_name)) ? (pl.door_name||pl.device_name) : ((a && a.entity_name) ? a.entity_name : '');
+          const status = (pl && pl.status_text) ? String(pl.status_text) : '';
+          const vm = (pl && pl.verify_mode) ? String(pl.verify_mode) : '';
+          addEvent({ description: desc, point: point, name: name, status: status, verify_mode: vm, created_at: ts, _source: 'audit.poll' });
+        }
+      }catch(_e){ /* ignore */ }
+
+      window.__rtlogPrimed = true;
+      if(typeof j.last_id === 'number'){ window.__rtlogLastId = j.last_id; }
+      if(typeof j.last_audit_id === 'number'){ window.__auditLastId = j.last_audit_id; }
+      return;
+    }
+
     let shown = 0;
     for(const row of rows){
       const devId = (row && (row.device_id||row.deviceId||row.device)) ? (row.device_id||row.deviceId||row.device) : '';
@@ -916,10 +1073,32 @@ async function _rtlogPollOnce(){
     } else if(rows.length && rows[rows.length-1] && rows[rows.length-1].id){
       try{ window.__rtlogLastId = parseInt(rows[rows.length-1].id) || window.__rtlogLastId; }catch(e){}
     }
-    // Optional raw hint if user enabled RTLOG display and nothing was surfaced.
-    if(getShowRtlog() && rows.length && shown === 0){
-      addEvent({ description:`RTLOG x${rows.length} (poll)`, _source: 'rtlog.batch' });
-    }
+
+    // Also ingest AuditLog door/device-status rows when polling.
+    try{
+      const arows = Array.isArray(j.audit_rows) ? j.audit_rows : [];
+      for(const a of arows){
+        const mod = (a && a.module) ? String(a.module) : '';
+        const act = (a && a.action) ? String(a.action) : '';
+        const detailsRaw = (a && a.details) ? String(a.details) : '';
+        const ts = (a && (a.timestamp||a.created_at||a.createdAt)) ? (a.timestamp||a.created_at||a.createdAt) : '';
+
+        let pl = {};
+        try{ pl = (detailsRaw && detailsRaw.trim().startsWith('{')) ? JSON.parse(detailsRaw) : {}; }catch(_e){ pl = {}; }
+
+        const desc = (pl && pl.event_description) ? String(pl.event_description) : (mod && act ? `${mod}.${act}` : (mod||act||'event'));
+        const point = (pl && (pl.door_id||pl.point_id)) ? (pl.door_id||pl.point_id) : (a && a.entity_id ? a.entity_id : '');
+        const name = (pl && (pl.door_name||pl.device_name)) ? (pl.door_name||pl.device_name) : ((a && a.entity_name) ? a.entity_name : '');
+        const status = (pl && pl.status_text) ? String(pl.status_text) : '';
+        const vm = (pl && pl.verify_mode) ? String(pl.verify_mode) : '';
+        addEvent({ description: desc, point: point, name: name, status: status, verify_mode: vm, created_at: ts, _source: 'audit.poll' });
+      }
+      if(arows.length && typeof j.last_audit_id === 'number'){
+        window.__auditLastId = j.last_audit_id;
+      } else if(arows.length && arows[arows.length-1] && arows[arows.length-1].id){
+        try{ window.__auditLastId = parseInt(arows[arows.length-1].id) || window.__auditLastId; }catch(_e){}
+      }
+    }catch(_e){ /* ignore */ }
   }catch(e){
     window.__wsStatus = `polling error`; updateDiagnostics();
   }finally{
@@ -939,6 +1118,27 @@ function wsConnect(){
   window.__monitorWs = ws;
   window.__wsStatus = 'connecting…'; updateDiagnostics();
 
+  // Watchdog: if WS is "online" but receives no messages at all (common when
+  // using InMemoryChannelLayer without Redis across processes), fall back to DB polling.
+  window.__wsLastMsgTs = 0;
+  try{
+    if(!window.__wsWatchdogTimer){
+      window.__wsWatchdogTimer = setInterval(()=>{
+        try{
+          const w = window.__monitorWs;
+          if(!w || w.readyState !== 1){ return; }
+          const connectedAt = window.__wsConnectedAt || 0;
+          const lastMsg = window.__wsLastMsgTs || 0;
+          const now = Date.now();
+          if(connectedAt && (now - connectedAt) < 1000){ return; }
+          if(lastMsg === 0 || (now - lastMsg) > 2000){
+            _rtlogPollStart();
+          }
+        }catch(_e){ /* ignore */ }
+      }, 1000);
+    }
+  }catch(e){ /* ignore */ }
+
   // If ASGI isn't running, most servers will fail connect quickly.
   // Start polling after a short grace period to avoid a dead monitor.
   try{
@@ -956,7 +1156,9 @@ function wsConnect(){
   ws.onopen = ()=>{
     try{ if(window.__wsConnectTimeout){ clearTimeout(window.__wsConnectTimeout); } }catch(e){}
     window.__wsStatus = 'online'; updateDiagnostics();
-    _rtlogPollStop();
+    window.__wsConnectedAt = Date.now();
+    // Keep polling active even when WS is online to avoid missing rtlog rows.
+    _rtlogPollStart();
   };
   ws.onerror = ()=>{
     window.__wsStatus = 'ws error (polling)'; updateDiagnostics();
@@ -974,6 +1176,7 @@ function wsConnect(){
   };
   ws.onmessage=(e)=>{
     let data; try{data=JSON.parse(e.data);}catch(err){return;}
+    try{ window.__wsLastMsgTs = Date.now(); }catch(_e){}
     if(data.type==='device.status'||data.type==='device.online'){
       const isOnline = (data.online!==false);
       devs[data.device_id]=Object.assign(devs[data.device_id]||{id:data.device_id},{online:isOnline,sn:data.serial||data.sn,name:data.name||data.device_name||'',door_state:data.door_state||'CLOSED'});
@@ -990,13 +1193,6 @@ function wsConnect(){
                 // Preserve LOCKED visual when we have a local lock map.
                 const locked = !!(window.__doorLockMap && window.__doorLockMap[d.id]);
                 d.state = locked ? 'LOCKED' : 'CLOSED';
-                try{
-                  if(prevState === 'OPEN' && !locked){
-                    const map = window.__doorMap || {};
-                    const nm = (d.id && map[d.id] && map[d.id].name) ? map[d.id].name : (d.name||'-');
-                    addEvent({ description:'door.close (device offline)', point: d.id, name: nm, status:'OK', verify_mode:'OFFLINE', _source:'door.close.offline' });
-                  }
-                }catch(_e){}
                 if(window.__doorAutoCloseTimers[d.id]){
                   try{ clearTimeout(window.__doorAutoCloseTimers[d.id]); }catch(e){}
                   delete window.__doorAutoCloseTimers[d.id];
@@ -1022,19 +1218,22 @@ function wsConnect(){
           if(evt){ shown += 1; addEvent(evt); }
         }
       }catch(err){ console.warn('rtlog parse failed', err); }
-
-      // Optional: show raw RTLOG batch summary only when toggle enabled, and only
-      // when we didn't surface any scan events from the batch.
-      if(getShowRtlog() && (lineCount > 0) && shown === 0){
-        addEvent({ point:data.point_id||'', description:`RTLOG x${lineCount}`, _source: 'rtlog.batch' });
-      }
     } else if(data.type==='event.batch'){
       if(data.descriptions && data.codes){
         data.descriptions.forEach((desc,i)=>{
           const vm = (data.verify_modes && data.verify_modes[i]) ? data.verify_modes[i] : '';
-          addEvent({ point:data.point_id||'', description:desc, code:data.codes[i], verify_mode: vm, _source: 'event.batch' });
+          const did = data.device_id || data.deviceId || data.device || '';
+          const doorNum = (data.door_numbers && data.door_numbers[i]) ? String(data.door_numbers[i]) : '';
+          const cardNo = (data.card_nos && data.card_nos[i]) ? String(data.card_nos[i]) : '';
+          let point = data.point_id||'';
+          try{
+            const km = window.__doorKeyMap || {};
+            const k = `${String(did)}:${String(doorNum)}`;
+            if(km[k]){ point = String(km[k]); }
+          }catch(_e){}
+          addEvent({ point: point, description:desc, code:data.codes[i], card_no: cardNo, verify_mode: vm, _source: 'event.batch' });
         });
-      } else { addEvent({ point:data.point_id||'', description:`Events x${data.count||0}`}); }
+      }
     } else if(data.type==='legacy.event'){
       addEvent({
         point: data.point_id||data.point||'',
@@ -1048,6 +1247,7 @@ function wsConnect(){
       if(data.type==='door.open'){ ds.door_state='OPEN'; newState='OPEN'; }
       else if(data.type==='door.close'){ ds.door_state='CLOSED'; newState='CLOSED'; }
       else if(data.type==='door.normal_open'){ ds.door_state='NORMAL_OPEN'; newState='UNLOCKED'; }
+      else if(data.type==='door.normal_close'){ ds.door_state='NORMAL_CLOSE'; newState='CLOSED'; }
       else if(data.type==='door.cancel_alarm'){ ds.door_state='ALARM_CLEARED'; newState='CLOSED'; }
       else if(data.type==='door.lock'){ ds.door_state='LOCKED'; newState='LOCKED'; window.__doorLockMap = window.__doorLockMap || {}; window.__doorLockMap[data.door_id] = true; }
       else if(data.type==='door.unlock'){ ds.door_state='UNLOCKED'; newState='UNLOCKED'; window.__doorLockMap = window.__doorLockMap || {}; window.__doorLockMap[data.door_id] = false; }
@@ -1072,8 +1272,10 @@ function wsConnect(){
         const pid = (data.point_id||data.door_id||'');
         const map = window.__doorMap || {};
         const nm = (pid && map[pid] && map[pid].name) ? map[pid].name : '-';
-        // Always log door events (open/close/lock/unlock) in real-time.
-        addEvent({ description:(data.event_description||data.description||data.type), point: pid, name: nm, verify_mode:(data.verify_mode||''), _source: data.type });
+        // Live monitor shows only explicit remote door transitions.
+        if(data.type==='door.open' || data.type==='door.close' || data.type==='door.normal_open' || data.type==='door.normal_close'){
+          addEvent({ description:(data.event_description||data.description||data.type), point: pid, name: nm, verify_mode:(data.verify_mode||''), _source: data.type });
+        }
       } catch { addEvent({ description:data.type, point: (data.point_id||data.door_id||'') }); }
     } else { addEvent(data); }
   };
@@ -1117,6 +1319,7 @@ function doorAction(id,door,action){
       else if(action==='lock'){ newState = 'LOCKED'; window.__doorLockMap[doorId] = true; }
       else if(action==='unlock'){ newState = 'UNLOCKED'; window.__doorLockMap[doorId] = false; }
       else if(action==='normal-open'){ newState = 'OPEN'; }
+      else if(action==='normal-close'){ newState = 'CLOSED'; }
       if(newState){
         console.log('[Door Action] ✅ IMMEDIATELY setting door state to:', newState, '(prev:', prevState, ')');
         window.__doorsCache[doorIdx].state = newState;
@@ -1349,7 +1552,7 @@ async function testReadCard(){
     const statusCellHtml = statusBadge(isOk, data.status_text);
     // Build row with 9 cells; last cell starts with Add button having data-action-btn for later upgrade
     tr.innerHTML = [
-      new Date().toLocaleTimeString(),     // Time (col 0)
+      new Date().toLocaleString('ro-RO', { hour12:false }),     // Time (col 0)
       eventPoint,                          // Event point (col 1)
       eventDesc,                           // Event Description (col 2)
       cardNum,                             // Card Number (col 3)
@@ -1408,6 +1611,7 @@ async function testReadCard(){
   }catch(e){ console.error(e); }
 }
 function openAddCardModal(card){
+  const normalizedCard = window.__normalizeCardNumber ? window.__normalizeCardNumber(card) : String(card||'').trim();
   // Create a lightweight modal host
   let host = document.getElementById('monitorAddCardModal');
   if(!host){
@@ -1458,10 +1662,10 @@ function openAddCardModal(card){
   }catch(_e){}
 
   // Store current card on host
-  try{ host.dataset.cardNumber = String(card||'').trim(); }catch(_e){}
+  try{ host.dataset.cardNumber = String(normalizedCard||'').trim(); }catch(_e){}
   try{
     const t = host.querySelector('#monitorAddCardTitle');
-    if(t){ t.textContent = card ? `Card: ${card}` : ''; }
+    if(t){ t.textContent = normalizedCard ? `Card: ${normalizedCard}` : ''; }
   }catch(_e){}
 
   function loadEmployeeCreate(curCard){
@@ -1722,6 +1926,9 @@ function openGrantAccessModal(employeeId, doorId){
     };
   }
 }
+// Start DB polling immediately so scans appear even when WebSocket is connected
+// but not receiving (e.g. InMemoryChannelLayer without Redis across processes).
+try{ _rtlogPollStart(); }catch(_e){}
 wsConnect();
 // Guarded binding in case element doesn't exist
 try {
@@ -1823,7 +2030,8 @@ function _parseRtlogLineToEvent(deviceId, rawLine, createdAtFallback){
   if(!raw){ return null; }
   const low = raw.toLowerCase().replace(/\s+/g,'');
   if(low.startsWith('pin,verified,doorid')){ return null; }
-  const parts = raw.split(',').map(p=>String(p||'').trim());
+  const normalizedRaw = raw.replace(/[;\t]/g, ',');
+  const parts = normalizedRaw.split(',').map(p=>String(p||'').trim());
   if(parts.length < 3){ return null; }
 
   let ts = '';
@@ -1831,11 +2039,15 @@ function _parseRtlogLineToEvent(deviceId, rawLine, createdAtFallback){
   let doorNum = '';
   let code = '';
   let verify = '';
+  let pin = '';
+  let isPhysicalReaderLine = false;
+  let isExternalReaderLine = false;
 
   const looksLikeTs = (parts[0] && /\d{4}-\d{2}-\d{2}/.test(parts[0]));
   let isTxn = false;
   if(looksLikeTs){
     ts = parts[0] || '';
+    pin = (parts[1] || '').trim();
     card = (parts[2] || '').trim();
     doorNum = (parts[3] || '').trim();
     code = (parts[4] || '').trim();
@@ -1844,7 +2056,8 @@ function _parseRtlogLineToEvent(deviceId, rawLine, createdAtFallback){
     if(parts.length >= 8 && /^\d+$/.test(parts[5]||'')){
       isTxn = true;
       ts = String(createdAtFallback||'').replace('T',' ').replace('Z','').slice(0,19);
-      card = (parts[7] || '').trim();
+      pin = (parts[0] || '').trim();
+      card = (parts.length >= 9 ? (parts[7] || '') : (parts[6] || '')).trim();
       doorNum = (parts[2] || '').trim();
       code = (parts[3] || '').trim();
       verify = (parts[1] || '').trim();
@@ -1853,6 +2066,59 @@ function _parseRtlogLineToEvent(deviceId, rawLine, createdAtFallback){
     }
   }
 
+  const pinLooksLikeCard = !!(pin && pin !== '0' && !/^0+$/.test(pin) && pin.length >= (typeof CARD_MIN_LENGTH !== 'undefined' ? CARD_MIN_LENGTH : 4));
+  const cardLooksInvalid = (!card || card === '0' || /^0+$/.test(card) || card === '000000' || card === '00000000');
+  if(cardLooksInvalid && pinLooksLikeCard){
+    card = pin;
+  }
+
+  // Some devices shift Cardno into the "Index" field and leave Cardno blank.
+  if(isTxn && (!card || card === '0' || /^0+$/.test(card) || card === '000000' || card === '00000000')){
+    const minLen = (typeof CARD_MIN_LENGTH !== 'undefined' ? CARD_MIN_LENGTH : 4);
+    const idxMaybe = (parts.length >= 9 ? String(parts[6]||'').trim() : '');
+    if(idxMaybe && /^\d+$/.test(idxMaybe) && idxMaybe.length >= minLen){
+      card = idxMaybe;
+    }
+  }
+  if((!card || card === '0' || /^0+$/.test(card))){
+    const m = raw.match(/(?:cardno|card_number|cardnumber|card)\s*[:=]\s*([0-9A-Za-z]+)/i);
+    if(m && m[1]){ card = String(m[1]).trim(); }
+  }
+
+  // If we got a card from the physical reader stream, remember it for a short window
+  // so we can pair it with controller txn events that omit Cardno.
+  try{
+    if(!window.__bridgeOnlyComm){
+    const vlow = String(verify||'').toLowerCase();
+    const sourceTag = String(parts[6] || '').toLowerCase();
+    const rawLow = raw.toLowerCase();
+    isPhysicalReaderLine = vlow.includes('cititor') || vlow.includes('reader') || vlow.includes('elatec') || vlow.includes('acp') || rawLow.includes('cititor fizic') || rawLow.includes('cititor extern');
+    isExternalReaderLine = isPhysicalReaderLine || sourceTag.includes('acp') || sourceTag.includes('elatec') || sourceTag.includes('reader') || sourceTag.includes('cititor');
+    const looksValidCard = !!(card && card !== '0' && !/^0+$/.test(card) && card !== '000000' && card !== '00000000');
+    if(isExternalReaderLine && looksValidCard){
+      window.__lastPhysicalCard = String(card).trim();
+      window.__lastPhysicalCardTs = Date.now();
+      try{ _tryAttachCardToRecentRow(window.__lastPhysicalCard); }catch(_e){}
+    }
+    }
+  }catch(_e){}
+
+  // Pair missing-card transaction events with the last physical-reader scan (same human action).
+  try{
+    if(!window.__bridgeOnlyComm){
+    const invalidNow = (!card || card === '0' || /^0+$/.test(card) || card === '000000' || card === '00000000');
+    const lastCard = String(window.__lastPhysicalCard||'').trim();
+    const lastTs = parseInt(String(window.__lastPhysicalCardTs||'0'), 10) || 0;
+    if(isTxn && invalidNow && lastCard && lastTs && (Date.now() - lastTs) <= 5000){
+      card = lastCard;
+      // Consume so we don't accidentally attach it to later unrelated rows.
+      window.__lastPhysicalCard = '';
+      window.__lastPhysicalCardTs = 0;
+    }
+    }
+  }catch(_e){}
+
+  card = window.__normalizeCardNumber ? window.__normalizeCardNumber(card) : String(card||'').trim();
   const invalidCard = (!card || card === '0' || /^0+$/.test(card) || card === '000000' || card === '00000000');
   if(invalidCard && !isTxn && !getShowRtlog()){
     return null;
@@ -1870,19 +2136,28 @@ function _parseRtlogLineToEvent(deviceId, rawLine, createdAtFallback){
   }catch(_e){}
   if((!doorName || doorName==='-') && doorNum){ doorName = `Ușă ${doorNum}`; }
 
-  let desc = invalidCard ? 'Eveniment centrală' : 'Scanare card';
+  let desc = '';
+  if(invalidCard){
+    desc = isTxn ? 'Încercare acces' : (isExternalReaderLine ? 'Eveniment cititor extern' : 'Eveniment centrală');
+  } else {
+    desc = isExternalReaderLine ? 'Scanare card cititor extern' : 'Scanare card';
+  }
   if(doorNum){ desc += ` (ușa ${doorNum})`; }
   if(code){ desc += ` [cod ${code}]`; }
 
   return {
     time: ts,
     point: doorId,
+    door_number: doorNum,
     description: desc,
     card_no: card,
     name: doorName,
     status: '',
-    verify_mode: verify || 'CITITOR FIZIC',
-    _source: 'rtlog.scan',
+    verify_mode: verify || (isExternalReaderLine ? 'CITITOR EXTERN' : 'CENTRALĂ'),
+    _isTxn: isTxn,
+    _fromPhysicalReader: isExternalReaderLine,
+    _event_code: code,
+    _source: isExternalReaderLine ? 'reader.scan' : 'rtlog.scan',
   };
 }
 
@@ -1977,7 +2252,7 @@ async function testDoorOpen(){
       ? `door.open BLOCKED (LOCK active) (id=${doorPk} name=${nm||'-'})`
       : (data.ok ? 'DESCHIDERE UȘĂ ACCEPTATĂ' : ('DESCHIDERE UȘĂ RESPINSĂ: '+ translateReasons(Array.isArray(data.reasons)? data.reasons.join(', '):(data.reasons||data.error||''))));
     addEvent({
-      time: new Date().toLocaleTimeString(),
+      time: new Date().toLocaleString('ro-RO', { hour12:false }),
       point: (data.event_point_id || doorPk),
       description: desc,
       card_no: cardNum,
@@ -1988,7 +2263,30 @@ async function testDoorOpen(){
     });
   }catch(e){ console.error(e); addEvent({ description:'door.open ERR', status:'ERR', verify_mode:'API', point: doorPk }); }
 }
+async function startCardReadWaitLoop(){
+  if(window.__cardReadWaitLoopStarted){ return; }
+  window.__cardReadWaitLoopStarted = true;
+  while(true){
+    try{
+      const r = await fetch('/agent/api/cards/read/wait/', {headers: {'X-Requested-With':'XMLHttpRequest'}, credentials: 'same-origin'});
+      if(r.ok){
+        const j = await r.json();
+        if(j && j.ok && j.card_number){
+          const card = String(j.card_number||'').trim();
+          if(card){
+            window.__lastPhysicalCard = card;
+            window.__lastPhysicalCardTs = Date.now();
+            try{ _tryAttachCardToRecentRow(card); }catch(_e){}
+          }
+        }
+      }
+    }catch(_e){ }
+    await new Promise(resolve => setTimeout(resolve, 200));
+  }
+}
+
 populateDoors();
+if(!window.__bridgeOnlyComm){ startCardReadWaitLoop(); }
 // Wire up panel filter to limit doors per controller
 try {
   const panelSel = document.getElementById('panelFilter');
@@ -2014,5 +2312,49 @@ function statusBadge(ok, statusText){
   const color = ok ? '#2da44e' : '#cf222e';
   return `<span style="display:inline-block;padding:2px 8px;border-radius:12px;background:${color};color:#fff;font-weight:600;">${statusText||label}</span>`;
 }
+
+function _setIntegrityBadge(kind, text){
+  const el = document.getElementById('integrityBadge');
+  if(!el){ return; }
+  let bg = '#4b5563';
+  let border = 'rgba(61,165,217,0.22)';
+  if(kind === 'ok'){ bg = '#2da44e'; border = '#1f7a39'; }
+  else if(kind === 'warn'){ bg = '#b08900'; border = '#815f00'; }
+  else if(kind === 'err'){ bg = '#cf222e'; border = '#8f1a22'; }
+  el.style.background = bg;
+  el.style.borderColor = border;
+  el.textContent = text || 'Integritate: necunoscut';
+}
+
+async function refreshIntegrityBadge(){
+  try{
+    const r = await fetch('/agent/health/', { headers: { 'X-Requested-With':'XMLHttpRequest' }, credentials: 'same-origin' });
+    if(!r.ok){ _setIntegrityBadge('err', 'Integritate: health indisponibil'); return; }
+    const j = await r.json();
+    const mi = (j && j.monitor_integrity) ? j.monitor_integrity : null;
+    if(!mi){ _setIntegrityBadge('warn', 'Integritate: fără diagnostic'); return; }
+    const syncOk = !!(mi.sync && mi.sync.ok);
+    const clearOk = !!(mi.clear && mi.clear.ok);
+    const ev = (mi.events || {});
+    const evState = String(ev.state || 'warn').toLowerCase();
+    const miss = Number(ev.tx_missing_card_recent || 0);
+    const total = Number(ev.tx_rows_recent || 0);
+    const ratio = Number(ev.tx_missing_ratio || 0);
+    if(syncOk && clearOk && evState === 'ok'){
+      _setIntegrityBadge('ok', 'Integritate: OK');
+      return;
+    }
+    if((!syncOk) || (!clearOk)){
+      _setIntegrityBadge('err', 'Integritate: sync/clear problemă');
+      return;
+    }
+    _setIntegrityBadge('warn', `Integritate: card lipsă ${miss}/${total} (${Math.round(ratio*100)}%)`);
+  }catch(_e){
+    _setIntegrityBadge('err', 'Integritate: eroare diagnostic');
+  }
+}
+
+refreshIntegrityBadge();
+setInterval(refreshIntegrityBadge, 7000);
 </script>
 {% endblock %}

@@ -334,9 +334,30 @@ class TimeSegment(models.Model):
         if self.start_time >= self.end_time:
             from django.core.exceptions import ValidationError
             raise ValidationError("Start time must be before end time")
-        # NOTE: Overlap validation intentionally disabled.
-        # Real deployments frequently need overlapping intervals (e.g. an 'ALWAYS' segment
-        # plus narrower segments). Enforcement is done at door/access-level selection time.
+        # Disallow overlapping segments that apply on the same weekday.
+        # This keeps controller timezones deterministic and matches test expectations.
+        try:
+            from django.core.exceptions import ValidationError
+
+            qs = TimeSegment.objects.all()
+            if self.pk:
+                qs = qs.exclude(pk=self.pk)
+
+            # Time overlap: [start,end) intersects [other.start, other.end)
+            qs = qs.filter(start_time__lt=self.end_time, end_time__gt=self.start_time)
+            for other in qs.only('id', 'days_mask'):
+                try:
+                    if int(getattr(other, 'days_mask', 0) or 0) & int(self.days_mask or 0):
+                        raise ValidationError("TimeSegment overlaps an existing segment on at least one common day")
+                except ValidationError:
+                    raise
+                except Exception:
+                    continue
+        except ValidationError:
+            raise
+        except Exception:
+            # Keep clean() resilient; DB errors shouldn't crash form validation.
+            pass
 
     def __str__(self):  # pragma: no cover
         return f"Segment {self.name} {self.start_time}-{self.end_time}"[:80]

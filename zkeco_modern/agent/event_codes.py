@@ -20,19 +20,72 @@ from typing import Dict
 # Event code -> legacy label
 # NOTE: Device firmwares vary a lot; we only map codes we actually emit/observe.
 EVENT_CODES: Dict[str, str] = {
+    # ---------------------------------------------------------------
+    # ZKTeco C3/F3/G series Format B transaction eventType codes (0-39)
+    # These appear in the eventType (index 3) field of Format B lines:
+    #   pin,verified,door,eventType,inOut,time_second[,index][,cardno,sitecode]
+    # ---------------------------------------------------------------
+    "0": "Normal Open by Card",
+    "1": "Normal Open Manually",
+    "2": "Access Denied - Invalid Card",
+    "3": "Access Denied - Card Not Authorized",
+    "4": "Access Denied - Expired Card",
+    "5": "Access Denied - Invalid Time",
+    "6": "Access Denied - Anti-Passback",
+    "7": "Access Denied - Emergency Password",
+    "8": "Door Opened by Remote",
+    "9": "Door Closed Normally",
+    "10": "Door Opened by Button",
+    "11": "Button Pressed",
+    "12": "Door Locked by Schedule",
+    "13": "Door Unlocked by Schedule",
+    "14": "Normal Open Schedule Started",
+    "15": "Normal Open Schedule Cleared",
+    "16": "Access Denied - Card Not in List",
+    "17": "Fingerprint Access Granted",
+    "18": "Fingerprint Access Denied",
+    "19": "Multi-Card Open (Master Card)",
+    "20": "Emergency Password Open",
+    "21": "Access Granted by Super Password",
+    "22": "Door Opened Too Long",
+    "23": "Door Opened Too Long Recovered",
+    "25": "Alarm Input Triggered",
+    "26": "Alarm Input Cleared",
+    "27": "System Power-On",
+    "28": "Anti-Passback Error",
+    "29": "Inter-Lock Error",
+    "30": "Multi-Card Open Door",
+    "31": "Access Denied - Must Verify Both",
+    "32": "Door Opened Forcibly",
+    "33": "Door Closed After Force-Open Alarm",
+    "34": "Access Denied - Duress Card",
+    "35": "Card Removed",
+    "36": "Reserved",
+    "37": "Tamper Alarm",
+    "38": "Tamper Alarm Recovered",
+    "39": "Door Sensor Short-Circuit",
+
+    # ---------------------------------------------------------------
     # Door state (used by our code paths)
+    # ---------------------------------------------------------------
     "100": "Door Opened Correctly",
     "101": "Door Closed Correctly",
 
+    # ---------------------------------------------------------------
     # Access result (used by our code paths)
+    # ---------------------------------------------------------------
     "200": "Access Granted",
     "201": "Access Denied",
 
+    # ---------------------------------------------------------------
     # Alarms (placeholder; adjust as you catalog codes)
+    # ---------------------------------------------------------------
     "300": "Alarm Triggered",
     "301": "Alarm Cleared",
 
+    # ---------------------------------------------------------------
     # A few known legacy event ids seen in translations
+    # ---------------------------------------------------------------
     "203": "Multi-Card Open(Card plus Fingerprint)",
 }
 
@@ -64,6 +117,7 @@ DOOR_EVENT_LABELS: Dict[str, str] = {
     "door.open": "Remote Opening",
     "door.close": "Remote Closing",
     "door.normal_open": "Remote Normal Opening",
+    "door.normal_close": "Remote Normal Closing",
     "door.cancel_alarm": "Cancel Alarm",
     "door.lock": "Lock",
     "door.unlock": "Unlock",

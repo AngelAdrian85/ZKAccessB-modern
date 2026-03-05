@@ -74,6 +74,24 @@ powershell -ExecutionPolicy Bypass -File tray_launch.ps1
 
 The system tray icon will appear. Right-click it for menu options.
 
+### (Optional, Ideal) Enable Redis for true Live WebSockets
+In tray mode, the web server (Daphne) and CommCenter run in different processes. For WebSocket group events to work reliably across processes, you should run Redis and set `REDIS_URL`.
+
+If you already have Redis running locally on `127.0.0.1:6379`, `tray_launch.ps1` will auto-enable it.
+
+Helper script (tries `redis-server` on PATH; or Docker if you pass `-Docker`):
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\start_redis.ps1
+# or (Docker Desktop)
+powershell -ExecutionPolicy Bypass -File .\scripts\start_redis.ps1 -Docker
+```
+
+Then launch:
+```powershell
+$env:REDIS_URL = "redis://127.0.0.1:6379/0"
+powershell -ExecutionPolicy Bypass -File tray_launch.ps1
+```
+
 ### 3. Open Web Interface
 - Navigate to: `http://localhost:8000/agent/dashboard/`
 - Default port: **8000** (configurable)

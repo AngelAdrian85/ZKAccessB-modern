@@ -837,10 +837,20 @@
         <button type="button" class="btn-secondary" data-equip-action="logs" data-equip-module="command" data-equip-title="Comenzi" title="Deschide logurile pentru comenzi">📋 Loguri</button>
       </div>
     </div>
+    <div class="action-bar">
+      <span class="hint">Filtre</span>
+      <input id="cmdFilterDevice" type="text" placeholder="Device Name" class="input-compact" />
+      <input id="cmdFilterSerial" type="text" placeholder="Serial Number" class="input-compact" />
+      <input id="cmdFilterResult" type="text" placeholder="Returned Value" class="input-compact" />
+      <input id="cmdFilterQ" type="text" placeholder="Content" class="input-compact" style="min-width:260px;" />
+      <button type="button" id="btnCmdApplyFilters" class="btn-secondary">Caută</button>
+      <button type="button" id="btnCmdResetFilters" class="btn-secondary">Reset</button>
+      <span class="hint" id="cmdFilterHint"></span>
+    </div>
     <div class="table-shell">
       <table>
-        <thead><tr><th>#</th><th>Dispozitiv</th><th>Serie</th><th>Ușă</th><th>Conținut</th><th>Status</th><th>Creat</th><th>Acțiuni</th></tr></thead>
-        <tbody id="cmdTableBody"><tr><td colspan="8" class="td-center-muted">Se încarcă comenzi...</td></tr></tbody>
+        <thead><tr><th>#</th><th>Dispozitiv</th><th>Serie</th><th>Ușă</th><th>Conținut</th><th>Status</th><th>Creat</th><th>Executat</th><th>Returned</th><th>Acțiuni</th></tr></thead>
+        <tbody id="cmdTableBody"><tr><td colspan="10" class="td-center-muted">Se încarcă comenzi...</td></tr></tbody>
       </table>
     </div>
     <div id="cmdFlash" class="hint mt-6"></div>
@@ -3090,11 +3100,11 @@
   }
 
   let _menuSyncPollTimer = null;
-  function syncDevicePersonnelMenu(deviceId, deviceName){
+  function _syncDeviceGenericMenu(deviceId, deviceName, endpointUrl, okText){
     try{ if(_menuSyncPollTimer){ clearInterval(_menuSyncPollTimer); _menuSyncPollTimer = null; } }catch(e){}
     const dn = (deviceName || ('#' + String(deviceId||'')));
-    showMenuActionLoading('Sincronizare', `Se sincronizează server → centrală (${dn})...`);
-    fetch(`/agent/api/devices/${encodeURIComponent(String(deviceId))}/sync-personnel/`, {
+    showMenuActionLoading('Sincronizare', `${okText} (${dn})...`);
+    fetch(String(endpointUrl || ''), {
       method: 'POST',
       headers: {
         'Content-Type':'application/json',
@@ -3143,7 +3153,26 @@
       showMenuActionOverlay('Sincronizare: nu a pornit (' + msg + ')', false, 2600);
     });
   }
+
+  function syncDevicePersonnelMenu(deviceId, deviceName){
+    _syncDeviceGenericMenu(
+      deviceId,
+      deviceName,
+      `/agent/api/devices/${encodeURIComponent(String(deviceId))}/sync/`,
+      'Se sincronizează datele (server → centrală)'
+    );
+  }
   try{ window.syncDevicePersonnelMenu = syncDevicePersonnelMenu; }catch(e){}
+
+  function syncDeviceAccessLevelsMenu(deviceId, deviceName){
+    _syncDeviceGenericMenu(
+      deviceId,
+      deviceName,
+      `/agent/api/devices/${encodeURIComponent(String(deviceId))}/sync-access-levels/`,
+      'Se sincronizează nivelurile de acces (server → centrală)'
+    );
+  }
+  try{ window.syncDeviceAccessLevelsMenu = syncDeviceAccessLevelsMenu; }catch(e){}
 
   function deviceModalHasActionModal(){
     return Boolean(window.zkActionModal && typeof window.zkActionModal.open === 'function' && typeof window.zkActionModal.setState === 'function');
@@ -5034,7 +5063,29 @@
 
   async function loadCommands(){
     try{
-      const resp = await fetch('{% url "commands-full" %}?limit=200');
+      const esc = (s)=> String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/\'/g,'&#39;');
+      const dev = String(document.getElementById('cmdFilterDevice')?.value || '').trim();
+      const ser = String(document.getElementById('cmdFilterSerial')?.value || '').trim();
+      const resv = String(document.getElementById('cmdFilterResult')?.value || '').trim();
+      const qq = String(document.getElementById('cmdFilterQ')?.value || '').trim();
+      const params = new URLSearchParams();
+      params.set('limit','200');
+      if(dev) params.set('device', dev);
+      if(ser) params.set('serial', ser);
+      if(resv) params.set('result', resv);
+      if(qq) params.set('q', qq);
+
+      const hint = document.getElementById('cmdFilterHint');
+      if(hint){
+        const bits = [];
+        if(dev) bits.push('device=' + dev);
+        if(ser) bits.push('serial=' + ser);
+        if(resv) bits.push('returned=' + resv);
+        if(qq) bits.push('q=' + qq);
+        hint.textContent = bits.length ? ('(' + bits.join(', ') + ')') : '';
+      }
+
+      const resp = await fetch('{% url "commands-full" %}?' + params.toString());
       const data = await resp.json();
       if(!data.ok) throw new Error(data.error || 'load fail');
       const tbody = document.getElementById('cmdTableBody');
@@ -5042,24 +5093,64 @@
         const devId = parseInt(String(c.device_id || 0), 10) || 0;
         const devMeta = (devId && DEVICE_INDEX && DEVICE_INDEX[devId]) ? DEVICE_INDEX[devId] : null;
         const isPhys = Boolean(devMeta && devMeta.is_physical);
-        const devName = String((c.device || (devMeta && devMeta.name) || '') || '');
-        const syncBtn = (devId > 0 && isPhys)
-          ? `<button type="button" class="row-action" title="Sincronizează server → centrală" onclick="if(window.syncDevicePersonnelMenu){ window.syncDevicePersonnelMenu(${devId}, ${JSON.stringify(devName)}); }">SYNC</button>`
+        const cmdTxt = String((c.command || '') || '').trim();
+        const cmdUp = cmdTxt.toUpperCase();
+        let syncKind = '';
+        let syncLabel = '';
+        if(cmdUp.startsWith('SYNC_ALL') || cmdUp.startsWith('SYNC_PERSONNEL') || cmdUp.startsWith('SYNC_ACCESS_LEVELS')){ syncKind = 'personnel'; syncLabel = 'SYNC'; }
+
+        const syncBtn = (devId > 0 && isPhys && syncKind)
+          ? `<button type="button" class="row-action" data-cmd-action="sync" data-device-id="${devId}" data-sync-kind="${syncKind}" title="${syncLabel}">${syncLabel}</button>`
           : '';
+
+        const createdTxt = String((c.created_at||'')||'').replace('T',' ').slice(0,16);
+        const execTxt = String((c.executed_at||'')||'').replace('T',' ').slice(0,16);
+        const statusTxt = esc(c.status || '');
+        const resTxt = esc(c.result || '');
+        const cmdCell = esc(c.command || '');
         return `<tr>
         <td>${idx+1}</td>
-        <td>${c.device || '-'}</td>
-        <td>${c.serial || ''}</td>
-        <td>${c.door || ''}</td>
-        <td>${c.command}</td>
-        <td><span class="badge ${c.status==='OK'?'badge-green':'badge-orange'}">${c.status}</span></td>
-        <td>${(c.created_at||'').replace('T',' ').slice(0,16)}</td>
+        <td>${esc(c.device || '-')}</td>
+        <td>${esc(c.serial || '')}</td>
+        <td>${esc(c.door || '')}</td>
+        <td>${cmdCell}</td>
+        <td><span class="badge ${String(c.status||'')==='OK'?'badge-green':'badge-orange'}">${statusTxt}</span></td>
+        <td>${esc(createdTxt)}</td>
+        <td>${esc(execTxt)}</td>
+        <td>${resTxt}</td>
         <td>${syncBtn}</td>
       </tr>`;
       }).join('');
       flash(cmdFlash, `Comenzi: ${data.items.length}`);
     }catch(err){ flash(cmdFlash, `Eroare comenzi: ${err}`, true); }
   }
+
+  document.getElementById('btnCmdApplyFilters')?.addEventListener('click', ()=>{ loadCommands(); });
+  document.getElementById('btnCmdResetFilters')?.addEventListener('click', ()=>{
+    const ids = ['cmdFilterDevice','cmdFilterSerial','cmdFilterResult','cmdFilterQ'];
+    ids.forEach((id)=>{ const el = document.getElementById(id); if(el) el.value = ''; });
+    const hint = document.getElementById('cmdFilterHint');
+    if(hint) hint.textContent = '';
+    loadCommands();
+  });
+
+  document.getElementById('cmdTableBody')?.addEventListener('click', (e)=>{
+    const btn = e && e.target && e.target.closest ? e.target.closest('button[data-cmd-action="sync"]') : null;
+    if(!btn) return;
+    const deviceId = parseInt(String(btn.getAttribute('data-device-id') || '0'), 10) || 0;
+    const kind = String(btn.getAttribute('data-sync-kind') || '').trim().toLowerCase();
+    if(!(deviceId > 0) || !kind) return;
+    const devMeta = (deviceId && DEVICE_INDEX && DEVICE_INDEX[deviceId]) ? DEVICE_INDEX[deviceId] : null;
+    const devName = String((devMeta && devMeta.name) ? devMeta.name : ('#' + String(deviceId)));
+    if(kind === 'personnel'){
+      syncDevicePersonnelMenu(deviceId, devName);
+      return;
+    }
+    if(kind === 'access-levels'){
+      syncDeviceAccessLevelsMenu(deviceId, devName);
+      return;
+    }
+  });
 
   document.getElementById('btnCmdClear')?.addEventListener('click', async () => {
     const resp = await fetch('{% url "commands-clear" %}', {method:'POST', headers:{'X-CSRFToken': getCSRF()}});

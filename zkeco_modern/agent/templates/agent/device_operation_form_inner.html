@@ -163,9 +163,9 @@
 
       <div class="op-actions">
         <button type="button" class="op-btn" data-modal-close="1">Închide</button>
-        <button type="button" class="op-btn" data-modal-reload-url="/agent/crud/devices/{{ dev.id }}/op/get-events/?modal=1&limit=2000" data-modal-title="Get events – {{ dev.name }}">2.000</button>
-        <button type="button" class="op-btn" data-modal-reload-url="/agent/crud/devices/{{ dev.id }}/op/get-events/?modal=1&limit=5000" data-modal-title="Get events – {{ dev.name }}">5.000</button>
-        <button type="button" class="op-btn" data-modal-reload-url="/agent/crud/devices/{{ dev.id }}/op/get-events/?modal=1&all=1" data-modal-title="Get events – {{ dev.name }}">TOT (max)</button>
+        <button type="button" class="op-btn" data-modal-reload-url="/agent/crud/devices/{{ dev.id }}/op/get-events/?modal=1&limit=2000" data-modal-title="Evenimente – {{ dev.name }}">2.000</button>
+        <button type="button" class="op-btn" data-modal-reload-url="/agent/crud/devices/{{ dev.id }}/op/get-events/?modal=1&limit=5000" data-modal-title="Evenimente – {{ dev.name }}">5.000</button>
+        <button type="button" class="op-btn" data-modal-reload-url="/agent/crud/devices/{{ dev.id }}/op/get-events/?modal=1&all=1" data-modal-title="Evenimente – {{ dev.name }}">TOT (max)</button>
         <button type="submit" class="op-btn primary">PREIA EVENIMENTE (DIN CENTRALĂ)</button>
       </div>
 
@@ -306,21 +306,21 @@
       {% endif %}
 
     {% elif op == 'get-personnel' %}
-      <div class="op-sub" style="margin-top:6px;">Afișează ce există pe centrală (device) + ce există în DB. Permite alinierea frecventă server → centrală.</div>
+      <div class="op-sub" style="margin-top:6px;">Afișează ce există pe centrală + ce există în DB. Permite alinierea frecventă server → centrală.</div>
 
       <div class="op-actions">
         <button type="button" class="op-btn" data-modal-close="1">Închide</button>
         {% if show_device_data %}
-          <button type="button" class="op-btn" data-modal-reload-url="/agent/crud/devices/{{ dev.id }}/op/get-personnel/?modal=1&limit={{ limit }}" data-modal-title="Get personnel – {{ dev.name }}">ASCUNDE DATELE DEVICE</button>
+          <button type="button" class="op-btn" data-modal-reload-url="/agent/crud/devices/{{ dev.id }}/op/get-personnel/?modal=1&limit={{ limit }}" data-modal-title="Personal – {{ dev.name }}">ASCUNDE DATELE CENTRALEI</button>
         {% else %}
-          <button type="button" class="op-btn" data-modal-reload-url="/agent/crud/devices/{{ dev.id }}/op/get-personnel/?modal=1&limit={{ limit }}&device=1" data-modal-title="Get personnel – {{ dev.name }}">CITEȘTE DIN CENTRALĂ</button>
+          <button type="button" class="op-btn" data-modal-reload-url="/agent/crud/devices/{{ dev.id }}/op/get-personnel/?modal=1&limit={{ limit }}&device=1" data-modal-title="Personal – {{ dev.name }}">CITEȘTE DIN CENTRALĂ</button>
         {% endif %}
         <button type="submit" class="op-btn primary" name="do" value="sync" {% if not can_sync_personnel %}disabled title="SYNC disponibil doar pentru centrale fizice, când există personal syncabil în DB și listele diferă."{% endif %}>
-          {% if personnel_sets_identical %}SYNC (deja identic){% else %}SYNC SERVER → CENTRALĂ{% endif %}
+          {% if personnel_sets_identical %}SYNC (identic){% else %}SYNC{% endif %}
         </button>
       </div>
 
-      <div class="op-grid" style="margin-top:10px;grid-template-columns:1fr 1fr;">
+      <div class="op-grid" style="margin-top:10px;grid-template-columns:minmax(460px,1.12fr) minmax(420px,0.88fr);gap:12px;align-items:start;">
         <div>
           <div class="op-sub" style="margin:0 0 6px 0;">Contorizare pe centrală</div>
           <div style="border:1px solid #2f5876;border-radius:2px;padding:6px;background:#0f2433;">

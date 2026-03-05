@@ -79,6 +79,9 @@ static class PlcommproNative
     [DllImport("plcommpro.dll", EntryPoint = "GetDeviceData", CallingConvention = CallingConvention.StdCall)]
     public static extern int GetDeviceData(int handle, IntPtr outBuf, int outLen, IntPtr table, IntPtr fields, IntPtr filter, IntPtr options);
 
+    [DllImport("plcommpro.dll", EntryPoint = "GetRTLog", CallingConvention = CallingConvention.StdCall)]
+    public static extern int GetRTLog(int handle, IntPtr outBuf, int outLen);
+
     [DllImport("plcommpro.dll", EntryPoint = "DeleteDeviceData", CallingConvention = CallingConvention.StdCall)]
     public static extern int DeleteDeviceData(int handle, IntPtr table, IntPtr filter, IntPtr options);
 
@@ -212,6 +215,7 @@ class Program
                     "connect_only" => HandleConnectOnly(handle),
                     "get_options" => HandleGetOptions(handle, root),
                     "set_options" => HandleSetOptions(handle, root),
+                    "get_rtlog" => HandleGetRtlog(handle, root),
                     "data_count" => HandleDataCount(handle, root),
                     "query_data" => HandleQueryData(handle, root),
                     "delete_data" => HandleDeleteData(handle, root),
@@ -450,6 +454,35 @@ class Program
             if (hFields.IsAllocated) hFields.Free();
             if (hFilter.IsAllocated) hFilter.Free();
             if (hOpt.IsAllocated) hOpt.Free();
+            ArrayPool<byte>.Shared.Return(outBuf);
+        }
+    }
+
+    static int HandleGetRtlog(int handle, JsonElement root)
+    {
+        int bufLen = GetInt(root, "buffer_len", 65536);
+        if (bufLen < 4096) bufLen = 4096;
+        if (bufLen > 1024 * 1024) bufLen = 1024 * 1024;
+
+        byte[] outBuf = ArrayPool<byte>.Shared.Rent(bufLen);
+        Array.Clear(outBuf, 0, bufLen);
+        GCHandle hOut = default;
+        try
+        {
+            hOut = GCHandle.Alloc(outBuf, GCHandleType.Pinned);
+            int ret = PlcommproNative.GetRTLog(handle, hOut.AddrOfPinnedObject(), bufLen);
+            int lastErr = SafeLastError();
+            string data = "";
+            if (ret >= 0)
+            {
+                data = Util.FromLatin1Z(outBuf);
+            }
+            Write(new BridgeResponse(ret >= 0, ret, data, lastErr));
+            return 0;
+        }
+        finally
+        {
+            if (hOut.IsAllocated) hOut.Free();
             ArrayPool<byte>.Shared.Return(outBuf);
         }
     }

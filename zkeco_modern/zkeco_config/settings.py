@@ -215,7 +215,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # Internationalization
 LANGUAGE_CODE = "en-us"
-TIME_ZONE = "UTC"
+TIME_ZONE = "Europe/Bucharest"  # Romania EET/EEST (UTC+2 / UTC+3)
 USE_I18N = True
 USE_TZ = True
 

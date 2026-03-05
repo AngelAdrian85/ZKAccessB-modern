@@ -1,11 +1,13 @@
 Param(
-  [int]$Port = 8000,
+  [int]$Port = 0,
   [string]$Settings = 'zkeco_config.settings',
   [string]$Venv = '.venv',
   [string]$WebUser = '',
   [string]$WebPassword = '',
   [switch]$SaveWebCreds,
+  [switch]$Detach,
   [switch]$SelfTest,
+  [switch]$SelfTestFull,
   [switch]$NoCommCenter,
   [switch]$WSGI
 )
@@ -13,6 +15,41 @@ Param(
 # Force Django settings module for this session.
 # Legacy installations may have DJANGO_SETTINGS_MODULE=mysite.settings in the system env.
 $env:DJANGO_SETTINGS_MODULE = $Settings
+
+# Optional Redis channel layer (recommended for cross-process WebSocket events).
+# Safe behavior: only enable if a local Redis is already listening.
+function Test-TcpPort {
+  param(
+    [string]$Host = '127.0.0.1',
+    [int]$Port = 6379,
+    [int]$TimeoutMs = 250
+  )
+  try {
+    $client = New-Object System.Net.Sockets.TcpClient
+    $iar = $client.BeginConnect($Host, $Port, $null, $null)
+    $ok = $iar.AsyncWaitHandle.WaitOne($TimeoutMs, $false)
+    if(-not $ok){ try{ $client.Close() }catch{}; return $false }
+    $client.EndConnect($iar)
+    try{ $client.Close() }catch{}
+    return $true
+  } catch {
+    try{ if($client){ $client.Close() } }catch{}
+    return $false
+  }
+}
+
+try {
+  if((-not $env:REDIS_URL) -or [string]::IsNullOrWhiteSpace([string]$env:REDIS_URL)){
+    if(Test-TcpPort -Host '127.0.0.1' -Port 6379 -TimeoutMs 250){
+      $env:REDIS_URL = 'redis://127.0.0.1:6379/0'
+      Write-Host "[TRAY] REDIS_URL set ($($env:REDIS_URL)) - WS cross-process enabled"
+    } else {
+      Write-Host "[TRAY] Redis not detected on 127.0.0.1:6379 - using in-memory Channels (polling fallback still works)"
+    }
+  } else {
+    Write-Host "[TRAY] REDIS_URL already set (keeping existing value)"
+  }
+} catch {}
 
 # Optional: controller web UI credentials (used only for diagnostics / config scraping).
 # NOTE: We do NOT hard-code defaults here; operators can pass -WebUser/-WebPassword and
@@ -49,6 +86,24 @@ try {
     $configFile = Join-Path $env:USERPROFILE 'zkeco_tray_config.ini'
   }
 } catch { $configFile = $null }
+
+# If -Port was not explicitly passed (0 = sentinel), read port from INI config.
+# This ensures that after changing the port via Server Configuration dialog, the
+# next tray_launch (without -Port) automatically uses the saved port.
+if($Port -eq 0){
+  $iniPort = 0
+  try {
+    if($configFile -and (Test-Path $configFile)){
+      $iniPortRaw = Get-Content $configFile -ErrorAction SilentlyContinue |
+        Select-String '^\s*port\s*=\s*(\d+)' |
+        ForEach-Object { $_.Matches[0].Groups[1].Value } |
+        Select-Object -First 1
+      if($iniPortRaw){ $iniPort = [int]$iniPortRaw }
+    }
+  } catch {}
+  if($iniPort -gt 0){ $Port = $iniPort; Write-Host "[TRAY] Using port $Port from saved config" }
+  else { $Port = 8000; Write-Host "[TRAY] No saved port found, using default 8000" }
+}
 
 # Load any existing stored web creds
 $cfgLines = @()
@@ -225,6 +280,36 @@ try {
     } catch {}
   }
 } catch {}
+
+# Extra cleanup: ensure we don't run duplicate python system/venv processes.
+# If multiple tray_agent/daphne/readers exist, status becomes inconsistent and CommCenter appears offline.
+try {
+  Write-Host "[TRAY] Cleaning up old tray/server/reader processes (any Python)"
+  $root = (Resolve-Path $PWD).Path
+  $patterns = @(
+    '*manage.py* tray_agent*',
+    '*-m daphne*',
+    '*manage.py* runserver*',
+    '*card_reader_acp.py*',
+    '*card_reader_elatec.py*'
+  )
+  $procs = Get-CimInstance Win32_Process | Where-Object {
+    try {
+      $_.CommandLine -and ($_.CommandLine -like "*$root*")
+    } catch { $false }
+  }
+  $toKill = @()
+  foreach($p in $procs){
+    foreach($pat in $patterns){
+      try {
+        if($p.CommandLine -like $pat){ $toKill += $p.ProcessId; break }
+      } catch {}
+    }
+  }
+  foreach($pid in ($toKill | Sort-Object -Unique)){
+    try { Stop-Process -Id [int]$pid -Force -ErrorAction SilentlyContinue; Write-Host "[TRAY] Killed PID $pid" } catch {}
+  }
+} catch {}
 # Prefer the standard .venv if present; else fallback to .venv_new
 if( -not (Test-Path $Venv) ){
   if(Test-Path '.venv') { $Venv = '.venv' }
@@ -235,6 +320,55 @@ if(!(Test-Path "$Venv\Scripts\python.exe")){
   py -3 -m venv $Venv; if($LASTEXITCODE -ne 0){ Write-Error 'venv failed'; exit 1 }
 }
 $py = Join-Path $Venv 'Scripts/python.exe'
+
+# -----------------------------------------------------------------------------
+# QUICK SELF-TEST (non-blocking)
+# -----------------------------------------------------------------------------
+# Historical note: -SelfTest previously launched tray_agent with --self-test,
+# which keeps running and can look like a "hang". To avoid blocking operators,
+# -SelfTest is now a quick diagnostic that exits. Use -SelfTestFull to run the
+# old long-running behavior.
+if($SelfTest -and (-not $SelfTestFull)){
+  Write-Host "[TRAY] Quick self-test (no migrations, no tray agent)"
+
+  $manage = "zkeco_modern/manage.py"
+  if(-not (Test-Path $manage)){
+    Write-Error "[TRAY] manage.py not found at $manage"
+    exit 1
+  }
+
+  # 1) Basic imports (fast)
+  try {
+    & $py -c "import django, channels; import channels_redis; import redis; print('imports:ok')" 2>$null
+    if($LASTEXITCODE -ne 0){ throw "python imports failed" }
+  } catch {
+    Write-Warning "[TRAY] Python imports check failed (channels_redis/redis). WS will fall back to polling if Redis layer isn't available."
+  }
+
+  # 2) Django config check (fast, no migrate)
+  try {
+    & $py $manage 'check' "--settings=$Settings" 1>$null
+    if($LASTEXITCODE -ne 0){
+      Write-Warning "[TRAY] Django check reported issues (exit=$LASTEXITCODE)"
+    } else {
+      Write-Host "[TRAY] Django check OK"
+    }
+  } catch {
+    Write-Warning "[TRAY] Django check threw: $_"
+  }
+
+  # 3) Redis status hint
+  try {
+    if($env:REDIS_URL){
+      Write-Host "[TRAY] REDIS_URL=$($env:REDIS_URL)"
+    } else {
+      Write-Host "[TRAY] REDIS_URL not set; if Redis runs locally it will be auto-enabled on normal launch"
+    }
+  } catch {}
+
+  Write-Host "[TRAY] Quick self-test complete"
+  exit 0
+}
 
 # Optional: configure plcommpro.dll bridge runner
 # Preferred modern path: x86 .NET bridge EXE (no Python 32-bit required).
@@ -466,6 +600,47 @@ Write-Host "[TRAY] Pip install complete"
 # Start Card Reader Services (ACP & Elatec) if available
 Write-Host "[TRAY] Starting card reader services (ACP, Elatec)"
 $global:TrayChildPids = @()
+$acpEnabled = $false
+$elatecEnabled = $false
+
+function Get-ReaderProcess {
+  param(
+    [Parameter(Mandatory=$true)][string]$ScriptName
+  )
+  try {
+    return Get-CimInstance Win32_Process | Where-Object {
+      try {
+        $_.CommandLine -and ($_.CommandLine -like "*${ScriptName}*")
+      } catch {
+        $false
+      }
+    }
+  } catch {
+    return @()
+  }
+}
+
+function Start-ReaderIfNotRunning {
+  param(
+    [Parameter(Mandatory=$true)][string]$ScriptPath,
+    [Parameter(Mandatory=$true)][string[]]$Args,
+    [Parameter(Mandatory=$true)][string]$Tag
+  )
+  try {
+    $scriptLeaf = Split-Path $ScriptPath -Leaf
+    $running = @(Get-ReaderProcess -ScriptName $scriptLeaf)
+    if($running.Count -gt 0){
+      Write-Host "[TRAY] ${Tag} already running (count=$($running.Count)); skipping duplicate start"
+      return $null
+    }
+    $p = Start-Process -FilePath $py -ArgumentList (@($ScriptPath) + $Args) -PassThru -WindowStyle Hidden
+    return $p
+  } catch {
+    Write-Warning "[TRAY] Failed to start ${Tag}: $_"
+    return $null
+  }
+}
+
 function Write-TrayStatusJson {
   param(
     [bool]$AcpOn,
@@ -512,12 +687,18 @@ try {
       if ($ReaderCfg.acp.enabled -eq $false) { $acpEnabled = $false }
       if ($null -ne $ReaderCfg.acp.port) { $acpPort = [string]$ReaderCfg.acp.port }
     }
+    
     if ($acpEnabled) {
       Write-Host "[TRAY] Starting ACP listener on port $acpPort"
       # Respect UI block flag if present
-      if ($null -ne $trayStatus -and $trayStatus.acp_blocked -eq $true) { Write-Host "[TRAY] ACP start suppressed: acp_blocked flag set"; $acpEnabled = $false } 
-      $p = Start-Process -FilePath $py -ArgumentList $acpScript, $acpPort -PassThru -WindowStyle Hidden
-      if ($p) { $global:TrayChildPids += $p.Id }
+      if ($null -ne $trayStatus -and $trayStatus.acp_blocked -eq $true) {
+        Write-Host "[TRAY] ACP start suppressed: acp_blocked flag set"
+        $acpEnabled = $false
+      }
+      if($acpEnabled){
+        $p = Start-ReaderIfNotRunning -ScriptPath $acpScript -Args @($acpPort) -Tag 'ACP listener'
+        if ($p) { $global:TrayChildPids += $p.Id }
+      }
     } else {
       Write-Host "[TRAY] ACP listener disabled via config"
     }
@@ -535,14 +716,14 @@ try {
       if ($null -ne $ReaderCfg.elatec.port) { $elatecPort = [string]$ReaderCfg.elatec.port }
       if ($null -ne $ReaderCfg.elatec.mode) { $elatecMode = [string]$ReaderCfg.elatec.mode }
     }
-    # Auto-disable if COM port not present (only for non-virtual mode)
+    # Warn if COM port not present (only for non-virtual mode), but keep listener enabled.
+    # Elatec must still start as an independent reader service and may recover later.
     if ($elatecMode -ne 'virtual') {
       try {
         $ports = (Get-CimInstance Win32_SerialPort | Select-Object -ExpandProperty DeviceID) 2> $null
       } catch { $ports = @() }
       if ($elatecEnabled -and ($null -eq $ports -or ($ports -notcontains $elatecPort))) {
-        Write-Warning "[TRAY] Elatec port '$elatecPort' not found; disabling Elatec"
-        $elatecEnabled = $false
+        Write-Warning "[TRAY] Elatec port '$elatecPort' not found; starting listener anyway (independent reader mode)"
       }
     } else {
       Write-Host "[TRAY] Elatec in virtual mode; skipping COM port check"
@@ -554,12 +735,17 @@ try {
         Write-Host "[TRAY] Starting Elatec serial listener on $elatecPort"
       }
       # Respect UI block flag if present
-      if ($null -ne $trayStatus -and $trayStatus.elatec_blocked -eq $true) { Write-Host "[TRAY] Elatec start suppressed: elatec_blocked flag set"; $elatecEnabled = $false }
-      try {
-        $p2 = Start-Process -FilePath $py -ArgumentList $elatecScript, $elatecPort -PassThru -WindowStyle Hidden
-        if ($p2) { $global:TrayChildPids += $p2.Id }
-      } catch {
-        Write-Warning "[ELATEC] Failed to start on '$elatecPort': $_"; $elatecEnabled = $false
+      if ($null -ne $trayStatus -and $trayStatus.elatec_blocked -eq $true) {
+        Write-Host "[TRAY] Elatec start suppressed: elatec_blocked flag set"
+        $elatecEnabled = $false
+      }
+      if($elatecEnabled){
+        $p2 = Start-ReaderIfNotRunning -ScriptPath $elatecScript -Args @($elatecPort) -Tag 'Elatec listener'
+        if ($p2) {
+          $global:TrayChildPids += $p2.Id
+        } else {
+          $elatecEnabled = $false
+        }
       }
     } else {
       Write-Host "[TRAY] Elatec listener disabled (no valid port or config)"
@@ -623,17 +809,37 @@ if (Test-Path $manage) {
   Add-Content -Path migration_auto.log -Value ((Get-Date).ToString() + " manage.py missing; skipped migrations")
 }
 
+# Best-effort: allow inbound ADMS/iClock push to this server port.
+# (Requires admin; failures are non-fatal.)
+try {
+  $ruleName = "ZKAccessB ADMS Port $Port"
+  $existing = $null
+  try { $existing = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue } catch { $existing = $null }
+  if(-not $existing){
+    try {
+      New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Action Allow -Protocol TCP -LocalPort $Port -Profile Any -ErrorAction SilentlyContinue | Out-Null
+      Write-Host "[TRAY] Firewall rule added: $ruleName"
+    } catch {
+      Write-Warning "[TRAY] Could not add firewall rule (needs admin): $_"
+    }
+  }
+} catch {}
+
 Write-Host "[TRAY] Launching tray agent"
 $trayArgs = @()
-if($SelfTest){ $trayArgs += '--self-test' }
+if($SelfTestFull){ $trayArgs += '--self-test' }
 if($NoCommCenter){ $trayArgs += '--no-commcenter' }
 if(-not $WSGI){ $trayArgs += '--asgi' }
-$trayArgs += @('--driver','auto','--port',"$Port")
+$commDriver = ''
+try { $commDriver = [string]($env:ZKACCESS_COMMCENTER_DRIVER) } catch { $commDriver = '' }
+if([string]::IsNullOrWhiteSpace($commDriver)){ $commDriver = 'plcommpro' }
+Write-Host "[TRAY] CommCenter driver: $commDriver"
+$trayArgs += @('--driver',"$commDriver",'--port',"$Port")
 Write-Host "[TRAY] Collecting static files"
 & $py $manage 'collectstatic' '--noinput' "--settings=$Settings" > $null 2> collectstatic_errors.log
 if($LASTEXITCODE -ne 0){ Write-Warning "[TRAY] collectstatic reported errors; see collectstatic_errors.log" }
 Write-Host "[TRAY] Starting tray agent"
-# Run tray_agent in the foreground so actions are visible in terminal
+# Run tray_agent detached so it keeps running even if this launcher session ends.
 try {
   # Write initial running status before handing off
   $statusRun = [ordered]@{
@@ -656,5 +862,40 @@ try {
   }
   Set-Content -Path (Join-Path $PWD 'tray_status.json') -Value ($statusRun | ConvertTo-Json -Depth 3) -Encoding UTF8
 } catch {}
-& $py @('zkeco_modern/manage.py','tray_agent',"--settings=$Settings") @trayArgs
+
+try {
+  $selfPid = $PID
+  $existingTray = Get-CimInstance Win32_Process | Where-Object {
+    try {
+      $_.ProcessId -ne $selfPid -and $_.CommandLine -and ($_.CommandLine -like '*manage.py* tray_agent*')
+    } catch {
+      $false
+    }
+  }
+  foreach($proc in $existingTray){
+    try {
+      Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+      Write-Host "[TRAY] Stopped previous tray_agent PID $($proc.ProcessId)"
+    } catch {}
+  }
+} catch {
+  Write-Warning "[TRAY] Could not pre-clean tray_agent processes: $_"
+}
+
+try {
+  $stdout = Join-Path $PWD 'tray_agent_stdout.log'
+  $stderr = Join-Path $PWD 'tray_agent_stderr.log'
+  $argList = @('zkeco_modern/manage.py','tray_agent',"--settings=$Settings") + $trayArgs
+  if($Detach){
+    Start-Process -FilePath $py -ArgumentList $argList -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr | Out-Null
+    Write-Host "[TRAY] tray_agent launched (detached)"
+    Write-Host "[TRAY] Logs: $stdout ; $stderr"
+  } else {
+    Write-Host "[TRAY] tray_agent launching in this console (Ctrl+C stops only this console, tray stays managed by OS)"
+    & $py @($argList)
+  }
+} catch {
+  Write-Warning "[TRAY] Failed to launch tray_agent detached: $_"
+  throw
+}
  

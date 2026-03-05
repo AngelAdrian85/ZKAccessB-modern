@@ -11,11 +11,11 @@
 <div class="access-saved" data-access-saved="1"
      data-action-state="success"
      data-action-title="ACCES SALVAT"
-     data-action-message="Nivelul de acces a fost salvat. Sincronizare către centrale: queued={{ queued_sync|default:0 }}{% if already_sync %}, deja în așteptare={{ already_sync }}{% endif %} (SYNC_PERSONNEL)."
+  data-action-message="Nivelul de acces a fost salvat. Sincronizare către centrale: queued={{ queued_sync|default:0 }}{% if already_sync %}, deja în așteptare={{ already_sync }}{% endif %} (SYNC)."
      data-close-delay-ms="350">
   <h3>Nivelul {{ obj.name }} {% if created %}creat{% else %}actualizat{% endif %}</h3>
   <p>Modificarea a fost salvată.</p>
-  <p style="margin-top:6px;" class="hint">Sincronizare către centrale (SYNC_PERSONNEL): queued={{ queued_sync|default:0 }}{% if already_sync %}, deja în așteptare={{ already_sync }}{% endif %}.</p>
+  <p style="margin-top:6px;" class="hint">Sincronizare către centrale (SYNC): queued={{ queued_sync|default:0 }}{% if already_sync %}, deja în așteptare={{ already_sync }}{% endif %}.</p>
   <div class="actions">
     <button type="button" class="btn btn-secondary" data-modal-close="1">Închide</button>
     <button type="button" class="btn btn-primary" data-modal-close="1">Actualizează lista</button>
