@@ -49,6 +49,18 @@
 @keyframes flash{0%,100%{border-color:#cf222e;}50%{border-color:#ff6b6b;}}
 .device-icon.alarm{animation:flash 0.8s infinite;}
 #debug-status{position:fixed;bottom:0;right:0;background:rgba(0,0,0,0.9);color:#0f0;font-size:10px;padding:8px;max-width:300px;font-family:monospace;max-height:120px;overflow-y:auto;z-index:9999;border-top:1px solid #0f0;}
+.monitor-bottom-bar{position:relative;background:rgba(8,24,38,0.95);border:1px solid #1e303d;color:#9fd2f1;font-size:11px;padding:4px 10px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:6px;border-radius:6px;}
+.monitor-bottom-bar .k{color:#cfe9f8;font-weight:700;}
+.enrichment-legend{display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+.enrichment-pill{display:inline-flex;align-items:center;padding:1px 6px;border-radius:999px;font-size:10px;font-weight:700;letter-spacing:.2px;text-transform:uppercase;}
+.enrichment-pill.direct{background:#166534;color:#dcfce7;}
+.enrichment-pill.derived{background:#92400e;color:#fef3c7;}
+.enrichment-pill.enriched{background:#1d4ed8;color:#dbeafe;}
+.enrichment-pill.unresolved{background:#7f1d1d;color:#fecaca;}
+.enrichment-pill.controller-missing-card{background:#312e81;color:#e0e7ff;}
+.enrichment-pill.wiegand-resolved{background:#0f766e;color:#ccfbf1;}
+.capture-health-banner{display:none;margin:2px 0 0 0;padding:8px 10px;border-radius:8px;border:1px solid #815f00;background:#3d2a1a;color:#ffd66b;font-size:11px;font-weight:800;}
+.capture-health-banner.err{border-color:#8f1a22;background:#3b1e1e;color:#ffb4b4;}
 </style>
 
 <div class="monitor-embed">
@@ -75,12 +87,24 @@
   <div class="monitor-body">
     <div class="device-grid" id="devices"></div>
 
+    <div id="captureHealthBanner" class="capture-health-banner"></div>
+
     <div class="monitor-events">
       <div class="monitor-events-header">
         <h3>📋 Monitorizare Evenimente</h3>
         <div class="monitor-events-controls">
           <label>Afișare RTLOG / door events</label>
           <input type="checkbox" id="toggleRtlog" style="width:18px;height:18px;" />
+          <label>Enrichment</label>
+          <select id="enrichmentFilter" style="max-width:180px;">
+            <option value="all">Toate</option>
+            <option value="direct">Direct</option>
+            <option value="derived">Derived</option>
+            <option value="enriched">Enriched</option>
+            <option value="unresolved">Unresolved</option>
+            <option value="controller-missing-card">Valid fara CardNo</option>
+            <option value="missing">Fără status</option>
+          </select>
           <input id="eventFilter" placeholder="Filtrează evenimente..." style="max-width:220px;" oninput="filterEvents()" />
         </div>
       </div>
@@ -105,11 +129,23 @@
       </div>
     </div>
   </div>
+    <div class="monitor-bottom-bar" id="monitorBottomBar">
+      <span><span class="k">WS:</span> <span id="diagWs">connecting...</span></span>
+      <span><span class="k">Comm:</span> <span id="diagCommCenter">-</span></span>
+      <span><span class="k">RTLOG:</span> <span id="diagRtlogPersist">-</span></span>
+      <span><span class="k">Raw:</span> <span id="diagRawCapture">-</span></span>
+      <span><span class="k">ZKEM:</span> <span id="diagZkemkeeper">-</span></span>
+      <span><span class="k">Doors:</span> <span id="diagDoorsCount">0</span></span>
+      <span><span class="k">Map:</span> <span id="diagMapStatus">-</span></span>
+      <span><span class="k">Rows:</span> <span id="diagEventCount">0</span></span>
+      <span><span class="k">Last Card:</span> <span id="diagLastCard">-</span></span>
+      <span class="enrichment-legend"><span class="k">Legendă:</span> <span class="enrichment-pill direct">direct</span><span class="enrichment-pill derived">derived</span><span class="enrichment-pill enriched">enriched</span><span class="enrichment-pill unresolved">unresolved</span><span class="enrichment-pill controller-missing-card">valid fara CardNo</span><span class="enrichment-pill wiegand-resolved">wiegand</span></span>
+    </div>
 </div>
 
 <script>
 console.log('Monitor UI template loaded: v2025-12-10.3 + Physical Card Reader');
-window.__bridgeOnlyComm = false;
+window.__bridgeOnlyComm = true;
 window.__lastPhysicalCard = window.__lastPhysicalCard || '';
 window.__lastPhysicalCardTs = window.__lastPhysicalCardTs || 0;
 window.__monitorPageLoadTs = window.__monitorPageLoadTs || Date.now();
@@ -504,12 +540,164 @@ function updateDiagnostics(){
     const doors = window.__doorsCache || [];
     const map = window.__doorMap || {};
     const wsEl = document.getElementById('diagWs');
+    const commEl = document.getElementById('diagCommCenter');
+    const rtlogEl = document.getElementById('diagRtlogPersist');
+    const rawEl = document.getElementById('diagRawCapture');
+    const zkemEl = document.getElementById('diagZkemkeeper');
     const doorsCountEl = document.getElementById('diagDoorsCount');
     const mapStatusEl = document.getElementById('diagMapStatus');
+    const eventCountEl = document.getElementById('diagEventCount');
+    const lastCardEl = document.getElementById('diagLastCard');
+    const eventsBody = document.getElementById('events');
     if(doorsCountEl){ doorsCountEl.textContent = doors.length||0; }
     if(mapStatusEl){ mapStatusEl.textContent = (map && Object.keys(map).length>0) ? '✓' : '✗'; }
     if(wsEl && typeof window.__wsStatus==='string'){ wsEl.textContent = window.__wsStatus; }
+    if(commEl){ commEl.textContent = _diagCommCenterText(); }
+    if(rtlogEl){ rtlogEl.textContent = _diagRtlogText(); }
+    if(rawEl){ rawEl.textContent = _diagRawCaptureText(); }
+    if(zkemEl){ zkemEl.textContent = _diagZkemkeeperText(); }
+    if(eventCountEl && eventsBody){ eventCountEl.textContent = String(eventsBody.rows.length || 0); }
+    if(lastCardEl){ lastCardEl.textContent = String(window.__lastMonitorCardDiag || window.__lastMonitorCard || '-'); }
   }catch{}
+}
+
+function _diagFormatTs(value){
+  try{
+    if(value === null || value === undefined || value === ''){ return ''; }
+    let dt = null;
+    if(typeof value === 'number'){
+      dt = new Date(value < 1000000000000 ? value * 1000 : value);
+    } else {
+      dt = new Date(String(value));
+    }
+    if(!dt || isNaN(dt.getTime())){ return ''; }
+    return dt.toLocaleTimeString('ro-RO', { hour12: false });
+  }catch(_e){ return ''; }
+}
+
+function _diagAgeLabel(value){
+  try{
+    if(value === null || value === undefined || value === ''){ return ''; }
+    let tsMs = 0;
+    if(typeof value === 'number'){
+      tsMs = value < 1000000000000 ? value * 1000 : value;
+    } else {
+      tsMs = Date.parse(String(value));
+    }
+    if(!tsMs || isNaN(tsMs)){ return ''; }
+    const ageS = Math.max(0, Math.round((Date.now() - tsMs) / 1000));
+    return `${ageS}s`;
+  }catch(_e){ return ''; }
+}
+
+function _diagCommCenterText(){
+  try{
+    const center = window.__commCenterDiag || null;
+    if(!center){ return 'loading'; }
+    if(center.error){ return center.error; }
+    if(!center.running){ return 'offline'; }
+    const parts = ['online'];
+    const hb = _diagAgeLabel(center.last_cycle);
+    if(hb){ parts.push(`hb ${hb}`); }
+    if(center.sessions !== undefined && center.sessions !== null){ parts.push(`dev ${center.sessions}`); }
+    return parts.join(' | ');
+  }catch(_e){ return '-'; }
+}
+
+function _diagRtlogText(){
+  try{
+    const row = window.__latestPersistedRtlog || null;
+    if(!row || !row.id){ return 'none'; }
+    const parts = [`#${row.id}`];
+    if(row.device_id !== undefined && row.device_id !== null){ parts.push(`dev ${row.device_id}`); }
+    const tm = _diagFormatTs(row.created_at);
+    if(tm){ parts.push(tm); }
+    const age = _diagAgeLabel(row.created_at);
+    if(age){ parts.push(age); }
+    return parts.join(' | ');
+  }catch(_e){ return '-'; }
+}
+
+function _diagRawCaptureText(){
+  try{
+    const health = window.__captureHealthDiag || null;
+    if(!health){ return 'loading'; }
+    const state = String(health.raw_capture_state || 'unknown').toUpperCase();
+    const age = health.raw_capture_last_frame_age_s;
+    const parts = [state];
+    if(age !== null && age !== undefined && age !== ''){ parts.push(`last ${age}s`); }
+    return parts.join(' | ');
+  }catch(_e){ return '-'; }
+}
+
+function _diagZkemkeeperText(){
+  try{
+    const health = window.__captureHealthDiag || null;
+    if(!health){ return 'loading'; }
+    const label = String(health.zkemkeeper_label || health.zkemkeeper_state || 'unknown').toUpperCase();
+    if(health.zkemkeeper_error && health.zkemkeeper_message){
+      return `${label} | ${String(health.zkemkeeper_message).slice(0, 48)}`;
+    }
+    return label;
+  }catch(_e){ return '-'; }
+}
+
+function _renderCaptureHealthBanner(){
+  const el = document.getElementById('captureHealthBanner');
+  if(!el){ return; }
+  try{
+    const health = window.__captureHealthDiag || null;
+    if(!health){ el.style.display = 'none'; return; }
+    const state = String(health.summary_state || '').toLowerCase();
+    if(!state || state === 'ok' || state === 'disabled'){
+      el.style.display = 'none';
+      return;
+    }
+    const details = [];
+    if(health.raw_capture_message){ details.push(`W26: ${health.raw_capture_message}`); }
+    if(health.zkemkeeper_error && health.zkemkeeper_message){ details.push(`ZKEM: ${health.zkemkeeper_message}`); }
+    el.className = `capture-health-banner ${state === 'err' ? 'err' : ''}`.trim();
+    el.textContent = details.join(' | ') || String(health.summary_message || 'Captură brută indisponibilă');
+    el.style.display = 'block';
+  }catch(_e){
+    el.style.display = 'none';
+  }
+}
+
+async function pollCommCenterStatus(){
+  try{
+    const r = await fetch('/agent/control/comm-center/status/', {
+      headers: {'X-Requested-With':'XMLHttpRequest'},
+      credentials: 'same-origin',
+    });
+    if(!r.ok){ throw new Error(`http ${r.status}`); }
+    const j = await r.json();
+    if(!j || j.ok !== true){ throw new Error((j && j.error) ? j.error : 'status-failed'); }
+    const center = j.center || {};
+    window.__commCenterDiag = center;
+    window.__latestPersistedRtlog = center.latest_rtlog || null;
+  }catch(e){
+    window.__commCenterDiag = { error: 'status unavailable' };
+  }finally{
+    updateDiagnostics();
+  }
+}
+
+async function pollReaderCaptureHealth(){
+  try{
+    const r = await fetch('/agent/api/readers/status', {
+      headers: {'X-Requested-With':'XMLHttpRequest'},
+      credentials: 'same-origin',
+    });
+    if(!r.ok){ throw new Error(`http ${r.status}`); }
+    const j = await r.json();
+    window.__captureHealthDiag = (j && j.extra && j.extra.capture_health) ? j.extra.capture_health : { summary_state: 'err', summary_message: 'reader status unavailable' };
+  }catch(_e){
+    window.__captureHealthDiag = { summary_state: 'err', summary_message: 'reader status unavailable', raw_capture_state: 'unknown', zkemkeeper_state: 'unknown' };
+  }finally{
+    _renderCaptureHealthBanner();
+    updateDiagnostics();
+  }
 }
 const devs={};
 function renderDevices(){
@@ -625,10 +813,93 @@ function normalizeEvent(e){
   ne.cardholder = ne.cardholder || ne.employee_fullname || ne.employee_name || ne.emp_name || '';
   ne.status = ne.status || ne.status_text || '';
   ne.verify_mode = ne.verify_mode || ne.verify || '';
+  ne.enrichment_status = ne.enrichment_status || ne.card_enrichment_status || '';
+  ne.enrichment_source = ne.enrichment_source || ne.card_enrichment_source || '';
+  ne.enrichment_note = ne.enrichment_note || ne.card_enrichment_note || '';
+  ne.controller_event_status = ne.controller_event_status || ne.card_controller_event_status || '';
+  ne.controller_event_without_cardno = (ne.controller_event_without_cardno === true) || (String(ne.controller_event_status || '').trim().toLowerCase() === 'controller-event-without-cardno');
+  ne.card_display_status = ne.card_display_status || '';
+  ne.card_display_label = ne.card_display_label || '';
+  ne.card_display_note = ne.card_display_note || '';
+  ne.correlation_payload = ne.correlation_payload || ((ne._rtlogEntry && ne._rtlogEntry.correlation_payload) ? ne._rtlogEntry.correlation_payload : {}) || {};
+  ne.resolved_from_wiegand = !!(ne.correlation_payload && ne.correlation_payload.resolved_from_wiegand);
+  if(ne.resolved_from_wiegand){
+    ne.enrichment_status = ne.enrichment_status || 'enriched';
+    ne.enrichment_source = ne.enrichment_source || String(ne.correlation_payload.resolution_source || ne.correlation_payload.sniffed_source || 'wiegand_buffer');
+    ne.enrichment_note = ne.enrichment_note || `resolved_from_wiegand card=${String(ne.correlation_payload.sniffed_card_number || '')}`;
+  }
   return ne;
 }
+
+function isControllerMissingCardEvent(e, obj){
+  try{
+    if(e && e.controller_event_without_cardno === true){ return true; }
+    if(String((e && e.controller_event_status) || '').trim().toLowerCase() === 'controller-event-without-cardno'){ return true; }
+    const hasCard = !!String((e && e.card_no) || '').trim();
+    return !hasCard && !!((e && (e._isTxn || e.isTxn)) || (obj && obj._isTxn));
+  }catch(_e){
+    return false;
+  }
+}
+
+function enrichmentBadge(status, source, note){
+  const st = String(status || '').trim().toLowerCase();
+  const src = String(source || '').trim();
+  const nt = String(note || '').trim();
+  if(!st && !src){ return ''; }
+  let bg = '#334155';
+  let fg = '#e2e8f0';
+  if(st === 'direct'){ bg = '#166534'; fg = '#dcfce7'; }
+  else if(st === 'derived'){ bg = '#92400e'; fg = '#fef3c7'; }
+  else if(st === 'enriched'){ bg = '#1d4ed8'; fg = '#dbeafe'; }
+  else if(st === 'unresolved'){ bg = '#7f1d1d'; fg = '#fecaca'; }
+  const label = st || 'unknown';
+  const pieces = [`status=${label}`];
+  if(src){ pieces.push(`source=${src}`); }
+  if(nt){ pieces.push(nt); }
+  const title = _escapeHtml(pieces.join(' | '));
+  const sourceHtml = src ? `<span style="opacity:.9;">${_escapeHtml(src)}</span>` : '';
+  return `<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap;align-items:center;" title="${title}"><span style="display:inline-flex;align-items:center;padding:1px 6px;border-radius:999px;background:${bg};color:${fg};font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.2px;">${_escapeHtml(label)}</span>${sourceHtml}</div>`;
+}
+
+function wiegandResolutionBadge(correlationPayload){
+  const payload = correlationPayload || {};
+  if(!payload || payload.resolved_from_wiegand !== true){ return ''; }
+  const source = String(payload.sniffed_source || payload.resolution_source || 'wiegand').trim();
+  const card = String(payload.sniffed_card_number || '').trim();
+  const age = payload.buffer_age_ms !== undefined && payload.buffer_age_ms !== null ? `${payload.buffer_age_ms} ms` : '';
+  const title = _escapeHtml(['unknown card resolved from Wiegand', card ? `card=${card}` : '', source ? `source=${source}` : '', age].filter(Boolean).join(' | '));
+  const meta = [source, age].filter(Boolean).map(x => `<span style="color:#99f6e4;font-size:10px;">${_escapeHtml(String(x))}</span>`).join('');
+  return `<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap;align-items:center;" title="${title}"><span style="display:inline-flex;align-items:center;padding:1px 6px;border-radius:999px;background:#0f766e;color:#ccfbf1;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.2px;">Wiegand resolved</span>${meta}</div>`;
+}
+
+function cardCellHtml(e, obj){
+  const controllerMissing = isControllerMissingCardEvent(e, obj);
+  const hasCard = !!String(e.card_no || '').trim();
+  const fallback = controllerMissing ? String(e.card_display_label || 'Valid event, no CardNo from controller') : ((e._isTxn || e.isTxn || obj._isTxn) ? 'N/A (controller)' : '');
+  const value = hasCard ? _escapeHtml(e.card_no) : _escapeHtml(fallback);
+  const badge = (controllerMissing && String(e.enrichment_status || '').trim().toLowerCase() === 'unresolved')
+    ? ''
+    : enrichmentBadge(e.enrichment_status, e.enrichment_source, e.enrichment_note);
+  const wiegandBadge = wiegandResolutionBadge(e.correlation_payload || {});
+  const controllerBadge = controllerMissing
+    ? `<div style="margin-top:4px;display:flex;gap:4px;flex-wrap:wrap;align-items:center;"><span style="display:inline-flex;align-items:center;padding:1px 6px;border-radius:999px;background:#312e81;color:#e0e7ff;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.2px;">${_escapeHtml(String(e.card_display_label || 'valid fara CardNo'))}</span><span style="color:#c7d9ff;font-size:10px;">firmware/controller lane</span></div><div style="margin-top:4px;color:#9fb3c8;font-size:10px;">${_escapeHtml(String(e.card_display_note || 'Evenimentul este valid, dar centrala nu a trimis CardNo pe acest canal.'))}</div>`
+    : '';
+  if(!badge && !wiegandBadge && !controllerBadge){ return value; }
+  return `<div>${value || '-'}</div>${badge || ''}${wiegandBadge || ''}${controllerBadge}`;
+}
+
 function addEvent(obj){
   const e = normalizeEvent(obj);
+  try{
+    const rtlogRowId = String(e._rtlogRowId || (e._rtlogEntry && (e._rtlogEntry.id || e._rtlogEntry.rtlog_id)) || obj._rtlogRowId || obj.id || '').trim();
+    if(rtlogRowId){
+      window.__evtRtlogRowSeen = window.__evtRtlogRowSeen || {};
+      if(window.__evtRtlogRowSeen[rtlogRowId]){ return; }
+      window.__evtRtlogRowSeen[rtlogRowId] = 1;
+      e._rtlogRowId = rtlogRowId;
+    }
+  }catch(_e){}
   // Strict Live Monitor: show only access-relevant events (card scans + open/close).
   try{
     const src = String(e._source||obj._source||'').toLowerCase();
@@ -666,7 +937,7 @@ function addEvent(obj){
   // rapid consecutive scans would otherwise be dropped as "identical".
   try{
     const src0 = String(e._source||obj._source||'').toLowerCase();
-    if(src0 !== 'rtlog.scan' && src0 !== 'reader.scan' && src0 !== 'event.batch'){
+    if(src0 !== 'rtlog.scan' && src0 !== 'rtlog.batch' && src0 !== 'reader.scan' && src0 !== 'event.batch'){
       window.__evtDedup = window.__evtDedup || {};
       const k = `${String(e._source||obj._source||'')}|${String(e.point||'')}|${String(e.description||'')}|${String(e.status||'')}`;
       const now = Date.now();
@@ -703,6 +974,23 @@ function addEvent(obj){
     if(src === 'door.open' && !hasCard && point){
       const lastCard = window.__lastCardOnDoor[point] || 0;
       if(lastCard && (now - lastCard) < 1200){ return; }
+    }
+
+    // Cross-source dedup for EMPTY-CARD scan events.
+    // Keep this window short so rapid consecutive denied scans are not collapsed.
+    if(!hasCard && (src === 'rtlog.batch' || src === 'rtlog.scan' || src === 'event.batch') && point){
+      const devId = String(e.device_id || e.deviceId || '').trim();
+      const evCode = String(e.event_code || e.major || e.code || '').trim();
+      const vfy = String(e.verify_mode || '').trim().toLowerCase();
+      const dsc = String(e.description || '').trim().toLowerCase();
+      const k3 = `${devId}|${point}|${evCode}|${vfy}|${dsc}`;
+      window.__evtNoCDDedup = window.__evtNoCDDedup || {};
+      window.__evtNoCDDedupSrc = window.__evtNoCDDedupSrc || {};
+      const prevT = window.__evtNoCDDedup[k3] || 0;
+      const prevS = String(window.__evtNoCDDedupSrc[k3] || '').toLowerCase();
+      if(prevT && (now - prevT) < 700 && prevS && prevS !== src){ return; }
+      window.__evtNoCDDedup[k3] = now;
+      window.__evtNoCDDedupSrc[k3] = src;
     }
   }catch(_e){}
   // e._source may be set by the WebSocket handler to indicate origin/type
@@ -758,7 +1046,25 @@ function addEvent(obj){
   tr.style.background = rowBackground;
   // preserve source/type for client-side filtering (e.g. 'rtlog.batch' or 'door.open')
   try{ tr.dataset.eventSource = (e._source || obj._source || '').toString(); }catch{};
+  try{ tr.dataset.rtlogRowId = String(e._rtlogRowId || ''); }catch{};
+  try{ tr.dataset.readerSource = String(e._readerSource || e.reader_source || (e._rtlogEntry && e._rtlogEntry.reader_source) || ''); }catch{};
   tr.dataset.cardNo = e.card_no || '';
+  try{ tr.dataset.enrichmentStatus = String(e.enrichment_status || ''); }catch{};
+  try{ tr.dataset.enrichmentSource = String(e.enrichment_source || ''); }catch{};
+  try{ tr.dataset.controllerMissingCard = isControllerMissingCardEvent(e, obj) ? '1' : '0'; }catch{};
+  try{ tr.dataset.wiegandResolved = e.resolved_from_wiegand ? '1' : '0'; }catch{};
+  try{
+    const cc = String(e.card_no || '').trim();
+    if(cc && cc !== '0' && !/^0+$/.test(cc) && cc !== '000000' && cc !== '00000000'){
+      window.__lastMonitorCard = cc;
+      const sourceLabel = String(e._readerSource || e.reader_source || (e._rtlogEntry && e._rtlogEntry.reader_source) || e._source || '').trim();
+      const rowLabel = String(e._rtlogRowId || '').trim();
+      const meta = [];
+      if(sourceLabel){ meta.push(sourceLabel); }
+      if(rowLabel){ meta.push(`#${rowLabel}`); }
+      window.__lastMonitorCardDiag = meta.length ? `${cc} (${meta.join(' | ')})` : cc;
+    }
+  }catch(_e){}
   try{ tr.dataset.insertedAt = String(Date.now()); }catch{};
   
   // Create cells - action button will be in the last column (Acțiune)
@@ -766,13 +1072,16 @@ function addEvent(obj){
     e.time,
     e.point||'',
     e.description||'',
-    e.card_no||'',
+    cardCellHtml(e, obj),
     displayName || '-',
     (e.cardholder||'') || '-',
     e.status||'',
     e.verify_mode||'',
     '' // Empty for action column - will be filled below
   ].map((val, idx) => {
+    if(idx === 3){
+      return `<td>${val}</td>`;
+    }
     // Last column (index 8) is the action button column
     if(idx === 8 && e.card_no){
       return `<td><button data-action-btn style="padding:2px 6px;background:#15803d;color:#fff;border:none;border-radius:3px;cursor:pointer;font-size:11px;font-weight:500;">+Adaugă Card</button></td>`;
@@ -794,6 +1103,7 @@ function addEvent(obj){
   
   body.insertBefore(tr, body.firstChild);
   while(body.rows.length>500){ body.deleteRow(500); }
+  updateDiagnostics();
 }
 
 // No bridging between PC reader scans and controller events.
@@ -814,16 +1124,43 @@ function setShowRtlog(val){
   try{ localStorage.setItem('monitor.show_rtlog', val ? '1' : '0'); }catch{}
   applyEventFilterToExistingRows();
 }
-function applyEventFilterToExistingRows(){
+function getEnrichmentFilter(){
+  try{
+    const el = document.getElementById('enrichmentFilter');
+    return String((el && el.value) || 'all').trim().toLowerCase() || 'all';
+  }catch{ return 'all'; }
+}
+function _rowMatchesEnrichmentFilter(row){
+  const wanted = getEnrichmentFilter();
+  if(wanted === 'all'){ return true; }
+  if(wanted === 'controller-missing-card'){
+    return String((row.dataset && row.dataset.controllerMissingCard) || '') === '1';
+  }
+  const status = String((row.dataset && row.dataset.enrichmentStatus) || '').trim().toLowerCase();
+  if(wanted === 'missing'){ return !status; }
+  return status === wanted;
+}
+function _rowMatchesTextFilter(row){
+  const el = document.getElementById('eventFilter');
+  const term = String((el && el.value) || '').toLowerCase();
+  return (!term || row.textContent.toLowerCase().includes(term));
+}
+function _rowMatchesRtlogFilter(row){
   const show = getShowRtlog();
+  const src = String((row.dataset && row.dataset.eventSource) || '').toLowerCase();
+  const desc = String((row.cells && row.cells[2] && row.cells[2].textContent) || '').toLowerCase();
+  const isRtlog = src.includes('rtlog') || /^rtlog/.test(desc);
+  return !isRtlog || show;
+}
+function _applyAllFiltersToRow(row){
+  const visible = _rowMatchesRtlogFilter(row) && _rowMatchesTextFilter(row) && _rowMatchesEnrichmentFilter(row);
+  row.style.display = visible ? '' : 'none';
+}
+function applyEventFilterToExistingRows(){
   document.querySelectorAll('#events tr').forEach(r=>{
-    const src = (r.dataset.eventSource||'').toLowerCase();
-    const desc = (r.cells && r.cells[2] && r.cells[2].textContent || '').toLowerCase();
-    // hide only if source is rtlog or description starts with rtlog
-    const isRtlog = src.includes('rtlog') || /^rtlog/.test(desc);
-    if(isRtlog && !show){ r.style.display = 'none'; }
-    else if(r.style.display==='none' && show){ r.style.display = ''; }
+    _applyAllFiltersToRow(r);
   });
+  updateDiagnostics();
 }
 
 // Async function to check card ownership and update row styling
@@ -969,10 +1306,7 @@ function openEditCardModal(employeeId, cardNumber){
   window.location.href = url;
 }
 function filterEvents(){
-  const term=document.getElementById('eventFilter').value.toLowerCase();
-  document.querySelectorAll('#events tr').forEach(r=>{
-    r.style.display = (!term || r.textContent.toLowerCase().includes(term)) ? '' : 'none';
-  });
+  applyEventFilterToExistingRows();
 }
 
 // --- RTLOG polling fallback (when WebSockets are unavailable) ---
@@ -1031,7 +1365,13 @@ async function _rtlogPollOnce(){
         if(!isFresh){ continue; }
         const devId = (row && (row.device_id||row.deviceId||row.device)) ? (row.device_id||row.deviceId||row.device) : '';
         const evt = _parseRtlogLineToEvent(devId, raw, createdAt);
-        if(evt){ addEvent(evt); }
+        if(evt){
+          evt._rtlogRowId = row.id || '';
+          evt._readerSource = 'db.poll';
+          evt.correlation_payload = row.correlation_payload || {};
+          evt._rtlogEntry = Object.assign({}, evt._rtlogEntry || {}, { id: row.id || '', raw: raw, created_at: createdAt, reader_source: 'db.poll', correlation_payload: row.correlation_payload || {} });
+          addEvent(evt);
+        }
       }
 
       try{
@@ -1066,7 +1406,13 @@ async function _rtlogPollOnce(){
       const raw = row && row.raw ? row.raw : '';
       const createdAt = row && (row.created_at||row.createdAt) ? (row.created_at||row.createdAt) : '';
       const evt = _parseRtlogLineToEvent(devId, raw, createdAt);
-      if(evt){ shown += 1; addEvent(evt); }
+      if(evt){
+        evt._rtlogRowId = row.id || '';
+        evt._readerSource = 'db.poll';
+        evt._rtlogEntry = Object.assign({}, evt._rtlogEntry || {}, { id: row.id || '', raw: raw, created_at: createdAt, reader_source: 'db.poll' });
+        shown += 1;
+        addEvent(evt);
+      }
     }
     if(rows.length && typeof j.last_id === 'number'){
       window.__rtlogLastId = j.last_id;
@@ -1205,20 +1551,87 @@ function wsConnect(){
       renderDevices();
       window.__wsStatus = 'online'; updateDiagnostics();
     } else if(data.type==='rtlog.batch'){
+      const entries = (data && Array.isArray(data.entries)) ? data.entries : [];
       const lines = (data && Array.isArray(data.lines)) ? data.lines : [];
-      const lineCount = lines.length;
       const devId = data.device_id || data.deviceId || data.device || '';
 
       // Convert RTLOG lines into user-facing scan events when they contain a card.
       // Critical path: physical scan -> monitor row -> "+Adaugă Card".
       let shown = 0;
       try{
+        if(entries.length){
+          for(const entry of entries){
+            const did = entry.device_id || devId || '';
+            let evt = null;
+            try{ evt = entry.raw ? _parseRtlogLineToEvent(did, entry.raw, entry.time || entry.time_second || '') : null; }catch(_e){}
+            if(!evt){
+              let point = '';
+              try{
+                const km = window.__doorKeyMap || {};
+                const k = `${String(did)}:${String(entry.door_number || '')}`;
+                if(km[k]){ point = String(km[k]); }
+              }catch(_e){}
+              evt = {
+                point: point,
+                description: entry.event_description || 'Eveniment centrala',
+                verify_mode: entry.verify_mode || '',
+                device_id: did,
+                _source: 'rtlog.batch',
+              };
+            }
+            evt.time = entry.time || evt.time || entry.time_second || '';
+            evt.card_no = entry.card_no || evt.card_no || entry.card_no_raw || '';
+            evt.verify_mode = entry.verify_mode || evt.verify_mode || '';
+            evt.description = entry.event_description || evt.description || 'Eveniment centrala';
+            evt._source = 'rtlog.batch';
+            evt._event_code = entry.event_code || evt._event_code || '';
+            evt.enrichment_status = entry.enrichment_status || '';
+            evt.enrichment_source = entry.enrichment_source || '';
+            evt.enrichment_note = entry.enrichment_note || '';
+            evt.correlation_payload = entry.correlation_payload || {};
+            evt._rtlogRowId = entry.id || entry.rtlog_id || '';
+            evt._readerSource = entry.reader_source || entry.monitor_origin || 'ws.rtlog.batch';
+            evt._rtlogEntry = entry;
+            shown += 1;
+            addEvent(evt);
+          }
+          return;
+        }
         for(const ln of lines){
           const evt = _parseRtlogLineToEvent(devId, ln);
           if(evt){ shown += 1; addEvent(evt); }
         }
       }catch(err){ console.warn('rtlog parse failed', err); }
     } else if(data.type==='event.batch'){
+      const entries = (data && Array.isArray(data.entries)) ? data.entries : [];
+      if(entries.length){
+        entries.forEach((entry)=>{
+          const did = entry.device_id || data.device_id || data.deviceId || data.device || '';
+          const doorNum = entry.door_number ? String(entry.door_number) : '';
+          let point = data.point_id||'';
+          try{
+            const km = window.__doorKeyMap || {};
+            const k = `${String(did)}:${String(doorNum)}`;
+            if(km[k]){ point = String(km[k]); }
+          }catch(_e){}
+          addEvent({
+            point: point,
+            description: entry.event_description || 'Eveniment centrala',
+            code: entry.event_code || '',
+            event_code: entry.event_code || '',
+            card_no: entry.card_no || entry.card_no_raw || '',
+            verify_mode: entry.verify_mode || '',
+            device_id: did,
+            isTxn: true,
+            enrichment_status: entry.enrichment_status || '',
+            enrichment_source: entry.enrichment_source || '',
+            enrichment_note: entry.enrichment_note || '',
+            _source: 'event.batch',
+            _rtlogEntry: entry,
+          });
+        });
+        return;
+      }
       if(data.descriptions && data.codes){
         data.descriptions.forEach((desc,i)=>{
           const vm = (data.verify_modes && data.verify_modes[i]) ? data.verify_modes[i] : '';
@@ -1231,7 +1644,17 @@ function wsConnect(){
             const k = `${String(did)}:${String(doorNum)}`;
             if(km[k]){ point = String(km[k]); }
           }catch(_e){}
-          addEvent({ point: point, description:desc, code:data.codes[i], card_no: cardNo, verify_mode: vm, _source: 'event.batch' });
+          addEvent({
+            point: point,
+            description: desc,
+            code: data.codes[i],
+            event_code: data.codes[i],
+            card_no: cardNo,
+            verify_mode: vm,
+            device_id: did,
+            isTxn: true,
+            _source: 'event.batch'
+          });
         });
       }
     } else if(data.type==='legacy.event'){
@@ -1929,11 +2352,19 @@ function openGrantAccessModal(employeeId, doorId){
 // Start DB polling immediately so scans appear even when WebSocket is connected
 // but not receiving (e.g. InMemoryChannelLayer without Redis across processes).
 try{ _rtlogPollStart(); }catch(_e){}
+try{ pollCommCenterStatus(); }catch(_e){}
+try{ window.__commCenterDiagTimer = setInterval(pollCommCenterStatus, 5000); }catch(_e){}
+try{ pollReaderCaptureHealth(); }catch(_e){}
+try{ window.__captureHealthTimer = setInterval(pollReaderCaptureHealth, 5000); }catch(_e){}
 wsConnect();
 // Guarded binding in case element doesn't exist
 try {
   const ef = document.getElementById('eventFilter');
   if(ef){ ef.addEventListener('input',()=>filterEvents()); }
+} catch{}
+try {
+  const enf = document.getElementById('enrichmentFilter');
+  if(enf){ enf.addEventListener('change', ()=>applyEventFilterToExistingRows()); }
 } catch{}
 // Initialize RTLOG toggle state and bind handler
 try{
@@ -2066,17 +2497,17 @@ function _parseRtlogLineToEvent(deviceId, rawLine, createdAtFallback){
     }
   }
 
-  const pinLooksLikeCard = !!(pin && pin !== '0' && !/^0+$/.test(pin) && pin.length >= (typeof CARD_MIN_LENGTH !== 'undefined' ? CARD_MIN_LENGTH : 4));
+  const pinLooksLikeCard = !!(pin && pin !== '0' && /^\d+$/.test(pin) && !/^0+$/.test(pin) && pin.length >= (typeof CARD_MIN_LENGTH !== 'undefined' ? CARD_MIN_LENGTH : 4));
   const cardLooksInvalid = (!card || card === '0' || /^0+$/.test(card) || card === '000000' || card === '00000000');
-  if(cardLooksInvalid && pinLooksLikeCard){
+  if(isTxn && cardLooksInvalid && pinLooksLikeCard){
     card = pin;
   }
 
-  // Some devices shift Cardno into the "Index" field and leave Cardno blank.
+  // Keep frontend behavior aligned with backend parsing: only treat the RTLOG
+  // index as CardNo when it clearly looks like a true card identifier.
   if(isTxn && (!card || card === '0' || /^0+$/.test(card) || card === '000000' || card === '00000000')){
-    const minLen = (typeof CARD_MIN_LENGTH !== 'undefined' ? CARD_MIN_LENGTH : 4);
     const idxMaybe = (parts.length >= 9 ? String(parts[6]||'').trim() : '');
-    if(idxMaybe && /^\d+$/.test(idxMaybe) && idxMaybe.length >= minLen){
+    if(idxMaybe && ((/^\d+$/.test(idxMaybe) && idxMaybe.length >= 7) || !/^\d+$/.test(idxMaybe))){
       card = idxMaybe;
     }
   }

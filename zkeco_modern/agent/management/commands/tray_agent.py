@@ -30,6 +30,7 @@ except Exception:  # pragma: no cover
 
 _CENTER = None
 _SERVER_PROC = None
+_ADMS_SERVER_PROC = None
 _CENTER_THREAD = None
 _LAST_ICON_STATE = None  # (server_running, center_running)
 _LAST_ICON_STATE = None  # (server_running, center_running)
@@ -46,7 +47,8 @@ _COMM_LAST_DRIVER = None
 _COMM_LAST_BACKEND = None
 
 DEFAULT_HOST = '0.0.0.0'
-DEFAULT_PORT = 8000
+DEFAULT_PORT = 15437
+DEFAULT_ADMS_PORT = 8091
 CONFIG_PATH = Path.home() / 'zkeco_tray_config.ini'
 # Be tolerant to manual edits: allow duplicate keys (keeps last occurrence)
 _CONFIG = configparser.ConfigParser(strict=False)
@@ -60,6 +62,8 @@ if not _CONFIG.has_section('tray'):
     _CONFIG.add_section('tray')
 if not _CONFIG.has_option('tray','port'):
     _CONFIG.set('tray','port', str(DEFAULT_PORT))
+if not _CONFIG.has_option('tray','adms_port'):
+    _CONFIG.set('tray','adms_port', str(DEFAULT_ADMS_PORT))
 if not _CONFIG.has_option('tray','server_mode'):
     _CONFIG.set('tray','server_mode', 'asgi')  # asgi or wsgi
 if not _CONFIG.has_option('tray','license_cipher'):
@@ -137,6 +141,8 @@ def _init_logging():
             sh.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
             root = logging.getLogger()
             root.addHandler(sh)
+        except SystemExit:
+            raise
         except Exception:
             pass
     except Exception:
@@ -333,6 +339,12 @@ def _looks_like_our_server_cmdline(cmdline: str) -> bool:
         return True
     return False
 
+def _looks_like_our_listener_cmdline(cmdline: str) -> bool:
+    if not cmdline:
+        return False
+    cl = cmdline.lower()
+    return any(name in cl for name in ('card_reader_acp.py', 'card_reader_elatec.py', 'wiegand_listener.py'))
+
 def _windows_listening_pids_on_port(port: int) -> set:
     pids = set()
     try:
@@ -375,6 +387,31 @@ def _stop_our_server_on_port(port: int):
                     stderr=subprocess.DEVNULL,
                 )
                 logging.info('Stopped server pid=%s on port %s', pid, port)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+def _stop_our_listener_on_port(port: int):
+    """Stop our TCP listener processes on a given port."""
+    try:
+        if os.name != 'nt':
+            return
+        port = int(port)
+        listen_pids = _windows_listening_pids_on_port(port)
+        for pid in sorted(listen_pids):
+            try:
+                if pid == os.getpid():
+                    continue
+                cmdline = _windows_get_process_cmdline(pid)
+                if not _looks_like_our_listener_cmdline(cmdline):
+                    continue
+                subprocess.run(
+                    ['taskkill', '/PID', str(pid), '/F', '/T'],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                logging.info('Stopped listener pid=%s on port %s', pid, port)
             except Exception:
                 pass
     except Exception:
@@ -442,12 +479,216 @@ def _read_tray_status() -> dict:
     try:
         p = _tray_status_path()
         if p.exists():
-            return json.loads(p.read_text(encoding='utf-8')) or {}
+            return json.loads(p.read_text(encoding='utf-8-sig')) or {}
     except Exception:
         pass
     return {}
 
-def _write_tray_status(acp_on: bool, elatec_on: bool, server_state: str, center_on: bool):
+def _zkemkeeper_heartbeat_path() -> Path:
+    return Path.home() / 'zkeco_reader_heartbeat_zkemkeeper.json'
+
+def _read_zkemkeeper_heartbeat() -> dict:
+    try:
+        p = _zkemkeeper_heartbeat_path()
+        if p.exists():
+            return json.loads(p.read_text(encoding='utf-8-sig')) or {}
+    except Exception:
+        pass
+    return {}
+
+def _zkemkeeper_process_running() -> bool:
+    try:
+        out = subprocess.run(
+            [
+                'powershell',
+                '-ExecutionPolicy',
+                'Bypass',
+                '-Command',
+                "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*zkemkeeper_event_bridge.ps1*' -or $_.CommandLine -like '*zkemkeeper_event_bridge.vbs*' } | Select-Object -First 1 -ExpandProperty ProcessId",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        return bool((out.stdout or '').strip())
+    except Exception:
+        return False
+
+
+def _wiegand_heartbeat_path() -> Path:
+    return Path.home() / 'zkeco_reader_heartbeat_wiegand.json'
+
+
+def _wiegand_trace_path() -> Path:
+    try:
+        base = Path(getattr(settings, 'BASE_DIR', Path.cwd()))
+        return base.parent / 'tmp_wiegand_listener_trace.jsonl'
+    except Exception:
+        return Path('tmp_wiegand_listener_trace.jsonl')
+
+
+def _read_last_jsonl_event(path: Path, event_name: str) -> dict:
+    try:
+        if not path.exists():
+            return {}
+        text = path.read_text(encoding='utf-8', errors='ignore')
+        for line in reversed(text.splitlines()):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                payload = json.loads(line)
+            except Exception:
+                continue
+            if str(payload.get('event') or '').strip() == event_name:
+                return payload if isinstance(payload, dict) else {}
+    except Exception:
+        pass
+    return {}
+
+
+def _collect_capture_health(st: dict) -> dict:
+    try:
+        cfg = _load_readers_cfg() or {}
+    except Exception:
+        cfg = {}
+    wiegand_cfg = cfg.get('wiegand') or {}
+    wiegand_enabled = bool(st.get('wiegand_enabled', wiegand_cfg.get('enabled', False)))
+    wiegand_listener = str(st.get('wiegand') or 'OPRIT').strip().upper()
+    heartbeat = {}
+    try:
+        hb_path = _wiegand_heartbeat_path()
+        if hb_path.exists():
+            heartbeat = json.loads(hb_path.read_text(encoding='utf-8-sig')) or {}
+    except Exception:
+        heartbeat = {}
+    last_frame = _read_last_jsonl_event(_wiegand_trace_path(), 'frame_parsed')
+
+    raw_capture_last_frame_ts = last_frame.get('ts')
+    heartbeat_ts = heartbeat.get('ts') if isinstance(heartbeat, dict) else None
+    heartbeat_source = str((heartbeat or {}).get('source') or '').strip().lower()
+    try:
+        if heartbeat_source == 'frame' and heartbeat_ts not in (None, ''):
+            if raw_capture_last_frame_ts in (None, '') or float(heartbeat_ts) > float(raw_capture_last_frame_ts):
+                raw_capture_last_frame_ts = heartbeat_ts
+    except Exception:
+        pass
+
+    raw_capture_last_frame_age_s = None
+    try:
+        if raw_capture_last_frame_ts not in (None, ''):
+            raw_capture_last_frame_age_s = max(0, int(time.time() - float(raw_capture_last_frame_ts)))
+    except Exception:
+        raw_capture_last_frame_age_s = None
+
+    if not wiegand_enabled:
+        raw_capture_state = 'disabled'
+        raw_capture_message = 'W26 dezactivat'
+    elif wiegand_listener != 'ON':
+        raw_capture_state = 'listener_down'
+        raw_capture_message = 'W26 oprit; nu există captură brută'
+    elif raw_capture_last_frame_age_s is None:
+        raw_capture_state = 'absent'
+        raw_capture_message = 'W26 pornit, dar nu a capturat niciun frame brut'
+    elif raw_capture_last_frame_age_s > 120:
+        raw_capture_state = 'absent'
+        raw_capture_message = f'W26 pornit, dar ultimul frame brut are {raw_capture_last_frame_age_s}s'
+    else:
+        raw_capture_state = 'active'
+        raw_capture_message = f'W26 activ; ultimul frame brut are {raw_capture_last_frame_age_s}s'
+
+    zkem_enabled = bool(st.get('zkemkeeper_enabled', False))
+    zkem_label = str(st.get('zkemkeeper') or '').strip().upper()
+    zkem_status = str(st.get('zkemkeeper_status') or '').strip().lower()
+    zkem_message = str(st.get('zkemkeeper_message') or '').strip()
+    if not zkem_enabled:
+        zkem_capture_state = 'disabled'
+    elif zkem_label == 'EROARE' or zkem_status == 'error':
+        zkem_capture_state = 'error'
+    elif zkem_label == 'ON':
+        zkem_capture_state = 'active'
+    elif zkem_label:
+        zkem_capture_state = 'inactive'
+    else:
+        zkem_capture_state = 'unknown'
+
+    warnings = []
+    summary_state = 'ok'
+    if raw_capture_state in ('listener_down', 'absent'):
+        warnings.append('raw capture absent')
+        summary_state = 'warn'
+    if zkem_capture_state == 'error':
+        warnings.append('zkemkeeper error')
+        summary_state = 'err'
+    if warnings:
+        summary_message = '; '.join(warnings)
+    elif raw_capture_state == 'disabled' and zkem_capture_state == 'disabled':
+        summary_state = 'disabled'
+        summary_message = 'capture disabled'
+    else:
+        summary_message = 'capture active'
+
+    heartbeat_age_s = None
+    try:
+        if heartbeat_ts not in (None, ''):
+            heartbeat_age_s = max(0, int(time.time() - float(heartbeat_ts)))
+    except Exception:
+        heartbeat_age_s = None
+
+    return {
+        'summary_state': summary_state,
+        'summary_message': summary_message,
+        'warnings': warnings,
+        'raw_capture_state': raw_capture_state,
+        'raw_capture_message': raw_capture_message,
+        'raw_capture_last_frame_ts': raw_capture_last_frame_ts,
+        'raw_capture_last_frame_age_s': raw_capture_last_frame_age_s,
+        'wiegand_enabled': wiegand_enabled,
+        'wiegand_listener': wiegand_listener,
+        'wiegand_port': wiegand_cfg.get('port'),
+        'wiegand_heartbeat_age_s': heartbeat_age_s,
+        'zkemkeeper_state': zkem_capture_state,
+        'zkemkeeper_label': zkem_label or 'UNKNOWN',
+        'zkemkeeper_error': zkem_capture_state == 'error',
+        'zkemkeeper_message': zkem_message,
+    }
+
+def _collect_zkemkeeper_status(st_prev: dict | None = None) -> dict:
+    st_prev = st_prev or {}
+    data = {k: v for k, v in st_prev.items() if k.startswith('zkemkeeper')}
+    hb = _read_zkemkeeper_heartbeat()
+    if hb:
+        hb_status = str(hb.get('status') or '').strip().lower()
+        if hb_status in ('connected', 'event'):
+            state = 'ON'
+        elif hb_status == 'error':
+            state = 'EROARE'
+        else:
+            state = data.get('zkemkeeper', 'PORNESTE')
+        data.update(
+            {
+                'zkemkeeper': state,
+                'zkemkeeper_status': hb_status,
+                'zkemkeeper_message': hb.get('message') or data.get('zkemkeeper_message'),
+                'zkemkeeper_target': hb.get('ip') and f"{hb.get('ip')}:{hb.get('port')}" or data.get('zkemkeeper_target', ''),
+                'zkemkeeper_prog_id': hb.get('prog_id') or data.get('zkemkeeper_prog_id', ''),
+                'zkemkeeper_dump_file': hb.get('dump_file') or data.get('zkemkeeper_dump_file', ''),
+                'zkemkeeper_last_event': hb.get('last_event') or '',
+                'zkemkeeper_last_card': hb.get('last_card') or '',
+                'zkemkeeper_last_pin': hb.get('last_pin') or '',
+                'zkemkeeper_event_count': hb.get('event_count') or 0,
+                'zkemkeeper_connected_since': hb.get('connected_since') or '',
+                'zkemkeeper_registered_events': hb.get('registered_events') or [],
+                'zkemkeeper_enabled': bool(st_prev.get('zkemkeeper_enabled', True)),
+            }
+        )
+    elif data.get('zkemkeeper_enabled'):
+        if _zkemkeeper_process_running():
+            data.setdefault('zkemkeeper', 'PORNESTE')
+        elif data.get('zkemkeeper') == 'ON':
+            data['zkemkeeper'] = 'OPRIT'
+    return data
+
+def _write_tray_status(acp_on: bool, elatec_on: bool, server_state: str, center_on: bool, wiegand_on: bool = False):
     """Write tray_status.json while preserving enabled flags.
     Treat disabled readers as satisfied for color semantics.
     server_state in { 'PORNIT', 'PORNESTE', 'OPRIT' }.
@@ -463,19 +704,22 @@ def _write_tray_status(acp_on: bool, elatec_on: bool, server_state: str, center_
         st_prev = _read_tray_status()
         acp_enabled = bool(st_prev.get('acp_enabled', True))
         elatec_enabled = bool(st_prev.get('elatec_enabled', True))
+        wiegand_enabled = bool(st_prev.get('wiegand_enabled', False))
         # Color computation with enabled flags
-        all_ok = (srv == 'PORNIT') and center_on and ((not acp_enabled) or acp_on) and ((not elatec_enabled) or elatec_on)
-        any_running = (srv == 'PORNIT') or center_on or (acp_enabled and acp_on) or (elatec_enabled and elatec_on)
+        all_ok = (srv == 'PORNIT') and center_on and ((not acp_enabled) or acp_on) and ((not elatec_enabled) or elatec_on) and ((not wiegand_enabled) or wiegand_on)
+        any_running = (srv == 'PORNIT') or center_on or (acp_enabled and acp_on) or (elatec_enabled and elatec_on) or (wiegand_enabled and wiegand_on)
         color = 'green' if all_ok else ('yellow' if any_running else 'red')
         data = {
             'acp': 'ON' if acp_on else 'OPRIT',
             'elatec': 'ON' if elatec_on else 'OPRIT',
+            'wiegand': 'ON' if wiegand_on else 'OPRIT',
             'commcenter': 'ON' if center_on else 'OPRIT',
             'commcenter_driver': _COMM_LAST_DRIVER or _COMM_DEFAULT_DRIVER,
             'commcenter_backend': _COMM_LAST_BACKEND,
             'server': srv,
             'acp_enabled': acp_enabled,
             'elatec_enabled': elatec_enabled,
+            'wiegand_enabled': wiegand_enabled,
             'color': color,
         }
         # Preserve blocked flags and other important UI-controlled keys from previous file
@@ -484,6 +728,18 @@ def _write_tray_status(acp_on: bool, elatec_on: bool, server_state: str, center_
                 if k.endswith('_blocked') or k.startswith('cmd_'):
                     # keep blocked flags and transient cmd_* flags if present
                     data[k] = v
+        except Exception:
+            pass
+        try:
+            data.update(_collect_zkemkeeper_status(st_prev))
+        except Exception:
+            pass
+        try:
+            capture_health = _collect_capture_health(data)
+            data['capture_health'] = capture_health
+            data['raw_capture_state'] = capture_health.get('raw_capture_state')
+            data['raw_capture_message'] = capture_health.get('raw_capture_message')
+            data['raw_capture_last_frame_age_s'] = capture_health.get('raw_capture_last_frame_age_s')
         except Exception:
             pass
         p = _tray_status_path()
@@ -894,9 +1150,15 @@ def _read_listeners_config():
     return {}
 
 def _start_listener(name: str):
-    """Start a single listener based on config: 'acp' or 'elatec'."""
+    """Start a single listener based on config."""
     global _LISTENER_PROCS
     try:
+        try:
+            if _listener_running(name):
+                logging.info('Listener %s already running; skipping duplicate start', name)
+                return
+        except Exception:
+            pass
         # Respect explicit UI block flags to avoid unwanted auto-start
         try:
             st = _read_tray_status()
@@ -932,12 +1194,48 @@ def _start_listener(name: str):
                     p = subprocess.Popen([py, script, com], cwd=str(base.parent), creationflags=cf)
                     logging.info('Starting listener process: %s %s', script, port if name=='acp' else com)
                     _LISTENER_PROCS.append(p)
+        elif name == 'wiegand':
+            wg = cfg.get('wiegand', {'enabled': False, 'listen_host': '0.0.0.0', 'port': 9002, 'format_name': 'Wiegand 26', 'source': 'w26-hardware-tap'})
+            if wg.get('enabled', False):
+                script = str(base.parent / 'scripts' / 'wiegand_listener.py')
+                if Path(script).exists():
+                    listen_host = str(wg.get('listen_host', '0.0.0.0') or '0.0.0.0')
+                    listen_port = str(wg.get('port', 9002) or 9002)
+                    args = [
+                        py,
+                        script,
+                        '--server-url', f"http://127.0.0.1:{int(_CONFIG.get('tray', 'port', fallback=str(DEFAULT_PORT)))}",
+                        '--listen-host', listen_host,
+                        '--listen-port', listen_port,
+                    ]
+                    if wg.get('format_name'):
+                        args.extend(['--format-name', str(wg.get('format_name') or '').strip()])
+                    if wg.get('format_id'):
+                        args.extend(['--format-id', str(wg.get('format_id') or '').strip()])
+                    if wg.get('device_id') not in (None, ''):
+                        args.extend(['--device-id', str(wg.get('device_id') or '').strip()])
+                    if wg.get('door_id') not in (None, ''):
+                        args.extend(['--door-id', str(wg.get('door_id') or '').strip()])
+                    if wg.get('door_pk') not in (None, ''):
+                        args.extend(['--door-pk', str(wg.get('door_pk') or '').strip()])
+                    if wg.get('source'):
+                        args.extend(['--source', str(wg.get('source') or '').strip()])
+                    cf = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+                    p = subprocess.Popen(args, cwd=str(base.parent), creationflags=cf)
+                    logging.info('Starting listener process: %s %s:%s', script, listen_host, listen_port)
+                    _LISTENER_PROCS.append(p)
     except Exception:
         pass
 
 def _stop_listener(name: str):
     """Stop processes matching a listener script."""
-    target = 'card_reader_acp.py' if name == 'acp' else 'card_reader_elatec.py'
+    target = {
+        'acp': 'card_reader_acp.py',
+        'elatec': 'card_reader_elatec.py',
+        'wiegand': 'wiegand_listener.py',
+    }.get(name, '')
+    if not target:
+        return
     try:
         logging.info('Stopping listener: %s', name)
         # Stop tracked ones
@@ -1023,6 +1321,36 @@ def _start_listeners():
                     _LISTENER_PROCS.append(p)
         except Exception:
             pass
+        # Wiegand
+        try:
+            wg = cfg.get('wiegand', {'enabled': False, 'listen_host': '0.0.0.0', 'port': 9002})
+            if wg.get('enabled', False) and not bool(st.get('wiegand_blocked', False)):
+                script = str(base.parent / 'scripts' / 'wiegand_listener.py')
+                if Path(script).exists():
+                    args = [
+                        py,
+                        script,
+                        '--server-url', f"http://127.0.0.1:{int(_CONFIG.get('tray', 'port', fallback=str(DEFAULT_PORT)))}",
+                        '--listen-host', str(wg.get('listen_host', '0.0.0.0') or '0.0.0.0'),
+                        '--listen-port', str(wg.get('port', 9002) or 9002),
+                    ]
+                    if wg.get('format_name'):
+                        args.extend(['--format-name', str(wg.get('format_name') or '').strip()])
+                    if wg.get('format_id'):
+                        args.extend(['--format-id', str(wg.get('format_id') or '').strip()])
+                    if wg.get('device_id') not in (None, ''):
+                        args.extend(['--device-id', str(wg.get('device_id') or '').strip()])
+                    if wg.get('door_id') not in (None, ''):
+                        args.extend(['--door-id', str(wg.get('door_id') or '').strip()])
+                    if wg.get('door_pk') not in (None, ''):
+                        args.extend(['--door-pk', str(wg.get('door_pk') or '').strip()])
+                    if wg.get('source'):
+                        args.extend(['--source', str(wg.get('source') or '').strip()])
+                    cf = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
+                    p = subprocess.Popen(args, cwd=str(base.parent), creationflags=cf)
+                    _LISTENER_PROCS.append(p)
+        except Exception:
+            pass
     except Exception:
         pass
 
@@ -1047,7 +1375,7 @@ def _stop_listeners():
     try:
         # Use tasklist to enumerate and taskkill by window title-less processes with matching command line via wmic/powershell
         # Fallback: taskkill by filter on script name strings
-        for name in ['card_reader_acp.py','card_reader_elatec.py']:
+        for name in ['card_reader_acp.py','card_reader_elatec.py','wiegand_listener.py']:
             try:
                 subprocess.run(['powershell','-ExecutionPolicy','Bypass','-Command', f"Get-CimInstance Win32_Process | Where-Object {{ ($_.Name -match 'python|pyw') -and $_.CommandLine -like '*{name}*' }} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force }}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             except Exception:
@@ -1056,7 +1384,13 @@ def _stop_listeners():
         pass
 
 def _listener_running(name: str, hb_threshold: float = 15.0, startup_grace: float = 30.0) -> bool:
-    target = 'card_reader_acp.py' if name == 'acp' else 'card_reader_elatec.py'
+    target = {
+        'acp': 'card_reader_acp.py',
+        'elatec': 'card_reader_elatec.py',
+        'wiegand': 'wiegand_listener.py',
+    }.get(name, '')
+    if not target:
+        return False
     try:
         out = subprocess.run(['powershell','-ExecutionPolicy','Bypass','-Command', f"Get-CimInstance Win32_Process | Where-Object {{ ($_.Name -match 'python|pyw') -and $_.CommandLine -like '*{target}*' }} | Select-Object -First 1 -ExpandProperty ProcessId"], capture_output=True, text=True)
         pid = (out.stdout or '').strip()
@@ -1083,30 +1417,35 @@ def _is_server_running(host='127.0.0.1', port=DEFAULT_PORT):
     finally:
         s.close()
 
-def _start_server(host=DEFAULT_HOST, port=DEFAULT_PORT, asgi=True, retry_count=3):
-    global _SERVER_PROC
-    if _SERVER_PROC and _SERVER_PROC.poll() is None:
+def _get_adms_port(explicit_port=None):
+    for candidate in (explicit_port, os.environ.get('ZKACCESS_ADMS_PORT'), _CONFIG.get('tray', 'adms_port', fallback=str(DEFAULT_ADMS_PORT))):
+        try:
+            port = int(str(candidate).strip())
+            if 1 <= port <= 65535:
+                return port
+        except Exception:
+            continue
+    return DEFAULT_ADMS_PORT
+
+def _launch_server_process(host, port, asgi=True, retry_count=3, process_label='server', write_state=False):
+    global _SERVER_PROC, _ADMS_SERVER_PROC
+    current_proc = _SERVER_PROC if process_label == 'server' else _ADMS_SERVER_PROC
+    if current_proc and current_proc.poll() is None:
         return True
-    # If a previous tray run crashed, the server may still be running on the last used port.
-    # Stop it before we decide whether the port is already in use.
-    try:
-        _stop_orphan_server_from_state()
-        time.sleep(0.2)
-    except Exception:
-        pass
-    # Retry with exponential backoff if port bind fails
+
     for attempt in range(retry_count):
         try:
             if attempt > 0:
                 wait_time = 2 ** attempt
-                logging.info('Server retry attempt %d, waiting %ds', attempt + 1, wait_time)
+                logging.info('%s retry attempt %d, waiting %ds', process_label.capitalize(), attempt + 1, wait_time)
                 time.sleep(wait_time)
             env = os.environ.copy()
             env['DJANGO_SETTINGS_MODULE'] = 'zkeco_config.settings'
+            env['ZKACCESS_ADMS_PORT'] = str(_get_adms_port(port if process_label == 'adms' else None))
             try:
                 base_dir = Path(settings.BASE_DIR)
                 parent_dir = base_dir.parent
-                existing = env.get('PYTHONPATH','')
+                existing = env.get('PYTHONPATH', '')
                 paths = [p for p in existing.split(os.pathsep) if p]
                 if str(parent_dir) not in paths:
                     paths.insert(0, str(parent_dir))
@@ -1115,41 +1454,42 @@ def _start_server(host=DEFAULT_HOST, port=DEFAULT_PORT, asgi=True, retry_count=3
                 env['PYTHONPATH'] = os.pathsep.join(paths)
             except Exception:
                 pass
-            
-            # Try ASGI first if requested
+
             if asgi:
                 try:
                     importlib.import_module('daphne')
                     cmd = [sys.executable, '-m', 'daphne', '-b', host, '-p', str(port), 'zkeco_config.asgi:application']
                     server_type = 'ASGI (Daphne)'
                 except Exception:
-                    # Daphne not available, fallback to WSGI
                     cmd = [sys.executable, str(Path(settings.BASE_DIR) / 'manage.py'), 'runserver', f'{host}:{port}', '--noreload', '--nostatic']
                     server_type = 'WSGI (runserver)'
                     asgi = False
             else:
                 cmd = [sys.executable, str(Path(settings.BASE_DIR) / 'manage.py'), 'runserver', f'{host}:{port}', '--noreload', '--nostatic']
                 server_type = 'WSGI (runserver)'
-            
+
             log_path = _server_log_path()
             logf = open(log_path, 'ab')
             creationflags = getattr(subprocess, 'CREATE_NO_WINDOW', 0)
-            _SERVER_PROC = subprocess.Popen(cmd, env=env, stdout=logf, stderr=subprocess.STDOUT, cwd=str(settings.BASE_DIR), creationflags=creationflags)
-            logging.info('Server started (%s) pid=%s on %s:%s (attempt %d)', server_type, _SERVER_PROC.pid, host, port, attempt + 1)
+            proc = subprocess.Popen(cmd, env=env, stdout=logf, stderr=subprocess.STDOUT, cwd=str(settings.BASE_DIR), creationflags=creationflags)
+            logging.info('%s started (%s) pid=%s on %s:%s (attempt %d)', process_label.capitalize(), server_type, proc.pid, host, port, attempt + 1)
             time.sleep(1.5)
-            if _SERVER_PROC.poll() is not None:
-                # Process died, retry
-                logging.warning('Server process exited immediately, retrying...')
+            if proc.poll() is not None:
+                logging.warning('%s process exited immediately, retrying...', process_label.capitalize())
                 continue
-            try:
-                _write_server_state(_SERVER_PROC.pid, host, int(port), bool(asgi), server_type)
-            except Exception:
-                pass
-            # Success
+            if write_state:
+                try:
+                    _write_server_state(proc.pid, host, int(port), bool(asgi), server_type)
+                except Exception:
+                    pass
+            if process_label == 'server':
+                _SERVER_PROC = proc
+            else:
+                _ADMS_SERVER_PROC = proc
             return True
         except Exception as e:
-            logging.error('Server start attempt %d failed: %s', attempt + 1, e)
-            if attempt == retry_count - 1:
+            logging.error('%s start attempt %d failed: %s', process_label.capitalize(), attempt + 1, e)
+            if attempt == retry_count - 1 and process_label == 'server':
                 try:
                     err = _read_first_error_from_log()
                     detail = err or f'{e.__class__.__name__}: {e}'
@@ -1158,21 +1498,49 @@ def _start_server(host=DEFAULT_HOST, port=DEFAULT_PORT, asgi=True, retry_count=3
                     pass
     return False
 
-def _stop_server():
-    global _SERVER_PROC
+def _start_adms_server(host=DEFAULT_HOST, port=None):
+    adms_port = _get_adms_port(port)
     try:
-        if _SERVER_PROC and _SERVER_PROC.poll() is None:
-            try:
-                _SERVER_PROC.send_signal(signal.SIGINT)
-                _SERVER_PROC.wait(timeout=5)
-            except Exception:
-                _SERVER_PROC.terminate()
-            try:
-                _SERVER_PROC.wait(timeout=5)
-            except Exception:
-                _SERVER_PROC.kill()
+        main_port = int(_CONFIG.get('tray', 'port', fallback=str(DEFAULT_PORT)))
+    except Exception:
+        main_port = DEFAULT_PORT
+    if adms_port == main_port:
+        return True
+    return _launch_server_process(host=host, port=adms_port, asgi=False, retry_count=3, process_label='adms', write_state=False)
+
+def _start_server(host=DEFAULT_HOST, port=DEFAULT_PORT, asgi=True, retry_count=3):
+    global _SERVER_PROC
+    if _SERVER_PROC and _SERVER_PROC.poll() is None:
+        return _start_adms_server(host=host)
+    # If a previous tray run crashed, the server may still be running on the last used port.
+    # Stop it before we decide whether the port is already in use.
+    try:
+        _stop_orphan_server_from_state()
+        time.sleep(0.2)
     except Exception:
         pass
+    if not _launch_server_process(host=host, port=port, asgi=asgi, retry_count=retry_count, process_label='server', write_state=True):
+        return False
+    return _start_adms_server(host=host)
+
+def _stop_server():
+    global _SERVER_PROC, _ADMS_SERVER_PROC
+    for proc_name in ('_ADMS_SERVER_PROC', '_SERVER_PROC'):
+        proc = _ADMS_SERVER_PROC if proc_name == '_ADMS_SERVER_PROC' else _SERVER_PROC
+        try:
+            if proc and proc.poll() is None:
+                try:
+                    proc.send_signal(signal.SIGINT)
+                    proc.wait(timeout=5)
+                except Exception:
+                    proc.terminate()
+                try:
+                    proc.wait(timeout=5)
+                except Exception:
+                    proc.kill()
+        except Exception:
+            pass
+    _ADMS_SERVER_PROC = None
     _SERVER_PROC = None
 
 def _open_dashboard():
@@ -1286,7 +1654,23 @@ def _shutdown(icon):
         cfg_port = int(_CONFIG.get('tray', 'port', fallback=str(DEFAULT_PORT)))
     except Exception:
         cfg_port = DEFAULT_PORT
-    ports_to_report = sorted({int(DEFAULT_PORT), int(cfg_port)})
+    try:
+        adms_port = int(_CONFIG.get('tray', 'adms_port', fallback=str(DEFAULT_ADMS_PORT)))
+    except Exception:
+        adms_port = DEFAULT_ADMS_PORT
+    listener_ports_to_report: set[int] = set()
+    try:
+        cfg = _read_listeners_config() or {}
+        acp_cfg = cfg.get('acp') or {}
+        wg_cfg = cfg.get('wiegand') or {}
+        if acp_cfg.get('enabled', True):
+            listener_ports_to_report.add(int(acp_cfg.get('port', 9001) or 9001))
+        if wg_cfg.get('enabled', False):
+            listener_ports_to_report.add(int(wg_cfg.get('port', 9002) or 9002))
+    except Exception:
+        pass
+    server_ports_to_report = sorted({int(DEFAULT_PORT), int(cfg_port), int(adms_port)})
+    ports_to_report = sorted(set(server_ports_to_report).union(listener_ports_to_report))
 
     server_pid = None
     try:
@@ -1322,7 +1706,7 @@ def _shutdown(icon):
             if not rows:
                 _emit(f"[TRAY] Port {port}: no LISTENING TCP processes")
             else:
-                ours = [r for r in rows if r.get('ours')]
+                ours = [r for r in rows if r.get('ours') or _looks_like_our_listener_cmdline(str(r.get('cmd') or ''))]
                 pids = [r.get('pid') for r in rows]
                 _emit(f"[TRAY] Port {port}: LISTENING pids={pids} (ours={ [r.get('pid') for r in ours] })")
     except Exception:
@@ -1332,6 +1716,15 @@ def _shutdown(icon):
 
     def _enqueue_close_all_doors_before_shutdown() -> None:
         """Best-effort: queue DOOR_CLOSE for active doors before stopping CommCenter."""
+        try:
+            # Critical safety default: do not inject synthetic DOOR_CLOSE commands
+            # during shutdown unless explicitly requested.
+            should_close = str(os.getenv('ZKACCESS_CLOSE_DOORS_ON_SHUTDOWN', '0') or '0').strip().lower()
+            if should_close not in ('1', 'true', 'yes', 'on'):
+                _emit('[TRAY] Skip close-on-shutdown (ZKACCESS_CLOSE_DOORS_ON_SHUTDOWN!=1)')
+                return
+        except Exception:
+            return
         try:
             from agent.models import Door, CommandLog
         except Exception as e:
@@ -1405,7 +1798,7 @@ def _shutdown(icon):
             red_img = _build_icon(color=(231,76,60))
             if red_img is not None:
                 icon.icon = red_img
-            icon.title = 'ACP:OPRIT | Elatec:OPRIT | Server:OPRIT | CommCenter:OPRIT'
+            icon.title = 'ACP:OPRIT | Elatec:OPRIT | W26:OPRIT | Server:OPRIT | CommCenter:OPRIT'
     except Exception:
         pass
     
@@ -1413,9 +1806,14 @@ def _shutdown(icon):
     # Also report port 8000 even if not configured.
     try:
         _emit('Cleaning up port bindings (safe: only our server cmdlines)...')
-        for port in ports_to_report:
+        for port in server_ports_to_report:
             try:
                 _stop_our_server_on_port(int(port))
+            except Exception:
+                continue
+        for port in sorted(listener_ports_to_report):
+            try:
+                _stop_our_listener_on_port(int(port))
             except Exception:
                 continue
         time.sleep(0.25)
@@ -1435,7 +1833,7 @@ def _shutdown(icon):
             if not post_rows:
                 _emit(f"[TRAY] Port {port}: FREE (no LISTENING)")
                 continue
-            ours = [r for r in post_rows if r.get('ours')]
+            ours = [r for r in post_rows if r.get('ours') or _looks_like_our_listener_cmdline(str(r.get('cmd') or ''))]
             if ours:
                 _emit(f"[TRAY] Port {port}: still LISTENING by OUR process(es): {[r.get('pid') for r in ours]}" , level='warn')
             else:
@@ -1475,20 +1873,28 @@ def _build_menu(icon, host, port):
         def _save():
             try:
                 new_port = int(entry_port.get())
+                new_adms_port = int(entry_adms_port.get())
                 mode = mode_var.get()
                 _CONFIG.set('tray','port', str(new_port))
+                _CONFIG.set('tray','adms_port', str(new_adms_port))
                 _CONFIG.set('tray','server_mode', mode)
+                os.environ['ZKACCESS_ADMS_PORT'] = str(new_adms_port)
                 _save_config()
                 messagebox.showinfo('Port','Saved. Restarting server...')
                 _stop_server(); _start_server(host=host, port=new_port, asgi=(mode=='asgi'))
             except Exception as e:
                 messagebox.showerror('Error', str(e))
-        root = tk.Tk(); root.title('Server Configuration'); root.geometry('340x220')
+        root = tk.Tk(); root.title('Server Configuration'); root.geometry('340x280')
         tk.Label(root,text='Port:', anchor='w').pack(pady=6)
         entry_port = tk.Entry(root)
         entry_port.pack()
         current = _CONFIG.get('tray','port', fallback=str(port))
         entry_port.delete(0,'end'); entry_port.insert(0,current)
+        tk.Label(root,text='ADMS Port:', anchor='w').pack(pady=6)
+        entry_adms_port = tk.Entry(root)
+        entry_adms_port.pack()
+        current_adms = _CONFIG.get('tray','adms_port', fallback=str(DEFAULT_ADMS_PORT))
+        entry_adms_port.delete(0,'end'); entry_adms_port.insert(0,current_adms)
         tk.Label(root,text='Mode:', anchor='w').pack(pady=6)
         mode_var = tk.StringVar(value=_CONFIG.get('tray','server_mode', fallback='asgi'))
         frm = tk.Frame(root); frm.pack()
@@ -1735,8 +2141,13 @@ def _build_menu(icon, host, port):
             pystray.MenuItem('Elatec: Stop', lambda: threading.Thread(target=lambda: (_set_blocked('elatec', True), _stop_listener('elatec'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
             pystray.MenuItem('Elatec: Restart', lambda: threading.Thread(target=lambda: (_set_blocked('elatec', True), _stop_listener('elatec'), time.sleep(1), _set_blocked('elatec', False), _start_listener('elatec'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
             pystray.MenuItem('---', pystray.Menu()),
+            pystray.MenuItem('W26: Start', lambda: threading.Thread(target=lambda: (_set_blocked('wiegand', False), _start_listener('wiegand'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
+            pystray.MenuItem('W26: Stop', lambda: threading.Thread(target=lambda: (_set_blocked('wiegand', True), _stop_listener('wiegand'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
+            pystray.MenuItem('W26: Restart', lambda: threading.Thread(target=lambda: (_set_blocked('wiegand', True), _stop_listener('wiegand'), time.sleep(1), _set_blocked('wiegand', False), _start_listener('wiegand'), time.sleep(0.6), _recompute_status_once()), daemon=True).start()),
+            pystray.MenuItem('---', pystray.Menu()),
             pystray.MenuItem('ACP: Unblock', lambda: threading.Thread(target=lambda: (_set_blocked('acp', False), time.sleep(0.2), _recompute_status_once()), daemon=True).start()),
             pystray.MenuItem('Elatec: Unblock', lambda: threading.Thread(target=lambda: (_set_blocked('elatec', False), time.sleep(0.2), _recompute_status_once()), daemon=True).start()),
+            pystray.MenuItem('W26: Unblock', lambda: threading.Thread(target=lambda: (_set_blocked('wiegand', False), time.sleep(0.2), _recompute_status_once()), daemon=True).start()),
         )
 
     def _recompute_status_once():
@@ -1749,13 +2160,17 @@ def _build_menu(icon, host, port):
             cen = _CENTER is not None
             acp_live = _listener_running('acp')
             el_live = _listener_running('elatec')
+            wg_live = _listener_running('wiegand')
             # Respect enabled flags from tray_status.json
             st = _read_tray_status()
             acp_en = bool(st.get('acp_enabled', True))
             el_en = bool(st.get('elatec_enabled', True))
+            wg_en = bool(st.get('wiegand_enabled', False))
             acp_blocked = bool(st.get('acp_blocked', False))
             el_blocked = bool(st.get('elatec_blocked', False))
-            _write_tray_status(acp_live, el_live, ('PORNIT' if srv else 'OPRIT'), cen)
+            wg_blocked = bool(st.get('wiegand_blocked', False))
+            _write_tray_status(acp_live, el_live, ('PORNIT' if srv else 'OPRIT'), cen, wg_live)
+            st = _read_tray_status()
             # Nudge icon tooltip immediately; blocked takes precedence over disabled
             if icon is not None:
                 tip = []
@@ -1769,8 +2184,23 @@ def _build_menu(icon, host, port):
                     return 'OPRIT'
                 tip.append('ACP:' + _reader_label(acp_live, acp_blocked, acp_en))
                 tip.append('Elatec:' + _reader_label(el_live, el_blocked, el_en))
+                tip.append('W26:' + _reader_label(wg_live, wg_blocked, wg_en))
                 tip.append('Server:' + ('PORNIT' if srv else 'OPRIT'))
                 tip.append('CommCenter:' + ('PORNIT' if cen else 'OPRIT'))
+                capture_health = st.get('capture_health') or {}
+                raw_state = str(capture_health.get('raw_capture_state') or '').strip().upper()
+                raw_age = capture_health.get('raw_capture_last_frame_age_s')
+                if raw_state:
+                    raw_bits = [raw_state]
+                    if raw_age not in (None, ''):
+                        raw_bits.append(f'{raw_age}s')
+                    tip.append('RAW:' + ' '.join(raw_bits))
+                if st.get('zkemkeeper_enabled'):
+                    zkem_tip = 'ZKEM:' + str(st.get('zkemkeeper') or 'OPRIT')
+                    zkem_msg = str(st.get('zkemkeeper_message') or '').strip()
+                    if str(st.get('zkemkeeper') or '').strip().upper() == 'EROARE' and zkem_msg:
+                        zkem_tip += ' ' + zkem_msg[:56]
+                    tip.append(zkem_tip)
                 tip.append(f'Licență:{_license_status()}')
                 tip.append('Click dreapta: meniu')
                 _set_icon_title(icon, ' | '.join(tip))
@@ -1783,8 +2213,8 @@ def _build_menu(icon, host, port):
         pystray.MenuItem('CommCenter', commcenter_menu),
         pystray.MenuItem('Card Readers', _card_readers_menu()),
         pystray.MenuItem('---', pystray.Menu()),  # Separator
-        pystray.MenuItem('Stop All Services', lambda: threading.Thread(target=lambda: (_set_blocked('acp', True), _set_blocked('elatec', True), _stop_server(), _stop_comm_center(), _stop_listeners(), time.sleep(0.2), _recompute_status_once()), daemon=True).start()),
-        pystray.MenuItem('Start All Services', lambda: threading.Thread(target=lambda: (_update_tray_status_fields({'acp_enabled': True, 'elatec_enabled': True, 'cmd_start_acp': True, 'cmd_start_elatec': True}), _set_blocked('acp', False), _set_blocked('elatec', False), _start_server(host=host, port=port, asgi=True), _start_comm_center(), _start_listeners(), time.sleep(0.4), _recompute_status_once()), daemon=True).start()),
+        pystray.MenuItem('Stop All Services', lambda: threading.Thread(target=lambda: (_set_blocked('acp', True), _set_blocked('elatec', True), _set_blocked('wiegand', True), _stop_server(), _stop_comm_center(), _stop_listeners(), time.sleep(0.2), _recompute_status_once()), daemon=True).start()),
+        pystray.MenuItem('Start All Services', lambda: threading.Thread(target=lambda: (_update_tray_status_fields({'acp_enabled': True, 'elatec_enabled': True, 'wiegand_enabled': True, 'cmd_start_acp': True, 'cmd_start_elatec': True, 'cmd_start_wiegand': True}), _set_blocked('acp', False), _set_blocked('elatec', False), _set_blocked('wiegand', False), _start_server(host=host, port=port, asgi=True), _start_comm_center(), _start_listeners(), time.sleep(0.4), _recompute_status_once()), daemon=True).start()),
         pystray.MenuItem('---', pystray.Menu()),  # Separator
         pystray.MenuItem('Ajutor (RO)', lambda: threading.Thread(target=_show_help_ro, daemon=True).start()),
         pystray.MenuItem('Admin Menu', legacy_menu),
@@ -1796,9 +2226,11 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('--no-server', action='store_true', help='Do not auto start server')
+        parser.add_argument('--headless', action='store_true', help='Run without tray icon and keep services alive in-process')
         parser.add_argument('--asgi', action='store_true', help='Auto start Daphne ASGI server (WebSockets)')
         parser.add_argument('--host', type=str, default=DEFAULT_HOST, help='Bind host')
         parser.add_argument('--port', type=int, default=DEFAULT_PORT, help='Bind port')
+        parser.add_argument('--adms-port', type=int, default=DEFAULT_ADMS_PORT, help='Dedicated ADMS/iClock bind port')
         parser.add_argument('--poll', type=float, default=0.25, help='CommCenter poll interval seconds')
         parser.add_argument(
             '--driver',
@@ -1818,7 +2250,7 @@ class Command(BaseCommand):
         parser.add_argument('--self-test', action='store_true', help='Run tray diagnostics and exit')
 
     def handle(self, *args, **options):
-        if pystray is None:
+        if pystray is None and not options.get('headless'):
             self.stderr.write('pystray not available; install Pillow + pystray.')
             return
 
@@ -1895,12 +2327,14 @@ class Command(BaseCommand):
             _COMM_DEFAULT_POLL = 0.25
         _COMM_LAST_DRIVER = _COMM_DEFAULT_DRIVER
         _COMM_LAST_BACKEND = None
-        host = options['host']; port = options['port']
+        host = options['host']; port = options['port']; adms_port = options['adms_port']
         # Override port/mode from persisted config
         try:
             port_cfg = int(_CONFIG.get('tray','port', fallback=str(port)))
+            adms_port_cfg = int(_CONFIG.get('tray','adms_port', fallback=str(adms_port)))
             mode_cfg = _CONFIG.get('tray','server_mode', fallback=('asgi' if options.get('asgi') else 'wsgi'))
             port = port_cfg
+            adms_port = adms_port_cfg
             options['asgi'] = (mode_cfg == 'asgi') or options.get('asgi')
         except Exception:
             pass
@@ -1976,7 +2410,10 @@ class Command(BaseCommand):
         # that devices should push to (/iclock/*). Default to enabled unless
         # explicitly disabled by env.
         try:
-            os.environ.setdefault('ZKACCESS_ADMS_PORT', str(int(port)))
+            # Always sync ADMS target port with the effective tray server port.
+            # setdefault() keeps stale values from previous sessions and can break
+            # push callbacks after operator changes the server port.
+            os.environ['ZKACCESS_ADMS_PORT'] = str(int(adms_port))
         except Exception:
             pass
         try:
@@ -2044,21 +2481,23 @@ class Command(BaseCommand):
             global _LAST_ICON_STATE
             logging.info('Status loop started')
             # Wait until the icon is actually visible, then force an immediate update
-            for _ in range(50):  # up to ~5s
-                try:
-                    if getattr(icon_ref, 'visible', False):
-                        break
-                except Exception:
-                    pass
-                time.sleep(0.1)
+            if icon_ref is not None:
+                for _ in range(50):  # up to ~5s
+                    try:
+                        if getattr(icon_ref, 'visible', False):
+                            break
+                    except Exception:
+                        pass
+                    time.sleep(0.1)
             try:
                 # First update as soon as tray is visible
                 st0 = _read_tray_status()
                 srv0 = (st0.get('server') or '').upper()
                 acp0 = _listener_running('acp')
                 el0 = _listener_running('elatec')
+                wg0 = _listener_running('wiegand')
                 cen0 = _CENTER is not None
-                _write_tray_status(acp0, el0, ('PORNIT' if _is_server_running('127.0.0.1', int(_CONFIG.get('tray','port', fallback='8000'))) else ('PORNESTE' if srv0=='PORNESTE' else 'OPRIT')), cen0)
+                _write_tray_status(acp0, el0, ('PORNIT' if _is_server_running('127.0.0.1', int(_CONFIG.get('tray','port', fallback='8000'))) else ('PORNESTE' if srv0=='PORNESTE' else 'OPRIT')), cen0, wg0)
             except Exception:
                 pass
             while not _STOP_EVENT.is_set():
@@ -2088,6 +2527,7 @@ class Command(BaseCommand):
                     # Live reader state from processes (ground truth)
                     acp_live = _listener_running('acp')
                     el_live = _listener_running('elatec')
+                    wg_live = _listener_running('wiegand')
                     # Respect explicit UI blocked flags immediately
                     try:
                         st_block = status_json or {}
@@ -2095,21 +2535,26 @@ class Command(BaseCommand):
                             acp_live = False
                         if st_block.get('elatec_blocked', False):
                             el_live = False
+                        if st_block.get('wiegand_blocked', False):
+                            wg_live = False
                     except Exception:
                         pass
                     # record initial source reasons
                     acp_reason = 'process' if acp_live else 'none'
                     el_reason = 'process' if el_live else 'none'
-                    any_running = (server_running or center_running or acp_live or el_live)
+                    wg_reason = 'process' if wg_live else 'none'
+                    any_running = (server_running or center_running or acp_live or el_live or wg_live)
                     tip = []
                     # Reader status summaries from JSON if present; fall back to config hints
                     try:
                         cfg = _read_listeners_config()
                         acp_cfg = (cfg or {}).get('acp') or {}
                         el_cfg = (cfg or {}).get('elatec') or {}
+                        wg_cfg = (cfg or {}).get('wiegand') or {}
                         st = _read_tray_status()
                         acp_en = bool(st.get('acp_enabled', acp_cfg.get('enabled', True)))
                         el_en = bool(st.get('elatec_enabled', el_cfg.get('enabled', True)))
+                        wg_en = bool(st.get('wiegand_enabled', wg_cfg.get('enabled', False)))
                         # Hardware-aware check: detect Elatec COM presence and override enabled flag
                         com_present = True
                         try:
@@ -2130,6 +2575,8 @@ class Command(BaseCommand):
                             acp_cmd_stop = bool(st.get('cmd_stop_acp'))
                             el_cmd_start = bool(st.get('cmd_start_elatec'))
                             el_cmd_stop = bool(st.get('cmd_stop_elatec'))
+                            wg_cmd_start = bool(st.get('cmd_start_wiegand'))
+                            wg_cmd_stop = bool(st.get('cmd_stop_wiegand'))
                             if acp_cmd_start:
                                 logging.info('UI requested: start ACP listener')
                                 _start_listener('acp')
@@ -2153,19 +2600,29 @@ class Command(BaseCommand):
                                 _stop_listener('elatec')
                                 time.sleep(0.2)
                                 el_live = _listener_running('elatec')
+                            if wg_cmd_start:
+                                logging.info('UI requested: start Wiegand listener')
+                                _start_listener('wiegand')
+                                time.sleep(0.2)
+                                wg_live = _listener_running('wiegand')
+                            if wg_cmd_stop:
+                                logging.info('UI requested: stop Wiegand listener')
+                                _stop_listener('wiegand')
+                                time.sleep(0.2)
+                                wg_live = _listener_running('wiegand')
                             # Clear one-shot command flags to reflect execution
-                            if any([acp_cmd_start, acp_cmd_stop, el_cmd_start, el_cmd_stop]):
+                            if any([acp_cmd_start, acp_cmd_stop, el_cmd_start, el_cmd_stop, wg_cmd_start, wg_cmd_stop]):
                                 try:
                                     st2 = dict(st)
-                                    for k in ['cmd_start_acp','cmd_stop_acp','cmd_start_elatec','cmd_stop_elatec']:
+                                    for k in ['cmd_start_acp','cmd_stop_acp','cmd_start_elatec','cmd_stop_elatec','cmd_start_wiegand','cmd_stop_wiegand']:
                                         if st2.get(k):
                                             st2.pop(k, None)
-                                    _write_tray_status(acp_live, el_live, ('PORNIT' if server_running else 'OPRIT'), center_running)
+                                    _write_tray_status(acp_live, el_live, ('PORNIT' if server_running else 'OPRIT'), center_running, wg_live)
                                     # Also write tray_status.json with flags cleared
                                     p = _tray_status_path()
                                     import json as _json
                                     data = _read_tray_status()
-                                    for k in ['cmd_start_acp','cmd_stop_acp','cmd_start_elatec','cmd_stop_elatec']:
+                                    for k in ['cmd_start_acp','cmd_stop_acp','cmd_start_elatec','cmd_stop_elatec','cmd_start_wiegand','cmd_stop_wiegand']:
                                         if k in data:
                                             data.pop(k, None)
                                     try:
@@ -2243,7 +2700,17 @@ class Command(BaseCommand):
                             pass
                         # Log decision path for readers each loop (concise)
                         try:
-                            logging.info('Reader decision: ACP live=%s reason=%s ; Elatec live=%s reason=%s', acp_live, acp_reason, el_live, el_reason)
+                            logging.info('Reader decision: ACP live=%s reason=%s ; Elatec live=%s reason=%s ; Wiegand live=%s reason=%s', acp_live, acp_reason, el_live, el_reason, wg_live, wg_reason)
+                        except Exception:
+                            pass
+                        try:
+                            adms_port = _get_adms_port()
+                            adms_running = _is_server_running(host='127.0.0.1', port=adms_port)
+                            if not adms_running:
+                                adms_running = _ADMS_SERVER_PROC is not None and _ADMS_SERVER_PROC.poll() is None
+                            if server_running and adms_port != port_probe and not adms_running:
+                                logging.info('ADMS listener down; attempting restart on port %s', adms_port)
+                                _start_adms_server(host=host, port=adms_port)
                         except Exception:
                             pass
                         # Auto-restart listeners if enabled but not live (skip if user requested stop)
@@ -2259,6 +2726,11 @@ class Command(BaseCommand):
                                 _start_listener('elatec')
                                 time.sleep(0.2)
                                 el_live = _listener_running('elatec')
+                            if wg_en and not wg_live and not bool(st.get('cmd_stop_wiegand')) and not bool(st.get('wiegand_blocked', False)):
+                                logging.info('Wiegand listener down; attempting auto-restart')
+                                _start_listener('wiegand')
+                                time.sleep(0.2)
+                                wg_live = _listener_running('wiegand')
                         except Exception:
                             pass
                         # Heartbeat ages for diagnostics
@@ -2271,8 +2743,10 @@ class Command(BaseCommand):
                                 return None
                         acp_age = _hb_age(str(Path.home() / 'zkeco_reader_heartbeat_acp.json'))
                         el_age = _hb_age(str(Path.home() / 'zkeco_reader_heartbeat_elatec.json'))
+                        wg_age = _hb_age(str(Path.home() / 'zkeco_reader_heartbeat_wiegand.json'))
                         acp_blocked = bool(st.get('acp_blocked', False))
                         el_blocked = bool(st.get('elatec_blocked', False))
+                        wg_blocked = bool(st.get('wiegand_blocked', False))
                         def _reader_label2(live, blocked, enabled):
                             if live:
                                 return 'ON'
@@ -2283,10 +2757,13 @@ class Command(BaseCommand):
                             return 'OPRIT'
                         tip.append('ACP:' + _reader_label2(acp_live, acp_blocked, acp_en))
                         tip.append('Elatec:' + _reader_label2(el_live, el_blocked, el_en))
+                        tip.append('W26:' + _reader_label2(wg_live, wg_blocked, wg_en))
                         if acp_age is not None:
                             tip.append(f"ACP HB:{acp_age}s")
                         if el_age is not None:
                             tip.append(f"Elatec HB:{el_age}s")
+                        if wg_age is not None:
+                            tip.append(f"W26 HB:{wg_age}s")
                     except Exception:
                         pass
                     # Append last card read and access evaluation status
@@ -2314,10 +2791,12 @@ class Command(BaseCommand):
                         tip.append(f"RT {_CENTER.total_rtlog_lines}")
                     tip.append('Server:' + ( 'PORNIT' if server_running else ('PORNESTE' if srv_state=='PORNESTE' else 'OPRIT') ))
                     tip.append('CommCenter:' + ('PORNIT' if center_running else 'OPRIT'))
+                    if st.get('zkemkeeper_enabled'):
+                        tip.append('ZKEM:' + str(st.get('zkemkeeper') or 'OPRIT'))
                     tip.append(f'Licență:{_license_status()}')
                     tip.append('Click dreapta: meniu')
                     _set_icon_title(icon_ref, ' | '.join(tip))
-                    state = (server_running, center_running, any_running, color_json if use_json else None, acp_live, el_live)
+                    state = (server_running, center_running, any_running, color_json if use_json else None, acp_live, el_live, wg_live)
                     if state != _LAST_ICON_STATE:
                         logging.info('State change: srv=%s, cen=%s, acp=%s, el=%s', server_running, center_running, acp_live, el_live)
                         # Derive color: green when required services running
@@ -2325,7 +2804,7 @@ class Command(BaseCommand):
                         st2 = _read_tray_status()
                         acp_en = bool(st2.get('acp_enabled', ((cfg or {}).get('acp') or {}).get('enabled', True)))
                         el_en = bool(st2.get('elatec_enabled', ((cfg or {}).get('elatec') or {}).get('enabled', True)))
-                        all_on = server_running and center_running and ((not acp_en) or acp_live) and ((not el_en) or el_live)
+                        all_on = server_running and center_running and ((not acp_en) or acp_live) and ((not el_en) or el_live) and ((not wg_en) or wg_live)
                         if all_on:
                             color = (46,204,113)
                         elif any_running:
@@ -2340,7 +2819,7 @@ class Command(BaseCommand):
                     try:
                         # If JSON provided explicit server state, use it; else derive from boolean
                         srv_out = ('PORNIT' if server_running else ('PORNESTE' if srv_state=='PORNESTE' else 'OPRIT'))
-                        _write_tray_status(acp_live, el_live, srv_out, center_running)
+                        _write_tray_status(acp_live, el_live, srv_out, center_running, wg_live)
                     except Exception:
                         pass
                 except Exception:
@@ -2353,9 +2832,52 @@ class Command(BaseCommand):
                     if options.get('auto_restart'):
                         if (not _SERVER_PROC) or (_SERVER_PROC and _SERVER_PROC.poll() is not None):
                             _start_server(host=host, port=port, asgi=options.get('asgi'))
+                        adms_port = _get_adms_port()
+                        if adms_port != port and ((not _ADMS_SERVER_PROC) or (_ADMS_SERVER_PROC and _ADMS_SERVER_PROC.poll() is not None)):
+                            _start_adms_server(host=host, port=adms_port)
                     _STOP_EVENT.wait(5.0)
                 except Exception:
                     _STOP_EVENT.wait(5.0)
+
+        if options.get('headless'):
+            self.stdout.write('Headless tray mode active. Services will keep running without a tray icon.')
+            self.stdout.write(f'Using management command at: {__file__}')
+            self.stdout.flush()
+            try:
+                _recompute_status_once()
+                time.sleep(0.3)
+                _recompute_status_once()
+            except Exception:
+                pass
+            threading.Thread(target=_status_loop, args=(None,), daemon=True).start()
+            if options.get('auto_restart'):
+                threading.Thread(target=_restart_loop, daemon=True).start()
+
+            def _headless_signal_handler(signum, _frame):
+                logging.info('Headless tray signal received: %s', signum)
+                try:
+                    _shutdown(None)
+                except Exception as cleanup_err:
+                    logging.error(f'Error during headless cleanup: {cleanup_err}')
+
+            for sig_name in ('SIGINT', 'SIGTERM', 'SIGBREAK'):
+                try:
+                    sig = getattr(signal, sig_name)
+                    signal.signal(sig, _headless_signal_handler)
+                except Exception:
+                    pass
+
+            try:
+                while not _STOP_EVENT.is_set():
+                    time.sleep(1.0)
+            except KeyboardInterrupt:
+                self.stdout.write('Headless tray interrupted. Performing final cleanup...')
+                try:
+                    _shutdown(None)
+                except Exception as cleanup_err:
+                    logging.error(f'Error during headless cleanup: {cleanup_err}')
+            self.stdout.write('Tray agent exited.')
+            return 0
 
         # Clear, unique tooltip to confirm the correct agent is running
         icon = pystray.Icon('zkeco_access', _build_icon(color=_choose_icon_color(False, False)), 'Access Control — Django Tray Agent', menu=_build_menu(None, host, port))
@@ -2373,7 +2895,7 @@ class Command(BaseCommand):
         self.stdout.write('Tray icon active. Right-click for menu.')
         self.stdout.write(f'Using management command at: {__file__}')
         self.stdout.flush()
-        
+
         # Wrap icon.run() with exception handling and cleanup
         try:
             icon.run()
@@ -2386,5 +2908,5 @@ class Command(BaseCommand):
             except Exception as cleanup_err:
                 logging.error(f'Error during final cleanup: {cleanup_err}')
             self.stdout.write('Tray agent exited.')
-        
+
         return 0

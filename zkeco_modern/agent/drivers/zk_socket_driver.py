@@ -13,9 +13,12 @@ import socket
 import struct
 import logging
 import time
+from types import SimpleNamespace
 from typing import Dict, Any, Optional, List
 
 from django.conf import settings
+
+from .plcommpro_bridge_driver import PlcommproBridgeDriver
 
 LOG = logging.getLogger("zk_socket_driver")
 
@@ -72,6 +75,36 @@ class ZKTechSocketDriver:
         self.reply_id: int = 0
         self.timeout: float = 5.0
         self._lock = __import__('threading').Lock()
+        self._bridge_driver: Optional[PlcommproBridgeDriver] = None
+
+    def _bridge(self) -> PlcommproBridgeDriver:
+        if self._bridge_driver is None:
+            self._bridge_driver = PlcommproBridgeDriver(self.dev)
+        return self._bridge_driver
+
+    def _bridge_passthrough(self, method_name: str, *args, **kwargs) -> Dict[str, Any]:
+        """Use the proven bridge transport for table/option parity operations.
+
+        The direct socket transport remains the primary path for RTLOG and relay
+        control, while the bridge is used for table CRUD/read-count parity.
+        """
+        try:
+            bridge = self._bridge()
+            method = getattr(bridge, method_name)
+            resp = method(*args, **kwargs)
+            if isinstance(resp, dict):
+                resp = dict(resp)
+                resp.setdefault("transport", "bridge-fallback")
+                return resp
+            return {"result": -1, "error": f"invalid_{method_name}_response"}
+        except Exception as e:
+            LOG.error("%s bridge fallback error: %s", method_name, e)
+            return {"result": -1, "error": str(e), "transport": "bridge-fallback"}
+
+    @classmethod
+    def from_connection_info(cls, *, ip: str, port: int = 4370, password: str = "") -> "ZKTechSocketDriver":
+        dev = SimpleNamespace(ip_address=ip, port=port, comm_password=password)
+        return cls(dev)
         
     def connect(self) -> Dict[str, Any]:
         """Establish TCP connection to ZKTech device.
@@ -226,7 +259,7 @@ class ZKTechSocketDriver:
             LOG.error(f"get_transaction error: {e}")
             return {"result": -1, "error": str(e)}
     
-    def controldevice(self, door: int, index: int, state: int) -> Dict[str, Any]:
+    def controldevice(self, door: int, index: int, state: int, time_s: int = 0) -> Dict[str, Any]:
         """Control door relay (open/close).
         
         Args:
@@ -291,22 +324,108 @@ class ZKTechSocketDriver:
             LOG.error(f"cancel_alarm error: {e}")
             return {"result": -1, "error": str(e)}
     
-    # Remaining CommDriver protocol methods (stubs)
-    def query_data(self, table: str, fields: str, flt: str, extra: str) -> Dict[str, Any]:
-        return {"result": 0, "data": []}
-    
-    def update_data(self, table: str, data: str, extra: str) -> Dict[str, Any]:
-        return {"result": 1}
-    
-    def delete_data(self, table: str, flt: str) -> Dict[str, Any]:
-        return {"result": 1}
-    
+    def query_data(
+        self,
+        table: str,
+        fields: str = "*",
+        flt: str = "",
+        extra: str = "",
+        **kwargs,
+    ) -> Dict[str, Any]:
+        table_name = str(table or "").strip().lower()
+        filter_value = kwargs.get("filter", flt)
+        option_value = kwargs.get("option", extra)
+        if self._is_connected():
+            try:
+                if table_name == "transaction" and (not str(filter_value or "").strip()):
+                    newlog = str(option_value or "").strip().lower() == "newrecord"
+                    txn_resp = self.get_transaction(newlog=newlog)
+                    if int(txn_resp.get("result", -1) or -1) >= 0:
+                        rows = txn_resp.get("data") or {}
+                        if isinstance(rows, dict):
+                            text = "\r\n".join(str(v or "").strip() for v in rows.values() if str(v or "").strip())
+                        else:
+                            text = str(rows or "")
+                        return {
+                            "result": int(txn_resp.get("result", 0) or 0),
+                            "data": text,
+                            "transport": "socket-native",
+                        }
+                if table_name == "rtlog" and (not str(filter_value or "").strip()):
+                    rt_resp = self.get_rtlog()
+                    if int(rt_resp.get("result", -1) or -1) >= 0:
+                        return {
+                            "result": int(rt_resp.get("result", 0) or 0),
+                            "data": str(rt_resp.get("data") or ""),
+                            "transport": "socket-native",
+                        }
+            except Exception as e:
+                LOG.warning("query_data socket-native fallback error for %s: %s", table_name, e)
+        return self._bridge_passthrough(
+            "query_data",
+            table=str(table or "").strip(),
+            fields=str(fields or "*").strip() or "*",
+            filter=str(filter_value or "").strip(),
+            option=str(option_value or "").strip(),
+        )
+
+    def update_data(self, table: str, data: str, extra: str = "", **kwargs) -> Dict[str, Any]:
+        option_value = kwargs.get("option", extra)
+        return self._bridge_passthrough(
+            "update_data",
+            table=str(table or "").strip(),
+            data=str(data or ""),
+            option=str(option_value or "").strip(),
+        )
+
+    def delete_data(self, table: str, flt: str = "", extra: str = "", **kwargs) -> Dict[str, Any]:
+        filter_value = kwargs.get("filter", flt)
+        return self._bridge_passthrough(
+            "delete_data",
+            table=str(table or "").strip(),
+            filter=str(filter_value or "").strip(),
+        )
+
     def Get_Data_Count(self, table: str) -> Dict[str, Any]:
-        return {"result": 0}
-    
+        table_name = str(table or "").strip().lower()
+        if self._is_connected():
+            try:
+                if table_name == "transaction":
+                    txn_resp = self.get_transaction(newlog=False)
+                    if int(txn_resp.get("result", -1) or -1) >= 0:
+                        return {"result": int(txn_resp.get("result", 0) or 0), "transport": "socket-native"}
+                if table_name == "rtlog":
+                    rt_resp = self.get_rtlog()
+                    if int(rt_resp.get("result", -1) or -1) >= 0:
+                        return {"result": int(rt_resp.get("result", 0) or 0), "transport": "socket-native"}
+            except Exception as e:
+                LOG.warning("Get_Data_Count socket-native fallback error for %s: %s", table_name, e)
+        return self._bridge_passthrough("Get_Data_Count", str(table or "").strip())
+
     def get_options(self, items: str) -> Dict[str, Any]:
-        """Get device options (placeholder)."""
-        return {"result": 0, "data": ""}
+        request_items = str(items or "")
+        if self._is_connected():
+            try:
+                with self._lock:
+                    payload = request_items.encode("utf-8")
+                    cmd_packet = self._build_command(self.CMD_GETOPTIONS, payload, expect_reply=1)
+                    self.socket.send(cmd_packet)
+                    response = self._recv_all(4096)
+                    payload_bytes = self._extract_payload(response)
+                    text = payload_bytes.decode("utf-8", errors="ignore").replace("\x00", "").strip()
+                    if text:
+                        return {"result": 1, "data": text, "transport": "socket-native", "ok": True}
+                    result_code = self._parse_response_result(response)
+                    if result_code >= 0:
+                        return {
+                            "result": result_code,
+                            "data": text,
+                            "transport": "socket-native",
+                            "ok": bool(text),
+                        }
+            except Exception as e:
+                LOG.warning("get_options socket-native error: %s", e)
+        return self._bridge_passthrough("get_options", request_items)
     
     def set_options(self, items: str) -> Dict[str, Any]:
         """Set device options via CMD_SETOPTIONS (e.g. ServerAddr, ServerPort, CLOUDSERVICEFLAG)."""
@@ -444,6 +563,22 @@ class ZKTechSocketDriver:
             return result
         except:
             return -1
+
+    def _extract_payload(self, data: bytes) -> bytes:
+        if len(data) <= 10:
+            return b""
+        try:
+            header = self._parse_response_header(data)
+            length = int(header.get("length", 0) or 0)
+            start = 10
+            end = start + length
+            if length > 0 and len(data) >= end:
+                return data[start:end]
+        except Exception:
+            pass
+        if len(data) > 12:
+            return data[10:-2]
+        return data[10:]
     
     def _parse_rtlog_response(self, data: bytes) -> List[str]:
         """Parse rtlog response into list of log lines.

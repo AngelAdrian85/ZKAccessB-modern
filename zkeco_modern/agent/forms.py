@@ -1,8 +1,9 @@
 from django import forms
 from django.contrib.auth.models import Group, Permission, User
 from django.contrib.auth.password_validation import validate_password
-from .models import Door, TimeSegment, Holiday, AccessLevel, Employee, EmployeeCard, Device, DSTime
+from .models import Door, TimeSegment, Holiday, AccessLevel, Employee, EmployeeCard, Device, DSTime, WiegandCardFormat
 from .models import DoorFirstCardRule, DoorMultiCardRule
+from .wiegand_decoder import list_known_wiegand_formats
 try:
     from legacy_models.models import (
         Area as LegacyArea,
@@ -269,6 +270,134 @@ class HolidayForm(forms.ModelForm):
             "name": forms.TextInput(attrs={"class": "txt"}),
             "description": forms.Textarea(attrs={"rows": 3}),
         }
+
+
+class WiegandCardFormatForm(forms.ModelForm):
+    known_preset = forms.ChoiceField(required=False, choices=(), label='Preset cunoscut')
+
+    class Meta:
+        model = WiegandCardFormat
+        fields = [
+            'wiegand_name',
+            'default_fmt',
+            'is_active',
+            'wiegand_count',
+            'wiegand_mode',
+            'first_p',
+            'second_p',
+            'even_parity_start',
+            'even_parity_count',
+            'odd_parity_start',
+            'odd_parity_count',
+            'cid_start',
+            'cid_count',
+            'facility_code_start',
+            'facility_code_count',
+            'site_code_start',
+            'site_code_count',
+            'manufactory_code_start',
+            'manufactory_code_count',
+            'before_fmt',
+            'after_fmt',
+        ]
+        widgets = {
+            'wiegand_name': forms.TextInput(attrs={'class': 'txt'}),
+            'before_fmt': forms.TextInput(attrs={'class': 'txt', 'spellcheck': 'false'}),
+            'after_fmt': forms.TextInput(attrs={'class': 'txt', 'spellcheck': 'false'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        preset_choices = [('', 'Preset gol')]
+        seen_presets = set()
+        try:
+            existing_rows = list(
+                WiegandCardFormat.objects.order_by('-is_active', '-default_fmt', 'wiegand_name').values(
+                    'wiegand_name',
+                    'wiegand_count',
+                )
+            )
+        except Exception:
+            existing_rows = []
+        for row in existing_rows:
+            preset_name = str(row.get('wiegand_name') or '').strip()
+            if not preset_name:
+                continue
+            preset_choices.append((preset_name, f"Existent: {preset_name} ({int(row.get('wiegand_count') or 0)}b)"))
+            seen_presets.add(preset_name)
+        for row in list_known_wiegand_formats(include_details=True):
+            preset_name = str(row.get('name') or '').strip()
+            if not preset_name or preset_name in seen_presets:
+                continue
+            preset_choices.append((preset_name, f"{row.get('name')} ({row.get('bit_length')}b)"))
+        self.fields['known_preset'].choices = preset_choices
+
+        for name, field in self.fields.items():
+            if name in ('default_fmt', 'is_active'):
+                continue
+            if name == 'known_preset':
+                field.widget.attrs.update({'data-wiegand-preset-select': '1'})
+                continue
+            if isinstance(field.widget, forms.CheckboxInput):
+                continue
+            css = field.widget.attrs.get('class', '')
+            field.widget.attrs['class'] = (css + ' txt').strip()
+            if name not in ('wiegand_name', 'before_fmt', 'after_fmt'):
+                field.widget.attrs.setdefault('inputmode', 'numeric')
+
+        self.fields['wiegand_name'].label = 'Nume format'
+        self.fields['default_fmt'].label = 'Auto match'
+        self.fields['is_active'].label = 'Activ pentru test rapid'
+        self.fields['wiegand_count'].label = 'Total biți'
+        self.fields['wiegand_mode'].label = 'Mod'
+        self.fields['first_p'].label = 'Primul bit p'
+        self.fields['second_p'].label = 'Al doilea bit p'
+        self.fields['before_fmt'].label = 'Card check format'
+        self.fields['after_fmt'].label = 'Odd/even check format'
+
+        inst = getattr(self, 'instance', None)
+        if (not self.is_bound) and (inst is None or not getattr(inst, 'pk', None)):
+            active_existing = None
+            try:
+                active_existing = (
+                    WiegandCardFormat.objects.order_by('-is_active', '-default_fmt', 'wiegand_name').first()
+                )
+            except Exception:
+                active_existing = None
+            if active_existing is not None:
+                self.initial.setdefault('known_preset', str(getattr(active_existing, 'wiegand_name', '') or ''))
+        if inst is not None and getattr(inst, 'pk', None) and bool(getattr(inst, 'system_defined', False)):
+            self.fields['wiegand_name'].disabled = True
+            self.fields['wiegand_count'].disabled = True
+
+    def clean_wiegand_name(self):
+        return str(self.cleaned_data.get('wiegand_name') or '').strip()
+
+    def clean(self):
+        cleaned = super().clean()
+        bit_count = int(cleaned.get('wiegand_count') or 0)
+        mode = int(cleaned.get('wiegand_mode') or 1)
+        if bit_count <= 0:
+            raise forms.ValidationError('Totalul de biți trebuie să fie mai mare decât 0.')
+        if mode not in (1, 2):
+            raise forms.ValidationError('Modul Wiegand este invalid.')
+
+        if mode == 2:
+            before_fmt = str(cleaned.get('before_fmt') or '').strip()
+            after_fmt = str(cleaned.get('after_fmt') or '').strip()
+            if before_fmt and len(before_fmt) != bit_count:
+                self.add_error('before_fmt', 'Card check format trebuie să aibă exact lungimea Total biți.')
+            if after_fmt and len(after_fmt) != bit_count:
+                self.add_error('after_fmt', 'Odd/even check format trebuie să aibă exact lungimea Total biți.')
+
+        return cleaned
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if commit:
+            instance.save()
+        return instance
 
 class DSTimeForm(forms.ModelForm):
     class Meta:
@@ -943,7 +1072,18 @@ class DeviceExtendedForm(forms.ModelForm):
             if (self.initial.get('enabled') is None) and (self.fields['enabled'].initial is None):
                 self.fields['enabled'].initial = True
             if (self.initial.get('port') is None) and (self.fields['port'].initial is None):
-                self.fields['port'].initial = 4370
+                inferred_port = None
+                try:
+                    from .controller_capabilities import infer_firmware_tcp_port
+
+                    inferred_port = infer_firmware_tcp_port(
+                        device_name=str(self.initial.get('name') or ''),
+                        hardware_version=str(self.initial.get('hardware_version') or ''),
+                        firmware_version=str(self.initial.get('firmware_version') or ''),
+                    )
+                except Exception:
+                    inferred_port = None
+                self.fields['port'].initial = int(inferred_port or 4370)
             if (self.initial.get('rs485_baudrate') is None) and (self.fields['rs485_baudrate'].initial is None):
                 self.fields['rs485_baudrate'].initial = 9600
 

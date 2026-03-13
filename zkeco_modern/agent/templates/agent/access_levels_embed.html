@@ -138,84 +138,106 @@
                   </thead>
                   <tbody>
                     {% for g in dev_groups %}
-                      <tr>
-                        <td>
-                          <button type="button" class="dc-op" data-level-device-toggle="1" data-level-id="{{ l.id }}" data-device-id="{{ g.grouper.id }}">+</button>
-                        </td>
-                        <td><strong>#{{ g.grouper.id }}</strong></td>
-                        <td><strong>{{ g.grouper.name|default:'(fără nume)' }}</strong></td>
-                        <td>
-                          {% if l.prefetched_time_segments %}
-                            {{ l.prefetched_time_segments.0.name }}
-                          {% else %}
-                            <span class="al-muted">—</span>
-                          {% endif %}
-                        </td>
-                        <td>{{ g.grouper.get_comm_mode_display|default:'TCP/IP' }}</td>
-                        <td>{{ g.grouper.ip_address|default:'—' }}</td>
-                        <td>{% if g.grouper.enabled %}<span class="pill" style="background:rgba(45,164,78,0.18);border-color:rgba(45,164,78,0.35);">✓</span>{% else %}<span class="pill bad">✕</span>{% endif %}</td>
-                        <td>{{ g.grouper.get_device_type_display|default:g.grouper.device_type|default:'—' }}</td>
-                        <td>{{ g.grouper.hardware_version|default:'—' }}</td>
-                        <td><span class="pill">{{ g.list|length }}</span></td>
-                        <td>
-                          {% if g.grouper.is_physical_controller %}
-                            <button type="button" class="dc-link" data-access-sync="1" data-sync-kind="access-levels" data-device-id="{{ g.grouper.id }}" data-device-name="{{ g.grouper.name|default:'' }}" title="Sincronizează datele către centrală">SYNC</button>
-                          {% else %}
-                            <span class="al-muted">—</span>
-                          {% endif %}
-                        </td>
-                      </tr>
-                      <tr data-level-device-detail-row="1" data-level-id="{{ l.id }}" data-device-id="{{ g.grouper.id }}" style="display:none;">
-                        <td colspan="11">
-                          <div class="dc-detail">
-                            <table class="dc-subtable" aria-label="Doors">
-                              <thead>
-                                <tr>
-                                  <th style="width:90px;">Număr ușă</th>
-                                  <th>Nume ușă</th>
-                                  <th style="width:220px;">Interval activ</th>
-                                  <th style="width:190px;">First-Card (Normal Open)</th>
-                                  <th style="width:170px;">Multi-Card Open</th>
-                                  <th style="width:160px;">Acțiuni</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {% for d in g.list %}
+                      {% if g.grouper %}
+                        <tr>
+                          <td>
+                            <button type="button" class="dc-op" data-level-device-toggle="1" data-level-id="{{ l.id }}" data-device-id="{{ g.grouper.id }}">+</button>
+                          </td>
+                          <td><strong>#{{ g.grouper.id }}</strong></td>
+                          <td><strong>{{ g.grouper.name|default:'(fără nume)' }}</strong></td>
+                          <td>
+                            {% if l.prefetched_time_segments %}
+                              {{ l.prefetched_time_segments.0.name }}
+                            {% else %}
+                              <span class="al-muted">—</span>
+                            {% endif %}
+                          </td>
+                          <td>{{ g.grouper.get_comm_mode_display|default:'TCP/IP' }}</td>
+                          <td>{{ g.grouper.ip_address|default:'—' }}</td>
+                          <td>{% if g.grouper.enabled %}<span class="pill" style="background:rgba(45,164,78,0.18);border-color:rgba(45,164,78,0.35);">✓</span>{% else %}<span class="pill bad">✕</span>{% endif %}</td>
+                          <td>{{ g.grouper.get_device_type_display|default:g.grouper.device_type|default:'—' }}</td>
+                          <td>{{ g.grouper.hardware_version|default:'—' }}</td>
+                          <td><span class="pill">{{ g.list|length }}</span></td>
+                          <td>
+                            {% if g.grouper.is_physical_controller %}
+                              <button type="button" class="dc-link" data-access-sync="1" data-sync-kind="access-levels" data-device-id="{{ g.grouper.id }}" data-device-name="{{ g.grouper.name|default:'' }}" title="Sincronizează datele către centrală">SYNC</button>
+                            {% else %}
+                              <span class="al-muted">—</span>
+                            {% endif %}
+                          </td>
+                        </tr>
+                        <tr data-level-device-detail-row="1" data-level-id="{{ l.id }}" data-device-id="{{ g.grouper.id }}" style="display:none;">
+                          <td colspan="11">
+                            <div class="dc-detail">
+                              <table class="dc-subtable" aria-label="Doors">
+                                <thead>
                                   <tr>
-                                    <td>
-                                      {% if d.door_number %}<span class="pill">{{ d.door_number }}</span>{% else %}<span class="pill bad">NECONFIG</span>{% endif %}
-                                    </td>
-                                    <td title="Door ID {{ d.id }}">
-                                      {{ d.name }}
-                                      <div class="hint" style="margin-top:2px;">Reader1: {{ d.reader_in_name|default:'—' }} | Reader2: {{ d.reader_out_name|default:'—' }}</div>
-                                    </td>
-                                    <td>{% if d.door_active_time_zone %}{{ d.door_active_time_zone.name }}{% else %}<span class="hint">—</span>{% endif %}</td>
-                                    <td>
-                                      Quantity Set: {{ d.first_card_rules.all|length }} |
-                                      {% if can_edit %}
-                                        <a class="dc-link" href="{% url 'crud-door-first-card' d.id %}?modal=1" data-access-open="1" data-title="First-Card Normal Open – {{ d.name }}" data-url="{% url 'crud-door-first-card' d.id %}?modal=1">Set</a>
-                                      {% else %}Set{% endif %}
-                                    </td>
-                                    <td>
-                                      Quantity Set: {{ d.multi_card_rules.all|length }} |
-                                      {% if can_edit %}
-                                        <a class="dc-link" href="{% url 'crud-door-multi-card' d.id %}?modal=1" data-access-open="1" data-title="Multi-Card Open – {{ d.name }}" data-url="{% url 'crud-door-multi-card' d.id %}?modal=1">Set</a>
-                                      {% else %}Set{% endif %}
-                                    </td>
-                                    <td>
-                                      {% if can_edit %}
-                                        <a class="dc-link" href="{% url 'crud-door-edit' d.id %}?modal=1" data-access-open="1" data-title="Detalii ușă – {{ d.name }}" data-url="{% url 'crud-door-edit' d.id %}?modal=1">Editează</a>
-                                      {% else %}—{% endif %}
-                                    </td>
+                                    <th style="width:90px;">Număr ușă</th>
+                                    <th>Nume ușă</th>
+                                    <th style="width:220px;">Interval activ</th>
+                                    <th style="width:190px;">First-Card (Normal Open)</th>
+                                    <th style="width:170px;">Multi-Card Open</th>
+                                    <th style="width:160px;">Acțiuni</th>
                                   </tr>
-                                {% empty %}
-                                  <tr><td colspan="6" class="td-center-muted">Nu există uși</td></tr>
-                                {% endfor %}
-                              </tbody>
-                            </table>
-                          </div>
-                        </td>
-                      </tr>
+                                </thead>
+                                <tbody>
+                                  {% for d in g.list %}
+                                    <tr>
+                                      <td>
+                                        {% if d.door_number %}<span class="pill">{{ d.door_number }}</span>{% else %}<span class="pill bad">NECONFIG</span>{% endif %}
+                                      </td>
+                                      <td title="Door ID {{ d.id }}">
+                                        {{ d.name }}
+                                        <div class="hint" style="margin-top:2px;">Reader1: {{ d.reader_in_name|default:'—' }} | Reader2: {{ d.reader_out_name|default:'—' }}</div>
+                                      </td>
+                                      <td>{% if d.door_active_time_zone %}{{ d.door_active_time_zone.name }}{% else %}<span class="hint">—</span>{% endif %}</td>
+                                      <td>
+                                        Quantity Set: {{ d.first_card_rules.all|length }} |
+                                        {% if can_edit %}
+                                          <a class="dc-link" href="{% url 'crud-door-first-card' d.id %}?modal=1" data-access-open="1" data-title="First-Card Normal Open – {{ d.name }}" data-url="{% url 'crud-door-first-card' d.id %}?modal=1">Set</a>
+                                        {% else %}Set{% endif %}
+                                      </td>
+                                      <td>
+                                        Quantity Set: {{ d.multi_card_rules.all|length }} |
+                                        {% if can_edit %}
+                                          <a class="dc-link" href="{% url 'crud-door-multi-card' d.id %}?modal=1" data-access-open="1" data-title="Multi-Card Open – {{ d.name }}" data-url="{% url 'crud-door-multi-card' d.id %}?modal=1">Set</a>
+                                        {% else %}Set{% endif %}
+                                      </td>
+                                      <td>
+                                        {% if can_edit %}
+                                          <a class="dc-link" href="{% url 'crud-door-edit' d.id %}?modal=1" data-access-open="1" data-title="Detalii ușă – {{ d.name }}" data-url="{% url 'crud-door-edit' d.id %}?modal=1">Editează</a>
+                                        {% else %}—{% endif %}
+                                      </td>
+                                    </tr>
+                                  {% empty %}
+                                    <tr><td colspan="6" class="td-center-muted">Nu există uși</td></tr>
+                                  {% endfor %}
+                                </tbody>
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
+                      {% else %}
+                        <tr>
+                          <td><span class="al-muted">—</span></td>
+                          <td><strong>#—</strong></td>
+                          <td><strong>(fără centrală)</strong></td>
+                          <td>
+                            {% if l.prefetched_time_segments %}
+                              {{ l.prefetched_time_segments.0.name }}
+                            {% else %}
+                              <span class="al-muted">—</span>
+                            {% endif %}
+                          </td>
+                          <td><span class="al-muted">—</span></td>
+                          <td><span class="al-muted">—</span></td>
+                          <td><span class="pill bad">✕</span></td>
+                          <td><span class="al-muted">—</span></td>
+                          <td><span class="al-muted">—</span></td>
+                          <td><span class="pill">{{ g.list|length }}</span></td>
+                          <td><span class="al-muted">—</span></td>
+                        </tr>
+                      {% endif %}
                     {% empty %}
                       <tr><td colspan="11" class="td-center-muted">Nu există centrale</td></tr>
                     {% endfor %}

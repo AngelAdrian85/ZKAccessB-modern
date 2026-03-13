@@ -14,6 +14,7 @@ import hashlib
 import os
 import ssl
 import sys
+import json
 from urllib.error import HTTPError
 from urllib.parse import urlencode, urljoin
 from urllib.request import HTTPCookieProcessor, HTTPSHandler, Request, build_opener
@@ -49,7 +50,7 @@ def request(op, url: str, *, method: str = "GET", data: bytes | None = None, hea
 
 def main() -> int:
     if len(sys.argv) < 2:
-        print("Usage: probe_zkteco_param_cgi.py <base_url>")
+        print("Usage: probe_zkteco_param_cgi.py <base_url> [cmd|json-payload ...]")
         return 2
 
     base = sys.argv[1].strip()
@@ -92,8 +93,40 @@ def main() -> int:
 
     param_url = urljoin(base, "cgi-bin/param.cgi")
 
-    def call_cmd(cmd: str):
-        body = urlencode({"cmd": cmd}).encode("utf-8")
+    payload_args = sys.argv[2:]
+    default_payloads = [
+        {"cmd": "getdeviceinfo"},
+        {"cmd": "getnetattr"},
+        {"cmd": "getnetportattr"},
+        {"cmd": "getpushserverattr"},
+        {"cmd": "getdevlevel"},
+        {"cmd": "getcommpwd"},
+        {"cmd": "getdatapwd"},
+    ]
+
+    payloads = []
+    if payload_args:
+        for raw_arg in payload_args:
+            raw_arg = (raw_arg or "").strip()
+            if not raw_arg:
+                continue
+            if raw_arg.startswith("{"):
+                try:
+                    decoded = json.loads(raw_arg)
+                except Exception as exc:
+                    print(f"Invalid JSON payload: {raw_arg} ({exc})")
+                    return 5
+                if not isinstance(decoded, dict) or not decoded.get("cmd"):
+                    print(f"Invalid payload (missing cmd): {raw_arg}")
+                    return 5
+                payloads.append({str(k): str(v) for k, v in decoded.items()})
+            else:
+                payloads.append({"cmd": raw_arg})
+    else:
+        payloads = default_payloads
+
+    def call_payload(payload: dict[str, str]):
+        body = urlencode(payload).encode("utf-8")
         st, rr = request(
             op,
             param_url,
@@ -109,19 +142,11 @@ def main() -> int:
             },
         )
         tt = rr.decode("utf-8", "replace")
-        print("\n== param.cgi cmd=", cmd, "status=", st)
+        print("\n== param.cgi payload=", payload, "status=", st)
         print(tt[:4000])
 
-    for cmd in (
-        "getdeviceinfo",
-        "getnetattr",
-        "getnetportattr",
-        "getpushserverattr",
-        "getdevlevel",
-        "getcommpwd",
-        "getdatapwd",
-    ):
-        call_cmd(cmd)
+    for payload in payloads:
+        call_payload(payload)
 
     return 0
 

@@ -18,64 +18,66 @@ from typing import Dict
 
 
 # Event code -> legacy label
-# NOTE: Device firmwares vary a lot; we only map codes we actually emit/observe.
+# NOTE: Device firmwares vary a lot. For C3/F3/G controller eventType values we
+# prefer the bundled ZKAccess 3.5 language tables (`LinkAgeIO`) over guesswork.
+# App-internal synthetic result codes may still exist elsewhere in the UI.
 EVENT_CODES: Dict[str, str] = {
     # ---------------------------------------------------------------
     # ZKTeco C3/F3/G series Format B transaction eventType codes (0-39)
     # These appear in the eventType (index 3) field of Format B lines:
     #   pin,verified,door,eventType,inOut,time_second[,index][,cardno,sitecode]
     # ---------------------------------------------------------------
-    "0": "Normal Open by Card",
-    "1": "Normal Open Manually",
-    "2": "Access Denied - Invalid Card",
-    "3": "Access Denied - Card Not Authorized",
-    "4": "Access Denied - Expired Card",
-    "5": "Access Denied - Invalid Time",
-    "6": "Access Denied - Anti-Passback",
-    "7": "Access Denied - Emergency Password",
-    "8": "Door Opened by Remote",
-    "9": "Door Closed Normally",
-    "10": "Door Opened by Button",
-    "11": "Button Pressed",
-    "12": "Door Locked by Schedule",
-    "13": "Door Unlocked by Schedule",
-    "14": "Normal Open Schedule Started",
-    "15": "Normal Open Schedule Cleared",
-    "16": "Access Denied - Card Not in List",
-    "17": "Fingerprint Access Granted",
-    "18": "Fingerprint Access Denied",
-    "19": "Multi-Card Open (Master Card)",
-    "20": "Emergency Password Open",
-    "21": "Access Granted by Super Password",
-    "22": "Door Opened Too Long",
-    "23": "Door Opened Too Long Recovered",
-    "25": "Alarm Input Triggered",
-    "26": "Alarm Input Cleared",
-    "27": "System Power-On",
-    "28": "Anti-Passback Error",
-    "29": "Inter-Lock Error",
-    "30": "Multi-Card Open Door",
-    "31": "Access Denied - Must Verify Both",
-    "32": "Door Opened Forcibly",
-    "33": "Door Closed After Force-Open Alarm",
-    "34": "Access Denied - Duress Card",
-    "35": "Card Removed",
-    "36": "Reserved",
-    "37": "Tamper Alarm",
-    "38": "Tamper Alarm Recovered",
-    "39": "Door Sensor Short-Circuit",
+    "0": "Normal Punch Open",
+    "1": "Punch during Passage Mode Time Zone",
+    "2": "First-Card Normal Open(Punch Card)",
+    "3": "Multi-Card Open(Punch Card)",
+    "4": "Emergency Password Open",
+    "5": "Open during Passage Mode Time Zone",
+    "8": "Remote Opening",
+    "9": "Remote Closing",
+    "14": "Normal Fingerprint Open",
+    "15": "Multi-Card Open(Press Fingerprint)",
+    "16": "Press Fingerprint during Passage Mode Time Zone",
+    "17": "Card plus Fingerprint Open",
+    "18": "First-Card Normal Open(Press Fingerprint)",
+    "19": "First-Card Normal Open(Card plus Fingerprint)",
+    "20": "Punch Interval too Short",
+    "21": "Door Inactive Time Zone(Punch Card)",
+    "22": "Illegal Time Zone",
+    "23": "Access Denied",
+    "24": "Anti-Passback",
+    "25": "Interlock",
+    "26": "Multi-Card Authentication(Punch Card)",
+    "27": "Access denied - Unregistered Card",
+    "28": "Open Door Time Out",
+    "29": "Card Expired",
+    "30": "Password Error",
+    "31": "Press Fingerprint Interval too Short",
+    "32": "Multi-Card Authentication(Press Fingerprint)",
+    "33": "Fingerprint Expired",
+    "34": "Access denied - Unregistered Fingerprint",
+    "35": "Door Inactive Time Zone(Press Fingerprint)",
+    "36": "Door Inactive Time Zone(Press Exit Button)",
+    "37": "Failed to Close during Passage Mode Time Zone",
+    "255": "Access denied - Unregistered Card",
 
     # ---------------------------------------------------------------
     # Door state (used by our code paths)
     # ---------------------------------------------------------------
     "100": "Door Opened Correctly",
     "101": "Door Closed Correctly",
+    "102": "Opened Forcefully",
+    "103": "Duress Fingerprint Open",
 
     # ---------------------------------------------------------------
     # Access result (used by our code paths)
     # ---------------------------------------------------------------
-    "200": "Access Granted",
-    "201": "Access Denied",
+    "200": "Door Opened Correctly",
+    "201": "Door Closed Correctly",
+    "202": "Exit Button Open",
+    "203": "Multi-Card Open(Card plus Fingerprint)",
+    "204": "Passage Mode Time Zone Over",
+    "205": "Remote Normal Opening",
 
     # ---------------------------------------------------------------
     # Alarms (placeholder; adjust as you catalog codes)
@@ -86,7 +88,8 @@ EVENT_CODES: Dict[str, str] = {
     # ---------------------------------------------------------------
     # A few known legacy event ids seen in translations
     # ---------------------------------------------------------------
-    "203": "Multi-Card Open(Card plus Fingerprint)",
+    "220": "Auxiliary Input Disconnected",
+    "221": "Auxiliary Input Shorted",
 }
 
 
@@ -124,6 +127,57 @@ DOOR_EVENT_LABELS: Dict[str, str] = {
 }
 
 
+ACCESS_GRANTED_EVENT_CODES = {
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "14",
+    "15",
+    "16",
+    "17",
+    "18",
+    "19",
+    "26",
+}
+
+
+ACCESS_DENIED_EVENT_CODES = {
+    "20",
+    "21",
+    "22",
+    "23",
+    "24",
+    "25",
+    "27",
+    "28",
+    "29",
+    "30",
+    "31",
+    "34",
+    "35",
+    "36",
+    "37",
+    "255",
+}
+
+
+DOOR_STATE_EVENT_CODES = {
+    "100",
+    "101",
+    "102",
+    "103",
+    "200",
+    "201",
+    "202",
+    "203",
+    "204",
+    "205",
+}
+
+
 def describe(code: str) -> str:
     """Map an event code to a legacy-like description."""
     return EVENT_CODES.get(str(code).strip(), "")
@@ -156,3 +210,28 @@ def describe_verify_mode(raw_verify_mode: str) -> str:
 def describe_door_event_type(event_type: str) -> str:
     """Map our WebSocket door.* event types to legacy-friendly descriptions."""
     return DOOR_EVENT_LABELS.get(str(event_type or "").strip(), str(event_type or "").strip())
+
+
+def normalized_status_text(code: str, description: str = "") -> str:
+    """Classify controller event rows into ACCEPTAT/RESPINS only when semantically valid.
+
+    Door-state notifications like 200/201 should stay as events, not synthetic access
+    results, so they return an empty status.
+    """
+    event_code = str(code or "").strip()
+    desc = str(description or "").strip().lower()
+
+    if event_code in DOOR_STATE_EVENT_CODES:
+        return ""
+    if event_code in ACCESS_GRANTED_EVENT_CODES:
+        return "ACCEPTAT"
+    if event_code in ACCESS_DENIED_EVENT_CODES:
+        return "RESPINS"
+    if "access denied" in desc or "unregistered" in desc:
+        return "RESPINS"
+    return ""
+
+
+def normalized_access_action(code: str, description: str = "") -> str:
+    """Return scan/event classification for controller-derived rows."""
+    return "scan" if normalized_status_text(code, description) in ("ACCEPTAT", "RESPINS") else "event"

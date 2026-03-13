@@ -27,6 +27,42 @@ def _guess_local_ip_for_device(device_ip: str) -> str:
         return ""
 
 
+def _route_aware_conn_for_device(dev, *, timeout_ms: int = 4000):
+    from agent.controller_capabilities import resolve_port_route
+    from agent.plcommpro_bridge import PlcommproConnInfo
+    from django.conf import settings
+
+    route = resolve_port_route(
+        getattr(dev, 'port', None),
+        device_name=str(getattr(dev, 'name', '') or ''),
+        hardware_version=str(getattr(dev, 'hardware_version', '') or ''),
+        firmware_version=str(getattr(dev, 'firmware_version', '') or ''),
+    )
+    password = str(getattr(dev, 'comm_password', '') or '').strip()
+    if not password:
+        try:
+            from agent.models import SystemSettings
+
+            ss = SystemSettings.get_solo()
+            password = str(getattr(ss, 'default_comm_password', '') or '').strip()
+        except Exception:
+            password = ''
+    if not password:
+        try:
+            password = str(getattr(settings, 'ZKACCESS_DEFAULT_COMM_PASSWORD', '') or '').strip()
+        except Exception:
+            password = ''
+    return (
+        PlcommproConnInfo(
+            ipaddress=str(getattr(dev, 'ip_address', '') or ''),
+            ip_port=int(route.get('effective_port') or getattr(dev, 'port', 4370) or 4370),
+            password=password,
+            timeout=int(timeout_ms),
+        ),
+        route,
+    )
+
+
 class Command(BaseCommand):
     help = (
         "<30s self-test for ADMS/iClock push reachability. "
@@ -51,7 +87,7 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             "--read-options-items",
-            default="ServerAddr,ServerPort,CLOUDSERVICEFLAG,ADMSServerIP",
+            default="ServerAddr,ServerPort,CLOUDSERVICEFLAG,PushFunOn,ADMSServerIP",
             help=(
                 "Comma-separated option names for GET_OPTION. "
                 "Use ALL (or *) to request all options (if supported by device)."
@@ -126,7 +162,7 @@ class Command(BaseCommand):
 
             items_used = (
                 f"ServerAddr={server_addr},ServerPort={int(server_port)},"
-                f"CLOUDSERVICEFLAG=1,ADMSServerIP={server_addr},"
+                f"CLOUDSERVICEFLAG=1,PushFunOn=1,ADMSServerIP={server_addr},"
                 f"WebServerURL=http://{server_addr}:{int(server_port)},"
                 f"TransFlag=1,Realtime=1,RTLog=1,TransInterval=1"
             )
@@ -135,14 +171,9 @@ class Command(BaseCommand):
             direct_ok = False
             direct_err = ""
             try:
-                from agent.plcommpro_bridge import PlcommproConnInfo, set_device_options
+                from agent.plcommpro_bridge import set_device_options
 
-                conn = PlcommproConnInfo(
-                    ipaddress=str(getattr(dev, "ip_address", "") or ""),
-                    ip_port=int(getattr(dev, "port", 4370) or 4370),
-                    password=str(getattr(dev, "comm_password", "") or ""),
-                    timeout=4000,
-                )
+                conn, route = _route_aware_conn_for_device(dev, timeout_ms=4000)
                 resp = set_device_options(conn, items_used)
                 direct_ok = bool(resp.get("ok"))
                 if not direct_ok:
@@ -247,7 +278,7 @@ class Command(BaseCommand):
             self.stdout.write(f"Applied/queued items: {items_used}")
 
         hints: list[str] = []
-        hints.append("Device not configured for ADMS push (ServerAddr/ServerPort/CLOUDSERVICEFLAG)")
+        hints.append("Device not configured for ADMS push (ServerAddr/ServerPort/CLOUDSERVICEFLAG/PushFunOn)")
         hints.append("Windows Firewall or network ACL blocks inbound TCP to server port")
         hints.append("Server bound to different port than device uses")
         if not device_ip:

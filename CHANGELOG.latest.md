@@ -1,5 +1,29 @@
 # Changelog — latest save
 
+Commit: pending — "Cloud sync: controller 22 diagnostics, W26 correlation, monitor hardening, and backup 2026-03-13"
+Merged into: pending
+Date: 2026-03-13
+Author: local workspace
+
+Summary
+-------
+Cloud-sync checkpoint for the current controller 22 investigation, including controller capability tooling, route diagnostics, W26 decode/correlation infrastructure, monitor and tray hardening, and today's backup note.
+
+High-level changes
+------------------
+- Added controller capability, provisioning, route-resolution, and decoding helpers for the C3-100Pro investigation.
+- Added Wiegand decoding, correlation payload persistence, raw capture tooling, and capture arm helpers.
+- Hardened monitor/tray status so stale state no longer claims raw capture is active when no fresh frame exists.
+- Added runbooks and helper scripts for passive W26 tapping and test-frame injection.
+- Added tests around route defaults, Wiegand decode/push flows, capture helpers, and CommCenter capture guard behavior.
+
+Notes
+-----
+- Local cookies, logs, and runtime capture artifacts remain excluded from Git.
+- The W26 software path is validated; any continued absence on real swipe is now a hardware-tap problem, not a server pipeline problem.
+
+---
+
 Commit: fbeddc0a — "Major update: ZKTech integration + bridge + provisioning + docs"
 Merged into: main
 Date: 2026-02-23

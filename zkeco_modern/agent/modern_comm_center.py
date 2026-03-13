@@ -26,11 +26,13 @@ You can drop in a real driver later or wrap existing DLL / SDK calls.
 from __future__ import annotations
 
 import os
+import json
 import time
 import logging
 import threading
 import configparser
 import re
+from datetime import timedelta
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Protocol, Tuple, Callable
 from collections import deque
@@ -42,8 +44,10 @@ from django.db.models import Q, Case, When, Value, IntegerField
 from django.apps import apps
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
-from .event_codes import describe as describe_event_code
-from .event_codes import describe_door_event_type, describe_verify_mode
+from .event_codes import describe_door_event_type
+from .controller_decoders import decode_user_rows
+from .rtlog_entries import build_rtlog_entry, sanitize_card_value
+from .uid_correlation import inject_card_number_into_rtlog, resolve_controller_uid
 
 try:  # Redis optional
     import redis  # type: ignore
@@ -82,7 +86,7 @@ class CommDriver(Protocol):
     def update_data(self, table: str, data: str, extra: str) -> Dict[str, Any]: ...
     def delete_data(self, table: str, flt: str) -> Dict[str, Any]: ...
     def Get_Data_Count(self, table: str) -> Dict[str, Any]: ...
-    def controldevice(self, door: int, index: int, state: int) -> Dict[str, Any]: ...
+    def controldevice(self, door: int, index: int, state: int, time_s: int = 0) -> Dict[str, Any]: ...
     def control_normal_open(self, door: int, state: int) -> Dict[str, Any]: ...
     def cancel_alarm(self, door: str) -> Dict[str, Any]: ...
     def get_options(self, items: str) -> Dict[str, Any]: ...
@@ -343,6 +347,142 @@ class ModernCommCenter(object):
             self.last_contact_interval_s: float = float(os.getenv('COMM_LAST_CONTACT_INTERVAL', '30'))
         except Exception:
             self.last_contact_interval_s = 30.0
+        self._last_running_recover_ts: float = 0.0
+        try:
+            self.running_recover_interval_s: float = float(os.getenv('COMM_RUNNING_RECOVER_INTERVAL', '5'))
+        except Exception:
+            self.running_recover_interval_s = 5.0
+        try:
+            self.running_stale_seconds: float = float(os.getenv('COMM_RUNNING_STALE_SECONDS', '12'))
+        except Exception:
+            self.running_stale_seconds = 12.0
+        try:
+            self.door_command_max_age_s: float = float(os.getenv('COMM_DOOR_COMMAND_MAX_AGE_SECONDS', '120'))
+        except Exception:
+            self.door_command_max_age_s = 120.0
+        self._exclusive_device_cache_ts: float = 0.0
+        self._exclusive_device_cache: set[int] = set()
+
+    def _exclusive_device_ids(self) -> set[int]:
+        """Return devices temporarily reserved for exclusive external capture.
+
+        During unknown-card HID diagnostics the ZKEMKeeper listener should own
+        the controller connection. If CommCenter keeps polling the same device
+        with plcommpro, both sides interfere and live capture becomes unstable.
+        """
+        now_ts = time.time()
+        if (now_ts - float(self._exclusive_device_cache_ts or 0.0)) < 1.0:
+            return set(self._exclusive_device_cache)
+
+        reserved: set[int] = set()
+        self._exclusive_device_cache_ts = now_ts
+
+        try:
+            enabled = str(os.getenv('ZKACCESS_ZKEMKEEPER_EXCLUSIVE', '1') or '').strip().lower()
+        except Exception:
+            enabled = '1'
+        if enabled in ('0', 'false', 'no', 'off'):
+            self._exclusive_device_cache = reserved
+            return set(reserved)
+
+        hb_path = os.path.join(os.path.expanduser('~'), 'zkeco_reader_heartbeat_zkemkeeper.json')
+        try:
+            if not os.path.exists(hb_path):
+                self._exclusive_device_cache = reserved
+                return set(reserved)
+            with open(hb_path, 'r', encoding='utf-8') as fh:
+                hb = json.load(fh) or {}
+        except Exception:
+            self._exclusive_device_cache = reserved
+            return set(reserved)
+
+        try:
+            hb_ts = float(hb.get('ts') or 0)
+        except Exception:
+            hb_ts = 0.0
+        hb_age_s = now_ts - hb_ts
+        if hb_ts <= 0 or hb_age_s > 15.0 or hb_age_s < -15.0:
+            self._exclusive_device_cache = reserved
+            return set(reserved)
+
+        status = str(hb.get('status') or '').strip().lower()
+        if status not in ('connected', 'event'):
+            self._exclusive_device_cache = reserved
+            return set(reserved)
+
+        try:
+            dev_id = int(hb.get('device_id') or 0)
+        except Exception:
+            dev_id = 0
+        if dev_id > 0:
+            reserved.add(dev_id)
+
+        self._exclusive_device_cache = reserved
+        return set(reserved)
+
+    def _recover_stale_running_commands(self) -> None:
+        """Move stale fast commands from RUNNING back to PENDING.
+
+        A blocked bridge subprocess can leave a command row in RUNNING with
+        executed_at=NULL, which then starves operator actions. We only recover
+        fast commands (door/control/read) and leave heavy sync jobs untouched.
+        """
+        now_ts = time.time()
+        if (now_ts - float(self._last_running_recover_ts or 0.0)) < float(self.running_recover_interval_s or 5.0):
+            return
+        self._last_running_recover_ts = now_ts
+
+        try:
+            CommandLog = apps.get_model('agent', 'CommandLog')
+        except Exception:
+            return
+
+        try:
+            cutoff = timezone.now() - timedelta(seconds=max(10.0, float(self.running_stale_seconds or 30.0)))
+            fast_q = (
+                Q(command__startswith='DOOR_')
+                | Q(command__startswith='CONNECT')
+                | Q(command__startswith='DISCONNECT')
+                | Q(command__startswith='REAL_LOG')
+                | Q(command__startswith='DOWN_NEWLOG')
+                | Q(command__startswith='SYNC_TIME')
+                | Q(command__startswith='GET_OPTION')
+                | Q(command__startswith='SET_OPTION')
+                | Q(command__startswith='REBOOT')
+            )
+            recovered = (
+                CommandLog.objects
+                .filter(status='RUNNING', executed_at__isnull=True, created_at__lte=cutoff)
+                .filter(fast_q)
+                .update(status='PENDING', result='queued:recovered-stale-running')
+            )
+            if recovered:
+                LOG.warning('Recovered %d stale RUNNING command(s) back to PENDING', int(recovered))
+        except Exception:
+            pass
+
+    def _expire_stale_door_commands(self) -> None:
+        """Hard-expire old DOOR_* commands before they can execute late.
+
+        This runs independently of device connectivity so stale commands cannot
+        be executed minutes later after a reconnect.
+        """
+        try:
+            CommandLog = apps.get_model('agent', 'CommandLog')
+        except Exception:
+            return
+        try:
+            cutoff = timezone.now() - timedelta(seconds=max(3.0, float(self.door_command_max_age_s or 8.0)))
+            expired = (
+                CommandLog.objects
+                .filter(command__startswith='DOOR_', created_at__lte=cutoff, executed_at__isnull=True)
+                .filter(Q(status='PENDING') | Q(status='RUNNING'))
+                .update(status='ERR', result='expired:stale-door-command', executed_at=timezone.now())
+            )
+            if expired:
+                LOG.warning('Expired %d stale DOOR_* command(s)', int(expired))
+        except Exception:
+            pass
 
     def _get_sync_limits(self):
         try:
@@ -401,15 +541,24 @@ class ModernCommCenter(object):
                 return None
             if not hasattr(DeviceModel, 'last_contact'):
                 return None
+            online_state = True
             try:
                 DeviceModel.objects.filter(pk=int(device_id)).update(last_contact=now)
             except Exception:
                 return None
 
+            try:
+                DeviceStatusModel = apps.get_model('agent', 'DeviceStatus')
+                status_obj = DeviceStatusModel.objects.filter(device_id=int(device_id)).only('online').first()
+                if status_obj is not None:
+                    online_state = bool(getattr(status_obj, 'online', True))
+            except Exception:
+                online_state = True
+
             iso = now.isoformat() if hasattr(now, 'isoformat') else str(now)
             try:
                 from agent.ws import broadcast_device_status
-                broadcast_device_status(int(device_id), True, updated_at=iso)
+                broadcast_device_status(int(device_id), online_state, updated_at=iso)
             except Exception:
                 pass
 
@@ -462,8 +611,20 @@ class ModernCommCenter(object):
         if Device is None:
             LOG.error("Device model unavailable.")
             return
+        exclusive_ids = self._exclusive_device_ids()
         for dev in Device.objects.all():  # type: ignore[attr-defined]
             try:
+                # Keep controller polling independent from standalone reader services
+                # (ACP/Elatec scripts). Reader devices are managed outside CommCenter.
+                is_reader = bool(getattr(dev, 'scanner_linked', False))
+                dev_type = str(getattr(dev, 'device_type', '') or '').strip().lower()
+                scanner_type = str(getattr(dev, 'scanner_type', '') or '').strip().lower()
+                if is_reader or dev_type == 'biometric_reader' or scanner_type in ('acp', 'elatec'):
+                    continue
+                if int(getattr(dev, 'id', 0) or 0) in exclusive_ids:
+                    LOG.info('Skipping exclusive-capture device during session build: device_id=%s', getattr(dev, 'id', 0))
+                    continue
+
                 driver = driver_factory(dev)
                 session = DeviceSession(
                     device_id=dev.id,
@@ -531,7 +692,7 @@ class ModernCommCenter(object):
         # transactions unless realtime flags are enabled.
         items = (
             f"ServerAddr={server_addr},ServerPort={int(port_int)},"
-            f"CLOUDSERVICEFLAG=1,ADMSServerIP={server_addr},"
+            f"CLOUDSERVICEFLAG=1,PushFunOn=1,ADMSServerIP={server_addr},"
             f"WebServerURL=http://{server_addr}:{int(port_int)},"
             f"TransFlag=1,Realtime=1,RTLog=1,TransInterval=1"
         )
@@ -575,6 +736,7 @@ class ModernCommCenter(object):
 
     def connect_all(self) -> None:
         enabled_ids = None
+        exclusive_ids = self._exclusive_device_ids()
         try:
             if Device is not None:
                 enabled_ids = set(Device.objects.filter(enabled=True).values_list('id', flat=True))  # type: ignore[attr-defined]
@@ -582,6 +744,13 @@ class ModernCommCenter(object):
             enabled_ids = None
 
         for session in self.sessions.values():
+            if int(session.device_id) in exclusive_ids:
+                if session.connected:
+                    try:
+                        session.disconnect()
+                    except Exception:
+                        pass
+                continue
             if enabled_ids is not None and int(session.device_id) not in enabled_ids:
                 if session.connected:
                     try:
@@ -595,8 +764,6 @@ class ModernCommCenter(object):
                         self._maybe_autoconfig_adms_push(session)
                     except Exception:
                         pass
-                    if self.state_store:
-                        self.state_store.update_device(session.device_id, online=True)
                     # Persist authoritative DeviceStatus and broadcast its updated_at
                     ua = None
                     # Probe for real device activity (rtlog) before deciding to persist
@@ -608,6 +775,10 @@ class ModernCommCenter(object):
                         probe_lines = session.poll_rtlog()
                     except Exception:
                         probe_lines = []
+                    connectivity_verified = bool(
+                        getattr(session, 'connected', False)
+                        and int(getattr(session, 'fails', 0) or 0) == 0
+                    )
 
                     # Download panel user→card mapping so rtlog PIN enrichment uses
                     # the actual Wiegand card number stored on the panel.
@@ -642,7 +813,12 @@ class ModernCommCenter(object):
                                 self._touch_last_contact(session.device_id)
                                 if self.state_store:
                                     self.state_store.update_device(session.device_id, online=True)
-                                self._publish_event({"type": "rtlog.batch", "device_id": session.device_id, "lines": filtered})
+                                self._publish_event({
+                                    "type": "rtlog.batch",
+                                    "device_id": session.device_id,
+                                    "lines": filtered,
+                                    "entries": self._build_rtlog_entries(session, filtered),
+                                })
                     except Exception:
                         pass
                     try:
@@ -660,11 +836,11 @@ class ModernCommCenter(object):
                                     # Only persist when there's an actual state change.
                                     prev_online = bool(obj.online)
                                     changed = False
-                                    # Mark device online as soon as connect() succeeds.
-                                    # The previous probe_lines guard was too strict:
-                                    # an idle panel produces no RTLOG data yet is fully online.
-                                    if not prev_online:
+                                    if connectivity_verified and not prev_online:
                                         obj.online = True
+                                        changed = True
+                                    elif (not connectivity_verified) and prev_online:
+                                        obj.online = False
                                         changed = True
                                     if obj.door_state != '':
                                         obj.door_state = ''
@@ -711,7 +887,7 @@ class ModernCommCenter(object):
 
                     try:
                         from agent.ws import broadcast_device_status
-                        broadcast_device_status(session.device_id, True, serial=session.sn, updated_at=ua_broadcast)
+                        broadcast_device_status(session.device_id, connectivity_verified, serial=session.sn, updated_at=ua_broadcast)
                         # Persist last broadcast timestamp to runtime file so WebSocket consumers
                         # can show the most-recent 'last seen' value even if DB wasn't written.
                         try:
@@ -744,6 +920,11 @@ class ModernCommCenter(object):
                             print('broadcast_device_status import/call failed:', e, flush=True)
                         except Exception:
                             pass
+                    try:
+                        if self.state_store:
+                            self.state_store.update_device(session.device_id, online=connectivity_verified)
+                    except Exception:
+                        pass
                         # Fallback: publish simple device.online event (include updated_at if available)
                         payload = {"type": "device.online", "device_id": session.device_id, "sn": session.sn}
                         if ua:
@@ -770,18 +951,24 @@ class ModernCommCenter(object):
             return None
 
         try:
+            self._expire_stale_door_commands()
+            self._recover_stale_running_commands()
+
             # Prefer connected devices, but also allow disconnected devices whose
             # reconnect backoff window has elapsed. Otherwise, commands can get
             # stuck forever when a device is flapping (connects briefly, then
             # disconnects before the command pop window).
             now_ts = time.time()
             eligible_ids: list[int] = []
+            exclusive_ids = self._exclusive_device_ids()
             for s in self.sessions.values():
                 try:
                     dev_id = int(getattr(s, 'device_id', 0) or 0)
                 except Exception:
                     dev_id = 0
                 if dev_id <= 0:
+                    continue
+                if dev_id in exclusive_ids:
                     continue
                 try:
                     if getattr(s, 'connected', False):
@@ -796,6 +983,17 @@ class ModernCommCenter(object):
                 if now_ts >= next_ts:
                     eligible_ids.append(dev_id)
 
+            if not eligible_ids:
+                # Still allow command pop/retry when all sessions are currently
+                # disconnected/backing off. Otherwise fresh operator commands can
+                # sit idle as PENDING without any active retry path.
+                for s in self.sessions.values():
+                    try:
+                        dev_id = int(getattr(s, 'device_id', 0) or 0)
+                    except Exception:
+                        dev_id = 0
+                    if dev_id > 0:
+                        eligible_ids.append(dev_id)
             if not eligible_ids:
                 return None
 
@@ -815,62 +1013,79 @@ class ModernCommCenter(object):
                 'GET_OPTION',
             )
 
-            with transaction.atomic():
-                row = (
-                    CommandLog.objects
-                    .select_for_update(skip_locked=True)
-                    .filter(device_id__in=eligible_ids)
-                    .filter(
-                        Q(status='PENDING')
-                        | Q(status='RUNNING', executed_at__isnull=True, result__startswith='queued')
-                    )
-                    .annotate(
-                        _conn_prio=Case(
-                            When(device_id__in=[int(s.device_id) for s in self.sessions.values() if getattr(s, 'connected', False)], then=Value(0)),
-                            default=Value(1),
-                            output_field=IntegerField(),
-                        ),
-                        _door_prio=Case(
-                            When(command__startswith='DOOR_', then=Value(0)),
-                            When(command__startswith='REBOOT', then=Value(1)),
-                            When(command__startswith='GET_OPTION', then=Value(1)),
-                            default=Value(2),
-                            output_field=IntegerField(),
+            for _attempt in range(6):
+                with transaction.atomic():
+                    row = (
+                        CommandLog.objects
+                        .select_for_update(skip_locked=True)
+                        .filter(device_id__in=eligible_ids)
+                        .filter(
+                            Q(status='PENDING')
+                            | Q(status='RUNNING', executed_at__isnull=True, result__startswith='queued')
                         )
+                        .annotate(
+                            _conn_prio=Case(
+                                When(device_id__in=[int(s.device_id) for s in self.sessions.values() if getattr(s, 'connected', False)], then=Value(0)),
+                                default=Value(1),
+                                output_field=IntegerField(),
+                            ),
+                            _door_prio=Case(
+                                When(command__startswith='DOOR_', then=Value(0)),
+                                When(command__startswith='REBOOT', then=Value(1)),
+                                When(command__startswith='GET_OPTION', then=Value(1)),
+                                default=Value(2),
+                                output_field=IntegerField(),
+                            )
+                        )
+                        .order_by('_conn_prio', '_door_prio', 'created_at')
+                        .first()
                     )
-                    .order_by('_conn_prio', '_door_prio', 'created_at')
-                    .first()
-                )
-                if not row:
-                    return None
+                    if not row:
+                        return None
 
-                try:
-                    cmdtxt = str(getattr(row, 'command', '') or '')
-                except Exception:
-                    cmdtxt = ''
-                if not cmdtxt or not cmdtxt.startswith(allow_prefixes):
                     try:
-                        CommandLog.objects.filter(id=int(row.id), status='PENDING').update(status='ERR', result='unsupported')
+                        cmdtxt = str(getattr(row, 'command', '') or '')
+                    except Exception:
+                        cmdtxt = ''
+                    if not cmdtxt or not cmdtxt.startswith(allow_prefixes):
+                        try:
+                            CommandLog.objects.filter(id=int(row.id), status='PENDING').update(status='ERR', result='unsupported')
+                        except Exception:
+                            pass
+                        continue
+
+                    # Safety: never execute stale door commands. They can trigger
+                    # delayed/ghost relay activations long after the operator action.
+                    try:
+                        if cmdtxt.startswith('DOOR_'):
+                            age_s = (timezone.now() - row.created_at).total_seconds()
+                            if age_s > float(self.door_command_max_age_s or 8.0):
+                                CommandLog.objects.filter(id=int(row.id), executed_at__isnull=True).update(
+                                    status='ERR',
+                                    result='expired:stale-door-command',
+                                    executed_at=timezone.now(),
+                                )
+                                continue
                     except Exception:
                         pass
-                    return None
 
-                # Global rate limit (hard cap) for heavy sync commands.
-                if cmdtxt.startswith(('SYNC_ALL', 'SYNC_PERSONNEL', 'SYNC_ACCESS_LEVELS')) and (not self._sync_personnel_rate_peek_ok()):
-                    return None
+                    # Global rate limit (hard cap) for heavy sync commands.
+                    if cmdtxt.startswith(('SYNC_ALL', 'SYNC_PERSONNEL', 'SYNC_ACCESS_LEVELS')) and (not self._sync_personnel_rate_peek_ok()):
+                        return None
 
-                updated = (
-                    CommandLog.objects
-                    .filter(
-                        id=int(row.id),
-                        status__in=('PENDING', 'RUNNING'),
-                        executed_at__isnull=True,
+                    updated = (
+                        CommandLog.objects
+                        .filter(
+                            id=int(row.id),
+                            status__in=('PENDING', 'RUNNING'),
+                            executed_at__isnull=True,
+                        )
+                        .update(status='RUNNING')
                     )
-                    .update(status='RUNNING')
-                )
-                if updated != 1:
-                    return None
-                return (int(row.id), int(row.device_id or 0), cmdtxt)
+                    if updated != 1:
+                        continue
+                    return (int(row.id), int(row.device_id or 0), cmdtxt)
+            return None
         except Exception:
             return None
 
@@ -995,6 +1210,44 @@ class ModernCommCenter(object):
             except Exception:
                 return None
 
+        def _pick_secondary_card(emp) -> str | None:
+            candidates: list[str] = []
+            try:
+                secondary = (getattr(emp, 'secondary_card_number', '') or '').strip()
+                if secondary:
+                    candidates.append(secondary)
+            except Exception:
+                pass
+            try:
+                cards_rel = getattr(emp, 'cards', None)
+                if cards_rel is not None:
+                    rows = list(cards_rel.all().order_by('id'))
+                    rows.sort(
+                        key=lambda card_obj: (
+                            0 if str(getattr(card_obj, 'slot', '')).lower() == 'secondary' else 1,
+                            0 if str(getattr(card_obj, 'status', 'active')).lower() == 'active' else 1,
+                            int(getattr(card_obj, 'id', 0) or 0),
+                        )
+                    )
+                    for card_obj in rows:
+                        status_txt = str(getattr(card_obj, 'status', 'active') or 'active').lower()
+                        if status_txt not in ('active', 'enabled', 'ok'):
+                            continue
+                        raw_card = (getattr(card_obj, 'card_number', '') or '').strip()
+                        if raw_card:
+                            candidates.append(raw_card)
+            except Exception:
+                pass
+            primary = _normalize_cardno((getattr(emp, 'card_number', '') or '').strip())
+            seen: set[str] = set()
+            for raw_value in candidates:
+                normalized = _normalize_cardno(raw_value)
+                if not normalized or normalized == primary or normalized in seen:
+                    continue
+                seen.add(normalized)
+                return normalized
+            return None
+
         doors = list(Door.objects.filter(device_id=int(session.device_id)).exclude(door_number__isnull=True))
         door_numbers = sorted({int(getattr(d, 'door_number') or 0) for d in doors if int(getattr(d, 'door_number') or 0) > 0})
         if not door_numbers:
@@ -1021,6 +1274,7 @@ class ModernCommCenter(object):
             pin = _pick_pin(emp)
             card_raw = (getattr(emp, 'card_number', '') or '').strip()
             card = _normalize_cardno(card_raw)
+            vice_card = _pick_secondary_card(emp)
             name = (f"{getattr(emp, 'first_name', '')} {getattr(emp, 'last_name', '')}").strip()
             dept_id = getattr(emp, 'dept_id', None)
             try:
@@ -1036,6 +1290,7 @@ class ModernCommCenter(object):
                 _line_kv([
                     ("Pin", pin),
                     ("CardNo", card),
+                    ("ViceCard", vice_card),
                     ("Name", name),
                     ("Password", pw),
                     ("Group", group),
@@ -1160,16 +1415,7 @@ class ModernCommCenter(object):
                 qres = int((q or {}).get('result', -1))
                 if qres < 0:
                     return None
-                raw = str((q or {}).get('data') or '').replace('\x00', '')
-                rows = [ln for ln in raw.split('\r\n') if str(ln or '').strip()]
-                if not rows:
-                    return False
-                # Query output commonly includes one header line.
-                for rr in rows[1:]:
-                    vals = [v.strip() for v in str(rr).split(',')]
-                    if any(vals):
-                        return True
-                return False
+                return bool(decode_user_rows(str((q or {}).get('data') or '')))
             except Exception:
                 return None
 
@@ -1242,7 +1488,7 @@ class ModernCommCenter(object):
                             except Exception:
                                 pass
                             def _query_user(flt: str):
-                                q0 = session.driver.query_data('user', fields='Pin,CardNo', filter=str(flt or ''), option='')
+                                q0 = session.driver.query_data('user', fields='Pin,CardNo,ViceCard,Group', filter=str(flt or ''), option='')
                                 try:
                                     qres0 = int(q0.get('result', -1))
                                 except Exception:
@@ -1267,47 +1513,51 @@ class ModernCommCenter(object):
 
                             if qres < 0:
                                 return (False, f"user_verify_failed:pin={pin_probe} err={(last_q or {}).get('error') or (last_q or {})}")
-                            if len(rows) <= 1:
+                            decoded_rows = decode_user_rows('\r\n'.join(rows)) if rows else []
+                            if not decoded_rows:
                                 verify_warnings.append(f"user_verify_inconclusive:pin={pin_probe}")
-                                rows = []
-
-                            if not rows:
                                 # If verification is inconclusive (no data), do not fail the entire sync.
                                 # Some panels/drivers filter `query_data` results even though writes apply.
                                 continue
 
-                            # Some drivers ignore `fields=` and return a full header.
-                            header = rows[0].split(',') if rows else []
-                            idx_pin = None
-                            idx_card = None
-                            try:
-                                for ii, col in enumerate(header):
-                                    c = (col or '').strip().lower()
-                                    if c == 'pin':
-                                        idx_pin = ii
-                                    elif c == 'cardno':
-                                        idx_card = ii
-                            except Exception:
-                                idx_pin = None
-                                idx_card = None
+                            matched_row = next(
+                                (row for row in decoded_rows if str(row.get('pin') or '').strip() == str(pin_probe)),
+                                None,
+                            )
 
-                            matched_row = None
+                            expected_group = None
+                            expected_vice = None
                             try:
-                                for rr in rows[1:]:
-                                    vals = rr.split(',')
-                                    if idx_pin is not None and idx_pin < len(vals):
-                                        if str(vals[idx_pin] or '').strip() == str(pin_probe):
-                                            matched_row = vals
-                                            break
+                                kv_first: dict[str, str] = {}
+                                for part in str(first or '').split('\t'):
+                                    if '=' in part:
+                                        kf, vf = part.split('=', 1)
+                                        kv_first[str(kf or '').strip().lower()] = str(vf or '').strip()
+                                expected_group = kv_first.get('group') or None
+                                expected_vice = kv_first.get('vicecard') or None
                             except Exception:
-                                matched_row = None
+                                expected_group = None
+                                expected_vice = None
 
                             if card_probe is not None and matched_row is not None:
                                 try:
-                                    if idx_card is not None and idx_card < len(matched_row):
-                                        got_card = str(matched_row[idx_card] or '').strip()
-                                        if got_card and got_card != card_probe:
-                                            return (False, f"user_verify_mismatch:pin={pin_probe} card={got_card} expected={card_probe}")
+                                    got_card = str(matched_row.get('cardno') or '').strip()
+                                    if got_card and got_card != card_probe:
+                                        return (False, f"user_verify_mismatch:pin={pin_probe} card={got_card} expected={card_probe}")
+                                except Exception:
+                                    pass
+                            if expected_vice is not None and matched_row is not None:
+                                try:
+                                    got_vice = str(matched_row.get('vicecard') or '').strip()
+                                    if got_vice != str(expected_vice):
+                                        return (False, f"user_verify_mismatch:pin={pin_probe} vicecard={got_vice} expected={expected_vice}")
+                                except Exception:
+                                    pass
+                            if expected_group is not None and matched_row is not None:
+                                try:
+                                    got_group = str(matched_row.get('group') or '').strip()
+                                    if got_group != str(expected_group):
+                                        return (False, f"user_verify_mismatch:pin={pin_probe} group={got_group} expected={expected_group}")
                                 except Exception:
                                     pass
                     except Exception:
@@ -1336,14 +1586,21 @@ class ModernCommCenter(object):
                 if not ok_ua:
                     return (False, info_ua)
 
-            # Hard guard against silent no-op writes (observed on some ports/proxies):
-            # if we attempted to sync users but controller still appears empty, report error.
+            # Post-sync no-effect guard.
+            # Some controller/bridge combinations report empty user table on read-back
+            # even when writes were accepted. Keep strict failure behind env toggle.
             try:
                 has_users_after = _device_has_users()
             except Exception:
                 has_users_after = None
             if has_users_after is False:
-                return (False, 'sync_no_effect:user_table_empty_after_write')
+                try:
+                    strict_no_effect = str(os.getenv('SYNC_ENFORCE_NO_EFFECT_GUARD', '0')).strip().lower() in ('1', 'true', 'yes', 'on')
+                except Exception:
+                    strict_no_effect = False
+                if strict_no_effect:
+                    return (False, 'sync_no_effect:user_table_empty_after_write')
+                verify_warnings.append('sync_no_effect:user_table_empty_after_write')
 
             # Audit
             try:
@@ -1361,7 +1618,7 @@ class ModernCommCenter(object):
             warn_txt = ''
             try:
                 if verify_warnings:
-                    warn_txt = ' warn=' + str(len(verify_warnings))
+                    warn_txt = ' warn=' + str(len(verify_warnings)) + ':' + ','.join(sorted({str(w) for w in verify_warnings})[:3])
             except Exception:
                 warn_txt = ''
             return (True, f"synced employees={employees.count()} tz={len(tz_ids)} hash={sig}{warn_txt}")
@@ -1369,14 +1626,15 @@ class ModernCommCenter(object):
             return (False, f"sync_failed:{e}")
 
     def _process_one_command(self) -> None:
-        item = self.cmd_queue.pop()
+        item = None
         cmdlog_id_from_db: Optional[int] = None
-        if not item:
-            popped = self._pop_pending_command_from_db()
-            if not popped:
-                return
+        popped = self._pop_pending_command_from_db()
+        if popped:
             cmdlog_id_from_db, device_id, cmd = popped
         else:
+            item = self.cmd_queue.pop()
+            if not item:
+                return
             device_id, cmd = item
         session = self.sessions.get(device_id)
         if not session or not session.connected:
@@ -1418,20 +1676,67 @@ class ModernCommCenter(object):
             elif cmd.startswith("DISCONNECT"):
                 session.disconnect()
             elif cmd.startswith("REAL_LOG"):
-                session.poll_rtlog()
+                rt_lines = session.poll_rtlog()
+                filtered_rt: List[str] = []
+                if rt_lines:
+                    filtered_rt = self._persist_rtlog(session, rt_lines) or []
+                    if filtered_rt:
+                        self.total_rtlog_lines += len(filtered_rt)
+                        self._touch_last_contact(session.device_id)
+                        if self.state_store:
+                            try:
+                                self.state_store.update_device(session.device_id, online=True)
+                            except Exception:
+                                pass
+                        try:
+                            self._publish_event({
+                                "type": "rtlog.batch",
+                                "device_id": session.device_id,
+                                "lines": filtered_rt,
+                                "entries": self._build_rtlog_entries(session, filtered_rt),
+                            })
+                        except Exception:
+                            pass
+                if cmdlog_id is not None:
+                    count_rt = len(filtered_rt) if rt_lines else 0
+                    result_rt = f'count={count_rt}'
+                    if filtered_rt:
+                        preview_rt = str(filtered_rt[0])[:96]
+                        result_rt = f'{result_rt} sample={preview_rt}'
+                    self._mark_command_log(cmdlog_id, status='OK', result=result_rt)
             elif cmd.startswith("DOWN_NEWLOG"):
-                session.down_new_logs()
+                new_logs = session.down_new_logs()
+                if new_logs:
+                    try:
+                        self._persist_event_logs(session, new_logs)
+                    except Exception:
+                        pass
+                if cmdlog_id is not None:
+                    self._mark_command_log(cmdlog_id, status='OK', result=f'count={len(new_logs or [])}')
             elif cmd.startswith("SYNC_TIME"):
                 # Best-effort: encode time as "SYNC_TIME:YYYY-mm-dd HH:MM:SS".
                 # Real drivers can implement a dedicated set-time operation later.
                 ts = cmd.split(':', 1)[1].strip() if ':' in cmd else ''
+                ok_sync = False
+                info_sync = 'sync_time_failed'
                 try:
                     if ts:
-                        session.driver.set_options(f"time={ts}")
+                        ret = session.driver.set_options(f"time={ts}")
                     else:
-                        session.driver.set_options("time=now")
-                except Exception:
-                    pass
+                        ret = session.driver.set_options("time=now")
+                    if isinstance(ret, dict):
+                        try:
+                            ok_sync = int(ret.get('result', -1) or -1) >= 0
+                        except Exception:
+                            ok_sync = bool(ret)
+                        info_sync = str(ret.get('data') or ret.get('result') or ('ok' if ok_sync else 'err'))[:120]
+                    else:
+                        ok_sync = bool(ret)
+                        info_sync = 'ok' if ok_sync else 'err'
+                except Exception as e:
+                    info_sync = str(e)[:120]
+                if cmdlog_id is not None:
+                    self._mark_command_log(cmdlog_id, status='OK' if ok_sync else 'ERR', result=info_sync)
             elif cmd.startswith(('SYNC_ALL', 'SYNC_PERSONNEL', 'SYNC_ACCESS_LEVELS')):
                 # Enforce global rate limit for manual/in-memory commands too.
                 if not self._sync_personnel_rate_peek_ok():
@@ -1509,6 +1814,19 @@ class ModernCommCenter(object):
             # Extend with more mappings as needed.
             elif cmd.startswith("DOOR_OPEN"):
                 door = cmd.split(":", 1)[1] if ":" in cmd else "0"
+                pulse_s = 0
+                try:
+                    Door = apps.get_model('agent', 'Door')
+                    door_obj = (
+                        Door.objects
+                        .filter(device_id=int(device_id), door_number=int(door or 0))
+                        .only('lock_open_duration')
+                        .first()
+                    )
+                    if door_obj is not None:
+                        pulse_s = max(1, min(254, int(getattr(door_obj, 'lock_open_duration', 0) or 0)))
+                except Exception:
+                    pulse_s = 0
                 def _ok(ret: Any) -> bool:
                     try:
                         if isinstance(ret, dict):
@@ -1521,7 +1839,7 @@ class ModernCommCenter(object):
                 acted = False
                 last_err = None
                 try:
-                    rr = session.driver.controldevice(int(door), 1, 1)
+                    rr = session.driver.controldevice(int(door), 1, 1, pulse_s)
                     acted = _ok(rr)
                 except Exception as e:
                     last_err = e
@@ -1533,12 +1851,6 @@ class ModernCommCenter(object):
                         last_err = e
                 if not acted:
                     raise RuntimeError(f"door_open_no_effect:{last_err}")
-                self._publish_event({
-                    "type": "door.open",
-                    "device_id": device_id,
-                    "door": door,
-                    "event_description": describe_door_event_type("door.open"),
-                })
                 if cmdlog_id is not None:
                     self._mark_command_log(cmdlog_id, status='OK', result='done')
             elif cmd.startswith("DOOR_CLOSE"):
@@ -1567,12 +1879,6 @@ class ModernCommCenter(object):
                         last_err = e
                 if not acted:
                     raise RuntimeError(f"door_close_no_effect:{last_err}")
-                self._publish_event({
-                    "type": "door.close",
-                    "device_id": device_id,
-                    "door": door,
-                    "event_description": describe_door_event_type("door.close"),
-                })
                 if cmdlog_id is not None:
                     self._mark_command_log(cmdlog_id, status='OK', result='done')
             elif cmd.startswith("DOOR_NORMAL_OPEN"):
@@ -1601,12 +1907,6 @@ class ModernCommCenter(object):
                         last_err = e
                 if not acted:
                     raise RuntimeError(f"door_normal_open_no_effect:{last_err}")
-                self._publish_event({
-                    "type": "door.normal_open",
-                    "device_id": device_id,
-                    "door": door,
-                    "event_description": describe_door_event_type("door.normal_open"),
-                })
                 if cmdlog_id is not None:
                     self._mark_command_log(cmdlog_id, status='OK', result='done')
             elif cmd.startswith("DOOR_NORMAL_CLOSE"):
@@ -1635,12 +1935,6 @@ class ModernCommCenter(object):
                         last_err = e
                 if not acted:
                     raise RuntimeError(f"door_normal_close_no_effect:{last_err}")
-                self._publish_event({
-                    "type": "door.normal_close",
-                    "device_id": device_id,
-                    "door": door,
-                    "event_description": describe_door_event_type("door.normal_close"),
-                })
                 if cmdlog_id is not None:
                     self._mark_command_log(cmdlog_id, status='OK', result='done')
             elif cmd.startswith("DOOR_CANCEL_ALARM"):
@@ -1762,14 +2056,26 @@ class ModernCommCenter(object):
         return current_hour in self.download_hours
 
     def _poll_cycle(self) -> None:
+        def _drain_commands(max_count: int) -> None:
+            for _ in range(max(1, int(max_count or 1))):
+                self._process_one_command()
+
         # Commands first: keep remote open responsive even when some devices are
         # currently offline or in reconnect backoff.
-        self._process_one_command()
+        _drain_commands(4)
         self.connect_all()
         # Try once more after (re)connect to avoid waiting an extra cycle.
-        self._process_one_command()
+        _drain_commands(4)
         # Rtlog for each session
+        exclusive_ids = self._exclusive_device_ids()
         for s in self.sessions.values():
+            if int(getattr(s, 'device_id', 0) or 0) in exclusive_ids:
+                if getattr(s, 'connected', False):
+                    try:
+                        s.disconnect()
+                    except Exception:
+                        pass
+                continue
             if s.connected:
                 was_connected = True
                 rt_lines = s.poll_rtlog()
@@ -1820,7 +2126,12 @@ class ModernCommCenter(object):
                     if self.state_store:
                         self.state_store.update_device(s.device_id, online=True)
                     if filtered:
-                        self._publish_event({"type": "rtlog.batch", "device_id": s.device_id, "lines": filtered})
+                        self._publish_event({
+                            "type": "rtlog.batch",
+                            "device_id": s.device_id,
+                            "lines": filtered,
+                            "entries": self._build_rtlog_entries(s, filtered),
+                        })
                 # Poll incremental transaction logs frequently for low-latency UI updates.
                 # Some panels produce card reads only via get_transaction(newlog=True).
                 now_ts = time.time()
@@ -1839,92 +2150,24 @@ class ModernCommCenter(object):
                         except Exception:
                             filtered_tx = None
 
-                        codes = []
-                        descs = []
-                        verify_modes = []
-                        card_nos = []
-                        door_numbers = []
-                        timestamp_strs = []
-                        for raw in new_logs:
-                            raw = (raw or '').strip()
-                            if not raw:
-                                continue
-                            low = raw.lower().replace(' ', '')
-                            # Some firmwares include a header line in the batch.
-                            if low.startswith('pin,verified,doorid'):
-                                continue
-
-                            normalized = raw
-                            if "\t" in normalized and "," not in normalized:
-                                normalized = normalized.replace("\t", ",")
-                            if ";" in normalized and "," not in normalized and normalized.count(';') >= 2:
-                                normalized = normalized.replace(";", ",")
-                            parts = [p.strip() for p in normalized.split(',')]
-                            pin_for_lookup = ''
-
-                            # Format A (standard): ts,pin,card,door,code,verify,...
-                            looks_like_ts = bool(parts and (len(parts[0]) >= 10) and ('-' in parts[0]) and (parts[0][:4].isdigit()))
-                            if looks_like_ts:
-                                timestamp = parts[0] if parts else ''
-                                pin_for_lookup = parts[1] if len(parts) > 1 else ''
-                                card = parts[2] if len(parts) > 2 else ''
-                                door = parts[3] if len(parts) > 3 else ''
-                                code = parts[4] if len(parts) > 4 else ''
-                                verify = parts[5] if len(parts) > 5 else ''
-                            elif len(parts) == 7:
-                                # SDK transaction format (7-field, Cardno-first):
-                                # Cardno,Pin,Verified,DoorID,EventType,InOutState,Time_second
-                                card = parts[0] if parts else ''
-                                pin_for_lookup = parts[1] if len(parts) > 1 else ''
-                                verify = parts[2] if len(parts) > 2 else ''
-                                door = parts[3] if len(parts) > 3 else ''
-                                code = parts[4] if len(parts) > 4 else ''
-                                timestamp = parts[6] if len(parts) > 6 else ''
-                            else:
-                                # Format B GetRTLog (9-field, Pin-first) or 8-field variant:
-                                # Pin,Verified,DoorID,EventType,InOutState,Time_second,Index,Cardno,Sitecode
-                                pin_for_lookup = str(parts[0]).strip() if parts else ''
-                                timestamp = parts[5] if len(parts) > 5 else ''
-                                door = parts[2] if len(parts) > 2 else ''
-                                code = parts[3] if len(parts) > 3 else ''
-                                verify = parts[1] if len(parts) > 1 else ''
-                                card = parts[7] if len(parts) > 7 else (parts[6] if len(parts) > 6 else '')
-                                # Only consider the 7th field as a CardNo candidate in the
-                                # 8-field variant (no Index). In the 9-field variant, parts[6]
-                                # is the Index and must not be treated as a CardNo.
-                                if (not str(card or '').strip()) and len(parts) > 6 and len(parts) < 9:
-                                    cand = str(parts[6] or '').strip()
-                                    if cand:
-                                        is_numeric = cand.isdigit()
-                                        if (not is_numeric) or (is_numeric and len(cand) >= 7):
-                                            card = cand
-
-                            card = re.sub(r'[^0-9A-Za-z]+', '', str(card or '')).upper()
-                            if (not card) and pin_for_lookup:
-                                looked_up = self._lookup_card_for_pin(s, pin_for_lookup)
-                                looked_up = re.sub(r'[^0-9A-Za-z]+', '', str(looked_up or '')).upper()
-                                if looked_up and looked_up not in {'0', '000000', '0000000', '00000000'}:
-                                    card = looked_up
-
-                            codes.append(code)
-                            descs.append(describe_event_code(code))
-                            verify_modes.append(describe_verify_mode(verify))
-                            card_nos.append(card)
-                            door_numbers.append(door)
-                            timestamp_strs.append(timestamp)
-                        self._persist_event_logs(s, new_logs)
-                        self.total_event_logs += len(new_logs)
-                        self._publish_event({
-                            "type": "event.batch",
-                            "device_id": s.device_id,
-                            "count": len(codes),
-                            "codes": codes,
-                            "descriptions": descs,
-                            "verify_modes": verify_modes,
-                            "card_nos": card_nos,
-                            "door_numbers": door_numbers,
-                            "timestamps": timestamp_strs,
-                        })
+                        event_entries = self._build_rtlog_entries(s, filtered_tx or new_logs)
+                        if event_entries:
+                            self._persist_event_logs(s, new_logs)
+                            self.total_event_logs += len(new_logs)
+                            self._publish_event({
+                                "type": "event.batch",
+                                "device_id": s.device_id,
+                                "count": len(event_entries),
+                                "codes": [entry.get('event_code', '') for entry in event_entries],
+                                "descriptions": [entry.get('event_description', '') for entry in event_entries],
+                                "verify_modes": [entry.get('verify_mode', '') for entry in event_entries],
+                                "card_nos": [entry.get('card_no', '') for entry in event_entries],
+                                "door_numbers": [entry.get('door_number', '') for entry in event_entries],
+                                "timestamps": [entry.get('time') or entry.get('time_second', '') for entry in event_entries],
+                                "entries": event_entries,
+                            })
+        # Final command pass to minimize latency when operator sends bursts.
+        _drain_commands(4)
         self.heartbeat_backend.set("last_cycle", time.time())
         self.cycles += 1
 
@@ -2007,6 +2250,63 @@ class ModernCommCenter(object):
         # If the controller didn't provide CardNo (rtlog/transaction/user table), return empty.
         return ''
 
+    @staticmethod
+    def _sanitize_card_value(value: str) -> str:
+        return sanitize_card_value(value)
+
+    def _decoded_rtlog_entry(self, session: 'DeviceSession', raw_line: str) -> Optional[Dict[str, Any]]:
+        return build_rtlog_entry(
+            self._normalize_rtlog_line(str(raw_line or '')),
+            device_id=int(getattr(session, 'device_id', 0) or 0),
+            serial_number=str(getattr(session, 'sn', '') or ''),
+            lookup_card_for_pin=lambda pin: self._lookup_card_for_pin(session, pin),
+        )
+
+    def _recent_rtlog_payload_map(self, session: 'DeviceSession', lines: List[str]) -> Dict[str, Dict[str, Any]]:
+        try:
+            uniq_raw = []
+            seen_raw = set()
+            for line in list(lines or []):
+                raw = self._normalize_rtlog_line(str(line or ''))
+                if not raw or raw in seen_raw:
+                    continue
+                seen_raw.add(raw)
+                uniq_raw.append(raw)
+            if not uniq_raw:
+                return {}
+
+            from agent import models
+
+            rows = list(
+                models.DeviceRealtimeLog.objects
+                .filter(device_id=int(getattr(session, 'device_id', 0) or 0), raw__in=uniq_raw)
+                .order_by('-id')[: max(20, len(uniq_raw) * 3)]
+            )
+            payload_map: Dict[str, Dict[str, Any]] = {}
+            for row in rows:
+                raw = self._normalize_rtlog_line(str(getattr(row, 'raw', '') or ''))
+                if raw and raw not in payload_map:
+                    payload_map[raw] = dict(getattr(row, 'correlation_payload', {}) or {})
+            return payload_map
+        except Exception:
+            return {}
+
+    def _build_rtlog_entries(self, session: 'DeviceSession', lines: List[str]) -> List[Dict[str, Any]]:
+        entries: List[Dict[str, Any]] = []
+        payload_map = self._recent_rtlog_payload_map(session, lines)
+        for line in list(lines or []):
+            entry = self._decoded_rtlog_entry(session, line)
+            if entry:
+                corr = payload_map.get(self._normalize_rtlog_line(str(line or '')), {}) or {}
+                if corr:
+                    entry['correlation_payload'] = corr
+                    if bool(corr.get('resolved_from_wiegand')):
+                        entry['enrichment_status'] = entry.get('enrichment_status') or 'enriched'
+                        entry['enrichment_source'] = entry.get('enrichment_source') or str(corr.get('resolution_source') or corr.get('sniffed_source') or 'wiegand_buffer')
+                        entry['enrichment_note'] = entry.get('enrichment_note') or f"resolved_from_wiegand card={corr.get('sniffed_card_number') or ''}"
+                entries.append(entry)
+        return entries
+
     def _persist_rtlog(self, session: DeviceSession, lines: List[str]) -> List[str]:
         try:
             import time as _time
@@ -2048,15 +2348,44 @@ class ModernCommCenter(object):
                 seen_set = set()
                 self._rtlog_seen[dev_id_rtlog] = seen_set
             if seen_order is None:
-                seen_order = deque(maxlen=self.rtlog_dedupe_window)
+                # Keep explicit trimming logic below in control of set+order sync.
+                # Using deque(maxlen=...) can silently evict entries and make future
+                # maintenance of the companion set harder to reason about.
+                seen_order = deque()
                 self._rtlog_seen_order[dev_id_rtlog] = seen_order
 
             filtered: List[str] = []
+            filtered_payloads: List[dict[str, Any]] = []
             last = self._rtlog_last_line.get(session.device_id)
             for raw in lines:
                 raw = self._normalize_rtlog_line(str(raw or ''))
                 if not raw:
                     continue
+                correlation_payload: dict[str, Any] = {}
+                # Some SDK bundles return key=value payloads (tab/comma separated)
+                # that the monitor parser cannot interpret directly. Normalize them.
+                if '=' in raw and ',' not in raw:
+                    try:
+                        sep = '\t' if '\t' in raw else ','
+                        kv_items = [p.strip() for p in raw.split(sep) if p.strip()]
+                        kv: Dict[str, str] = {}
+                        for it in kv_items:
+                            if '=' not in it:
+                                continue
+                            k, v = it.split('=', 1)
+                            kv[str(k or '').strip().lower()] = str(v or '').strip()
+                        pin_kv = kv.get('pin', '')
+                        verified_kv = kv.get('verified', '')
+                        door_kv = kv.get('doorid', kv.get('door', ''))
+                        event_kv = kv.get('eventtype', kv.get('event', ''))
+                        inout_kv = kv.get('inoutstate', kv.get('inout', ''))
+                        tsec_kv = kv.get('time_second', kv.get('timesecond', kv.get('time', '')))
+                        idx_kv = kv.get('index', kv.get('id', kv.get('logid', '')))
+                        card_kv = kv.get('cardno', '')
+                        if any([pin_kv, verified_kv, door_kv, event_kv, inout_kv, tsec_kv, idx_kv, card_kv]):
+                            raw = f"{pin_kv},{verified_kv},{door_kv},{event_kv},{inout_kv},{tsec_kv},{idx_kv},{card_kv},0"
+                    except Exception:
+                        pass
                 low = raw.lower().replace(' ', '')
                 # Header/noise line from some firmwares.
                 if low.startswith('pin,verified,doorid'):
@@ -2110,7 +2439,7 @@ class ModernCommCenter(object):
                         except Exception: pass
                     seen_set.add(fp_b)
                     seen_order.append(fp_b)
-                    # Enrich: if cardno is missing, look it up (panel user table → Django DB).
+                    # Enrich missing cardno from the controller user table cache only.
                     if (not card_b or card_b in ('0',)) and pin_b and pin_b not in ('0', ''):
                         looked_up = _lookup_card_for_pin(pin_b)
                         if looked_up:
@@ -2123,7 +2452,22 @@ class ModernCommCenter(object):
                                 "rtlog enrich pin=%s card=%s device=%s",
                                 pin_b, looked_up, session.sn,
                             )
+                    if not card_b or card_b in ('0', ''):
+                        matched_uid = resolve_controller_uid(device_id=int(session.device_id or 0), door_number=door_b)
+                        if matched_uid:
+                            raw = inject_card_number_into_rtlog(raw, matched_uid.get('sniffed_card_number'))
+                            correlation_payload = dict(matched_uid)
+                            correlation_payload['original_raw'] = str(parts and ','.join(parts) or raw)
+                            LOG.info(
+                                'rtlog correlate device=%s door=%s card=%s source=%s age_ms=%s',
+                                session.sn,
+                                door_b,
+                                correlation_payload.get('sniffed_card_number'),
+                                correlation_payload.get('sniffed_source'),
+                                correlation_payload.get('buffer_age_ms'),
+                            )
                 filtered.append(raw)
+                filtered_payloads.append(correlation_payload)
                 last = raw
 
                 # Fast-path cache for card enrollment UI (controller readers only):
@@ -2165,7 +2509,15 @@ class ModernCommCenter(object):
             self._rtlog_last_line[session.device_id] = last or self._rtlog_last_line.get(session.device_id, '')
 
             from agent import models  # needed for persistence only
-            objs = [models.DeviceRealtimeLog(device_id=session.device_id, sn=session.sn, raw=raw) for raw in filtered]
+            objs = [
+                models.DeviceRealtimeLog(
+                    device_id=session.device_id,
+                    sn=session.sn,
+                    raw=raw,
+                    correlation_payload=(filtered_payloads[idx] if idx < len(filtered_payloads) else {}),
+                )
+                for idx, raw in enumerate(filtered)
+            ]
             models.DeviceRealtimeLog.objects.bulk_create(objs, ignore_conflicts=True)
             if self.state_store:
                 for raw in filtered:
@@ -2190,7 +2542,10 @@ class ModernCommCenter(object):
                 recent = set()
                 self._event_recent[dev_id] = recent
             if order is None:
-                order = deque(maxlen=self.event_dedupe_window)
+                # Keep explicit trimming logic below in control of set+order sync.
+                # Using deque(maxlen=...) drops items silently and leaves stale values
+                # in `recent`, causing long-term false dedupe.
+                order = deque()
                 self._event_recent_order[dev_id] = order
 
             filtered: List[str] = []
@@ -2475,69 +2830,112 @@ def build_and_run_stub(poll_interval=1.0,
             return False
     # Choose driver
     if driver_factory is None:
-        if driver == "stub":
-            driver_factory = lambda dev: StubDriver(dev)
-        elif driver == "socket":
-            driver_factory = lambda dev: LegacyDriverAdapter(dev)
-        elif driver == "zk":  # NEW: ZKTech native socket driver
-            try:
-                from .drivers.zk_socket_driver import ZKTechSocketDriver
-                driver_factory = lambda dev: ZKTechSocketDriver(dev)
-                LOG.info("Using ZKTech socket driver")
-            except Exception as e:
-                LOG.warning("ZKTech driver not available (%s); falling back to stub", e)
-                driver_factory = lambda dev: StubDriver(dev)
-        elif driver == "plcommpro":
-            try:
-                from .drivers.plcommpro_bridge_driver import PlcommproBridgeDriver
-                driver_factory = lambda dev: PlcommproBridgeDriver(dev)
-                LOG.info("Using plcommpro.dll bridge driver")
-            except Exception as e:
-                LOG.warning("plcommpro bridge driver not available (%s); falling back to stub", e)
-                driver_factory = lambda dev: StubDriver(dev)
-        elif driver == "sdk":
-            try:
-                from .driver_ctypes import get_sdk_adapter_class
-                cls = get_sdk_adapter_class()
-                driver_factory = (lambda dev, C=cls: C(dev)) if cls else (lambda dev: StubDriver(dev))
-            except Exception:
-                driver_factory = lambda dev: StubDriver(dev)
-        else:  # auto
-            # Prefer plcommpro bridge when available (works with 32-bit plcommpro.dll on 64-bit OS)
-            try:
-                from .plcommpro_bridge import bridge_available
+        try:
+            from .controller_capabilities import choose_runtime_driver, resolve_runtime_transport
+        except Exception:
+            choose_runtime_driver = None
+            resolve_runtime_transport = None
 
-                if bridge_available():
-                    from .drivers.plcommpro_bridge_driver import PlcommproBridgeDriver
+        sdk_cls = None
+        sdk_available = False
+        try:
+            from .driver_ctypes import get_sdk_adapter_class
+            sdk_cls = get_sdk_adapter_class()
+            sdk_available = bool(sdk_cls)
+        except Exception:
+            sdk_cls = None
+            sdk_available = False
 
-                    driver_factory = lambda dev: PlcommproBridgeDriver(dev)
-                    LOG.info("Auto driver: using plcommpro bridge")
-                else:
-                    raise RuntimeError("plcommpro bridge unavailable")
-            except Exception:
-                # Prefer the pure-python ZKTech socket driver when present; it can retrieve RTLOG.
-                # If unavailable, fall back to SDK (ctypes) and finally to the lightweight socket
-                # probe adapter (heartbeat-only; does NOT retrieve RTLOG).
+        bridge_ok = False
+        try:
+            from .plcommpro_bridge import bridge_available
+            bridge_ok = bool(bridge_available())
+        except Exception:
+            bridge_ok = False
+
+        requested_driver = str(driver or "auto").strip().lower() or "auto"
+
+        def _instantiate_runtime_driver(resolved_driver: str, dev):
+            if resolved_driver == "stub":
+                return StubDriver(dev)
+            if resolved_driver == "socket":
+                return LegacyDriverAdapter(dev)
+            if resolved_driver == "zk":
                 try:
                     from .drivers.zk_socket_driver import ZKTechSocketDriver
 
-                    driver_factory = lambda dev: ZKTechSocketDriver(dev)
-                    LOG.info("Auto driver: using ZKTech socket driver")
-                except Exception:
-                    # Fallback to SDK (ctypes) if available, else to lightweight socket probe adapter.
-                    try:
-                        from .driver_ctypes import get_sdk_adapter_class
+                    return ZKTechSocketDriver(dev)
+                except Exception as e:
+                    LOG.warning("ZKTech driver not available (%s); falling back to stub", e)
+                    return StubDriver(dev)
+            if resolved_driver == "plcommpro":
+                try:
+                    from .drivers.plcommpro_bridge_driver import PlcommproBridgeDriver
 
-                        cls = get_sdk_adapter_class()
-                        if cls:
-                            driver_factory = lambda dev, C=cls: C(dev)
-                            LOG.info("Auto driver: using SDK adapter")
-                        else:
-                            driver_factory = lambda dev: LegacyDriverAdapter(dev)
-                            LOG.info("Auto driver: using legacy socket probe adapter")
-                    except Exception:
-                        driver_factory = lambda dev: LegacyDriverAdapter(dev)
-                        LOG.info("Auto driver: using legacy socket probe adapter")
+                    return PlcommproBridgeDriver(dev)
+                except Exception as e:
+                    LOG.warning("plcommpro bridge driver not available (%s); falling back to stub", e)
+                    return StubDriver(dev)
+            if resolved_driver == "sdk":
+                try:
+                    cls = sdk_cls
+                    return cls(dev) if cls else StubDriver(dev)
+                except Exception:
+                    return StubDriver(dev)
+            return LegacyDriverAdapter(dev)
+
+        def _resolve_transport_for_device(dev):
+            if resolve_runtime_transport is not None:
+                return resolve_runtime_transport(
+                    requested_driver,
+                    operation_class="live_monitoring",
+                    operation="rtlog-read",
+                    configured_port=getattr(dev, "port", None),
+                    device_name=str(getattr(dev, "name", "") or ""),
+                    hardware_version=str(getattr(dev, "hardware_version", "") or ""),
+                    firmware_version=str(getattr(dev, "firmware_version", "") or ""),
+                    bridge_available=bridge_ok,
+                    socket_available=True,
+                    sdk_available=sdk_available,
+                )
+            resolved_driver = requested_driver
+            if choose_runtime_driver is not None:
+                resolved_driver = choose_runtime_driver(
+                    requested_driver,
+                    operation_class="live_monitoring",
+                    operation="rtlog-read",
+                    bridge_available=bridge_ok,
+                    socket_available=True,
+                    sdk_available=sdk_available,
+                )
+            return {"driver": resolved_driver, "effective_port": getattr(dev, "port", None), "route_status": "unavailable"}
+
+        def driver_factory(dev):
+            resolution = _resolve_transport_for_device(dev)
+            resolved_driver = str(resolution.get("driver") or requested_driver or "auto").strip().lower() or "auto"
+            runtime_driver = _instantiate_runtime_driver(resolved_driver, dev)
+            effective_port = resolution.get("effective_port")
+            try:
+                if effective_port is not None and hasattr(runtime_driver, "port"):
+                    runtime_driver.port = int(effective_port)
+                if effective_port is not None and hasattr(runtime_driver, "_resolved_port"):
+                    runtime_driver._resolved_port = int(effective_port)
+            except Exception:
+                pass
+            try:
+                setattr(runtime_driver, "route_transport_resolution", resolution)
+            except Exception:
+                pass
+            LOG.info(
+                "Runtime transport resolved device=%s requested=%s driver=%s configured_port=%s effective_port=%s route_status=%s",
+                getattr(dev, "id", None),
+                requested_driver,
+                resolved_driver,
+                getattr(dev, "port", None),
+                effective_port,
+                resolution.get("route_status"),
+            )
+            return runtime_driver
 
     # Per-device override: keep virtual/unconfigured TCP devices alive in dev/demo.
     # This does NOT affect real networked devices; it only applies when there's no IP.

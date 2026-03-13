@@ -14,25 +14,31 @@ from __future__ import annotations
 
 import pytest
 from unittest.mock import MagicMock
+from types import SimpleNamespace
+
+from agent.models import DeviceRealtimeLog
+from agent.uid_correlation import remember_sniffed_uid
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1-2  event_codes
 # ─────────────────────────────────────────────────────────────────────────────
-from agent.event_codes import EVENT_CODES, describe
+from agent.event_codes import EVENT_CODES, describe, normalized_access_action, normalized_status_text
 
 
 class TestEventCodesC3:
     """ZKTeco C3-series Format B event codes must all be present and meaningful."""
 
     EXPECTED = {
-        "0":  "Normal Open by Card",
-        "2":  "Access Denied - Invalid Card",
-        "3":  "Access Denied - Card Not Authorized",
-        "8":  "Door Opened by Remote",
-        "22": "Door Opened Too Long",
-        "27": "System Power-On",
-        "32": "Door Opened Forcibly",
-        "37": "Tamper Alarm",
+        "0":  "Normal Punch Open",
+        "2":  "First-Card Normal Open(Punch Card)",
+        "8":  "Remote Opening",
+        "23": "Access Denied",
+        "27": "Access denied - Unregistered Card",
+        "255": "Access denied - Unregistered Card",
+        "32": "Multi-Card Authentication(Press Fingerprint)",
+        "37": "Failed to Close during Passage Mode Time Zone",
+        "102": "Opened Forcefully",
+        "205": "Remote Normal Opening",
     }
 
     def test_all_c3_codes_present(self):
@@ -48,8 +54,21 @@ class TestEventCodesC3:
 
     def test_original_door_codes_still_present(self):
         assert describe("100") == "Door Opened Correctly"
-        assert describe("200") == "Access Granted"
-        assert describe("201") == "Access Denied"
+        assert describe("200") == "Door Opened Correctly"
+        assert describe("201") == "Door Closed Correctly"
+
+    def test_status_helper_does_not_treat_200_or_201_as_access_results(self):
+        assert normalized_status_text("200", describe("200")) == ""
+        assert normalized_status_text("201", describe("201")) == ""
+        assert normalized_access_action("200", describe("200")) == "event"
+        assert normalized_access_action("201", describe("201")) == "event"
+
+    def test_status_helper_keeps_real_access_denied_codes_as_denied(self):
+        assert normalized_status_text("23", describe("23")) == "RESPINS"
+        assert normalized_status_text("27", describe("27")) == "RESPINS"
+        assert normalized_status_text("255", describe("255")) == "RESPINS"
+        assert normalized_access_action("27", describe("27")) == "scan"
+        assert normalized_access_action("255", describe("255")) == "scan"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -112,12 +131,12 @@ class TestPersistRtlogControllerOnly:
         parts = filtered[0].split(",")
         assert parts[7] == "0023456789", "Existing card was overwritten"
 
-    def test_format_b_power_on_event27_not_dropped(self, db):
-        """EventType=27 (power-on) – must NOT be filtered as noise even with no card."""
+    def test_format_b_unregistered_card_event27_not_dropped(self, db):
+        """EventType=27 means unregistered card and must not be filtered as noise."""
         raw_line = "0,0,1,27,0,840000045753,303,,0"
         cc = self._make_cc()
         filtered = cc._persist_rtlog(_FakeSession(), [raw_line])
-        assert len(filtered) == 1, "Power-on event should not be dropped"
+        assert len(filtered) == 1, "Unregistered-card event should not be dropped"
 
     def test_header_line_dropped(self, db):
         """Pin,Verified,DoorID header line must be filtered."""
@@ -148,6 +167,42 @@ class TestPersistRtlogControllerOnly:
         filtered = cc._persist_rtlog(_FakeSession(), [a1, a2])
         assert len(filtered) == 2
 
+    def test_rtlog_dedupe_window_evicts_old_fingerprint_cleanly(self, db):
+        cc = self._make_cc()
+        cc.rtlog_dedupe_window = 2
+        a1 = "2026-03-03 10:00:00,0,0011111111,1,201,0"
+        a2 = "2026-03-03 10:00:01,0,0011111111,1,201,0"
+        a3 = "2026-03-03 10:00:02,0,0011111111,1,201,0"
+
+        assert len(cc._persist_rtlog(_FakeSession(), [a1, a2])) == 2
+        assert len(cc._persist_rtlog(_FakeSession(), [a3])) == 1
+        # After the window advances, the oldest fingerprint should no longer block reappearance.
+        assert len(cc._persist_rtlog(_FakeSession(), [a1])) == 1
+
+    def test_wiegand_uid_buffer_resolves_missing_controller_card_and_persists_payload(self, db):
+        cc = self._make_cc()
+        session = SimpleNamespace(device_id=22, sn='CTRL22')
+
+        remembered = remember_sniffed_uid(
+            device_id=22,
+            door_number='1',
+            card_number='77-66-55-44',
+            source='w26',
+            payload={'reader': 'wiegand'},
+        )
+        assert remembered is not None
+
+        filtered = cc._persist_rtlog(session, ['0,4,1,27,0,840000000,303,,0'])
+
+        assert len(filtered) == 1
+        assert filtered[0].split(',')[7] == '77665544'
+
+        row = DeviceRealtimeLog.objects.order_by('-id').first()
+        assert row is not None
+        assert (row.correlation_payload or {}).get('resolved_from_wiegand') is True
+        assert (row.correlation_payload or {}).get('resolution_source') == 'wiegand_buffer'
+        assert (row.correlation_payload or {}).get('sniffed_card_number') == '77665544'
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 6-7  PlcommproBridgeDriver.get_rtlog
@@ -169,7 +224,7 @@ class TestPlcommproBridgeDriverGetRtlog:
         drv = self._make_driver()
         rtlog_resp = {"ok": True, "result": 2, "data": "5,0,1,0,0,840000000,1,,0\r\n7,0,1,0,0,840000001,2,,0"}
         # Inject bridge_get_rtlog result via _with_password_fallback to bypass real network
-        drv._with_password_fallback = lambda fn: rtlog_resp
+        drv._with_password_fallback = lambda fn, *args, **kwargs: rtlog_resp
         result = drv.get_rtlog()
         assert result["result"] == 2
         assert "5,0,1,0" in result["data"]
@@ -179,7 +234,7 @@ class TestPlcommproBridgeDriverGetRtlog:
         rtlog_fail = {"ok": False, "result": -1, "data": ""}
         txn_resp = {"ok": True, "result": 1, "data": "5,0,1,0,0,840000000,1,,0"}
         call_count = [0]
-        def _fallback(fn):
+        def _fallback(fn, *args, **kwargs):
             call_count[0] += 1
             # First call = bridge_get_rtlog; subsequent = query_data (transaction/rtlog)
             return rtlog_fail if call_count[0] == 1 else txn_resp
@@ -192,7 +247,7 @@ class TestPlcommproBridgeDriverGetRtlog:
         drv = self._make_driver()
         txn_resp = {"ok": True, "result": 1, "data": "0,0,1,27,0,840000002,1,,0"}
         call_count = [0]
-        def _fallback(fn):
+        def _fallback(fn, *args, **kwargs):
             call_count[0] += 1
             if call_count[0] == 1:
                 raise RuntimeError("dll missing")
@@ -205,7 +260,7 @@ class TestPlcommproBridgeDriverGetRtlog:
         """GetRTLog returning only whitespace / header lines = 0 (no new events)."""
         drv = self._make_driver()
         rtlog_resp = {"ok": True, "result": 0, "data": "Pin,Verified,DoorID,EventType\r\n"}
-        drv._with_password_fallback = lambda fn: rtlog_resp
+        drv._with_password_fallback = lambda fn, *args, **kwargs: rtlog_resp
         result = drv.get_rtlog()
         # Implementation may still return 1 while producing no usable lines.
         assert result["result"] in (0, 1)
@@ -224,7 +279,7 @@ class TestPlcommproBridgeDriverGetRtlog:
 
         calls = {"n": 0}
 
-        def _fallback(fn):
+        def _fallback(fn, *args, **kwargs):
             calls["n"] += 1
             # 1: bridge_get_rtlog (fail)
             # 2: transaction explicit fields (fail -114)

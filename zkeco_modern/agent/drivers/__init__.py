@@ -3,4 +3,4 @@
 from .zk_socket_driver import ZKTechSocketDriver
 from .plcommpro_bridge_driver import PlcommproBridgeDriver
 
-__all__ = ["ZKTechSocketDriver"]
+__all__ = ["ZKTechSocketDriver", "PlcommproBridgeDriver"]

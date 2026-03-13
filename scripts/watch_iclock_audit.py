@@ -19,6 +19,7 @@ def main() -> int:
     parser.add_argument("--seconds", type=int, default=300)
     parser.add_argument("--interval", type=float, default=1.0)
     parser.add_argument("--prefix", type=str, default="iclock")
+    parser.add_argument("--ip", type=str, default="", help="Optional remote IP filter")
     args = parser.parse_args()
 
     _filter_bad_syspath()
@@ -43,7 +44,8 @@ def main() -> int:
         .first()
         or 0
     )
-    print(f"watch_iclock_audit start prefix={args.prefix!r} last_id={last_id}")
+    ip_filter = str(args.ip or "").strip()
+    print(f"watch_iclock_audit start prefix={args.prefix!r} ip_filter={ip_filter!r} last_id={last_id}")
 
     end_mono = start_mono + float(args.seconds)
     while time.monotonic() < end_mono:
@@ -52,9 +54,14 @@ def main() -> int:
             .order_by("id")[:50]
         )
         for a in rows:
-            # Keep it compact + greppable
-            print(f"AUD {a.id} {a.timestamp} {a.module} {a.remote_ip} {a.message}")
             last_id = a.id
+            if ip_filter and str(a.ip_address or "").strip() != ip_filter:
+                continue
+            # Keep it compact + greppable and aligned with the current AuditLog model.
+            print(
+                f"AUD {a.id} {a.timestamp} {a.module} {a.ip_address} "
+                f"action={a.action} entity={a.entity_name or a.entity_id} details={a.details}"
+            )
         time.sleep(float(args.interval))
 
     print("watch_iclock_audit done")

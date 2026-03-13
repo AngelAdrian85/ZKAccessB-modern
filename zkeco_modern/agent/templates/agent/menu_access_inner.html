@@ -90,6 +90,7 @@
       <button type="button" class="access-tab-btn" data-tab="holidays">Sărbători</button>
       <button type="button" class="access-tab-btn" data-tab="levels">Niveluri</button>
       <button type="button" class="access-tab-btn" data-tab="personal_levels">Nivel Acces personal</button>
+        <button type="button" class="access-tab-btn" data-tab="wiegand">Wiegand</button>
       <button type="button" class="access-tab-btn" data-tab="logs">Loguri</button>
   </div>
 
@@ -162,6 +163,7 @@
     holidays:{label: 'Sărbători',  url: '/agent/crud/holidays/?embed=1'},
     levels:  {label: 'Niveluri',   url: '/agent/crud/access-levels/?embed=1'},
     personal_levels:{label: 'Nivel Acces personal', url: '/agent/crud/access-levels-personnel/?embed=1'},
+    wiegand:{label: 'Wiegand',     url: '/agent/crud/wiegand-formats/?embed=1'},
     logs:    {label: 'Loguri',     url: '/agent/menu/reports/?tab=accesslog&embed=1'},
   };
 
@@ -177,6 +179,590 @@
   let currentTabUrl = null;
   let currentModalUrl = null;
 
+  function escapeHtml(value){
+    return String(value == null ? '' : value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function parseJsonText(text, fallback){
+    try{ return JSON.parse(String(text || '')); }catch(_e){ return fallback; }
+  }
+
+  function getWiegandPane(){
+    return tabBody ? tabBody.querySelector('[data-tab="wiegand"]') : null;
+  }
+
+  function getWiegandManualForm(){
+    const pane = getWiegandPane();
+    return pane ? pane.querySelector('form[data-wiegand-manual-form="1"]') : null;
+  }
+
+  function getWiegandPreviewEl(){
+    const form = getWiegandManualForm();
+    return form ? form.querySelector('[data-wiegand-preview="1"]') : null;
+  }
+
+  function getSelectedWiegandOption(){
+    const form = getWiegandManualForm();
+    if(!form) return null;
+    const select = form.querySelector('[data-wiegand-manual-select="1"]');
+    if(!select) return null;
+    return select.options[select.selectedIndex] || null;
+  }
+
+  function getSelectedWiegandPayload(){
+    const opt = getSelectedWiegandOption();
+    if(!opt) return null;
+    return parseJsonText(opt.getAttribute('data-payload') || '', null);
+  }
+
+  function getWiegandDoorSelect(){
+    const form = getWiegandManualForm();
+    return form ? form.querySelector('[data-wiegand-door-select="1"]') : null;
+  }
+
+  function getWiegandTestModal(){
+    const pane = getWiegandPane();
+    return pane ? pane.querySelector('[data-wiegand-test-modal="1"]') : null;
+  }
+
+  function getWiegandTestDoorSelect(){
+    const modal = getWiegandTestModal();
+    return modal ? modal.querySelector('[data-wiegand-test-door="1"]') : null;
+  }
+
+  function getWiegandTestStatusEl(){
+    const modal = getWiegandTestModal();
+    return modal ? modal.querySelector('[data-wiegand-test-status="1"]') : null;
+  }
+
+  function getWiegandTestBody(){
+    const modal = getWiegandTestModal();
+    return modal ? modal.querySelector('[data-wiegand-test-body="1"]') : null;
+  }
+
+  function getWiegandTestStartBtn(){
+    const modal = getWiegandTestModal();
+    return modal ? modal.querySelector('[data-wiegand-test-start="1"]') : null;
+  }
+
+  function getWiegandTestStopBtn(){
+    const modal = getWiegandTestModal();
+    return modal ? modal.querySelector('[data-wiegand-test-stop="1"]') : null;
+  }
+
+  function readWiegandDoorOption(opt){
+    if(!opt) return null;
+    const id = String(opt.value || '').trim();
+    if(!id) return null;
+    return {
+      id,
+      deviceId: String(opt.getAttribute('data-device-id') || '').trim(),
+      doorNumber: String(opt.getAttribute('data-door-number') || '').trim(),
+      deviceName: String(opt.getAttribute('data-device-name') || '').trim(),
+      doorName: String(opt.getAttribute('data-door-name') || '').trim(),
+      label: String(opt.textContent || '').trim(),
+    };
+  }
+
+  function getSelectedWiegandDoor(preferTestModal){
+    const modal = getWiegandTestModal();
+    const modalOpen = !!(modal && modal.style.display === 'flex');
+    if(preferTestModal || modalOpen){
+      const testSelect = getWiegandTestDoorSelect();
+      if(testSelect){
+        const selected = readWiegandDoorOption(testSelect.options[testSelect.selectedIndex] || null);
+        if(selected) return selected;
+      }
+    }
+    const manualSelect = getWiegandDoorSelect();
+    if(!manualSelect) return null;
+    return readWiegandDoorOption(manualSelect.options[manualSelect.selectedIndex] || null);
+  }
+
+  function syncWiegandDoorSelection(doorId, source){
+    const wanted = String(doorId || '').trim();
+    const manualSelect = getWiegandDoorSelect();
+    const testSelect = getWiegandTestDoorSelect();
+    [
+      {select: manualSelect, key: 'manual'},
+      {select: testSelect, key: 'test'},
+    ].forEach(item => {
+      if(!item.select || item.key === source) return;
+      const next = Array.from(item.select.options || []).find(opt => String(opt.value || '').trim() === wanted);
+      if(next){
+        item.select.value = next.value;
+      } else if(!wanted){
+        item.select.value = '';
+      }
+    });
+  }
+
+  function ensureWiegandDoorDefaults(){
+    const manualSelect = getWiegandDoorSelect();
+    const testSelect = getWiegandTestDoorSelect();
+    if(manualSelect && !String(manualSelect.value || '').trim()){
+      const firstReal = Array.from(manualSelect.options || []).find(opt => String(opt.value || '').trim());
+      if(firstReal){ manualSelect.value = firstReal.value; }
+    }
+    if(testSelect && !String(testSelect.value || '').trim()){
+      const manualDoor = manualSelect ? String(manualSelect.value || '').trim() : '';
+      if(manualDoor){
+        testSelect.value = manualDoor;
+      } else {
+        const firstReal = Array.from(testSelect.options || []).find(opt => String(opt.value || '').trim());
+        if(firstReal){ testSelect.value = firstReal.value; }
+      }
+    }
+    const selectedValue = manualSelect && String(manualSelect.value || '').trim()
+      ? String(manualSelect.value || '').trim()
+      : (testSelect ? String(testSelect.value || '').trim() : '');
+    if(selectedValue){
+      syncWiegandDoorSelection(selectedValue, 'manual');
+    }
+  }
+
+  function setWiegandPreview(content, isError){
+    const preview = getWiegandPreviewEl();
+    if(!preview) return;
+    preview.style.color = isError ? '#ffbdbd' : '#d8ecfb';
+    preview.textContent = String(content || '');
+  }
+
+  function describeWiegandSelection(){
+    ensureWiegandDoorDefaults();
+    const opt = getSelectedWiegandOption();
+    const payload = getSelectedWiegandPayload();
+    if(!opt || !payload){
+      setWiegandPreview('Alege formatul și introdu bits/hex/int.', false);
+      return;
+    }
+    const lines = [
+      `Format: ${opt.textContent || ''}`,
+      `Biți: ${payload.bit_length || payload.wiegand_count || '-'}`,
+      `Mode: ${payload.wiegand_mode || payload.mode || '-'}`,
+    ];
+    if(payload.before_fmt || payload.after_fmt){
+      lines.push(`Pattern: ${payload.before_fmt || ''}${payload.after_fmt ? ' / ' + payload.after_fmt : ''}`);
+    } else {
+      lines.push(`CID: ${payload.cid_start || 0}+${payload.cid_count || 0}`);
+      lines.push(`Facility: ${payload.facility_code_start || 0}+${payload.facility_code_count || 0}`);
+      lines.push(`Parity even/odd: ${payload.even_parity_start || 0}+${payload.even_parity_count || 0} / ${payload.odd_parity_start || 0}+${payload.odd_parity_count || 0}`);
+    }
+    setWiegandPreview(lines.join('\n'), false);
+  }
+
+  function buildWiegandManualPayload(options){
+    const form = getWiegandManualForm();
+    if(!form) return null;
+    const fd = new FormData(form);
+    const payload = {
+      source: String(fd.get('source') || 'manual-wiegand').trim() || 'manual-wiegand',
+      wiegand_bits: String(fd.get('wiegand_bits') || '').trim(),
+      wiegand_hex: String(fd.get('wiegand_hex') || '').trim(),
+      wiegand_int: String(fd.get('wiegand_int') || '').trim(),
+      wiegand_format_id: String(fd.get('wiegand_format_id') || '').trim(),
+    };
+    const selectedPayload = getSelectedWiegandPayload();
+    if(selectedPayload){
+      payload.wiegand_format_config = selectedPayload;
+      payload.wiegand_format = selectedPayload.format_name || selectedPayload.wiegand_name || null;
+      payload.wiegand_bit_length = selectedPayload.bit_length || selectedPayload.wiegand_count || null;
+    }
+    const selectedDoor = (options && options.selectedDoor) ? options.selectedDoor : getSelectedWiegandDoor(Boolean(options && options.preferTestModal));
+    if(selectedDoor && selectedDoor.id){
+      payload.door_pk = selectedDoor.id;
+      if(selectedDoor.deviceId){ payload.device_id = selectedDoor.deviceId; }
+      if(selectedDoor.doorNumber){ payload.door_id = selectedDoor.doorNumber; }
+      payload.verify_access = 1;
+    } else if(options && options.verifyAccess === false){
+      payload.verify_access = 0;
+    }
+    return payload;
+  }
+
+  let wiegandTestRunning = false;
+  let wiegandTestTimer = null;
+  let wiegandTestPending = false;
+
+  function setWiegandTestStatus(message, isError){
+    const el = getWiegandTestStatusEl();
+    if(!el) return;
+    el.style.color = isError ? '#ffbdbd' : '#b7d6eb';
+    el.textContent = String(message || '');
+  }
+
+  function setWiegandTestButtons(){
+    const startBtn = getWiegandTestStartBtn();
+    const stopBtn = getWiegandTestStopBtn();
+    if(startBtn) startBtn.disabled = wiegandTestRunning;
+    if(stopBtn) stopBtn.disabled = !wiegandTestRunning;
+  }
+
+  function clearWiegandTestRows(){
+    const body = getWiegandTestBody();
+    if(!body) return;
+    body.innerHTML = '<tr><td colspan="8" class="td-center-muted">Nu există încă evenimente de test.</td></tr>';
+  }
+
+  function renderWiegandEmployeeLabel(evalData){
+    if(!evalData || typeof evalData !== 'object') return '-';
+    const pin = String(evalData.employee_pin || '').trim();
+    const name = String(evalData.employee_name || '').trim();
+    if(pin && name) return `${pin} (${name})`;
+    if(name) return name;
+    if(pin) return pin;
+    return '-';
+  }
+
+  function formatWiegandEventPoint(data, fallbackDoor){
+    const evalData = data && data.access_eval && typeof data.access_eval === 'object' ? data.access_eval : null;
+    if(evalData && evalData.door_name) return String(evalData.door_name);
+    if(data && data.door_name) return String(data.door_name);
+    if(fallbackDoor && fallbackDoor.doorName) return String(fallbackDoor.doorName);
+    const dn = data && data.door_number ? String(data.door_number) : (fallbackDoor && fallbackDoor.doorNumber ? String(fallbackDoor.doorNumber) : '');
+    return dn ? `Door ${dn}` : '-';
+  }
+
+  function formatWiegandDeviceLabel(data, fallbackDoor){
+    const evalData = data && data.access_eval && typeof data.access_eval === 'object' ? data.access_eval : null;
+    if(evalData && evalData.device_name) return String(evalData.device_name);
+    if(data && data.device_name) return String(data.device_name);
+    if(fallbackDoor && fallbackDoor.deviceName) return String(fallbackDoor.deviceName);
+    if(data && data.device_id) return `#${data.device_id}`;
+    return '-';
+  }
+
+  function appendWiegandTestRow(data, fallbackDoor){
+    const body = getWiegandTestBody();
+    if(!body) return;
+    const evalData = data && data.access_eval && typeof data.access_eval === 'object' ? data.access_eval : null;
+    const eventDescription = (evalData && evalData.event_description) ? evalData.event_description : ((data && data.source) ? `Wiegand ${data.source}` : 'Card read');
+    const statusText = (evalData && evalData.status_text) ? evalData.status_text : 'CAPTURAT';
+    const verifyMode = (evalData && evalData.verify_mode) ? evalData.verify_mode : ((data && data.source) ? data.source : '-');
+    const rowHtml = `
+      <tr>
+        <td>${escapeHtml(new Date().toLocaleString())}</td>
+        <td>${escapeHtml(formatWiegandDeviceLabel(data, fallbackDoor))}</td>
+        <td>${escapeHtml(formatWiegandEventPoint(data, fallbackDoor))}</td>
+        <td>${escapeHtml(eventDescription)}</td>
+        <td>${escapeHtml((data && data.card_number) ? data.card_number : '-')}</td>
+        <td>${escapeHtml(renderWiegandEmployeeLabel(evalData))}</td>
+        <td>${escapeHtml(statusText)}</td>
+        <td>${escapeHtml(verifyMode)}</td>
+      </tr>`;
+    const empty = body.querySelector('.td-center-muted');
+    if(empty){
+      body.innerHTML = rowHtml;
+    } else {
+      body.insertAdjacentHTML('afterbegin', rowHtml);
+    }
+  }
+
+  async function persistWiegandTestContext(active, selectedDoor){
+    const resp = await fetch('/agent/api/wiegand/test-context/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': getCSRF(),
+      },
+      body: JSON.stringify(active ? {active: true, door_pk: selectedDoor && selectedDoor.id ? selectedDoor.id : ''} : {active: false}),
+    });
+    const data = await resp.json();
+    if(!resp.ok || !data || data.ok !== true){
+      throw new Error((data && (data.error || data.message)) ? (data.error || data.message) : `HTTP ${resp.status}`);
+    }
+    return data;
+  }
+
+  function openWiegandTestModal(){
+    const modal = getWiegandTestModal();
+    if(!modal) return;
+    const selectedDoor = getSelectedWiegandDoor(false);
+    if(selectedDoor && selectedDoor.id){
+      syncWiegandDoorSelection(selectedDoor.id, 'manual');
+    }
+    modal.style.display = 'flex';
+    modal.setAttribute('aria-hidden', 'false');
+    setWiegandTestButtons();
+  }
+
+  async function stopWiegandTest(options){
+    const opts = options || {};
+    wiegandTestRunning = false;
+    wiegandTestPending = false;
+    if(wiegandTestTimer){
+      window.clearTimeout(wiegandTestTimer);
+      wiegandTestTimer = null;
+    }
+    setWiegandTestButtons();
+    try{
+      await persistWiegandTestContext(false, null);
+    }catch(err){
+      if(!opts.silent){
+        setWiegandTestStatus((err && err.message) ? err.message : String(err), true);
+      }
+    }
+    if(!opts.silent){
+      setWiegandTestStatus('Testarea a fost oprită.', false);
+    }
+  }
+
+  async function closeWiegandTestModal(){
+    await stopWiegandTest({silent: true});
+    const modal = getWiegandTestModal();
+    if(!modal) return;
+    modal.style.display = 'none';
+    modal.setAttribute('aria-hidden', 'true');
+    setWiegandTestStatus('Alege o ușă și pornește testul. Evenimentele brute ajunse prin listener sau formularul manual se vor atașa de ușa selectată și se vor salva în DB.', false);
+  }
+
+  async function pollWiegandTestLoop(){
+    if(!wiegandTestRunning || wiegandTestPending) return;
+    wiegandTestPending = true;
+    const selectedDoor = getSelectedWiegandDoor(true);
+    try{
+      const resp = await fetch('/agent/api/cards/read/wait/', {headers:{'Accept':'application/json','X-Requested-With':'XMLHttpRequest'}});
+      const data = await resp.json();
+      if(resp.ok && data && data.ok === true){
+        appendWiegandTestRow(data, selectedDoor);
+        setWiegandTestStatus(`Ultimul card capturat: ${data.card_number || '-'} pe ${formatWiegandEventPoint(data, selectedDoor)}.`, false);
+      } else if(resp.status !== 408) {
+        throw new Error((data && (data.error || data.message)) ? (data.error || data.message) : `HTTP ${resp.status}`);
+      }
+    }catch(err){
+      if(wiegandTestRunning){
+        setWiegandTestStatus((err && err.message) ? err.message : String(err), true);
+      }
+    }finally{
+      wiegandTestPending = false;
+      if(wiegandTestRunning){
+        wiegandTestTimer = window.setTimeout(pollWiegandTestLoop, 250);
+      }
+    }
+  }
+
+  async function startWiegandTest(){
+    const selectedDoor = getSelectedWiegandDoor(true);
+    if(!selectedDoor || !selectedDoor.id){
+      setWiegandTestStatus('Selectează o ușă validă înainte să pornești testul.', true);
+      return;
+    }
+    syncWiegandDoorSelection(selectedDoor.id, 'test');
+    clearWiegandTestRows();
+    setWiegandTestStatus(`Testarea rulează pentru ${selectedDoor.label}. Aștept carduri din listener sau din formularul manual.`, false);
+    try{
+      await persistWiegandTestContext(true, selectedDoor);
+      wiegandTestRunning = true;
+      setWiegandTestButtons();
+      pollWiegandTestLoop();
+    }catch(err){
+      wiegandTestRunning = false;
+      setWiegandTestButtons();
+      setWiegandTestStatus((err && err.message) ? err.message : String(err), true);
+    }
+  }
+
+  function renderWiegandDecoded(decoded){
+    const lines = [];
+    if(decoded && typeof decoded === 'object'){
+      lines.push(`Format: ${decoded.format_name || '-'}`);
+      lines.push(`CardNo: ${decoded.card_number || '-'}`);
+      lines.push(`Facility: ${decoded.facility_code != null ? decoded.facility_code : '-'}`);
+      lines.push(`Site: ${decoded.site_code != null ? decoded.site_code : '-'}`);
+      lines.push(`Manufacturer: ${decoded.manufacturer_code != null ? decoded.manufacturer_code : '-'}`);
+      lines.push(`CID: ${decoded.card_id != null ? decoded.card_id : '-'}`);
+      lines.push(`Parity valid: ${decoded.parity_valid == null ? '-' : (decoded.parity_valid ? 'da' : 'nu')}`);
+      lines.push(`Bits: ${decoded.bits || '-'}`);
+      lines.push(`Hex: ${decoded.hex_value || '-'}`);
+      lines.push(`Int: ${decoded.int_value != null ? decoded.int_value : '-'}`);
+    }
+    return lines.join('\n');
+  }
+
+  async function decodeWiegandManual(){
+    const payload = buildWiegandManualPayload();
+    if(!payload){
+      setWiegandPreview('Formularul Wiegand nu este disponibil.', true);
+      return;
+    }
+    if(!payload.wiegand_bits && !payload.wiegand_hex && !payload.wiegand_int){
+      setWiegandPreview('Introdu bits, hex sau int înainte de decodare.', true);
+      return;
+    }
+    setWiegandPreview('Se decodează...', false);
+    try{
+      const resp = await fetch('/agent/api/wiegand/decode/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRFToken': getCSRF(),
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json();
+      if(!resp.ok || !data || data.ok !== true){
+        throw new Error((data && (data.error || data.message)) ? (data.error || data.message) : `HTTP ${resp.status}`);
+      }
+      setWiegandPreview(renderWiegandDecoded(data.decoded || {}), false);
+    }catch(err){
+      setWiegandPreview((err && err.message) ? err.message : String(err), true);
+    }
+  }
+
+  async function sendWiegandManual(){
+    const payload = buildWiegandManualPayload({preferTestModal: true});
+    if(!payload){
+      setWiegandPreview('Formularul Wiegand nu este disponibil.', true);
+      return;
+    }
+    if(!payload.wiegand_bits && !payload.wiegand_hex && !payload.wiegand_int){
+      setWiegandPreview('Introdu bits, hex sau int înainte de trimitere.', true);
+      return;
+    }
+    setWiegandPreview('Se trimite către monitorizare...', false);
+    try{
+      const resp = await fetch('/agent/api/cards/read/push/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRFToken': getCSRF(),
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await resp.json();
+      if(!resp.ok || !data || data.ok !== true){
+        throw new Error((data && (data.error || data.message)) ? (data.error || data.message) : `HTTP ${resp.status}`);
+      }
+      const details = [];
+      details.push('Trimis în monitorizare cu succes.');
+      if(data.card_number){ details.push(`CardNo: ${data.card_number}`); }
+      if(data.door_name || data.door_number){ details.push(`Ușă: ${data.door_name || ('Door ' + data.door_number)}`); }
+      if(data.source){ details.push(`Sursă: ${data.source}`); }
+      if(data.access_eval && data.access_eval.status_text){ details.push(`Status: ${data.access_eval.status_text}`); }
+      if(data.wiegand){ details.push(''); details.push(renderWiegandDecoded(data.wiegand)); }
+      setWiegandPreview(details.join('\n'), false);
+    }catch(err){
+      setWiegandPreview((err && err.message) ? err.message : String(err), true);
+    }
+  }
+
+  async function activateWiegandFormat(url){
+    if(!url) return;
+    const preview = getWiegandPreviewEl();
+    if(preview){ preview.textContent = 'Se activează formatul...'; }
+    try{
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRFToken': getCSRF(),
+        },
+      });
+      const data = await resp.json();
+      if(!resp.ok || !data || data.ok !== true){
+        throw new Error((data && (data.error || data.message)) ? (data.error || data.message) : `HTTP ${resp.status}`);
+      }
+      await loadTab('wiegand', currentTabUrl || TAB_META.wiegand.url);
+    }catch(err){
+      setWiegandPreview((err && err.message) ? err.message : String(err), true);
+    }
+  }
+
+  function selectWiegandFormat(formatId){
+    const form = getWiegandManualForm();
+    if(!form) return;
+    const select = form.querySelector('[data-wiegand-manual-select="1"]');
+    if(!select) return;
+    const wanted = String(formatId || '').trim();
+    Array.from(select.options).forEach(opt => {
+      if(String(opt.value || '').trim() === wanted){
+        select.value = opt.value;
+      }
+    });
+    describeWiegandSelection();
+  }
+
+  function initializeWiegandFormatForm(scope){
+    const form = scope ? scope.querySelector('form[data-wiegand-format-form="1"]') : null;
+    if(!form || form.getAttribute('data-wiegand-init') === '1') return;
+    form.setAttribute('data-wiegand-init', '1');
+
+    const presetJsonEl = scope.querySelector('[data-wiegand-presets-json]');
+    const presetRows = parseJsonText(presetJsonEl ? presetJsonEl.value : '', []);
+    const presetSelect = form.querySelector('[data-wiegand-preset-select="1"]');
+    const modeHidden = form.querySelector('input[name="wiegand_mode"]');
+    const modeSwitches = Array.from(form.querySelectorAll('[data-wiegand-mode-switch="1"] input[type="radio"]'));
+    const modeOnePanel = form.querySelector('[data-wiegand-mode-panel="1"]');
+    const modeTwoPanel = form.querySelector('[data-wiegand-mode-panel="2"]');
+
+    function setMode(mode){
+      const nextMode = String(mode || '1') === '2' ? '2' : '1';
+      if(modeHidden) modeHidden.value = nextMode;
+      modeSwitches.forEach(r => { r.checked = (String(r.value || '') === nextMode); });
+      if(modeOnePanel) modeOnePanel.style.display = (nextMode === '1') ? 'block' : 'none';
+      if(modeTwoPanel) modeTwoPanel.style.display = (nextMode === '2') ? 'block' : 'none';
+    }
+
+    function fillField(name, value){
+      const field = form.querySelector(`[name="${name}"]`);
+      if(!field) return;
+      if(field.type === 'checkbox'){
+        field.checked = Boolean(value);
+        return;
+      }
+      field.value = (value == null) ? '' : String(value);
+    }
+
+    function applyPreset(name){
+      const preset = Array.isArray(presetRows) ? presetRows.find(row => String((row && (row.format_name || row.wiegand_name || row.name)) || '') === String(name || '')) : null;
+      if(!preset) return;
+      fillField('wiegand_name', preset.format_name || preset.wiegand_name || preset.name || '');
+      fillField('wiegand_count', preset.bit_length || preset.wiegand_count || '');
+      fillField('default_fmt', Boolean(preset.default_fmt));
+      fillField('is_active', Boolean(preset.is_active));
+      fillField('first_p', preset.first_p);
+      fillField('second_p', preset.second_p);
+      fillField('even_parity_start', preset.even_parity_start);
+      fillField('even_parity_count', preset.even_parity_count);
+      fillField('odd_parity_start', preset.odd_parity_start);
+      fillField('odd_parity_count', preset.odd_parity_count);
+      fillField('cid_start', preset.cid_start);
+      fillField('cid_count', preset.cid_count);
+      fillField('facility_code_start', preset.facility_code_start);
+      fillField('facility_code_count', preset.facility_code_count);
+      fillField('site_code_start', preset.site_code_start);
+      fillField('site_code_count', preset.site_code_count);
+      fillField('manufactory_code_start', preset.manufacturer_code_start || preset.manufactory_code_start);
+      fillField('manufactory_code_count', preset.manufacturer_code_count || preset.manufactory_code_count);
+      fillField('before_fmt', preset.before_fmt || '');
+      fillField('after_fmt', preset.after_fmt || '');
+      setMode(preset.wiegand_mode || preset.mode || 1);
+    }
+
+    modeSwitches.forEach(r => r.addEventListener('change', ()=> setMode(r.value)));
+    if(presetSelect){
+      presetSelect.addEventListener('change', ()=>{
+        const value = String(presetSelect.value || '').trim();
+        if(value) applyPreset(value);
+      });
+    }
+    setMode(modeHidden ? modeHidden.value : (modeSwitches.find(r => r.checked) || {}).value || '1');
+    if(presetSelect && String(presetSelect.value || '').trim()){
+      const shouldHydrate = !String((form.querySelector('[name="wiegand_name"]') || {}).value || '').trim();
+      if(shouldHydrate){
+        applyPreset(presetSelect.value);
+      }
+    }
+  }
+
   function setActiveTab(tab){
     currentTab = tab;
     const meta = TAB_META[tab] || TAB_META.doors;
@@ -188,6 +774,9 @@
   }
 
   async function loadTab(tab, urlOverride){
+    if(currentTab === 'wiegand'){
+      try{ await stopWiegandTest({silent: true}); }catch(_e){}
+    }
     const meta = TAB_META[tab] || TAB_META.doors;
     setActiveTab(tab);
     currentTabUrl = urlOverride || meta.url;
@@ -195,6 +784,7 @@
     const resp = await fetch(currentTabUrl, {headers:{'X-Requested-With':'XMLHttpRequest'}});
     const html = await resp.text();
     tabBody.innerHTML = html;
+    if(tab === 'wiegand') describeWiegandSelection();
   }
 
   function openModal(){
@@ -643,6 +1233,10 @@
         if(doorNoEl){ doorNoEl.addEventListener('change', renderReaders); doorNoEl.addEventListener('keyup', renderReaders); }
         renderReaders();
       }
+    }catch(_e){}
+
+    try{
+      initializeWiegandFormatForm(modalBody);
     }catch(_e){}
 
     // Initialize device modal widgets (comm mode groups) - injected scripts don't run.
@@ -1476,6 +2070,62 @@
       return;
     }
 
+    const wgDecodeBtn = e.target && e.target.closest ? e.target.closest('[data-wiegand-decode="1"]') : null;
+    if(wgDecodeBtn){
+      try{ e.preventDefault(); }catch(_e){}
+      decodeWiegandManual();
+      return;
+    }
+
+    const wgSendBtn = e.target && e.target.closest ? e.target.closest('[data-wiegand-send="1"]') : null;
+    if(wgSendBtn){
+      try{ e.preventDefault(); }catch(_e){}
+      sendWiegandManual();
+      return;
+    }
+
+    const wgUseBtn = e.target && e.target.closest ? e.target.closest('[data-wiegand-use="1"]') : null;
+    if(wgUseBtn){
+      try{ e.preventDefault(); }catch(_e){}
+      selectWiegandFormat(wgUseBtn.getAttribute('data-format-id'));
+      return;
+    }
+
+    const wgActivateBtn = e.target && e.target.closest ? e.target.closest('[data-wiegand-activate="1"]') : null;
+    if(wgActivateBtn){
+      try{ e.preventDefault(); }catch(_e){}
+      activateWiegandFormat(wgActivateBtn.getAttribute('data-url'));
+      return;
+    }
+
+    const wgTestOpenBtn = e.target && e.target.closest ? e.target.closest('[data-wiegand-test-open="1"]') : null;
+    if(wgTestOpenBtn){
+      try{ e.preventDefault(); }catch(_e){}
+      openWiegandTestModal();
+      return;
+    }
+
+    const wgTestCloseBtn = e.target && e.target.closest ? e.target.closest('[data-wiegand-test-close="1"]') : null;
+    if(wgTestCloseBtn){
+      try{ e.preventDefault(); }catch(_e){}
+      closeWiegandTestModal();
+      return;
+    }
+
+    const wgTestStartBtn = e.target && e.target.closest ? e.target.closest('[data-wiegand-test-start="1"]') : null;
+    if(wgTestStartBtn){
+      try{ e.preventDefault(); }catch(_e){}
+      startWiegandTest();
+      return;
+    }
+
+    const wgTestStopBtn = e.target && e.target.closest ? e.target.closest('[data-wiegand-test-stop="1"]') : null;
+    if(wgTestStopBtn){
+      try{ e.preventDefault(); }catch(_e){}
+      stopWiegandTest();
+      return;
+    }
+
     const pageLink = e.target && e.target.closest ? e.target.closest('[data-access-page="1"]') : null;
     if(pageLink){
       const href = pageLink.getAttribute('href');
@@ -1514,6 +2164,29 @@
         openAccessAuditLogs(mod, ttl);
         return;
       }
+    }
+  });
+
+  document.addEventListener('change', (e)=>{
+    const manualSelect = e.target && e.target.closest ? e.target.closest('[data-wiegand-manual-select="1"]') : null;
+    if(manualSelect){
+      describeWiegandSelection();
+      return;
+    }
+
+    const manualDoorSelect = e.target && e.target.closest ? e.target.closest('[data-wiegand-door-select="1"]') : null;
+    if(manualDoorSelect){
+      syncWiegandDoorSelection(manualDoorSelect.value, 'manual');
+      return;
+    }
+
+    const testDoorSelect = e.target && e.target.closest ? e.target.closest('[data-wiegand-test-door="1"]') : null;
+    if(testDoorSelect){
+      syncWiegandDoorSelection(testDoorSelect.value, 'test');
+      if(wiegandTestRunning){
+        setWiegandTestStatus('Ușa de test s-a schimbat. Oprește și repornește testarea ca listenerul să folosească noul context.', false);
+      }
+      return;
     }
   });
 

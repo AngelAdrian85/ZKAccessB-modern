@@ -2,6 +2,7 @@ import pytest
 from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.urls import reverse
+from types import SimpleNamespace
 
 from agent.models import AuditLog, CommandLog, Device, DeviceRealtimeLog, Employee, EmployeeCard
 
@@ -41,6 +42,34 @@ def test_monitor_rtlog_polling_endpoint_returns_rows_after_id(client):
 
 
 @pytest.mark.django_db
+def test_monitor_rtlog_polling_endpoint_exposes_correlation_payload(client):
+    u = User.objects.create_user('staffcorr', 'corr@b.c', 'pass')
+    u.is_staff = True
+    u.save()
+    client.login(username='staffcorr', password='pass')
+
+    row = DeviceRealtimeLog.objects.create(
+        device_id=22,
+        sn='SN22',
+        raw='0,4,1,27,0,841521593,714,77665544,0',
+        correlation_payload={
+            'resolved_from_wiegand': True,
+            'resolution_source': 'wiegand_buffer',
+            'sniffed_card_number': '77665544',
+        },
+    )
+
+    r = client.get(reverse('api-monitor-rtlog'))
+    assert r.status_code == 200
+    body = r.json()
+    rows = body.get('rows') or []
+    matched = next((item for item in rows if int(item.get('id') or 0) == row.id), None)
+    assert matched is not None
+    assert (matched.get('correlation_payload') or {}).get('resolved_from_wiegand') is True
+    assert (matched.get('correlation_payload') or {}).get('sniffed_card_number') == '77665544'
+
+
+@pytest.mark.django_db
 def test_monitor_rtlog_polling_endpoint_includes_audit_rows_incrementally(client):
     u = User.objects.create_user('staff2', 's2@b.c', 'pass')
     u.is_staff = True
@@ -76,6 +105,44 @@ def test_monitor_rtlog_polling_endpoint_includes_audit_rows_incrementally(client
     assert j1.get('ok') is True
     audit1 = j1.get('audit_rows') or []
     assert all(int(row.get('id')) > a1.id for row in audit1)
+
+
+@pytest.mark.django_db
+def test_comm_center_status_includes_latest_rtlog(client, monkeypatch):
+    u = User.objects.create_user('staffcc', 'cc@b.c', 'pass')
+    u.is_staff = True
+    u.save()
+    client.login(username='staffcc', password='pass')
+
+    row = DeviceRealtimeLog.objects.create(device_id=22, sn='SN22', raw='0,4,1,27,0,841521593,714,,0')
+
+    class DummyHeartbeat:
+        def get(self, field):
+            if field == 'last_cycle':
+                return 123.5
+            return None
+
+    fake_center = SimpleNamespace(
+        poll_interval=1.0,
+        sessions={22: object()},
+        total_rtlog_lines=7,
+        total_event_logs=0,
+        heartbeat_backend=DummyHeartbeat(),
+    )
+    monkeypatch.setattr('agent.views._get_active_center', lambda: fake_center)
+
+    r = client.get(reverse('comm-center-status'))
+    assert r.status_code == 200
+    j = r.json()
+    assert j.get('ok') is True
+    center = j.get('center') or {}
+    assert center.get('running') is True
+    assert center.get('last_cycle') == 123.5
+    latest = center.get('latest_rtlog') or {}
+    assert latest.get('id') == row.id
+    assert latest.get('device_id') == 22
+    assert latest.get('created_at')
+    assert '841521593' in str(latest.get('raw_preview') or '')
 
 
 @pytest.mark.django_db

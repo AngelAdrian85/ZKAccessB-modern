@@ -849,8 +849,8 @@
     </div>
     <div class="table-shell">
       <table>
-        <thead><tr><th>#</th><th>Dispozitiv</th><th>Serie</th><th>Ușă</th><th>Conținut</th><th>Status</th><th>Creat</th><th>Executat</th><th>Returned</th><th>Acțiuni</th></tr></thead>
-        <tbody id="cmdTableBody"><tr><td colspan="10" class="td-center-muted">Se încarcă comenzi...</td></tr></tbody>
+        <thead><tr><th>#</th><th>Dispozitiv</th><th>Serie</th><th>Ușă</th><th>Conținut</th><th>Status</th><th>Semnal real</th><th>Creat</th><th>Executat</th><th>Returned</th><th>Acțiuni</th></tr></thead>
+        <tbody id="cmdTableBody"><tr><td colspan="11" class="td-center-muted">Se încarcă comenzi...</td></tr></tbody>
       </table>
     </div>
     <div id="cmdFlash" class="hint mt-6"></div>
@@ -5064,6 +5064,22 @@
   async function loadCommands(){
     try{
       const esc = (s)=> String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;').replace(/\'/g,'&#39;');
+      const truthBadge = (label, value) => {
+        const state = (value === true) ? 'yes' : ((value === false) ? 'no' : 'n/a');
+        const color = (value === true) ? '#2ebf96' : ((value === false) ? '#ff9800' : '#607d8b');
+        return `<span class="badge" style="background:${color};margin:0 4px 4px 0;">${label}: ${state}</span>`;
+      };
+      const truthCell = (c) => {
+        const evidence = String(c.physical_evidence || '').trim();
+        return [
+          '<div style="display:flex;flex-wrap:wrap;align-items:center;">',
+          truthBadge('accepted', c.accepted),
+          truthBadge('controller', c.controller_confirmed),
+          truthBadge('physical', c.physical_changed),
+          '</div>',
+          evidence ? `<div class="hint" style="margin-top:4px;">proof=${esc(evidence)}</div>` : ''
+        ].join('');
+      };
       const dev = String(document.getElementById('cmdFilterDevice')?.value || '').trim();
       const ser = String(document.getElementById('cmdFilterSerial')?.value || '').trim();
       const resv = String(document.getElementById('cmdFilterResult')?.value || '').trim();
@@ -5115,6 +5131,7 @@
         <td>${esc(c.door || '')}</td>
         <td>${cmdCell}</td>
         <td><span class="badge ${String(c.status||'')==='OK'?'badge-green':'badge-orange'}">${statusTxt}</span></td>
+        <td>${truthCell(c)}</td>
         <td>${esc(createdTxt)}</td>
         <td>${esc(execTxt)}</td>
         <td>${resTxt}</td>

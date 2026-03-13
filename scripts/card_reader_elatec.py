@@ -49,21 +49,33 @@ ERROR_URL = BASE + '/agent/api/listeners/error/'
 # Optionally they can be configured to prefix with 'CARD:'
 # Virtual mode: when CFG.elatec.mode == "virtual", simulate heartbeat and optional card without opening serial.
 
+def _reader_context(source: str) -> dict:
+    cfg = (CFG or {}).get('elatec') or {}
+    payload = {'source': source, 'verify_access': True, 'remote_open': True}
+    for key in ('device_id', 'door_id', 'door_pk', 'wiegand_format', 'wiegand_format_id', 'wiegand_bit_length'):
+        if key in cfg:
+            payload[key] = cfg[key]
+    if 'wiegand_format_config' in cfg:
+        payload['wiegand_format_config'] = cfg['wiegand_format_config']
+    return payload
+
+
+def _post_payload(payload: dict):
+    r = requests.post(PUSH_URL, json=payload, timeout=2)
+    if not r.ok:
+        try:
+            msg = f'push failed http={r.status_code} body={(r.text or "")[:200]}'
+            requests.post(ERROR_URL, json={'name':'elatec','message': msg}, timeout=2)
+        except Exception:
+            pass
+    return r
+
 def push_card(card_number: str, source: str='elatec'):
     payload = None
     try:
-        payload = { 'card_number': card_number, 'source': source, 'verify_access': True, 'remote_open': True }
-        el_cfg = (CFG or {}).get('elatec') or {}
-        if 'device_id' in el_cfg: payload['device_id'] = el_cfg['device_id']
-        if 'door_id' in el_cfg: payload['door_id'] = el_cfg['door_id']
-        if 'door_pk' in el_cfg: payload['door_pk'] = el_cfg['door_pk']
-        r = requests.post(PUSH_URL, json=payload, timeout=2)
-        if not r.ok:
-            try:
-                msg = f'push failed http={r.status_code} body={(r.text or "")[:200]}'
-                requests.post(ERROR_URL, json={'name':'elatec','message': msg}, timeout=2)
-            except Exception:
-                pass
+        payload = _reader_context(source)
+        payload['card_number'] = card_number
+        _post_payload(payload)
         # IMPORTANT: avoid a second evaluate-open request.
         # /cards/read/push already handles evaluate+open and duplicate requests
         # can create repeated remote opening/closing events.
@@ -75,6 +87,24 @@ def push_card(card_number: str, source: str='elatec'):
             pass
         try:
             print(f"[ELATEC] Push error for card={card_number}: {e}")
+        except Exception:
+            pass
+
+
+def push_wiegand(payload: dict, source: str='elatec-wiegand'):
+    req = None
+    try:
+        req = _reader_context(source)
+        req.update(payload or {})
+        _post_payload(req)
+    except Exception as e:
+        try:
+            msg = f'wiegand push exception: {e.__class__.__name__}: {e}'
+            requests.post(ERROR_URL, json={'name':'elatec','message': msg}, timeout=2)
+        except Exception:
+            pass
+        try:
+            print(f"[ELATEC] Push error for wiegand={payload}: {e}")
         except Exception:
             pass
 
@@ -117,9 +147,32 @@ def run_serial():
                             continue
                         if s.upper().startswith('CARD:'):
                             push_card(s.split(':',1)[1].strip(), 'elatec')
+                        elif s.upper().startswith('BITS:'):
+                            push_wiegand({'wiegand_bits': s.split(':',1)[1].strip()}, 'elatec-wiegand')
+                        elif s.upper().startswith('HEX:'):
+                            push_wiegand({'wiegand_hex': s.split(':',1)[1].strip()}, 'elatec-wiegand')
+                        elif s.upper().startswith('INT:'):
+                            push_wiegand({'wiegand_int': s.split(':',1)[1].strip()}, 'elatec-wiegand')
                         else:
-                            # assume whole line is card number
-                            push_card(s.strip(), 'elatec')
+                            try:
+                                obj = json.loads(s)
+                            except Exception:
+                                obj = None
+                            if isinstance(obj, dict) and any(obj.get(key) for key in ('wiegand_bits', 'wiegand_hex', 'wiegand_int')):
+                                push_wiegand({
+                                    'wiegand_bits': obj.get('wiegand_bits') or '',
+                                    'wiegand_hex': obj.get('wiegand_hex') or '',
+                                    'wiegand_int': obj.get('wiegand_int') or '',
+                                    'wiegand_format': obj.get('wiegand_format') or '',
+                                    'wiegand_format_id': obj.get('wiegand_format_id') or '',
+                                    'wiegand_format_config': obj.get('wiegand_format_config') or None,
+                                    'wiegand_bit_length': obj.get('wiegand_bit_length') or '',
+                                }, 'elatec-wiegand')
+                            elif set(s) <= {'0', '1'} and len(s) >= 8:
+                                push_wiegand({'wiegand_bits': s.strip()}, 'elatec-wiegand')
+                            else:
+                                # assume whole line is card number
+                                push_card(s.strip(), 'elatec')
                     # Touch heartbeat on data activity
                     try:
                         hb = { 'ts': time.time(), 'source': 'elatec', 'port': SERIAL_PORT }

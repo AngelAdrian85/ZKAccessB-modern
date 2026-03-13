@@ -1,5 +1,6 @@
 Param(
   [int]$Port = 0,
+  [int]$AdmsPort = 0,
   [string]$Settings = 'zkeco_config.settings',
   [string]$Venv = '.venv',
   [string]$WebUser = '',
@@ -20,13 +21,13 @@ $env:DJANGO_SETTINGS_MODULE = $Settings
 # Safe behavior: only enable if a local Redis is already listening.
 function Test-TcpPort {
   param(
-    [string]$Host = '127.0.0.1',
+    [string]$HostName = '127.0.0.1',
     [int]$Port = 6379,
     [int]$TimeoutMs = 250
   )
   try {
     $client = New-Object System.Net.Sockets.TcpClient
-    $iar = $client.BeginConnect($Host, $Port, $null, $null)
+    $iar = $client.BeginConnect($HostName, $Port, $null, $null)
     $ok = $iar.AsyncWaitHandle.WaitOne($TimeoutMs, $false)
     if(-not $ok){ try{ $client.Close() }catch{}; return $false }
     $client.EndConnect($iar)
@@ -40,7 +41,7 @@ function Test-TcpPort {
 
 try {
   if((-not $env:REDIS_URL) -or [string]::IsNullOrWhiteSpace([string]$env:REDIS_URL)){
-    if(Test-TcpPort -Host '127.0.0.1' -Port 6379 -TimeoutMs 250){
+    if(Test-TcpPort -HostName '127.0.0.1' -Port 6379 -TimeoutMs 250){
       $env:REDIS_URL = 'redis://127.0.0.1:6379/0'
       Write-Host "[TRAY] REDIS_URL set ($($env:REDIS_URL)) - WS cross-process enabled"
     } else {
@@ -94,15 +95,50 @@ if($Port -eq 0){
   $iniPort = 0
   try {
     if($configFile -and (Test-Path $configFile)){
-      $iniPortRaw = Get-Content $configFile -ErrorAction SilentlyContinue |
-        Select-String '^\s*port\s*=\s*(\d+)' |
-        ForEach-Object { $_.Matches[0].Groups[1].Value } |
-        Select-Object -First 1
+      $iniPortRaw = Get-IniValue -Lines (Get-Content $configFile -ErrorAction SilentlyContinue) -Section 'tray' -Key 'port'
       if($iniPortRaw){ $iniPort = [int]$iniPortRaw }
     }
   } catch {}
   if($iniPort -gt 0){ $Port = $iniPort; Write-Host "[TRAY] Using port $Port from saved config" }
-  else { $Port = 8000; Write-Host "[TRAY] No saved port found, using default 8000" }
+  else { $Port = 15437; Write-Host "[TRAY] No saved port found, using default 15437" }
+}
+
+if($AdmsPort -eq 0){
+  $iniAdmsPort = 0
+  try {
+    if($configFile -and (Test-Path $configFile)){
+      $iniAdmsPortRaw = Get-IniValue -Lines (Get-Content $configFile -ErrorAction SilentlyContinue) -Section 'tray' -Key 'adms_port'
+      if($iniAdmsPortRaw){ $iniAdmsPort = [int]$iniAdmsPortRaw }
+    }
+  } catch {}
+  if($iniAdmsPort -gt 0){ $AdmsPort = $iniAdmsPort; Write-Host "[TRAY] Using ADMS port $AdmsPort from saved config" }
+  else { $AdmsPort = 8091; Write-Host "[TRAY] No saved ADMS port found, using default 8091" }
+}
+
+function Get-ConfiguredListenerPorts {
+  param(
+    [int]$ServerPort,
+    [int]$AdmsPort
+  )
+
+  $ports = @()
+  if($ServerPort -gt 0){ $ports += [int]$ServerPort }
+  if($AdmsPort -gt 0){ $ports += [int]$AdmsPort }
+
+  try {
+    $readerCfgPath = Join-Path $PWD 'scripts\card_readers.json'
+    if(Test-Path $readerCfgPath){
+      $readerCfg = Get-Content $readerCfgPath -Raw | ConvertFrom-Json
+      if($null -ne $readerCfg -and $null -ne $readerCfg.acp -and $readerCfg.acp.enabled -ne $false -and $null -ne $readerCfg.acp.port){
+        $ports += [int]([string]$readerCfg.acp.port)
+      }
+      if($null -ne $readerCfg -and $null -ne $readerCfg.wiegand -and $readerCfg.wiegand.enabled -ne $false -and $null -ne $readerCfg.wiegand.port){
+        $ports += [int]([string]$readerCfg.wiegand.port)
+      }
+    }
+  } catch {}
+
+  return @($ports | Where-Object { $_ -gt 0 } | Sort-Object -Unique)
 }
 
 # Load any existing stored web creds
@@ -167,7 +203,7 @@ try {
       if($null -ne $raw){ $cfgPort = [int]$raw }
     } catch {}
   }
-  $portsToKill = @($Port)
+  $portsToKill = @(Get-ConfiguredListenerPorts -ServerPort $Port -AdmsPort $AdmsPort)
   if($null -ne $cfgPort -and ($cfgPort -ne $Port)){ $portsToKill += $cfgPort }
   foreach($p in ($portsToKill | Sort-Object -Unique)){
     Write-Host "[TRAY] Scanning port $p"
@@ -194,6 +230,7 @@ try {
     $inTray = $false
     $seenTray = $false
     $wrotePort = $false
+    $wroteAdmsPort = $false
     $wroteMode = $false
 
     $inWeb = $false
@@ -219,6 +256,7 @@ try {
     foreach($ln in $lines){
       if($ln -match '^\s*\[(.+)\]\s*$'){
         if($inTray -and (-not $wrotePort)) { $out += "port=$Port"; $wrotePort = $true }
+        if($inTray -and (-not $wroteAdmsPort)) { $out += "adms_port=$AdmsPort"; $wroteAdmsPort = $true }
         if($inTray -and (-not $wroteMode)) { $out += "server_mode=$mode"; $wroteMode = $true }
 
         if($inWeb -and $wantSaveWeb){
@@ -236,6 +274,7 @@ try {
       }
       if($inTray){
         if($ln -match '^\s*port\s*='){ if(-not $wrotePort){ $out += "port=$Port"; $wrotePort = $true }; continue }
+        if($ln -match '^\s*adms_port\s*='){ if(-not $wroteAdmsPort){ $out += "adms_port=$AdmsPort"; $wroteAdmsPort = $true }; continue }
         if($ln -match '^\s*server_mode\s*='){ if(-not $wroteMode){ $out += "server_mode=$mode"; $wroteMode = $true }; continue }
       }
 
@@ -250,6 +289,7 @@ try {
       $out += '[tray]'
     }
     if(-not $wrotePort){ $out += "port=$Port" }
+    if(-not $wroteAdmsPort){ $out += "adms_port=$AdmsPort" }
     if(-not $wroteMode){ $out += "server_mode=$mode" }
 
     # Optionally persist controller web creds (diagnostics only)
@@ -263,9 +303,9 @@ try {
     }
     Set-Content -Path $cfgPath -Value $out -Encoding UTF8
     if($wantSaveWeb){
-      Write-Host "[TRAY] Persisted tray config (+web creds if provided): port=$Port, server_mode=$mode ($cfgPath)"
+      Write-Host "[TRAY] Persisted tray config (+web creds if provided): port=$Port, adms_port=$AdmsPort, server_mode=$mode ($cfgPath)"
     } else {
-      Write-Host "[TRAY] Persisted tray config: port=$Port, server_mode=$mode ($cfgPath)"
+      Write-Host "[TRAY] Persisted tray config: port=$Port, adms_port=$AdmsPort, server_mode=$mode ($cfgPath)"
     }
   }
 } catch {}
@@ -273,7 +313,7 @@ try {
 # Extra cleanup: kill any leftover card reader scripts started outside this session
 try {
   Write-Host "[TRAY] Cleaning up leftover card reader listeners"
-  $targets = @('card_reader_acp.py','card_reader_elatec.py')
+  $targets = @('card_reader_acp.py','card_reader_elatec.py','wiegand_listener.py','zkemkeeper_event_bridge.ps1','zkemkeeper_event_bridge.vbs')
   foreach($name in $targets){
     try {
       Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*$name*" } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} }
@@ -282,16 +322,20 @@ try {
 } catch {}
 
 # Extra cleanup: ensure we don't run duplicate python system/venv processes.
-# If multiple tray_agent/daphne/readers exist, status becomes inconsistent and CommCenter appears offline.
+# If multiple tray_agent/daphne/run_commcenter/readers exist, status becomes inconsistent.
 try {
   Write-Host "[TRAY] Cleaning up old tray/server/reader processes (any Python)"
   $root = (Resolve-Path $PWD).Path
   $patterns = @(
     '*manage.py* tray_agent*',
+    '*manage.py* run_commcenter*',
     '*-m daphne*',
     '*manage.py* runserver*',
     '*card_reader_acp.py*',
-    '*card_reader_elatec.py*'
+    '*card_reader_elatec.py*',
+    '*wiegand_listener.py*',
+    '*zkemkeeper_event_bridge.ps1*',
+    '*zkemkeeper_event_bridge.vbs*'
   )
   $procs = Get-CimInstance Win32_Process | Where-Object {
     try {
@@ -310,6 +354,26 @@ try {
     try { Stop-Process -Id [int]$pid -Force -ErrorAction SilentlyContinue; Write-Host "[TRAY] Killed PID $pid" } catch {}
   }
 } catch {}
+
+try {
+  Write-Host "[TRAY] Cleaning up old tray_launch shells"
+  $root = (Resolve-Path $PWD).Path
+  Get-CimInstance Win32_Process | Where-Object {
+    try {
+      $_.ProcessId -ne $PID -and
+      $_.CommandLine -and
+      ($_.CommandLine -like '*tray_launch.ps1*') -and
+      ($_.CommandLine -like "*$root*")
+    } catch {
+      $false
+    }
+  } | ForEach-Object {
+    try {
+      Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+      Write-Host "[TRAY] Killed old launcher PID $($_.ProcessId)"
+    } catch {}
+  }
+} catch {}
 # Prefer the standard .venv if present; else fallback to .venv_new
 if( -not (Test-Path $Venv) ){
   if(Test-Path '.venv') { $Venv = '.venv' }
@@ -320,6 +384,111 @@ if(!(Test-Path "$Venv\Scripts\python.exe")){
   py -3 -m venv $Venv; if($LASTEXITCODE -ne 0){ Write-Error 'venv failed'; exit 1 }
 }
 $py = Join-Path $Venv 'Scripts/python.exe'
+
+function Get-ManagedRuntimeProcesses {
+  param(
+    [string[]]$RoleFilter = @()
+  )
+
+  $venvPy = ''
+  try { $venvPy = (Resolve-Path $py).Path } catch {}
+
+  $items = @()
+  try {
+    foreach($proc in (Get-CimInstance Win32_Process)){
+      $cmd = [string]$proc.CommandLine
+      if([string]::IsNullOrWhiteSpace($cmd)){ continue }
+
+      $role = ''
+      if($cmd -like '*manage.py* tray_agent*'){
+        $role = 'tray_agent'
+      } elseif($cmd -like '*manage.py* run_commcenter*'){
+        $role = 'run_commcenter'
+      } elseif(($cmd -like '*-m daphne*') -and ($cmd -like "*-p $Port*")){
+        $role = 'daphne'
+      } elseif(($cmd -like '*manage.py* runserver*') -and ($cmd -like "*0.0.0.0:$AdmsPort*")){
+        $role = 'adms_runserver'
+      } elseif($cmd -like '*card_reader_acp.py*'){
+        $role = 'card_reader_acp'
+      } elseif($cmd -like '*card_reader_elatec.py*'){
+        $role = 'card_reader_elatec'
+      } elseif($cmd -like '*wiegand_listener.py*'){
+        $role = 'wiegand_listener'
+      } elseif($cmd -like '*zkemkeeper_event_bridge.ps1*' -or $cmd -like '*zkemkeeper_event_bridge.vbs*'){
+        $role = 'zkemkeeper_bridge'
+      } elseif(($cmd -like '*zkeco_modern*tray_agent.py*') -or ($cmd -like '* tray_agent.py*')){
+        $role = 'tray_agent_legacy'
+      }
+
+      if([string]::IsNullOrWhiteSpace($role)){ continue }
+      if($RoleFilter.Count -gt 0 -and ($RoleFilter -notcontains $role)){ continue }
+
+      $usesVenv = $false
+      try {
+        if($venvPy){
+          $usesVenv = ($cmd -like "*$venvPy*")
+        }
+      } catch {}
+
+      $items += [pscustomobject]@{
+        ProcessId = [int]$proc.ProcessId
+        Role = $role
+        UsesVenv = [bool]$usesVenv
+        Name = [string]$proc.Name
+        CommandLine = $cmd
+      }
+    }
+  } catch {}
+  return @($items)
+}
+
+function Stop-ManagedRuntimeNonVenv {
+  param(
+    [string[]]$RoleFilter = @(),
+    [int[]]$KeepPids = @()
+  )
+
+  foreach($proc in @(Get-ManagedRuntimeProcesses -RoleFilter $RoleFilter)){
+    if($KeepPids -contains [int]$proc.ProcessId){ continue }
+    if($proc.UsesVenv){ continue }
+    try {
+      Stop-Process -Id $proc.ProcessId -Force -ErrorAction SilentlyContinue
+      Write-Host "[TRAY] Killed non-venv PID $($proc.ProcessId) role=$($proc.Role)"
+    } catch {}
+  }
+}
+
+function Stop-ManagedRuntimeDuplicates {
+  param(
+    [string[]]$RoleFilter = @(),
+    [int[]]$KeepPids = @(),
+    [switch]$PreferVenv
+  )
+
+  $snapshot = @(Get-ManagedRuntimeProcesses -RoleFilter $RoleFilter)
+  foreach($group in @($snapshot | Group-Object Role)){
+    $groupItems = @($group.Group | Sort-Object ProcessId -Descending)
+    if($groupItems.Count -le 1){ continue }
+
+    $keep = $null
+    if($PreferVenv){
+      $keep = @($groupItems | Where-Object { $_.UsesVenv } | Select-Object -First 1)
+      if($keep.Count -gt 0){ $keep = $keep[0] } else { $keep = $null }
+    }
+    if($null -eq $keep){
+      $keep = $groupItems[0]
+    }
+
+    foreach($item in $groupItems){
+      if($KeepPids -contains [int]$item.ProcessId){ continue }
+      if([int]$item.ProcessId -eq [int]$keep.ProcessId){ continue }
+      try {
+        Stop-Process -Id $item.ProcessId -Force -ErrorAction SilentlyContinue
+        Write-Host "[TRAY] Killed duplicate PID $($item.ProcessId) role=$($item.Role)"
+      } catch {}
+    }
+  }
+}
 
 # -----------------------------------------------------------------------------
 # QUICK SELF-TEST (non-blocking)
@@ -339,17 +508,17 @@ if($SelfTest -and (-not $SelfTestFull)){
 
   # 1) Basic imports (fast)
   try {
-    & $py -c "import django, channels; import channels_redis; import redis; print('imports:ok')" 2>$null
-    if($LASTEXITCODE -ne 0){ throw "python imports failed" }
+    $importsProc = Start-Process -FilePath $py -ArgumentList @('-c',"import django, channels; import channels_redis; import redis; print('imports:ok')") -NoNewWindow -Wait -PassThru -RedirectStandardOutput 'selftest_imports.log' -RedirectStandardError 'selftest_imports_errors.log'
+    if($importsProc.ExitCode -ne 0){ throw "python imports failed" }
   } catch {
     Write-Warning "[TRAY] Python imports check failed (channels_redis/redis). WS will fall back to polling if Redis layer isn't available."
   }
 
   # 2) Django config check (fast, no migrate)
   try {
-    & $py $manage 'check' "--settings=$Settings" 1>$null
-    if($LASTEXITCODE -ne 0){
-      Write-Warning "[TRAY] Django check reported issues (exit=$LASTEXITCODE)"
+    $checkProc = Start-Process -FilePath $py -ArgumentList @($manage,'check',"--settings=$Settings") -NoNewWindow -Wait -PassThru -RedirectStandardOutput 'selftest_django_check.log' -RedirectStandardError 'selftest_django_check_errors.log'
+    if($checkProc.ExitCode -ne 0){
+      Write-Warning "[TRAY] Django check reported issues (exit=$($checkProc.ExitCode))"
     } else {
       Write-Host "[TRAY] Django check OK"
     }
@@ -371,8 +540,8 @@ if($SelfTest -and (-not $SelfTestFull)){
 }
 
 # Optional: configure plcommpro.dll bridge runner
-# Preferred modern path: x86 .NET bridge EXE (no Python 32-bit required).
-# Fallback path: 32-bit Python 3 bridge runner.
+# Preferred modern path: x64 .NET bridge EXE on 64-bit Windows.
+# Fallback path: x86 .NET bridge EXE or 32-bit Python 3 bridge runner.
 
 function Resolve-ZkAccessBridgeExe {
   try {
@@ -399,15 +568,52 @@ function Resolve-ZkAccessBridgeExeX64 {
   return $null
 }
 
+function Resolve-StandaloneSdkRoot {
+  try {
+    $resurseRoot = Join-Path $PWD 'Resurse'
+    if(-not (Test-Path $resurseRoot)){
+      return $null
+    }
+    $candidates = Get-ChildItem -Path $resurseRoot -Directory -Filter 'Standalone SDK-*' -ErrorAction SilentlyContinue |
+      Sort-Object Name -Descending
+    foreach($candidate in $candidates){
+      if($candidate -and (Test-Path (Join-Path $candidate.FullName 'SDK'))){
+        return $candidate.FullName
+      }
+    }
+  } catch {}
+  return $null
+}
+
+function Resolve-ZkemkeeperSdkDirX64 {
+  try {
+    if($env:ZKACCESS_ZKEMKEEPER_SDK_DIR -and (Test-Path $env:ZKACCESS_ZKEMKEEPER_SDK_DIR)){
+      return $env:ZKACCESS_ZKEMKEEPER_SDK_DIR
+    }
+    $resurseRoot = Join-Path $PWD 'Resurse'
+    if(Test-Path $resurseRoot){
+      $dllMatch = Get-ChildItem -Path $resurseRoot -Recurse -Filter 'zkemkeeper.dll' -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -match '[\\/](x64|64bits)[\\/]zkemkeeper\.dll$' } |
+        Sort-Object FullName |
+        Select-Object -First 1
+      if($dllMatch){
+        return $dllMatch.DirectoryName
+      }
+    }
+  } catch {}
+  return $null
+}
+
 function Resolve-PlcommproDllX86 {
   try {
     if($env:ZKACCESS_PLCOMMPRO_DLL -and (Test-Path $env:ZKACCESS_PLCOMMPRO_DLL)){
       return $env:ZKACCESS_PLCOMMPRO_DLL
     }
+    $sdkRoot = Resolve-StandaloneSdkRoot
     $cands = @(
-      (Join-Path $PWD 'Resurse\Standalone SDK-6.3.1.55\PullSDK\plcommpro.dll'),
+      $(if($sdkRoot){ Join-Path $sdkRoot 'PullSDK\plcommpro.dll' }),
       (Join-Path $PWD 'Resurse\ZKEUBioAccessSetup\Dependencies\ZKAccess3.5\NewSDK\plcommpro.dll'),
-      (Join-Path $PWD 'Resurse\Standalone SDK-6.3.1.55\SDK\x86\plcommpro.dll')
+      $(if($sdkRoot){ Join-Path $sdkRoot 'SDK\x86\plcommpro.dll' })
     )
     foreach($c in $cands){
       if($c -and (Test-Path $c)) { return $c }
@@ -421,8 +627,9 @@ function Resolve-PlcommproDllX64 {
     if($env:ZKACCESS_PLCOMMPRO_DLL -and (Test-Path $env:ZKACCESS_PLCOMMPRO_DLL)){
       return $env:ZKACCESS_PLCOMMPRO_DLL
     }
+    $sdkRoot = Resolve-StandaloneSdkRoot
     $cands = @(
-      (Join-Path $PWD 'Resurse\Standalone SDK-6.3.1.55\SDK\x64\plcommpro.dll')
+      $(if($sdkRoot){ Join-Path $sdkRoot 'SDK\x64\plcommpro.dll' })
     )
     foreach($c in $cands){
       if($c -and (Test-Path $c)) { return $c }
@@ -431,7 +638,14 @@ function Resolve-PlcommproDllX64 {
   return $null
 }
 
-# Optional: prefer x64 SDK bundle if explicitly requested.
+# Optional: prefer x64 SDK bundle by default on this deployment target.
+try {
+  if(-not $env:ZKACCESS_PLCOMMPRO_ARCH){
+    $env:ZKACCESS_PLCOMMPRO_ARCH = 'x64'
+    Write-Host "[TRAY] plcommpro arch defaulted to x64"
+  }
+} catch {}
+
 try {
   if(($env:ZKACCESS_PLCOMMPRO_ARCH -as [string]).ToLower() -eq 'x64'){
     if(-not $env:ZKACCESS_BRIDGE_EXE){
@@ -453,10 +667,13 @@ try {
 
 try {
   if(-not $env:ZKACCESS_BRIDGE_EXE){
-    $bridgeExe = Resolve-ZkAccessBridgeExe
+    $bridgeExe = Resolve-ZkAccessBridgeExeX64
+    if(-not $bridgeExe){
+      $bridgeExe = Resolve-ZkAccessBridgeExe
+    }
     if($bridgeExe){
       $env:ZKACCESS_BRIDGE_EXE = $bridgeExe
-      Write-Host "[TRAY] Bridge runner set (x86 EXE): $bridgeExe"
+      Write-Host "[TRAY] Bridge runner set: $bridgeExe"
     }
   }
 } catch {}
@@ -468,6 +685,45 @@ try {
       $env:ZKACCESS_PLCOMMPRO_DLL = $dll
       Write-Host "[TRAY] plcommpro.dll set (x86): $dll"
     }
+  }
+} catch {}
+
+try {
+  if(-not $env:ZKACCESS_ZKEMKEEPER_SDK_DIR){
+    $zkemSdk64 = Resolve-ZkemkeeperSdkDirX64
+    if(Test-Path $zkemSdk64){
+      $env:ZKACCESS_ZKEMKEEPER_SDK_DIR = $zkemSdk64
+      Write-Host "[TRAY] zkemkeeper SDK dir set (x64): $zkemSdk64"
+    }
+  }
+} catch {}
+
+try {
+  # Controller 22 defaults for the x64 zkemkeeper bridge. These can still be overridden
+  # externally, but tray_launch now boots a real integration path by default.
+  if(-not $env:ZKACCESS_ZKEMKEEPER_ENABLE){ $env:ZKACCESS_ZKEMKEEPER_ENABLE = '1' }
+  if(-not $env:ZKACCESS_ZKEMKEEPER_IP){ $env:ZKACCESS_ZKEMKEEPER_IP = '192.168.1.235' }
+  if(-not $env:ZKACCESS_ZKEMKEEPER_PORT){ $env:ZKACCESS_ZKEMKEEPER_PORT = '14370' }
+  if(-not $env:ZKACCESS_ZKEMKEEPER_MACHINE){ $env:ZKACCESS_ZKEMKEEPER_MACHINE = '1' }
+  if(-not $env:ZKACCESS_ZKEMKEEPER_DEVICE_ID){ $env:ZKACCESS_ZKEMKEEPER_DEVICE_ID = '22' }
+  if(-not $env:ZKACCESS_ZKEMKEEPER_DOOR_ID){ $env:ZKACCESS_ZKEMKEEPER_DOOR_ID = '1' }
+  if(-not $env:ZKACCESS_ZKEMKEEPER_DOOR_PK){ $env:ZKACCESS_ZKEMKEEPER_DOOR_PK = '27' }
+  if(-not $env:ZKACCESS_ZKEMKEEPER_SOURCE){ $env:ZKACCESS_ZKEMKEEPER_SOURCE = 'zkemkeeper-c22' }
+  if(-not $env:ZKACCESS_ZKEMKEEPER_AUTOREG){ $env:ZKACCESS_ZKEMKEEPER_AUTOREG = '1' }
+  if(-not $env:ZKACCESS_ZKEMKEEPER_ENGINE){ $env:ZKACCESS_ZKEMKEEPER_ENGINE = 'vbs' }
+  if((-not $env:ZKACCESS_ZKEMKEEPER_COMM_PASSWORD) -and $env:ZKACCESS_DEFAULT_COMM_PASSWORD){
+    $env:ZKACCESS_ZKEMKEEPER_COMM_PASSWORD = [string]$env:ZKACCESS_DEFAULT_COMM_PASSWORD
+  }
+  if(-not $env:ZKACCESS_ZKEMKEEPER_DUMP_FILE){
+    $env:ZKACCESS_ZKEMKEEPER_DUMP_FILE = (Join-Path $PWD 'zkemkeeper_event_dump_controller22.jsonl')
+  }
+  if(-not $env:ZKACCESS_ICLOCK_CAPTURE_FILE){
+    $env:ZKACCESS_ICLOCK_CAPTURE_FILE = (Join-Path $PWD 'iclock_push_capture.jsonl')
+    Write-Host "[TRAY] iClock capture file set: $($env:ZKACCESS_ICLOCK_CAPTURE_FILE)"
+  }
+  if(-not $env:ZKACCESS_ICLOCK_CAPTURE_ALL){
+    $env:ZKACCESS_ICLOCK_CAPTURE_ALL = '1'
+    Write-Host "[TRAY] iClock capture-all enabled for ADMS debugging"
   }
 } catch {}
 
@@ -549,36 +805,11 @@ try {
         $env:Path = "$scriptsPath;" + $env:Path
       }
     } catch {}
-    # Guard: kill any non-venv tray_agent/daphne/runserver processes
+    # Guard: kill any non-venv tray_agent/run_commcenter/daphne/runserver processes
     try {
       Write-Host "[TRAY] Guarding against non-venv processes"
-      $venvPy = Join-Path $scriptsPath 'python.exe'
-      $procList = Get-CimInstance Win32_Process
-      $toKill = @()
-      $workspaceRoot = (Resolve-Path $PWD).Path
-      foreach($p in $procList){
-        $cmd = $p.CommandLine
-        if([string]::IsNullOrEmpty($cmd)){ continue }
-        $isAgent = ($cmd -like "*manage.py* tray_agent*")
-        $isDaphne = ($cmd -like "*-m daphne*")
-        $isRunserver = ($cmd -like "*manage.py* runserver*")
-        $isLegacyAgent = ($cmd -like "*zkeco_modern*tray_agent.py*") -or ($cmd -like "* tray_agent.py*")
-        if($isAgent -or $isDaphne -or $isRunserver){
-          $usesVenv = ($cmd -like "*$venvPy*")
-          if(-not $usesVenv){ $toKill += $p.ProcessId }
-        }
-        # Always kill legacy standalone tray_agent.py started anywhere under this workspace
-        if($isLegacyAgent){
-          try {
-            if($cmd -like "*$workspaceRoot*"){
-              $toKill += $p.ProcessId
-            }
-          } catch {}
-        }
-      }
-      foreach($proc_id in ($toKill | Sort-Object -Unique)){
-        try { Stop-Process -Id $proc_id -Force -ErrorAction SilentlyContinue; Write-Host "[TRAY] Killed non-venv PID $proc_id" } catch {}
-      }
+      Stop-ManagedRuntimeNonVenv -RoleFilter @('tray_agent','tray_agent_legacy','run_commcenter','daphne','adms_runserver','card_reader_acp','card_reader_elatec','wiegand_listener')
+      Stop-ManagedRuntimeDuplicates -RoleFilter @('tray_agent','tray_agent_legacy','run_commcenter','daphne','adms_runserver','card_reader_acp','card_reader_elatec','wiegand_listener') -PreferVenv
     } catch {}
   } else {
     Write-Warning "[TRAY] Activate.ps1 not found in $Venv; continuing with direct python path"
@@ -587,30 +818,33 @@ try {
   Write-Warning "[TRAY] Failed to activate venv: $_"
 }
 
-# Upgrade pip quietly (suppress normal output, keep errors)
+# Upgrade pip quietly (suppress normal output, keep stderr in a file)
 Write-Host "[TRAY] Upgrading pip (quiet)"
-& $py -m pip install --upgrade pip -q 2> pip_upgrade_errors.log
+$pipUpgradeProc = Start-Process -FilePath $py -ArgumentList @('-m','pip','install','--upgrade','pip','-q') -NoNewWindow -Wait -PassThru -RedirectStandardOutput 'pip_upgrade_output.log' -RedirectStandardError 'pip_upgrade_errors.log'
+if($pipUpgradeProc.ExitCode -ne 0){ Write-Warning "pip upgrade reported errors; see pip_upgrade_errors.log" }
 
 # Install requirements quietly; capture a minimal summary
 Write-Host "[TRAY] Installing requirements (quiet)"
-& $py -m pip install -r requirements.txt -q 2> pip_install_errors.log
-if($LASTEXITCODE -ne 0){ Write-Warning "pip install reported errors; see pip_install_errors.log" }
+$pipInstallProc = Start-Process -FilePath $py -ArgumentList @('-m','pip','install','-r','requirements.txt','-q') -NoNewWindow -Wait -PassThru -RedirectStandardOutput 'pip_install_output.log' -RedirectStandardError 'pip_install_errors.log'
+if($pipInstallProc.ExitCode -ne 0){ Write-Warning "pip install reported errors; see pip_install_errors.log" }
 Write-Host "[TRAY] Pip install complete"
 
-# Start Card Reader Services (ACP & Elatec) if available
-Write-Host "[TRAY] Starting card reader services (ACP, Elatec)"
+# Start Card Reader Services (ACP, Elatec, Wiegand) if available
+Write-Host "[TRAY] Starting card reader services (ACP, Elatec, Wiegand)"
 $global:TrayChildPids = @()
 $acpEnabled = $false
 $elatecEnabled = $false
+$wiegandEnabled = $false
 
 function Get-ReaderProcess {
   param(
     [Parameter(Mandatory=$true)][string]$ScriptName
   )
   try {
+    $workspaceRoot = (Resolve-Path $PWD).Path
     return Get-CimInstance Win32_Process | Where-Object {
       try {
-        $_.CommandLine -and ($_.CommandLine -like "*${ScriptName}*")
+        $_.CommandLine -and ($_.CommandLine -like "*${ScriptName}*") -and (($_.CommandLine -like "*$workspaceRoot*") -or ($_.CommandLine -like "*scripts\\${ScriptName}*") -or ($_.CommandLine -like "*scripts/${ScriptName}*"))
       } catch {
         $false
       }
@@ -624,7 +858,9 @@ function Start-ReaderIfNotRunning {
   param(
     [Parameter(Mandatory=$true)][string]$ScriptPath,
     [Parameter(Mandatory=$true)][string[]]$Args,
-    [Parameter(Mandatory=$true)][string]$Tag
+    [Parameter(Mandatory=$true)][string]$Tag,
+    [int]$StartupPort = 0,
+    [int]$StartupTimeoutMs = 2500
   )
   try {
     $scriptLeaf = Split-Path $ScriptPath -Leaf
@@ -633,7 +869,45 @@ function Start-ReaderIfNotRunning {
       Write-Host "[TRAY] ${Tag} already running (count=$($running.Count)); skipping duplicate start"
       return $null
     }
-    $p = Start-Process -FilePath $py -ArgumentList (@($ScriptPath) + $Args) -PassThru -WindowStyle Hidden
+    $argumentList = @()
+    foreach($item in @($ScriptPath) + $Args){
+      $arg = [string]$item
+      if($arg -match '[\s"]'){
+        $argumentList += '"' + ($arg -replace '"', '\"') + '"'
+      } else {
+        $argumentList += $arg
+      }
+    }
+    $p = Start-Process -FilePath $py -ArgumentList $argumentList -PassThru -WindowStyle Hidden -WorkingDirectory $PWD
+    Start-Sleep -Milliseconds 300
+    try {
+      if($p.HasExited){
+        Write-Warning "[TRAY] ${Tag} exited immediately with code $($p.ExitCode)"
+        return $null
+      }
+    } catch {}
+    if($StartupPort -gt 0){
+      $deadline = (Get-Date).AddMilliseconds([math]::Max(500, $StartupTimeoutMs))
+      $ready = $false
+      while((Get-Date) -lt $deadline){
+        if(Test-TcpPort -HostName '127.0.0.1' -Port $StartupPort -TimeoutMs 200){
+          $ready = $true
+          break
+        }
+        try {
+          if($p.HasExited){ break }
+        } catch {}
+        Start-Sleep -Milliseconds 200
+      }
+      if(-not $ready){
+        try {
+          if($p.HasExited){
+            Write-Warning "[TRAY] ${Tag} failed to bind port $StartupPort and exited with code $($p.ExitCode)"
+            return $null
+          }
+        } catch {}
+      }
+    }
     return $p
   } catch {
     Write-Warning "[TRAY] Failed to start ${Tag}: $_"
@@ -661,9 +935,77 @@ function Write-TrayStatusJson {
     $color = 'yellow'
   }
   $status.color = $color
+  Merge-TrayStatusFields -Target $status -Updates (Get-ZkemkeeperTrayFields)
   try {
     $json = $status | ConvertTo-Json -Depth 3
     Set-Content -Path (Join-Path $PWD 'tray_status.json') -Value $json -Encoding UTF8
+  } catch {}
+}
+
+function Merge-TrayStatusFields {
+  param(
+    $Target,
+    $Updates
+  )
+  if ($null -eq $Target -or $null -eq $Updates) { return }
+  if ($Updates -is [System.Collections.IDictionary]) {
+    foreach ($entry in $Updates.GetEnumerator()) {
+      $Target[$entry.Key] = $entry.Value
+    }
+    return
+  }
+  foreach ($prop in $Updates.PSObject.Properties) {
+    $Target[$prop.Name] = $prop.Value
+  }
+}
+
+function Get-ZkemkeeperTrayFields {
+  $enabled = $false
+  try {
+    $enabledRaw = [string]($env:ZKACCESS_ZKEMKEEPER_ENABLE)
+    $enabled = $enabledRaw -and $enabledRaw.ToLower() -in @('1','true','yes','on')
+  } catch {}
+  $ip = [string]($env:ZKACCESS_ZKEMKEEPER_IP)
+  $port = [string]($env:ZKACCESS_ZKEMKEEPER_PORT)
+  if([string]::IsNullOrWhiteSpace($port)){ $port = '14370' }
+  $status = if($enabled){ 'PORNESTE' } else { 'OPRIT' }
+  [ordered]@{
+    zkemkeeper_enabled = $enabled
+    zkemkeeper = $status
+    zkemkeeper_target = if([string]::IsNullOrWhiteSpace($ip)){ '' } else { "${ip}:$port" }
+    zkemkeeper_device_id = [string]($env:ZKACCESS_ZKEMKEEPER_DEVICE_ID)
+    zkemkeeper_door_id = [string]($env:ZKACCESS_ZKEMKEEPER_DOOR_ID)
+    zkemkeeper_door_pk = [string]($env:ZKACCESS_ZKEMKEEPER_DOOR_PK)
+    zkemkeeper_dump_file = [string]($env:ZKACCESS_ZKEMKEEPER_DUMP_FILE)
+    zkemkeeper_registration = 'PENDING'
+  }
+}
+
+function Update-TrayStatusFields {
+  param($Updates)
+  try {
+    $trayStatusPath = Join-Path $PWD 'tray_status.json'
+    $current = [ordered]@{}
+    if (Test-Path $trayStatusPath) {
+      try {
+        $loaded = Get-Content $trayStatusPath -Raw | ConvertFrom-Json
+        if ($loaded) {
+          foreach ($prop in $loaded.PSObject.Properties) {
+            $current[$prop.Name] = $prop.Value
+          }
+        }
+      } catch {}
+    }
+    if ($Updates -is [System.Collections.IDictionary]) {
+      foreach ($entry in $Updates.GetEnumerator()) {
+        $current[$entry.Key] = $entry.Value
+      }
+    } elseif ($Updates) {
+      foreach ($entry in $Updates.GetEnumerator()) {
+        $current[$entry.Key] = $entry.Value
+      }
+    }
+    Set-Content -Path $trayStatusPath -Value ($current | ConvertTo-Json -Depth 6) -Encoding UTF8
   } catch {}
 }
 try {
@@ -696,7 +1038,7 @@ try {
         $acpEnabled = $false
       }
       if($acpEnabled){
-        $p = Start-ReaderIfNotRunning -ScriptPath $acpScript -Args @($acpPort) -Tag 'ACP listener'
+        $p = Start-ReaderIfNotRunning -ScriptPath $acpScript -Args @($acpPort) -Tag 'ACP listener' -StartupPort ([int]$acpPort)
         if ($p) { $global:TrayChildPids += $p.Id }
       }
     } else {
@@ -706,8 +1048,13 @@ try {
   $elatecScript = Join-Path 'scripts' 'card_reader_elatec.py'
   if (Test-Path $elatecScript) {
     # Attempt to ensure pyserial is present quietly
-    & $py -m pip show pyserial > $null 2> $null
-    if ($LASTEXITCODE -ne 0) { & $py -m pip install pyserial -q > $null 2> $null }
+    $pyserialShowProc = Start-Process -FilePath $py -ArgumentList @('-m','pip','show','pyserial') -NoNewWindow -Wait -PassThru -RedirectStandardOutput 'pyserial_show.log' -RedirectStandardError 'pyserial_show_errors.log'
+    if ($pyserialShowProc.ExitCode -ne 0) {
+      $pyserialInstallProc = Start-Process -FilePath $py -ArgumentList @('-m','pip','install','pyserial','-q') -NoNewWindow -Wait -PassThru -RedirectStandardOutput 'pyserial_install.log' -RedirectStandardError 'pyserial_install_errors.log'
+      if($pyserialInstallProc.ExitCode -ne 0){
+        Write-Warning "[TRAY] pyserial install reported errors; see pyserial_install_errors.log"
+      }
+    }
     $elatecEnabled = $true
     $elatecPort = 'COM3'
     $elatecMode = 'serial'
@@ -751,6 +1098,55 @@ try {
       Write-Host "[TRAY] Elatec listener disabled (no valid port or config)"
     }
   }
+  $wiegandScript = Join-Path 'scripts' 'wiegand_listener.py'
+  if (Test-Path $wiegandScript) {
+    $wiegandEnabled = $true
+    $wiegandHost = '0.0.0.0'
+    $wiegandPort = '9002'
+    $wiegandFormatName = 'Wiegand 26'
+    $wiegandFormatId = ''
+    $wiegandDeviceId = ''
+    $wiegandDoorId = ''
+    $wiegandDoorPk = ''
+    $wiegandSource = 'w26-hardware-tap'
+    if ($null -ne $ReaderCfg -and $null -ne $ReaderCfg.wiegand) {
+      if ($ReaderCfg.wiegand.enabled -eq $false) { $wiegandEnabled = $false }
+      if ($null -ne $ReaderCfg.wiegand.listen_host) { $wiegandHost = [string]$ReaderCfg.wiegand.listen_host }
+      if ($null -ne $ReaderCfg.wiegand.port) { $wiegandPort = [string]$ReaderCfg.wiegand.port }
+      if ($null -ne $ReaderCfg.wiegand.format_name) { $wiegandFormatName = [string]$ReaderCfg.wiegand.format_name }
+      if ($null -ne $ReaderCfg.wiegand.format_id) { $wiegandFormatId = [string]$ReaderCfg.wiegand.format_id }
+      if ($null -ne $ReaderCfg.wiegand.device_id) { $wiegandDeviceId = [string]$ReaderCfg.wiegand.device_id }
+      if ($null -ne $ReaderCfg.wiegand.door_id) { $wiegandDoorId = [string]$ReaderCfg.wiegand.door_id }
+      if ($null -ne $ReaderCfg.wiegand.door_pk) { $wiegandDoorPk = [string]$ReaderCfg.wiegand.door_pk }
+      if ($null -ne $ReaderCfg.wiegand.source) { $wiegandSource = [string]$ReaderCfg.wiegand.source }
+    }
+    if ([string]::IsNullOrWhiteSpace($wiegandDeviceId) -and $null -ne $ReaderCfg -and $null -ne $ReaderCfg.acp -and $null -ne $ReaderCfg.acp.device_id) { $wiegandDeviceId = [string]$ReaderCfg.acp.device_id }
+    if ([string]::IsNullOrWhiteSpace($wiegandDoorId) -and $null -ne $ReaderCfg -and $null -ne $ReaderCfg.acp -and $null -ne $ReaderCfg.acp.door_id) { $wiegandDoorId = [string]$ReaderCfg.acp.door_id }
+    if ([string]::IsNullOrWhiteSpace($wiegandDoorPk) -and $null -ne $ReaderCfg -and $null -ne $ReaderCfg.acp -and $null -ne $ReaderCfg.acp.door_pk) { $wiegandDoorPk = [string]$ReaderCfg.acp.door_pk }
+    if ($wiegandEnabled) {
+      Write-Host "[TRAY] Starting Wiegand listener on $wiegandHost`:$wiegandPort"
+      if ($null -ne $trayStatus -and $trayStatus.wiegand_blocked -eq $true) {
+        Write-Host "[TRAY] Wiegand start suppressed: wiegand_blocked flag set"
+        $wiegandEnabled = $false
+      }
+      if($wiegandEnabled){
+        $wgArgs = @('--server-url', "http://127.0.0.1:$Port", '--listen-host', $wiegandHost, '--listen-port', $wiegandPort, '--source', $wiegandSource)
+        if (-not [string]::IsNullOrWhiteSpace($wiegandFormatName)) { $wgArgs += @('--format-name', $wiegandFormatName) }
+        if (-not [string]::IsNullOrWhiteSpace($wiegandFormatId)) { $wgArgs += @('--format-id', $wiegandFormatId) }
+        if (-not [string]::IsNullOrWhiteSpace($wiegandDeviceId)) { $wgArgs += @('--device-id', $wiegandDeviceId) }
+        if (-not [string]::IsNullOrWhiteSpace($wiegandDoorId)) { $wgArgs += @('--door-id', $wiegandDoorId) }
+        if (-not [string]::IsNullOrWhiteSpace($wiegandDoorPk)) { $wgArgs += @('--door-pk', $wiegandDoorPk) }
+        $p3 = Start-ReaderIfNotRunning -ScriptPath $wiegandScript -Args $wgArgs -Tag 'Wiegand listener' -StartupPort ([int]$wiegandPort)
+        if ($p3) {
+          $global:TrayChildPids += $p3.Id
+        } else {
+          $wiegandEnabled = $false
+        }
+      }
+    } else {
+      Write-Host "[TRAY] Wiegand listener disabled via config"
+    }
+  }
 } catch {
   Write-Warning "[TRAY] Could not start card reader services: $_"
 }
@@ -761,22 +1157,27 @@ try {
   $statusInit = [ordered]@{
     acp            = if($acpEnabled){'ON'}else{'OPRIT'}
     elatec         = if($elatecEnabled){'ON'}else{'OPRIT'}
+    wiegand        = if($wiegandEnabled){'ON'}else{'OPRIT'}
     server         = 'PORNESTE'
     acp_enabled    = $acpEnabled
     elatec_enabled = $elatecEnabled
+    wiegand_enabled = $wiegandEnabled
     commcenter     = 'PORNESTE'
     commcenter_driver  = 'auto'
   }
   # Color: treat disabled readers as satisfied
-  $allReadersOk = (($statusInit.acp_enabled -eq $false) -or ($statusInit.acp -eq 'ON')) -and (($statusInit.elatec_enabled -eq $false) -or ($statusInit.elatec -eq 'ON'))
+  $allReadersOk = (($statusInit.acp_enabled -eq $false) -or ($statusInit.acp -eq 'ON')) -and (($statusInit.elatec_enabled -eq $false) -or ($statusInit.elatec -eq 'ON')) -and (($statusInit.wiegand_enabled -eq $false) -or ($statusInit.wiegand -eq 'ON'))
   $colorInit = if(($statusInit.server -eq 'PORNIT') -and $allReadersOk){ 'green' } elseif(($statusInit.server -eq 'PORNIT') -or $allReadersOk){ 'yellow' } else { 'red' }
   $statusInit.color = $colorInit
+  Merge-TrayStatusFields -Target $statusInit -Updates (Get-ZkemkeeperTrayFields)
   # Preserve any existing blocked flags so UI STOP isn't clobbered
   if ($trayStatus) {
     if ($true -eq $trayStatus.acp_blocked) { $statusInit.acp_blocked = $true }
     if ($true -eq $trayStatus.elatec_blocked) { $statusInit.elatec_blocked = $true }
+    if ($true -eq $trayStatus.wiegand_blocked) { $statusInit.wiegand_blocked = $true }
     if (($trayStatus.cmd_stop_acp | Measure-Object).Count -gt 0) { $statusInit.cmd_stop_acp = $trayStatus.cmd_stop_acp }
     if (($trayStatus.cmd_stop_elatec | Measure-Object).Count -gt 0) { $statusInit.cmd_stop_elatec = $trayStatus.cmd_stop_elatec }
+    if (($trayStatus.cmd_stop_wiegand | Measure-Object).Count -gt 0) { $statusInit.cmd_stop_wiegand = $trayStatus.cmd_stop_wiegand }
   }
   Set-Content -Path (Join-Path $PWD 'tray_status.json') -Value ($statusInit | ConvertTo-Json -Depth 3) -Encoding UTF8
 } catch {}
@@ -791,14 +1192,14 @@ if (Test-Path $manage) {
   $migrateOut = Join-Path $PWD 'migration_run.log'
   $migrateErr = Join-Path $PWD 'migration_run_errors.log'
   try {
-    & $py $manage 'migrate' '--noinput' "--settings=$Settings" 1> $migrateOut 2> $migrateErr
+    $migrateProc = Start-Process -FilePath $py -ArgumentList @($manage,'migrate','--noinput',"--settings=$Settings") -NoNewWindow -Wait -PassThru -RedirectStandardOutput $migrateOut -RedirectStandardError $migrateErr
   } catch {
     Write-Error "[TRAY] migrate threw an exception: $_"
     Add-Content -Path migration_auto.log -Value ((Get-Date).ToString() + " migrate exception; startup aborted")
     exit 1
   }
-  if ($LASTEXITCODE -ne 0) {
-    Write-Error "[TRAY] migrate failed (exit=$LASTEXITCODE). See migration_run_errors.log"
+  if ($migrateProc.ExitCode -ne 0) {
+    Write-Error "[TRAY] migrate failed (exit=$($migrateProc.ExitCode)). See migration_run_errors.log"
     Add-Content -Path migration_auto.log -Value ((Get-Date).ToString() + " migrate failed; startup aborted")
     exit 1
   }
@@ -809,18 +1210,22 @@ if (Test-Path $manage) {
   Add-Content -Path migration_auto.log -Value ((Get-Date).ToString() + " manage.py missing; skipped migrations")
 }
 
-# Best-effort: allow inbound ADMS/iClock push to this server port.
+# Best-effort: allow inbound UI and ADMS/iClock push to the configured ports.
 # (Requires admin; failures are non-fatal.)
 try {
-  $ruleName = "ZKAccessB ADMS Port $Port"
-  $existing = $null
-  try { $existing = Get-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue } catch { $existing = $null }
-  if(-not $existing){
-    try {
-      New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Action Allow -Protocol TCP -LocalPort $Port -Profile Any -ErrorAction SilentlyContinue | Out-Null
-      Write-Host "[TRAY] Firewall rule added: $ruleName"
-    } catch {
-      Write-Warning "[TRAY] Could not add firewall rule (needs admin): $_"
+  foreach($rule in @(
+    @{ Name = "ZKAccessB UI Port $Port"; LocalPort = $Port },
+    @{ Name = "ZKAccessB ADMS Port $AdmsPort"; LocalPort = $AdmsPort }
+  )){
+    $existing = $null
+    try { $existing = Get-NetFirewallRule -DisplayName $rule.Name -ErrorAction SilentlyContinue } catch { $existing = $null }
+    if(-not $existing){
+      try {
+        New-NetFirewallRule -DisplayName $rule.Name -Direction Inbound -Action Allow -Protocol TCP -LocalPort $rule.LocalPort -Profile Any -ErrorAction SilentlyContinue | Out-Null
+        Write-Host "[TRAY] Firewall rule added: $($rule.Name)"
+      } catch {
+        Write-Warning "[TRAY] Could not add firewall rule (needs admin): $_"
+      }
     }
   }
 } catch {}
@@ -832,33 +1237,44 @@ if($NoCommCenter){ $trayArgs += '--no-commcenter' }
 if(-not $WSGI){ $trayArgs += '--asgi' }
 $commDriver = ''
 try { $commDriver = [string]($env:ZKACCESS_COMMCENTER_DRIVER) } catch { $commDriver = '' }
-if([string]::IsNullOrWhiteSpace($commDriver)){ $commDriver = 'plcommpro' }
+if([string]::IsNullOrWhiteSpace($commDriver)){ $commDriver = 'auto' }
 Write-Host "[TRAY] CommCenter driver: $commDriver"
 $trayArgs += @('--driver',"$commDriver",'--port',"$Port")
+$trayArgs += @('--adms-port',"$AdmsPort")
 Write-Host "[TRAY] Collecting static files"
-& $py $manage 'collectstatic' '--noinput' "--settings=$Settings" > $null 2> collectstatic_errors.log
-if($LASTEXITCODE -ne 0){ Write-Warning "[TRAY] collectstatic reported errors; see collectstatic_errors.log" }
+$collectstaticProc = Start-Process -FilePath $py -ArgumentList @($manage,'collectstatic','--noinput',"--settings=$Settings") -NoNewWindow -Wait -PassThru -RedirectStandardOutput 'collectstatic_output.log' -RedirectStandardError 'collectstatic_errors.log'
+if($collectstaticProc.ExitCode -ne 0){ Write-Warning "[TRAY] collectstatic reported errors; see collectstatic_errors.log" }
 Write-Host "[TRAY] Starting tray agent"
 # Run tray_agent detached so it keeps running even if this launcher session ends.
+try {
+  # Keep ADMS auto-config in sync with the dedicated push port.
+  $env:ZKACCESS_ADMS_PORT = [string]$AdmsPort
+} catch {}
+
 try {
   # Write initial running status before handing off
   $statusRun = [ordered]@{
     acp            = if($acpEnabled){'ON'}else{'OPRIT'}
     elatec         = if($elatecEnabled){'ON'}else{'OPRIT'}
+    wiegand        = if($wiegandEnabled){'ON'}else{'OPRIT'}
     server         = 'PORNIT'
     acp_enabled    = $acpEnabled
     elatec_enabled = $elatecEnabled
+    wiegand_enabled = $wiegandEnabled
     commcenter     = 'PORNESTE'
     commcenter_driver  = 'auto'
   }
-  $allReadersOk = (($statusRun.acp_enabled -eq $false) -or ($statusRun.acp -eq 'ON')) -and (($statusRun.elatec_enabled -eq $false) -or ($statusRun.elatec -eq 'ON'))
+  $allReadersOk = (($statusRun.acp_enabled -eq $false) -or ($statusRun.acp -eq 'ON')) -and (($statusRun.elatec_enabled -eq $false) -or ($statusRun.elatec -eq 'ON')) -and (($statusRun.wiegand_enabled -eq $false) -or ($statusRun.wiegand -eq 'ON'))
   $statusRun.color = if(($statusRun.server -eq 'PORNIT') -and $allReadersOk){ 'green' } elseif(($statusRun.server -eq 'PORNIT') -or $allReadersOk){ 'yellow' } else { 'red' }
+  Merge-TrayStatusFields -Target $statusRun -Updates (Get-ZkemkeeperTrayFields)
   # Preserve blocked flags if present so a UI STOP remains effective
   if ($trayStatus) {
     if ($true -eq $trayStatus.acp_blocked) { $statusRun.acp_blocked = $true }
     if ($true -eq $trayStatus.elatec_blocked) { $statusRun.elatec_blocked = $true }
+    if ($true -eq $trayStatus.wiegand_blocked) { $statusRun.wiegand_blocked = $true }
     if (($trayStatus.cmd_stop_acp | Measure-Object).Count -gt 0) { $statusRun.cmd_stop_acp = $trayStatus.cmd_stop_acp }
     if (($trayStatus.cmd_stop_elatec | Measure-Object).Count -gt 0) { $statusRun.cmd_stop_elatec = $trayStatus.cmd_stop_elatec }
+    if (($trayStatus.cmd_stop_wiegand | Measure-Object).Count -gt 0) { $statusRun.cmd_stop_wiegand = $trayStatus.cmd_stop_wiegand }
   }
   Set-Content -Path (Join-Path $PWD 'tray_status.json') -Value ($statusRun | ConvertTo-Json -Depth 3) -Encoding UTF8
 } catch {}
@@ -882,20 +1298,216 @@ try {
   Write-Warning "[TRAY] Could not pre-clean tray_agent processes: $_"
 }
 
+$trayHealthy = $false
+
 try {
   $stdout = Join-Path $PWD 'tray_agent_stdout.log'
   $stderr = Join-Path $PWD 'tray_agent_stderr.log'
   $argList = @('zkeco_modern/manage.py','tray_agent',"--settings=$Settings") + $trayArgs
   if($Detach){
-    Start-Process -FilePath $py -ArgumentList $argList -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr | Out-Null
+    $argList += '--headless'
+    $trayProc = Start-Process -FilePath $py -ArgumentList $argList -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
     Write-Host "[TRAY] tray_agent launched (detached)"
     Write-Host "[TRAY] Logs: $stdout ; $stderr"
-  } else {
-    Write-Host "[TRAY] tray_agent launching in this console (Ctrl+C stops only this console, tray stays managed by OS)"
-    & $py @($argList)
-  }
+    try {
+      $healthDeadline = (Get-Date).AddSeconds(15)
+      do {
+        Start-Sleep -Seconds 1
+        $trayProcLive = @(Get-ManagedRuntimeProcesses -RoleFilter @('tray_agent','tray_agent_legacy'))
+        $serverLive = Test-TcpPort -HostName '127.0.0.1' -Port $Port -TimeoutMs 500
+        $admsLive = $true
+        if($AdmsPort -and ([int]$AdmsPort) -gt 0 -and ([int]$AdmsPort) -ne ([int]$Port)){
+          $admsLive = Test-TcpPort -HostName '127.0.0.1' -Port $AdmsPort -TimeoutMs 500
+        }
+        $trayHealthy = ($trayProcLive.Count -gt 0) -and $serverLive -and $admsLive
+      } until($trayHealthy -or ((Get-Date) -ge $healthDeadline))
+      if($trayHealthy){
+        Write-Host "[TRAY] tray_agent health check OK (ui=$Port adms=$AdmsPort)"
+      } else {
+        Write-Warning "[TRAY] tray_agent health check failed (tray=$($trayProcLive.Count) ui=$serverLive adms=$admsLive)"
+        try {
+          Update-TrayStatusFields @{
+            server = 'OPRIT'
+            commcenter = 'OPRIT'
+            color = 'red'
+          }
+        } catch {}
+      }
+    } catch {
+      Write-Warning "[TRAY] tray_agent health check error: $_"
+    }
+    } else {
+      Write-Host "[TRAY] tray_agent launching in this console"
+      & $py @($argList)
+      if($LASTEXITCODE -ne 0){
+        Write-Warning "[TRAY] tray_agent exited with code $LASTEXITCODE"
+      }
+      return
+    }
 } catch {
   Write-Warning "[TRAY] Failed to launch tray_agent detached: $_"
   throw
+}
+
+# Optional: start x64 zkemkeeper bridge for real-time controller events.
+# Enable with:
+#   $env:ZKACCESS_ZKEMKEEPER_ENABLE=1
+#   $env:ZKACCESS_ZKEMKEEPER_IP=192.168.1.235
+# Optional:
+#   $env:ZKACCESS_ZKEMKEEPER_PORT=4370
+#   $env:ZKACCESS_ZKEMKEEPER_MACHINE=1
+#   $env:ZKACCESS_ZKEMKEEPER_DEVICE_ID=22
+#   $env:ZKACCESS_ZKEMKEEPER_DOOR_ID=1
+#   $env:ZKACCESS_ZKEMKEEPER_DOOR_PK=<db door id>
+#   $env:ZKACCESS_ZKEMKEEPER_AUTOREG=1
+try {
+  $zkemEnable = [string]($env:ZKACCESS_ZKEMKEEPER_ENABLE)
+  if((-not $trayHealthy)){
+    Write-Warning "[TRAY] Skipping zkemkeeper bridge launch because tray/web stack is not healthy"
+  }
+  elseif($zkemEnable -and $zkemEnable.ToLower() -in @('1','true','yes','on')){
+    $zkemEngine = [string]($env:ZKACCESS_ZKEMKEEPER_ENGINE)
+    if([string]::IsNullOrWhiteSpace($zkemEngine)){ $zkemEngine = 'vbs' }
+    $zkemEngine = $zkemEngine.ToLowerInvariant()
+    $zkemPsScript = Join-Path $PWD 'scripts\zkemkeeper_event_bridge.ps1'
+    $zkemVbsScript = Join-Path $PWD 'scripts\zkemkeeper_event_bridge.vbs'
+    $zkemScript = if($zkemEngine -eq 'ps1'){ $zkemPsScript } else { $zkemVbsScript }
+    $zkemRegisterScript = Join-Path $PWD 'scripts\register_zkemkeeper_sdk_x64.ps1'
+    $zkemIp = [string]($env:ZKACCESS_ZKEMKEEPER_IP)
+    if((Test-Path $zkemScript) -and (-not [string]::IsNullOrWhiteSpace($zkemIp))){
+      $zkemPort = [string]($env:ZKACCESS_ZKEMKEEPER_PORT)
+      if([string]::IsNullOrWhiteSpace($zkemPort)){ $zkemPort = '14370' }
+      $zkemMachine = [string]($env:ZKACCESS_ZKEMKEEPER_MACHINE)
+      if([string]::IsNullOrWhiteSpace($zkemMachine)){ $zkemMachine = '1' }
+      $zkemSdkDir = [string]($env:ZKACCESS_ZKEMKEEPER_SDK_DIR)
+      if([string]::IsNullOrWhiteSpace($zkemSdkDir)){
+        $zkemSdkDir = Resolve-ZkemkeeperSdkDirX64
+      }
+      $zkemDumpFile = [string]($env:ZKACCESS_ZKEMKEEPER_DUMP_FILE)
+      if([string]::IsNullOrWhiteSpace($zkemDumpFile)){
+        $zkemDumpFile = Join-Path $PWD 'zkemkeeper_event_dump_controller22.jsonl'
+      }
+      $serverUrl = "http://127.0.0.1:$Port"
+      $regState = 'SKIPPED'
+      $regMessage = ''
+      $regProgId = ''
+      $canLaunch = $true
+      if(Test-Path $zkemRegisterScript){
+        try {
+          $regOutput = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $zkemRegisterScript -SdkDir $zkemSdkDir -Json 2>&1
+          $regExit = $LASTEXITCODE
+          $regText = (($regOutput | ForEach-Object { $_.ToString() }) -join [Environment]::NewLine).Trim()
+          $regObj = $null
+          if(-not [string]::IsNullOrWhiteSpace($regText)){
+            try { $regObj = $regText | ConvertFrom-Json } catch {}
+          }
+          if($regObj){
+            $regMessage = [string]$regObj.message
+            $regProgId = [string]$regObj.prog_id
+            if([bool]$regObj.ok){
+              $regState = if([bool]$regObj.already_registered){ 'REGISTERED' } else { 'REGISTERED_NOW' }
+            } else {
+              $regState = if([bool]$regObj.needs_admin){ 'NEEDS_ADMIN' } else { 'ERROR' }
+            }
+          } elseif($regExit -eq 0) {
+            $regState = 'REGISTERED'
+            $regMessage = 'Registration helper completed successfully.'
+          } else {
+            $regState = 'ERROR'
+            $regMessage = if($regText){ $regText } else { 'Registration helper failed.' }
+          }
+          if($regExit -ne 0 -and $regState -eq 'NEEDS_ADMIN'){
+            $canLaunch = $false
+          }
+        } catch {
+          $regState = 'ERROR'
+          $regMessage = $_.Exception.Message
+          $canLaunch = $false
+        }
+      }
+      Update-TrayStatusFields @{
+        zkemkeeper = if($canLaunch){ 'PORNESTE' } else { 'ADMIN' }
+        zkemkeeper_enabled = $true
+        zkemkeeper_target = "${zkemIp}:$zkemPort"
+        zkemkeeper_engine = $zkemEngine
+        zkemkeeper_registration = $regState
+        zkemkeeper_registration_message = $regMessage
+        zkemkeeper_prog_id = $regProgId
+        zkemkeeper_dump_file = $zkemDumpFile
+        zkemkeeper_device_id = [string]($env:ZKACCESS_ZKEMKEEPER_DEVICE_ID)
+        zkemkeeper_door_id = [string]($env:ZKACCESS_ZKEMKEEPER_DOOR_ID)
+        zkemkeeper_door_pk = [string]($env:ZKACCESS_ZKEMKEEPER_DOOR_PK)
+      }
+      if(-not $canLaunch){
+        Write-Warning "[TRAY] zkemkeeper registration requires Administrator rights before bridge launch. $regMessage"
+        return
+      }
+      $zkemStdout = Join-Path $PWD 'zkemkeeper_bridge_stdout.log'
+      $zkemStderr = Join-Path $PWD 'zkemkeeper_bridge_stderr.log'
+      try { Remove-Item (Join-Path $env:USERPROFILE 'zkeco_reader_heartbeat_zkemkeeper.json') -ErrorAction SilentlyContinue } catch {}
+      if($zkemEngine -eq 'ps1'){
+        $zkemArgTokens = @(
+          '-NoProfile',
+          '-ExecutionPolicy', 'Bypass',
+          '-File', ('"{0}"' -f $zkemScript),
+          '-Ip', ('"{0}"' -f $zkemIp),
+          '-Port', ('"{0}"' -f $zkemPort),
+          '-MachineNumber', ('"{0}"' -f $zkemMachine),
+          '-ServerUrl', ('"{0}"' -f $serverUrl),
+          '-SdkDir', ('"{0}"' -f $zkemSdkDir),
+          '-DumpFile', ('"{0}"' -f $zkemDumpFile)
+        )
+        if($env:ZKACCESS_ZKEMKEEPER_DEVICE_ID){ $zkemArgTokens += @('-DeviceId', ('"{0}"' -f [string]$env:ZKACCESS_ZKEMKEEPER_DEVICE_ID)) }
+        if($env:ZKACCESS_ZKEMKEEPER_DOOR_ID){ $zkemArgTokens += @('-DoorId', ('"{0}"' -f [string]$env:ZKACCESS_ZKEMKEEPER_DOOR_ID)) }
+        if($env:ZKACCESS_ZKEMKEEPER_DOOR_PK){ $zkemArgTokens += @('-DoorPk', ('"{0}"' -f [string]$env:ZKACCESS_ZKEMKEEPER_DOOR_PK)) }
+        if($env:ZKACCESS_ZKEMKEEPER_SOURCE){ $zkemArgTokens += @('-Source', ('"{0}"' -f [string]$env:ZKACCESS_ZKEMKEEPER_SOURCE)) }
+        if($env:ZKACCESS_ZKEMKEEPER_COMM_PASSWORD){ $zkemArgTokens += @('-CommPassword', ('"{0}"' -f [string]$env:ZKACCESS_ZKEMKEEPER_COMM_PASSWORD)) }
+        $autoReg = [string]($env:ZKACCESS_ZKEMKEEPER_AUTOREG)
+        if($autoReg -and $autoReg.ToLower() -in @('1','true','yes','on')){ $zkemArgTokens += '-AutoRegister' }
+        $zkemArgs = $zkemArgTokens -join ' '
+        Start-Process -FilePath 'powershell.exe' -ArgumentList $zkemArgs -WindowStyle Hidden -RedirectStandardOutput $zkemStdout -RedirectStandardError $zkemStderr | Out-Null
+      } else {
+        $zkemArgTokens = @(
+          '//nologo',
+          ('"{0}"' -f $zkemScript),
+          ('/Ip:{0}' -f ('"{0}"' -f $zkemIp)),
+          ('/Port:{0}' -f ('"{0}"' -f $zkemPort)),
+          ('/MachineNumber:{0}' -f ('"{0}"' -f $zkemMachine)),
+          ('/ServerUrl:{0}' -f ('"{0}"' -f $serverUrl)),
+          ('/SdkDir:{0}' -f ('"{0}"' -f $zkemSdkDir)),
+          ('/DumpFile:{0}' -f ('"{0}"' -f $zkemDumpFile))
+        )
+        if($env:ZKACCESS_ZKEMKEEPER_DEVICE_ID){ $zkemArgTokens += ('/DeviceId:{0}' -f ('"{0}"' -f [string]$env:ZKACCESS_ZKEMKEEPER_DEVICE_ID)) }
+        if($env:ZKACCESS_ZKEMKEEPER_DOOR_ID){ $zkemArgTokens += ('/DoorId:{0}' -f ('"{0}"' -f [string]$env:ZKACCESS_ZKEMKEEPER_DOOR_ID)) }
+        if($env:ZKACCESS_ZKEMKEEPER_DOOR_PK){ $zkemArgTokens += ('/DoorPk:{0}' -f ('"{0}"' -f [string]$env:ZKACCESS_ZKEMKEEPER_DOOR_PK)) }
+        if($env:ZKACCESS_ZKEMKEEPER_SOURCE){ $zkemArgTokens += ('/Source:{0}' -f ('"{0}"' -f [string]$env:ZKACCESS_ZKEMKEEPER_SOURCE)) }
+        if($env:ZKACCESS_ZKEMKEEPER_COMM_PASSWORD){ $zkemArgTokens += ('/CommPassword:{0}' -f ('"{0}"' -f [string]$env:ZKACCESS_ZKEMKEEPER_COMM_PASSWORD)) }
+        if($env:ZKACCESS_ZKEMKEEPER_AUTOREG){ $zkemArgTokens += ('/AutoRegister:{0}' -f ('"{0}"' -f [string]$env:ZKACCESS_ZKEMKEEPER_AUTOREG)) }
+        Start-Process -FilePath 'cscript.exe' -ArgumentList $zkemArgTokens -WindowStyle Hidden -RedirectStandardOutput $zkemStdout -RedirectStandardError $zkemStderr | Out-Null
+      }
+      Write-Host "[TRAY] zkemkeeper bridge launched for ${zkemIp}:$zkemPort"
+      Write-Host "[TRAY] Logs: $zkemStdout ; $zkemStderr"
+      Update-TrayStatusFields @{
+        zkemkeeper = 'PORNESTE'
+        zkemkeeper_message = 'Bridge launched by tray_launch.'
+        zkemkeeper_stdout = $zkemStdout
+        zkemkeeper_stderr = $zkemStderr
+        zkemkeeper_last_launch = (Get-Date).ToString('s')
+      }
+    } else {
+      Update-TrayStatusFields @{
+        zkemkeeper = 'EROARE'
+        zkemkeeper_enabled = $true
+        zkemkeeper_message = 'Missing script or controller IP for zkemkeeper bridge.'
+      }
+      Write-Warning "[TRAY] ZKEMKEEPER enabled but script/ip missing. Set ZKACCESS_ZKEMKEEPER_IP and ensure scripts\zkemkeeper_event_bridge.ps1 or scripts\zkemkeeper_event_bridge.vbs exists."
+    }
+  }
+} catch {
+  Update-TrayStatusFields @{
+    zkemkeeper = 'EROARE'
+    zkemkeeper_message = $_.Exception.Message
+  }
+  Write-Warning "[TRAY] Failed to launch zkemkeeper bridge: $_"
 }
  

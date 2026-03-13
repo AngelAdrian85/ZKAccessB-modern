@@ -86,6 +86,21 @@ zkeco_modern/agent/bridge_dotnet/**/obj/
 
 # Local last-run probe outputs
 tools/_last_*.txt
+push_dumps/
+probe_controller_direct_4370.latest.txt
+tmp_probe_controller_direct_4370.*
+zkemkeeper_event_dump_*.jsonl
+controller22_web.cookies
+iclock_push_capture.jsonl
+live_probe_monitor_22.txt
+live_probe_plcommpro_flow_22.txt
+live_provision_controller_22.json
+live_provision_controller_22_from_4370.json
+post_swipe_probe_22.txt
+swipe_capture_controller22.txt
+tmp_w26_tap_capture.log
+tmp_w26_tap_capture.err.log
+tmp_wiegand_listener_trace.jsonl
 
 # Never commit corrupted venv artifacts
 .venv_corrupt/

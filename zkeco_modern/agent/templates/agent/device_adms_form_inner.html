@@ -20,6 +20,14 @@
 .adms-form .btn { padding:7px 16px; border:none; border-radius:4px; cursor:pointer; font-size:12px; font-weight:700; transition:all 120ms; }
 .adms-form .btn-apply { background:#2da44e; color:#fff; }
 .adms-form .btn-apply:hover { background:#238636; }
+.adms-form .btn-dirty { box-shadow:0 0 0 2px rgba(255, 196, 61, 0.35) inset, 0 0 14px rgba(255, 196, 61, 0.35); }
+.adms-form .btn-pulse { animation:admsPulse 1s ease-in-out infinite; }
+.adms-form .dirty-hint { display:none; margin-top:8px; font-size:11px; color:#ffcc66; }
+.adms-form .dirty-hint.show { display:block; }
+@keyframes admsPulse {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1px); }
+}
 .adms-form .btn-clear { background:#5a3020; color:#ffa07a; border:1px solid #7a4030; }
 .adms-form .btn-clear:hover { background:#7a4030; }
 .adms-form .btn-read  { background:#1e4a6b; color:#9fd2f1; border:1px solid #2d5a7b; }
@@ -97,6 +105,8 @@
       <button type="button" class="btn btn-clear" id="btnAdmsClear">✕ Dezactivează ADMS push</button>
     </div>
 
+    <div id="admsDirtyHint" class="dirty-hint">Ai modificări manuale neaplicate. Apasă <strong>Reconfigurează</strong> pentru confirmare.</div>
+
     <div id="admsResult" class="result-box"></div>
   </form>
 </div>
@@ -106,6 +116,37 @@
   const deviceId = {{ device.id }};
   const baseUrl  = '/agent/api/devices/' + deviceId + '/configure-adms/';
   const csrf     = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+  const addrEl   = document.getElementById('admsServerAddr');
+  const portEl   = document.getElementById('admsServerPort');
+  const applyBtn = document.getElementById('btnAdmsApply');
+  const readBtn  = document.getElementById('btnAdmsRead');
+  const clearBtn = document.getElementById('btnAdmsClear');
+  const dirtyHint = document.getElementById('admsDirtyHint');
+
+  const initial = {
+    addr: (addrEl?.value || '').trim(),
+    port: (portEl?.value || '').trim(),
+  };
+
+  function isDirty(){
+    return ((addrEl?.value || '').trim() !== initial.addr) || ((portEl?.value || '').trim() !== initial.port);
+  }
+
+  function applyDirtyUi(){
+    const dirty = isDirty();
+    [applyBtn, readBtn, clearBtn].forEach((b)=>{
+      if(!b) return;
+      b.classList.toggle('btn-dirty', dirty);
+    });
+    if(applyBtn){ applyBtn.classList.toggle('btn-pulse', dirty); }
+    if(dirtyHint){ dirtyHint.classList.toggle('show', dirty); }
+  }
+
+  function commitCurrentAsInitial(){
+    initial.addr = (addrEl?.value || '').trim();
+    initial.port = (portEl?.value || '').trim();
+    applyDirtyUi();
+  }
 
   function showResult(msg, ok, warn){
     const el = document.getElementById('admsResult');
@@ -114,10 +155,10 @@
   }
 
   function doApply(){
-    const addr = document.getElementById('admsServerAddr').value.trim();
-    const port = document.getElementById('admsServerPort').value.trim();
+    const addr = (addrEl?.value || '').trim();
+    const port = (portEl?.value || '').trim();
     if(!addr){ showResult('Completați adresa IP a serverului.', false); return; }
-    const btn = document.getElementById('btnAdmsApply');
+    const btn = applyBtn;
     btn.disabled = true; btn.textContent = '⏳ Se trimite...';
     fetch(baseUrl, {
       method: 'POST',
@@ -128,6 +169,7 @@
     .then(d=>{
       btn.disabled = false; btn.textContent = '🔄 Reconfigurează';
       if(d.ok){
+        commitCurrentAsInitial();
         if(d.queued){
           showResult('⏳ ' + (d.note || 'Comanda a fost pusă în coadă pentru CommCenter.'), true, true);
         } else {
@@ -141,30 +183,35 @@
   }
 
   function doRead(){
-    const btn = document.getElementById('btnAdmsRead');
+    const btn = readBtn;
     btn.disabled = true; btn.textContent = '⏳...';
     fetch(baseUrl + '?action=read')
     .then(r=>r.json())
     .then(d=>{
-      btn.disabled = false; btn.textContent = '� Recitește parametri';
+      btn.disabled = false; btn.textContent = '📖 Recitește parametri';
       if(d.ok){
         const params = d.params || {};
-        const keys = ['ServerAddr','ServerPort','CLOUDSERVICEFLAG'];
+        const keys = ['ServerAddr','ServerPort','CLOUDSERVICEFLAG','PushFunOn'];
         let html = '';
         keys.forEach(k=> html += '<span class="current-val">' + k + '=' + (params[k]||'(gol)') + '</span> ');
         const container = document.querySelector('.adms-form .status-row');
         if(container) container.innerHTML = html;
+        try {
+          if(addrEl && params.ServerAddr != null){ addrEl.value = String(params.ServerAddr || '').trim(); }
+          if(portEl && params.ServerPort != null){ portEl.value = String(params.ServerPort || '').trim(); }
+          commitCurrentAsInitial();
+        } catch(_e){}
         showResult('Parametri actualizați.', true);
       } else {
         showResult('❌ Nu s-au putut citi parametrii: ' + (d.error||''), false);
       }
     })
-    .catch(e=>{ btn.disabled=false; btn.textContent='� Recitește parametri'; showResult('❌ '+e, false); });
+    .catch(e=>{ btn.disabled=false; btn.textContent='📖 Recitește parametri'; showResult('❌ '+e, false); });
   }
 
   function doClear(){
     if(!confirm('Dezactivezi ADMS push pe această centrală? Cardurile NU vor mai fi transmise la server.')) return;
-    const btn = document.getElementById('btnAdmsClear');
+    const btn = clearBtn;
     btn.disabled = true; btn.textContent = '⏳...';
     fetch(baseUrl, {
       method: 'POST',
@@ -183,5 +230,8 @@
   document.getElementById('btnAdmsApply').addEventListener('click', doApply);
   document.getElementById('btnAdmsRead').addEventListener('click', doRead);
   document.getElementById('btnAdmsClear').addEventListener('click', doClear);
+  if(addrEl){ addrEl.addEventListener('input', applyDirtyUi); }
+  if(portEl){ portEl.addEventListener('input', applyDirtyUi); }
+  applyDirtyUi();
 })();
 </script>

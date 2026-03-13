@@ -1,4 +1,5 @@
 import pytest
+import json
 from django.urls import reverse
 from django.contrib.auth.models import User
 
@@ -64,6 +65,115 @@ def test_device_ping_discover_endpoints(client):
     assert r.status_code in (200,400)
     r2 = client.get(reverse('device-discover')+'?base=127.0.0')
     assert r2.status_code in (200,400)
+
+@pytest.mark.django_db
+def test_device_discover_apply_updates_existing_device_by_serial(client):
+    from agent.models import Device
+
+    u = User.objects.create_user('staffdup','dup@b.c','pass'); u.is_staff = True; u.save(); client.login(username='staffdup', password='pass')
+    existing = Device.objects.create(
+        name='Existing Panel',
+        serial_number='SN-DISC-1',
+        ip_address='192.168.1.210',
+        port=4370,
+        device_type='access_panel',
+        comm_mode='tcp',
+        enabled=True,
+    )
+
+    resp = client.post(
+        reverse('device-discover-apply'),
+        data=json.dumps({
+            'action': 'add',
+            'ip': '192.168.1.235',
+            'port': 14370,
+            'name': 'Existing Panel Updated',
+            'serial_number': 'SN-DISC-1',
+        }),
+        content_type='application/json',
+    )
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload['ok'] is True
+    assert payload['id'] == existing.id
+    assert payload['created'] is False
+    assert Device.objects.count() == 1
+
+    existing.refresh_from_db()
+    assert existing.ip_address == '192.168.1.235'
+    assert existing.port == 14370
+    assert existing.name == 'Existing Panel Updated'
+
+
+@pytest.mark.django_db
+def test_device_discover_apply_auto_queues_adms_with_dedicated_port(client, monkeypatch):
+    from agent.models import CommandLog, Device
+
+    monkeypatch.setenv('ZKACCESS_ADMS_PORT', '8091')
+    u = User.objects.create_user('staffadms1', 'adms1@b.c', 'pass'); u.is_staff = True; u.save()
+    client.login(username='staffadms1', password='pass')
+
+    resp = client.post(
+        reverse('device-discover-apply'),
+        data=json.dumps({
+            'action': 'add',
+            'ip': '192.168.1.240',
+            'port': 14370,
+            'name': 'Panel Auto ADMS',
+            'serial_number': 'SN-AUTO-ADMS-1',
+        }),
+        content_type='application/json',
+        SERVER_PORT='15437',
+    )
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload['ok'] is True
+    assert payload['adms_auto_configured'] is True
+    assert payload['adms_server_port'] == 8091
+
+    dev = Device.objects.get(pk=payload['id'])
+    cmd = CommandLog.objects.filter(device=dev, command__startswith='SET_OPTION:ServerAddr=').latest('id')
+    assert 'ServerPort=8091' in cmd.command
+    assert 'PushFunOn=1' in cmd.command
+    assert 'ServerPort=15437' not in cmd.command
+
+
+@pytest.mark.django_db
+def test_device_create_auto_queues_adms_with_dedicated_port(client, monkeypatch):
+    from agent.models import CommandLog, Device
+
+    monkeypatch.setenv('ZKACCESS_ADMS_PORT', '8091')
+    u = User.objects.create_user('staffadms2', 'adms2@b.c', 'pass'); u.is_staff = True; u.save()
+    client.login(username='staffadms2', password='pass')
+
+    resp = client.post(
+        reverse('crud-device-create'),
+        {
+            'name': 'Panel Create ADMS',
+            'serial_number': 'SN-AUTO-ADMS-2',
+            'device_type': 'access_panel',
+            'comm_mode': 'tcp',
+            'ip_address': '192.168.1.241',
+            'port': '14370',
+            'area_name': 'Zona1',
+            'enabled': 'on',
+            'auto_sync_time': 'on',
+        },
+        HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        SERVER_PORT='15437',
+    )
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload['ok'] is True
+
+    dev = Device.objects.get(pk=payload['id'])
+    cmd = CommandLog.objects.filter(device=dev, command__startswith='SET_OPTION:ServerAddr=').latest('id')
+    assert 'ServerPort=8091' in cmd.command
+    assert 'PushFunOn=1' in cmd.command
+    assert 'ServerPort=15437' not in cmd.command
 
 @pytest.mark.django_db
 def test_model_diff(client):

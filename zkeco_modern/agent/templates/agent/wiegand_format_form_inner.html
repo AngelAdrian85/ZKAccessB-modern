@@ -1,0 +1,106 @@
+<div class="section">
+  <h4 style="margin:0 0 8px 0;">Format Wiegand</h4>
+  <div class="hint" style="margin-bottom:8px;">Mode 1 folosește poziții explicite; Mode 2 folosește șabloane `before_fmt` / `after_fmt` compatibile cu aplicația veche.</div>
+  <textarea hidden data-wiegand-presets-json>{{ preset_rows_json }}</textarea>
+  <form method="post"
+        data-modal-form="1"
+        data-wiegand-format-form="1"
+        data-action-modal-title="FORMAT WIEGAND"
+        data-action-modal-subtitle="Salvare definiție"
+        data-action-loading-big="SALVARE ÎN CURS"
+        data-action-loading-msg="Se salvează formatul Wiegand...">
+    {% csrf_token %}
+
+    {% if form.non_field_errors %}
+      <div class="inline-msg error" style="margin-bottom:8px;">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <div class="grid-3">
+      <div class="field">
+        <label for="id_known_preset">Preset cunoscut</label>
+        <select id="id_known_preset" name="known_preset" data-wiegand-preset-select="1">
+          {% for value,label in form.known_preset.field.choices %}
+            <option value="{{ value }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="id_wiegand_name">{{ form.wiegand_name.label }}</label>
+        {{ form.wiegand_name }}
+        {% if form.wiegand_name.errors %}<div class="inline-msg error">{{ form.wiegand_name.errors }}</div>{% endif %}
+      </div>
+      <div class="field">
+        <label for="id_wiegand_count">{{ form.wiegand_count.label }}</label>
+        {{ form.wiegand_count }}
+        {% if form.wiegand_count.errors %}<div class="inline-msg error">{{ form.wiegand_count.errors }}</div>{% endif %}
+      </div>
+    </div>
+
+    <div class="grid-3" style="margin-top:8px;">
+      <div class="field">
+        <label for="id_default_fmt">{{ form.default_fmt.label }}</label>
+        <div class="radio-row">{{ form.default_fmt }}</div>
+      </div>
+      <div class="field">
+        <label for="id_is_active">{{ form.is_active.label }}</label>
+        <div class="radio-row">{{ form.is_active }}</div>
+      </div>
+      <div class="field">
+        <label>Mod</label>
+        <div class="radio-row" data-wiegand-mode-switch="1">
+          <label><input type="radio" name="wiegand_mode_switch" value="1" {% if form.instance.wiegand_mode|default:1 == 1 %}checked{% endif %}> Mode 1</label>
+          <label><input type="radio" name="wiegand_mode_switch" value="2" {% if form.instance.wiegand_mode == 2 %}checked{% endif %}> Mode 2</label>
+        </div>
+        {{ form.wiegand_mode.as_hidden }}
+      </div>
+    </div>
+
+    <div class="section" style="margin-top:10px;" data-wiegand-mode-panel="1">
+      <h4 style="margin:0 0 8px 0;">Mode 1</h4>
+      <div class="grid-3">
+        <div class="field"><label for="id_first_p">{{ form.first_p.label }}</label>{{ form.first_p }}</div>
+        <div class="field"><label for="id_second_p">{{ form.second_p.label }}</label>{{ form.second_p }}</div>
+        <div class="field"><label for="id_cid_start">CID start</label>{{ form.cid_start }}</div>
+      </div>
+      <div class="grid-3" style="margin-top:8px;">
+        <div class="field"><label for="id_cid_count">CID count</label>{{ form.cid_count }}</div>
+        <div class="field"><label for="id_even_parity_start">Even parity start</label>{{ form.even_parity_start }}</div>
+        <div class="field"><label for="id_even_parity_count">Even parity count</label>{{ form.even_parity_count }}</div>
+      </div>
+      <div class="grid-3" style="margin-top:8px;">
+        <div class="field"><label for="id_odd_parity_start">Odd parity start</label>{{ form.odd_parity_start }}</div>
+        <div class="field"><label for="id_odd_parity_count">Odd parity count</label>{{ form.odd_parity_count }}</div>
+        <div class="field"><label for="id_facility_code_start">Facility start</label>{{ form.facility_code_start }}</div>
+      </div>
+      <div class="grid-3" style="margin-top:8px;">
+        <div class="field"><label for="id_facility_code_count">Facility count</label>{{ form.facility_code_count }}</div>
+        <div class="field"><label for="id_site_code_start">Site start</label>{{ form.site_code_start }}</div>
+        <div class="field"><label for="id_site_code_count">Site count</label>{{ form.site_code_count }}</div>
+      </div>
+      <div class="grid-3" style="margin-top:8px;">
+        <div class="field"><label for="id_manufactory_code_start">Manufacturer start</label>{{ form.manufactory_code_start }}</div>
+        <div class="field"><label for="id_manufactory_code_count">Manufacturer count</label>{{ form.manufactory_code_count }}</div>
+      </div>
+    </div>
+
+    <div class="section" style="margin-top:10px;" data-wiegand-mode-panel="2">
+      <h4 style="margin:0 0 8px 0;">Mode 2</h4>
+      <div class="field">
+        <label for="id_before_fmt">{{ form.before_fmt.label }}</label>
+        {{ form.before_fmt }}
+        {% if form.before_fmt.errors %}<div class="inline-msg error">{{ form.before_fmt.errors }}</div>{% endif %}
+      </div>
+      <div class="field" style="margin-top:8px;">
+        <label for="id_after_fmt">{{ form.after_fmt.label }}</label>
+        {{ form.after_fmt }}
+        {% if form.after_fmt.errors %}<div class="inline-msg error">{{ form.after_fmt.errors }}</div>{% endif %}
+      </div>
+      <div class="hint" style="margin-top:6px;">Folosește caracterele `c`, `f`, `s`, `m`, `e`, `o`, `p` și `0` pentru a reproduce schema veche.</div>
+    </div>
+
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" data-modal-close="1">Închide</button>
+      <button type="submit" class="btn-primary">Salvează</button>
+    </div>
+  </form>
+</div>

@@ -6,6 +6,7 @@ class DeviceRealtimeLog(models.Model):
     device_id = models.IntegerField()
     sn = models.CharField(max_length=64, blank=True, default="")
     raw = models.TextField()
+    correlation_payload = models.JSONField(blank=True, default=dict)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -421,6 +422,79 @@ class Holiday(models.Model):
 
     def __str__(self):  # pragma: no cover
         return f"Holiday {self.name} {self.date}"[:80]
+
+
+class WiegandCardFormat(models.Model):
+    MODE_CHOICES = [
+        (1, 'Mode 1'),
+        (2, 'Mode 2'),
+    ]
+
+    wiegand_name = models.CharField(max_length=64, unique=True)
+    default_fmt = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=False)
+    system_defined = models.BooleanField(default=False)
+    wiegand_count = models.PositiveSmallIntegerField(default=26)
+    wiegand_mode = models.PositiveSmallIntegerField(choices=MODE_CHOICES, default=1)
+    first_p = models.PositiveSmallIntegerField(default=0)
+    second_p = models.PositiveSmallIntegerField(default=0)
+    even_parity_start = models.PositiveSmallIntegerField(default=0)
+    even_parity_count = models.PositiveSmallIntegerField(default=0)
+    odd_parity_start = models.PositiveSmallIntegerField(default=0)
+    odd_parity_count = models.PositiveSmallIntegerField(default=0)
+    cid_start = models.PositiveSmallIntegerField(default=0)
+    cid_count = models.PositiveSmallIntegerField(default=0)
+    facility_code_start = models.PositiveSmallIntegerField(default=0)
+    facility_code_count = models.PositiveSmallIntegerField(default=0)
+    site_code_start = models.PositiveSmallIntegerField(default=0)
+    site_code_count = models.PositiveSmallIntegerField(default=0)
+    manufactory_code_start = models.PositiveSmallIntegerField(default=0)
+    manufactory_code_count = models.PositiveSmallIntegerField(default=0)
+    before_fmt = models.CharField(max_length=128, blank=True, default='')
+    after_fmt = models.CharField(max_length=128, blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-is_active', 'wiegand_count', 'wiegand_name']
+        indexes = [
+            models.Index(fields=['wiegand_name']),
+            models.Index(fields=['is_active']),
+            models.Index(fields=['system_defined']),
+        ]
+
+    def __str__(self):  # pragma: no cover
+        return f"Wiegand {self.wiegand_name}"[:80]
+
+    def decoder_payload(self) -> dict[str, object]:
+        from .wiegand_decoder import build_wiegand_format_from_mapping, format_to_dict
+
+        payload = {
+            'name': self.wiegand_name,
+            'format_name': self.wiegand_name,
+            'wiegand_name': self.wiegand_name,
+            'default': bool(self.default_fmt),
+            'bit_length': int(self.wiegand_count or 0),
+            'wiegand_count': int(self.wiegand_count or 0),
+            'wiegand_mode': int(self.wiegand_mode or 1),
+            'first_p': int(self.first_p or 0),
+            'second_p': int(self.second_p or 0),
+            'even_parity_start': int(self.even_parity_start or 0),
+            'even_parity_count': int(self.even_parity_count or 0),
+            'odd_parity_start': int(self.odd_parity_start or 0),
+            'odd_parity_count': int(self.odd_parity_count or 0),
+            'cid_start': int(self.cid_start or 0),
+            'cid_count': int(self.cid_count or 0),
+            'facility_code_start': int(self.facility_code_start or 0),
+            'facility_code_count': int(self.facility_code_count or 0),
+            'site_code_start': int(self.site_code_start or 0),
+            'site_code_count': int(self.site_code_count or 0),
+            'manufactory_code_start': int(self.manufactory_code_start or 0),
+            'manufactory_code_count': int(self.manufactory_code_count or 0),
+            'before_fmt': self.before_fmt or '',
+            'after_fmt': self.after_fmt or '',
+        }
+        return format_to_dict(build_wiegand_format_from_mapping(payload))
 
 
 class AccessLevel(models.Model):

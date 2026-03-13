@@ -11,6 +11,8 @@
   .op-btn.primary{background:#3da5d9;border-color:#3da5d9;color:#fff;}
   .op-btn:hover{filter:brightness(1.08);}
   .op-error{color:#ffbdbd;font-size:10px;margin:6px 0;}
+  .op-notice{color:#c8ffd6;font-size:10px;margin:6px 0;padding:6px 8px;border:1px solid #2da44e;background:rgba(45,164,78,0.12);border-radius:2px;}
+  .op-export-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px;}
 
   /* Enable/Disable special palettes */
   .op-danger .op-title{color:#ffd0d0;}
@@ -40,7 +42,8 @@
   <div class="legacy-ipwin">
     <div class="legacy-title">Modifică IP centrală</div>
 
-    {% if error %}<div class="op-error">{{ error }}</div>{% endif %}
+  {% if error %}<div class="op-error">{{ error }}</div>{% endif %}
+  {% if notice %}<div class="op-notice">{{ notice }}</div>{% endif %}
 
     <form method="post" data-modal-form="1">
       {% csrf_token %}
@@ -73,6 +76,7 @@
     <div class="op-sub">Centrală: <strong>{{ dev.name }}</strong> (ID #{{ dev.id }})</div>
 
     {% if error %}<div class="op-error">{{ error }}</div>{% endif %}
+    {% if notice %}<div class="op-notice">{{ notice }}</div>{% endif %}
 
     <form method="post" data-modal-form="1">
       {% csrf_token %}
@@ -396,6 +400,150 @@
                 {% if device_userauthorize_error %}<div class="op-error" style="margin:0 6px 6px 6px;">{{ device_userauthorize_error }}</div>{% endif %}
               {% endif %}
             </div>
+
+            <div class="op-sub" style="margin:10px 0 6px 0;">Inspector brut tabelă user (controller)</div>
+            <div style="border:1px solid #2f5876;border-radius:2px;padding:6px;background:#0f2433;">
+              <div style="font-size:10px;color:#e8f0f8;">Count(user): <strong>{{ device_user_raw_count|default:'?' }}</strong>{% if device_user_raw_count_error %} <span class="op-error" style="display:inline;margin-left:8px;">{{ device_user_raw_count_error }}</span>{% endif %}</div>
+              <div style="font-size:10px;color:#9fd2f1;margin-top:4px;">Fields folosite: <strong style="color:#e8f0f8;">{{ device_user_raw_fields|default:'-' }}</strong> | Result: <strong style="color:#e8f0f8;">{{ device_user_raw_result|default:'-' }}</strong></div>
+              <div class="op-export-actions">
+                <button type="button" class="op-btn" onclick="window.ControllerUserInspectorExport && window.ControllerUserInspectorExport.downloadJson('controller-user-rows-json', 'controller22-user-rows.json')">EXPORT JSON</button>
+                <button type="button" class="op-btn" onclick="window.ControllerUserInspectorExport && window.ControllerUserInspectorExport.downloadCsv('controller-user-rows-json', 'controller22-user-rows.csv')">EXPORT CSV</button>
+              </div>
+              {% if device_user_raw_header_only %}
+                <div style="font-size:10px;color:#ffd7a1;margin-top:4px;">Controllerul a răspuns doar cu header / fără rânduri utile.</div>
+              {% endif %}
+              {% if device_user_raw_error %}<div class="op-error" style="margin-top:6px;">{{ device_user_raw_error }}</div>{% endif %}
+              {% if device_user_raw_rows %}
+                <div style="margin-top:8px;border:1px solid rgba(47,88,118,0.55);border-radius:2px;overflow:hidden;max-height:220px;overflow:auto;">
+                  <table style="width:100%;border-collapse:collapse;font-size:10px;background:#0f2433;color:#e8f0f8;">
+                    <thead style="background:#163247;color:#9fd2f1;">
+                      <tr>
+                        <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:54px;">UID</th>
+                        <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:70px;">PIN</th>
+                        <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:120px;">CardNo</th>
+                        <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:120px;">ViceCard</th>
+                        <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:60px;">Group</th>
+                        <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;">Name</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for p in device_user_raw_rows|slice:':80' %}
+                      <tr>
+                        <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ p.uid|default:'' }}</td>
+                        <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ p.pin|default:'' }}</td>
+                        <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ p.cardno|default:'' }}</td>
+                        <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ p.vicecard|default:'' }}</td>
+                        <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ p.group|default:'' }}</td>
+                        <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;">{{ p.name|default:'' }}</td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              {% else %}
+                <div style="font-size:10px;color:#7db3d9;margin-top:6px;">Nu există rânduri `user` parse-ate de pe controller.</div>
+              {% endif %}
+
+              {% if device_user_raw_attempts %}
+                <div style="font-size:10px;color:#9fd2f1;margin-top:8px;">Încercări query:</div>
+                <div style="margin-top:4px;max-height:110px;overflow:auto;border:1px solid rgba(47,88,118,0.55);border-radius:2px;padding:4px;background:#0b1c29;">
+                  {% for a in device_user_raw_attempts %}
+                    <div style="font-size:10px;color:#e8f0f8;margin-bottom:3px;"><strong>{{ a.fields }}</strong> -> result={{ a.result }}{% if a.error %} | err={{ a.error }}{% endif %}</div>
+                  {% endfor %}
+                </div>
+              {% endif %}
+
+              {% if device_user_raw_preview %}
+                <div style="font-size:10px;color:#9fd2f1;margin-top:8px;">Payload brut:</div>
+                <pre style="margin:4px 0 0 0;padding:6px;font-size:10px;color:#e8f0f8;white-space:pre-wrap;max-height:180px;overflow:auto;border:1px solid rgba(47,88,118,0.55);border-radius:2px;background:#0b1c29;">{{ device_user_raw_preview }}</pre>
+              {% endif %}
+            </div>
+            {{ device_user_raw_rows|json_script:"controller-user-rows-json" }}
+
+            <div class="op-sub" style="margin:10px 0 6px 0;">User test direct în controller</div>
+            <div style="border:1px solid #2f5876;border-radius:2px;padding:6px;background:#0f2433;">
+              <div class="op-grid" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;">
+                <div class="op-row" style="margin-bottom:0;">
+                  <label>PIN test</label>
+                  <input name="test_pin" type="text" value="{{ controller_test_user.pin|default:'990022' }}" />
+                </div>
+                <div class="op-row" style="margin-bottom:0;">
+                  <label>CardNo</label>
+                  <input name="test_cardno" type="text" value="{{ controller_test_user.cardno|default:'220990022' }}" />
+                </div>
+                <div class="op-row" style="margin-bottom:0;">
+                  <label>ViceCard</label>
+                  <input name="test_vicecard" type="text" value="{{ controller_test_user.vicecard|default:'220990023' }}" />
+                </div>
+                <div class="op-row" style="margin-bottom:0;">
+                  <label>Group</label>
+                  <input name="test_group" type="text" value="{{ controller_test_user.group|default:'1' }}" />
+                </div>
+                <div class="op-row" style="margin-bottom:0;">
+                  <label>Name</label>
+                  <input name="test_name" type="text" value="{{ controller_test_user.name|default:'COPILOT TEST 22' }}" />
+                </div>
+                <div class="op-row" style="margin-bottom:0;">
+                  <label>Timezone ID</label>
+                  <input name="test_timezone_id" type="text" value="{{ controller_test_user.timezone_id|default:'1' }}" />
+                </div>
+              </div>
+              <div style="font-size:10px;color:#7db3d9;margin-top:8px;">Acțiunea scrie în `user` și `userauthorize`, apoi recitește controllerul în același modal.</div>
+              <div class="op-actions" style="margin-top:10px;justify-content:flex-start;">
+                <button type="submit" class="op-btn primary" name="do" value="push-test-user">PUSH USER TEST</button>
+                <button type="submit" class="op-btn" name="do" value="delete-test-user">ȘTERGE USER TEST</button>
+              </div>
+
+              {% if device_test_user_rows %}
+                <div style="font-size:10px;color:#9fd2f1;margin-top:10px;">Read-back filtrat după PIN test:</div>
+                <div style="margin-top:4px;border:1px solid rgba(47,88,118,0.55);border-radius:2px;overflow:hidden;">
+                  <table style="width:100%;border-collapse:collapse;font-size:10px;background:#0b1c29;color:#e8f0f8;">
+                    <thead style="background:#163247;color:#9fd2f1;">
+                      <tr>
+                        <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:70px;">PIN</th>
+                        <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:120px;">CardNo</th>
+                        <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:120px;">ViceCard</th>
+                        <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;">Name</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for p in device_test_user_rows %}
+                      <tr>
+                        <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ p.pin|default:'' }}</td>
+                        <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ p.cardno|default:'' }}</td>
+                        <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ p.vicecard|default:'' }}</td>
+                        <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ p.name|default:'' }}</td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              {% endif %}
+
+              {% if device_test_userauthorize_rows %}
+                <div style="font-size:10px;color:#9fd2f1;margin-top:10px;">Read-back userauthorize pentru PIN test:</div>
+                <div style="margin-top:4px;border:1px solid rgba(47,88,118,0.55);border-radius:2px;overflow:hidden;">
+                  <table style="width:100%;border-collapse:collapse;font-size:10px;background:#0b1c29;color:#e8f0f8;">
+                    <thead style="background:#163247;color:#9fd2f1;">
+                      <tr>
+                        <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:70px;">PIN</th>
+                        <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;width:90px;">TZ</th>
+                        <th style="text-align:left;padding:4px 6px;border-bottom:1px solid #2f5876;">Door mask</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for r in device_test_userauthorize_rows %}
+                      <tr>
+                        <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ r.pin|default:'' }}</td>
+                        <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ r.authorizetimezoneid|default:'' }}</td>
+                        <td style="padding:4px 6px;border-bottom:1px solid rgba(47,88,118,0.55);">{{ r.authorizedoorid|default:'' }}</td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+              {% endif %}
+            </div>
           {% endif %}
 
           <div class="op-sub" style="margin:10px 0 6px 0;">Comenzi recente (device)</div>
@@ -577,3 +725,53 @@
     </form>
   </div>
 {% endif %}
+
+<script>
+(function(){
+  if(window.ControllerUserInspectorExport){ return; }
+
+  function readJson(scriptId){
+    const el = document.getElementById(scriptId);
+    if(!el){ return []; }
+    try {
+      const parsed = JSON.parse(el.textContent || '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    } catch(_err){
+      return [];
+    }
+  }
+
+  function downloadBlob(filename, text, mimeType){
+    const blob = new Blob([text], { type: mimeType || 'application/octet-stream' });
+    const href = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = href;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    setTimeout(function(){ URL.revokeObjectURL(href); }, 0);
+  }
+
+  function toCsvValue(value){
+    const text = String(value == null ? '' : value);
+    return '"' + text.replace(/"/g, '""') + '"';
+  }
+
+  window.ControllerUserInspectorExport = {
+    downloadJson: function(scriptId, filename){
+      const rows = readJson(scriptId);
+      downloadBlob(filename || 'controller-user-rows.json', JSON.stringify(rows, null, 2), 'application/json;charset=utf-8');
+    },
+    downloadCsv: function(scriptId, filename){
+      const rows = readJson(scriptId);
+      const columns = ['uid', 'pin', 'cardno', 'vicecard', 'group', 'name', 'password', 'start_time', 'end_time', 'super_authorize', 'disable'];
+      const lines = [columns.join(',')];
+      rows.forEach(function(row){
+        lines.push(columns.map(function(col){ return toCsvValue(row && row[col]); }).join(','));
+      });
+      downloadBlob(filename || 'controller-user-rows.csv', lines.join('\r\n'), 'text/csv;charset=utf-8');
+    }
+  };
+})();
+</script>

@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from .controller_decoders import parse_option_pairs
+
 
 class PlcommproBridgeError(RuntimeError):
     pass
@@ -23,22 +25,123 @@ class PlcommproConnInfo:
 
 _PY_BRIDGE_VALIDATED: dict[str, bool] = {}
 _DLL_HINTS: dict[tuple[str, int], str] = {}
+_OPTION_DLL_HINTS: dict[tuple[str, int, str], str] = {}
+_QUERY_DLL_HINTS: dict[tuple[str, int, str, str], str] = {}
+
+
+def _bridge_meta_dict(resp: Dict[str, Any]) -> dict[str, Any]:
+    meta = resp.get("meta")
+    return dict(meta) if isinstance(meta, dict) else {}
+
+
+def _append_note_parts(*parts: Any) -> str:
+    out: list[str] = []
+    seen: set[str] = set()
+    for part in parts:
+        text = str(part or "").strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        out.append(text)
+    return " | ".join(out)
+
+
+def _finalize_bridge_response(
+    resp: Dict[str, Any],
+    *,
+    request: Optional[Dict[str, Any]] = None,
+    transport: str = "bridge",
+) -> Dict[str, Any]:
+    out = dict(resp or {})
+    if request is not None:
+        out.setdefault("action", str(request.get("action") or ""))
+        if "dll_path_used" not in out and request.get("dll_path"):
+            out["dll_path_used"] = str(request.get("dll_path") or "")
+    out["action_alias"] = str(out.get("action_alias") or out.get("action") or "").strip()
+    out["note"] = str(out.get("note") or "").strip()
+    out["meta"] = _bridge_meta_dict(out)
+    out.setdefault("transport", transport)
+    return out
+
+
+def _parse_option_pairs_text(raw: str) -> dict[str, str]:
+    return parse_option_pairs(raw, lowercase_keys=True)
+
+
+def _single_get_options_item(request: Dict[str, Any]) -> Optional[str]:
+    try:
+        if str(request.get("action") or "").strip().lower() != "get_options":
+            return None
+        items = [part.strip() for part in str(request.get("items") or "").split(",") if part.strip()]
+        if len(items) != 1:
+            return None
+        return items[0]
+    except Exception:
+        return None
+
+
+def _remember_option_dll_hint(request: Dict[str, Any], resp: Dict[str, Any], dll_path: str) -> None:
+    item = _single_get_options_item(request)
+    if not item or not dll_path:
+        return
+    try:
+        comm = request.get("comminfo") or {}
+        ip = str(comm.get("ipaddress") or "").strip()
+        port = int(comm.get("ip_port") or 0)
+        if (not ip) or port <= 0:
+            return
+        parsed = _parse_option_pairs_text(resp.get("data") or "")
+        if item.strip().lower() in parsed:
+            _OPTION_DLL_HINTS[(ip, port, item.strip().lower())] = str(dll_path)
+    except Exception:
+        return
+
+
+def _query_affinity_key(request: Dict[str, Any]) -> Optional[tuple[str, int, str, str]]:
+    try:
+        if str(request.get("action") or "").strip().lower() != "query_data":
+            return None
+        comm = request.get("comminfo") or {}
+        ip = str(comm.get("ipaddress") or "").strip()
+        port = int(comm.get("ip_port") or 0)
+        table = str(request.get("table") or "").strip().lower()
+        fields = str(request.get("fields") or "*").strip().lower().replace(" ", "") or "*"
+        if (not ip) or port <= 0 or table != "user":
+            return None
+        return (ip, port, table, fields)
+    except Exception:
+        return None
+
+
+def _remember_query_dll_hint(request: Dict[str, Any], resp: Dict[str, Any], dll_path: str) -> None:
+    key = _query_affinity_key(request)
+    if key is None or not dll_path:
+        return
+    try:
+        result = int(resp.get("result", -1) or -1)
+    except Exception:
+        result = -1
+    text = str(resp.get("data") or "").replace("\x00", "").strip()
+    if result >= 0 and text:
+        _QUERY_DLL_HINTS[key] = str(dll_path)
 
 
 def _preferred_plcommpro_arch() -> str:
     """Preferred plcommpro.dll architecture.
 
-    Default is x86 because legacy ZKAccessB deployments commonly ship 32-bit SDKs.
-    Operators can force x64 (newer PRO panels / newer SDK drops) by setting:
-      ZKACCESS_PLCOMMPRO_ARCH=x64
+    Default is x64 because the current deployment target is 64-bit Windows.
+    Operators can still force x86 for legacy SDK bundles by setting:
+      ZKACCESS_PLCOMMPRO_ARCH=x86
     """
     try:
         v = str(os.environ.get("ZKACCESS_PLCOMMPRO_ARCH") or "").strip().lower()
+        if v in ("x86", "32", "win-x86", "i386"):
+            return "x86"
         if v in ("x64", "amd64", "64", "win-x64"):
             return "x64"
     except Exception:
         pass
-    return "x86"
+    return "x64"
 
 
 def _pe_machine(path: str) -> Optional[int]:
@@ -81,63 +184,64 @@ def _default_plcommpro_dll_path() -> Optional[str]:
     if env_path and os.path.exists(env_path) and (_is_x86_pe(env_path) or _is_x64_pe(env_path)):
         return env_path
 
-    arch = _preferred_plcommpro_arch()
+    preferred_arch = _preferred_plcommpro_arch()
+    arch_order = [preferred_arch, "x86" if preferred_arch == "x64" else "x64"]
 
-    # Prefer repo-shipped DLLs first.
-    # Operator tip: the *largest* bundle often includes the most complete driver set.
-    # We pick the largest viable DLL among repo candidates for the selected arch.
-    try:
-        repo_root = Path(__file__).resolve().parents[2]
-        candidates: list[Path] = []
-        if arch == "x64":
-            candidates = [
-                repo_root / "Resurse" / "Standalone SDK-6.3.1.55" / "SDK" / "x64" / "plcommpro.dll",
-            ]
-        else:
-            # Ordering matters: prefer legacy PullSDK / ZKAccess-bundled DLLs first.
-            candidates = [
-                repo_root / "Resurse" / "Standalone SDK-6.3.1.55" / "PullSDK" / "plcommpro.dll",
-                repo_root / "Resurse" / "ZKEUBioAccessSetup" / "Dependencies" / "ZKAccess3.5" / "NewSDK" / "plcommpro.dll",
-                repo_root / "Resurse" / "ZKEUBioAccessSetup" / "Dependencies" / "ZKAccess3.5" / "pullsdk" / "plcommpro.dll",
-                repo_root / "Resurse" / "ZKEUBioAccessSetup" / "Dependencies" / "PullSDK" / "plcommpro.dll",
-                repo_root / "Resurse" / "SDK-Ver2.2.0.220" / "plcommpro.dll",
-                repo_root / "Resurse" / "Standalone SDK-6.3.1.55" / "SDK" / "x86" / "plcommpro.dll",
-            ]
-        best: tuple[int, Path] | None = None
-        for c in candidates:
-            try:
-                is_ok = False
-                if arch == "x64":
-                    is_ok = c.exists() and c.is_file() and _is_x64_pe(str(c))
-                else:
-                    is_ok = c.exists() and c.is_file() and _is_x86_pe(str(c))
-
-                if not is_ok:
+    for arch in arch_order:
+        # Prefer repo-shipped DLLs first.
+        # Operator tip: the *largest* bundle often includes the most complete driver set.
+        # We pick the largest viable DLL among repo candidates for the selected arch.
+        try:
+            repo_root = Path(__file__).resolve().parents[2]
+            candidates: list[Path] = []
+            if arch == "x64":
+                candidates = [
+                    repo_root / "Resurse" / "Standalone SDK-6.3.1.55" / "SDK" / "x64" / "plcommpro.dll",
+                ]
+            else:
+                # Ordering matters: prefer legacy PullSDK / ZKAccess-bundled DLLs first.
+                candidates = [
+                    repo_root / "Resurse" / "Standalone SDK-6.3.1.55" / "PullSDK" / "plcommpro.dll",
+                    repo_root / "Resurse" / "ZKEUBioAccessSetup" / "Dependencies" / "ZKAccess3.5" / "NewSDK" / "plcommpro.dll",
+                    repo_root / "Resurse" / "ZKEUBioAccessSetup" / "Dependencies" / "ZKAccess3.5" / "pullsdk" / "plcommpro.dll",
+                    repo_root / "Resurse" / "ZKEUBioAccessSetup" / "Dependencies" / "PullSDK" / "plcommpro.dll",
+                    repo_root / "Resurse" / "SDK-Ver2.2.0.220" / "plcommpro.dll",
+                    repo_root / "Resurse" / "Standalone SDK-6.3.1.55" / "SDK" / "x86" / "plcommpro.dll",
+                ]
+            best: tuple[int, Path] | None = None
+            for c in candidates:
+                try:
+                    is_ok = False
+                    if arch == "x64":
+                        is_ok = c.exists() and c.is_file() and _is_x64_pe(str(c))
+                    else:
+                        is_ok = c.exists() and c.is_file() and _is_x86_pe(str(c))
+                    if not is_ok:
+                        continue
+                    size = int(c.stat().st_size or 0)
+                    if best is None or size > best[0]:
+                        best = (size, c)
+                except Exception:
                     continue
-                size = int(c.stat().st_size or 0)
-                if best is None or size > best[0]:
-                    best = (size, c)
-            except Exception:
-                continue
-        if best is not None:
-            return str(best[1])
-    except Exception:
-        pass
+            if best is not None:
+                return str(best[1])
+        except Exception:
+            pass
 
-    if arch == "x64":
-        system32 = r"C:\\Windows\\System32\\plcommpro.dll"
-        if os.path.exists(system32) and _is_x64_pe(system32):
-            return system32
-    else:
-        syswow64 = r"C:\\Windows\\SysWOW64\\plcommpro.dll"
-        if os.path.exists(syswow64) and _is_x86_pe(syswow64):
-            return syswow64
+        if arch == "x64":
+            system32 = r"C:\\Windows\\System32\\plcommpro.dll"
+            if os.path.exists(system32) and _is_x64_pe(system32):
+                return system32
+        else:
+            syswow64 = r"C:\\Windows\\SysWOW64\\plcommpro.dll"
+            if os.path.exists(syswow64) and _is_x86_pe(syswow64):
+                return syswow64
 
     return None
 
 
 def default_plcommpro_dll_path() -> Optional[str]:
-    """Public wrapper for the best-effort default x86 plcommpro.dll path."""
+    """Public wrapper for the best-effort default plcommpro.dll path."""
     return _default_plcommpro_dll_path()
 
 
@@ -240,18 +344,39 @@ def _dll_candidates_for_request(request: Dict[str, Any]) -> list[str]:
         port = None
 
     hinted: list[str] = []
+    item = _single_get_options_item(request)
     if ip and port:
+        qhint_key = _query_affinity_key(request)
+        if qhint_key is not None:
+            qhint = _QUERY_DLL_HINTS.get(qhint_key)
+            if qhint and _is_viable_x86_dll(qhint):
+                hinted.append(qhint)
+        if item:
+            opt_hint = _OPTION_DLL_HINTS.get((ip, int(port), item.strip().lower()))
+            if opt_hint and _is_viable_x86_dll(opt_hint):
+                hinted.append(opt_hint)
         hint = _DLL_HINTS.get((ip, int(port)))
         if hint and _is_viable_x86_dll(hint):
             hinted.append(hint)
 
     arch = _preferred_plcommpro_arch()
-    if arch == "x64":
-        repo = [p for p in _plcommpro_repo_candidates(arch="x64") if _is_viable_x64_dll(p)]
-        extra = [p for p in _plcommpro_extra_dirs_candidates() if _is_viable_x64_dll(p)]
-    else:
-        repo = [p for p in _plcommpro_repo_candidates(arch="x86") if _is_viable_x86_dll(p)]
-        extra = [p for p in _plcommpro_extra_dirs_candidates() if _is_viable_x86_dll(p)]
+    arch_order = [arch, "x86" if arch == "x64" else "x64"]
+    repo: list[str] = []
+    extra: list[str] = []
+    sys_candidates: list[str] = []
+    for current_arch in arch_order:
+        if current_arch == "x64":
+            repo.extend([p for p in _plcommpro_repo_candidates(arch="x64") if _is_viable_x64_dll(p)])
+            extra.extend([p for p in _plcommpro_extra_dirs_candidates() if _is_viable_x64_dll(p)])
+            system32 = r"C:\\Windows\\System32\\plcommpro.dll"
+            if _is_viable_x64_dll(system32):
+                sys_candidates.append(system32)
+        else:
+            repo.extend([p for p in _plcommpro_repo_candidates(arch="x86") if _is_viable_x86_dll(p)])
+            extra.extend([p for p in _plcommpro_extra_dirs_candidates() if _is_viable_x86_dll(p)])
+            syswow64 = r"C:\\Windows\\SysWOW64\\plcommpro.dll"
+            if _is_viable_x86_dll(syswow64):
+                sys_candidates.append(syswow64)
 
     # Prefer newer bundles first when using uncommon ports (common for newer panels).
     if port and int(port) not in (4370, 4371, 4372):
@@ -268,17 +393,6 @@ def _dll_candidates_for_request(request: Dict[str, Any]) -> list[str]:
             else:
                 older.append(p)
         repo = newer + older
-
-    # Windows fallback
-    sys_candidates: list[str] = []
-    if arch == "x64":
-        system32 = r"C:\\Windows\\System32\\plcommpro.dll"
-        if _is_viable_x64_dll(system32):
-            sys_candidates = [system32]
-    else:
-        syswow64 = r"C:\\Windows\\SysWOW64\\plcommpro.dll"
-        if _is_viable_x86_dll(syswow64):
-            sys_candidates = [syswow64]
 
     # De-duplicate while preserving order.
     ordered: list[str] = hinted + extra + repo + sys_candidates
@@ -360,11 +474,23 @@ def _default_py_bridge_path() -> Optional[Path]:
     return None
 
 
-def _default_bridge_exe_path() -> Optional[Path]:
-    """Return a plcommpro bridge executable path (x86), if configured or found.
+def _bridge_exe_path_for_arch(arch: str) -> Optional[Path]:
+    try:
+        base = Path(__file__).resolve().parent
+        cand = base / "bridge_dotnet" / "PlcommproBridgeRunner" / "bin" / "Release" / "net8.0" / f"win-{arch}" / "publish" / "PlcommproBridgeRunner.exe"
+        if cand.exists() and cand.is_file():
+            return cand
+    except Exception:
+        pass
+    return None
 
-    This is the preferred modern path: run an x86 helper EXE on 64-bit Windows
-    to call the 32-bit plcommpro.dll without needing 32-bit Python.
+
+def _default_bridge_exe_path() -> Optional[Path]:
+    """Return the preferred published plcommpro bridge executable path.
+
+    Env `ZKACCESS_BRIDGE_EXE` still wins. Without an override we prefer the
+    architecture selected by `_preferred_plcommpro_arch()`, then fall back to
+    the other publish if only that one exists.
     """
     env = (os.environ.get("ZKACCESS_BRIDGE_EXE") or "").strip()
     if env:
@@ -375,49 +501,31 @@ def _default_bridge_exe_path() -> Optional[Path]:
         except Exception:
             pass
 
-    # Repo-local default (published output)
-    try:
-        base = Path(__file__).resolve().parent
-        cand = base / "bridge_dotnet" / "PlcommproBridgeRunner" / "bin" / "Release" / "net8.0" / "win-x86" / "publish" / "PlcommproBridgeRunner.exe"
-        if cand.exists() and cand.is_file():
+    preferred_arch = _preferred_plcommpro_arch()
+    arch_order = [preferred_arch, "x86" if preferred_arch == "x64" else "x64"]
+    for arch in arch_order:
+        cand = _bridge_exe_path_for_arch(arch)
+        if cand is not None:
             return cand
-    except Exception:
-        pass
     return None
 
 
 def _default_bridge_exe_path_x64() -> Optional[Path]:
-    """Return a plcommpro bridge executable path (x64), if found.
+    """Return a plcommpro bridge executable path (x64), if found."""
+    return _bridge_exe_path_for_arch("x64")
 
-    This is used only when the caller pins a 64-bit plcommpro.dll bundle.
-    """
-    # Repo-local default (published output)
-    try:
-        base = Path(__file__).resolve().parent
-        cand = (
-            base
-            / "bridge_dotnet"
-            / "PlcommproBridgeRunner"
-            / "bin"
-            / "Release"
-            / "net8.0"
-            / "win-x64"
-            / "publish"
-            / "PlcommproBridgeRunner.exe"
-        )
-        if cand.exists() and cand.is_file():
-            return cand
-    except Exception:
-        pass
-    return None
+
+def _default_bridge_exe_path_x86() -> Optional[Path]:
+    """Return a plcommpro bridge executable path (x86), if found."""
+    return _bridge_exe_path_for_arch("x86")
 
 
 def _bridge_exe_for_request(request: Dict[str, Any]) -> Optional[Path]:
     """Pick the best bridge EXE for a given request.
 
     - If env ZKACCESS_BRIDGE_EXE is set, it always wins.
-    - If request pins a dll_path and it is x64, use the win-x64 bridge.
-    - Otherwise, use the win-x86 bridge when available.
+    - If request pins a dll_path, use the matching bridge bitness.
+    - Otherwise, use the preferred published bridge for the current runtime.
     """
 
     env = (os.environ.get("ZKACCESS_BRIDGE_EXE") or "").strip()
@@ -461,6 +569,15 @@ def _bridge_exe_for_request(request: Dict[str, Any]) -> Optional[Path]:
                 "Build it with: dotnet publish zkeco_modern/agent/bridge_dotnet/PlcommproBridgeRunner/PlcommproBridgeRunner.csproj -c Release -r win-x64"
             )
         return b64
+
+    if dll_path and _is_x86_pe(dll_path):
+        b32 = _default_bridge_exe_path_x86()
+        if b32 is None:
+            raise PlcommproBridgeError(
+                "32-bit plcommpro.dll detected but win-x86 bridge is missing. "
+                "Build it with: dotnet publish zkeco_modern/agent/bridge_dotnet/PlcommproBridgeRunner/PlcommproBridgeRunner.csproj -c Release -r win-x86"
+            )
+        return b32
 
     return _default_bridge_exe_path()
 
@@ -649,8 +766,11 @@ def _run_bridge(request: Dict[str, Any], *, py_bridge: Optional[Path] = None) ->
     # If the caller explicitly pinned a DLL, do a single run.
     if "dll_path" in request:
         resp = _run_bridge_single(request, py_bridge=py_bridge)
-        if isinstance(resp, dict) and "dll_path_used" not in resp:
-            resp = {**resp, "dll_path_used": str(request.get("dll_path") or "")}
+        if isinstance(resp, dict):
+            resp = _finalize_bridge_response(resp, request=request)
+        if isinstance(resp, dict) and bool(resp.get("ok")):
+            _remember_option_dll_hint(request, resp, str(resp.get("dll_path_used") or request.get("dll_path") or ""))
+            _remember_query_dll_hint(request, resp, str(resp.get("dll_path_used") or request.get("dll_path") or ""))
         return resp
 
     candidates = _dll_candidates_for_request(request)
@@ -677,8 +797,8 @@ def _run_bridge(request: Dict[str, Any], *, py_bridge: Optional[Path] = None) ->
                 "data": f"bridge_error: {e}",
                 "last_error": 0,
             }
-        if isinstance(resp, dict) and "dll_path_used" not in resp:
-            resp = {**resp, "dll_path_used": dll_path}
+        if isinstance(resp, dict):
+            resp = _finalize_bridge_response(resp, request=req)
         last_resp = resp
 
         if bool(resp.get("ok")):
@@ -692,6 +812,8 @@ def _run_bridge(request: Dict[str, Any], *, py_bridge: Optional[Path] = None) ->
             else:
                 if ip and port:
                     _DLL_HINTS[(ip, int(port))] = dll_path
+                _remember_option_dll_hint(req, resp, dll_path)
+                _remember_query_dll_hint(req, resp, dll_path)
                 return resp
 
         # If it's clearly not a DLL/protocol issue, don't waste time trying all DLLs.
@@ -705,14 +827,22 @@ def _run_bridge(request: Dict[str, Any], *, py_bridge: Optional[Path] = None) ->
     # If no DLL produced a valid SearchDevice list, keep the first successful (even if empty/marker)
     # response to preserve legacy UX ("no devices found" vs a hard error).
     if action == "search_device" and best_ok_resp is not None:
-        return best_ok_resp
-    return last_resp
+        return _finalize_bridge_response(best_ok_resp, request=request)
+    return _finalize_bridge_response(last_resp, request=request)
 
 
-def set_device_options(conn: PlcommproConnInfo, items: str) -> Dict[str, Any]:
+def set_device_options(
+    conn: PlcommproConnInfo,
+    items: str,
+    *,
+    process_timeout_s: Optional[int] = None,
+    dll_path: Optional[str] = None,
+) -> Dict[str, Any]:
     return _run_bridge(
         {
             "action": "set_options",
+            **({"process_timeout_s": int(process_timeout_s)} if process_timeout_s is not None else {}),
+            **({"dll_path": str(dll_path)} if dll_path else {}),
             "comminfo": {
                 "comm_type": conn.comm_type,
                 "protocol": conn.protocol,
@@ -733,22 +863,99 @@ def get_device_options(
     process_timeout_s: Optional[int] = None,
     dll_path: Optional[str] = None,
 ) -> Dict[str, Any]:
-    return _run_bridge(
-        {
-            "action": "get_options",
-            **({"process_timeout_s": int(process_timeout_s)} if process_timeout_s is not None else {}),
-            **({"dll_path": str(dll_path)} if dll_path else {}),
-            "comminfo": {
-                "comm_type": conn.comm_type,
-                "protocol": conn.protocol,
-                "ipaddress": conn.ipaddress,
-                "ip_port": int(conn.ip_port),
-                "password": conn.password,
-                "timeout": int(conn.timeout),
-            },
-            "items": items,
-        }
-    )
+    timeout_s = process_timeout_s
+    if timeout_s is None:
+        try:
+            timeout_ms = int(conn.timeout or 3000)
+        except Exception:
+            timeout_ms = 3000
+        timeout_s = max(3, min(8, int((timeout_ms + 999) / 1000) + 2))
+    request = {
+        "action": "get_options",
+        **({"process_timeout_s": int(timeout_s)} if timeout_s is not None else {}),
+        **({"dll_path": str(dll_path)} if dll_path else {}),
+        "comminfo": {
+            "comm_type": conn.comm_type,
+            "protocol": conn.protocol,
+            "ipaddress": conn.ipaddress,
+            "ip_port": int(conn.ip_port),
+            "password": conn.password,
+            "timeout": int(conn.timeout),
+        },
+        "items": items,
+    }
+    resp = _run_bridge(request)
+    requested_items = [part.strip() for part in str(items or "").split(",") if part.strip()]
+    if bool(resp.get("ok")) or len(requested_items) <= 1:
+        return resp
+
+    merged: dict[str, str] = {}
+    dlls: list[str] = []
+    missing: list[str] = []
+    affinity_hits: list[str] = []
+    item_meta: dict[str, dict[str, Any]] = {}
+    item_aliases: dict[str, str] = {}
+    note_parts: list[str] = [str(resp.get("note") or "").strip()]
+    for item in requested_items:
+        single_req = dict(request)
+        single_req["items"] = item
+        single_resp = _run_bridge(single_req)
+        item_meta[item] = _bridge_meta_dict(single_resp)
+        item_aliases[item] = str(single_resp.get("action_alias") or "").strip()
+        note_parts.append(str(single_resp.get("note") or "").strip())
+        if not bool(single_resp.get("ok")):
+            missing.append(item)
+            continue
+        raw = str(single_resp.get("data") or "").replace("\x00", "").strip()
+        if not raw or "=" not in raw:
+            missing.append(item)
+            continue
+        for part in [p.strip() for p in raw.split(",") if p.strip()]:
+            if "=" not in part:
+                continue
+            key, value = part.split("=", 1)
+            merged[str(key or "").strip()] = str(value or "").strip()
+        dll_used = str(single_resp.get("dll_path_used") or "").strip()
+        if dll_used:
+            dlls.append(dll_used)
+        try:
+            if conn.ipaddress and int(conn.ip_port or 0) > 0:
+                cached = _OPTION_DLL_HINTS.get((str(conn.ipaddress).strip(), int(conn.ip_port), item.strip().lower()))
+                if cached and dll_used and cached == dll_used:
+                    affinity_hits.append(item)
+        except Exception:
+            pass
+
+    if not merged:
+        return resp
+
+    ordered = [f"{item}={merged[item]}" for item in requested_items if item in merged]
+    return {
+        "ok": True,
+        "result": 0,
+        "data": ",".join(ordered),
+        "last_error": 0,
+        "action": str(request.get("action") or "get_options"),
+        "action_alias": str(resp.get("action_alias") or request.get("action") or "get_options"),
+        "dll_path_used": ";".join(sorted(set(dlls))),
+        "partial": bool(missing),
+        "missing_items": missing,
+        "note": _append_note_parts(
+            *note_parts,
+            f"get_options fallback: item-by-item ({len(ordered)}/{len(requested_items)})",
+        ),
+        "dll_affinity_hits": affinity_hits,
+        "meta": {
+            "fallback_mode": "item-by-item",
+            "requested_items": requested_items,
+            "resolved_items": [item for item in requested_items if item in merged],
+            "missing_items": missing,
+            "dll_affinity_hits": affinity_hits,
+            "item_meta": item_meta,
+            "item_action_aliases": item_aliases,
+        },
+        "transport": "bridge",
+    }
 
 
 def connect_only(
@@ -812,11 +1019,18 @@ def get_rtlog(
     )
 
 
-def data_count(conn: PlcommproConnInfo, table: str, *, process_timeout_s: Optional[int] = None) -> Dict[str, Any]:
+def data_count(
+    conn: PlcommproConnInfo,
+    table: str,
+    *,
+    process_timeout_s: Optional[int] = None,
+    dll_path: Optional[str] = None,
+) -> Dict[str, Any]:
     return _run_bridge(
         {
             "action": "data_count",
             **({"process_timeout_s": int(process_timeout_s)} if process_timeout_s is not None else {}),
+            **({"dll_path": str(dll_path)} if dll_path else {}),
             "comminfo": {
                 "comm_type": conn.comm_type,
                 "protocol": conn.protocol,
@@ -876,7 +1090,20 @@ def query_data(
             retry_payload["fields"] = "*"
             retry_resp = _run_bridge(retry_payload)
             if isinstance(retry_resp, dict):
-                retry_resp.setdefault("note", f"query_data retry: user fields='*' (from {fields})")
+                retry_resp = dict(retry_resp)
+                retry_resp["note"] = _append_note_parts(
+                    retry_resp.get("note"),
+                    f"query_data retry: user fields='*' (from {fields})",
+                )
+                retry_meta = _bridge_meta_dict(retry_resp)
+                retry_meta.update(
+                    {
+                        "fallback_mode": "fields=*",
+                        "original_fields": fields,
+                        "retry_fields": "*",
+                    }
+                )
+                retry_resp["meta"] = retry_meta
             return retry_resp
     except Exception:
         pass
@@ -917,7 +1144,15 @@ def delete_device_data(
     )
 
 
-def set_device_data(conn: PlcommproConnInfo, table: str, data: str, option: str = "") -> Dict[str, Any]:
+def set_device_data(
+    conn: PlcommproConnInfo,
+    table: str,
+    data: str,
+    option: str = "",
+    *,
+    process_timeout_s: Optional[int] = None,
+    dll_path: Optional[str] = None,
+) -> Dict[str, Any]:
     """Write rows into a device table using plcommpro.SetDeviceData.
 
     `data` is typically a concatenation of lines separated by CRLF (\r\n), where each
@@ -929,6 +1164,8 @@ def set_device_data(conn: PlcommproConnInfo, table: str, data: str, option: str 
     return _run_bridge(
         {
             "action": "set_data",
+            **({"process_timeout_s": int(process_timeout_s)} if process_timeout_s is not None else {}),
+            **({"dll_path": str(dll_path)} if dll_path else {}),
             "comminfo": {
                 "comm_type": conn.comm_type,
                 "protocol": conn.protocol,
@@ -994,7 +1231,16 @@ def modify_ip_udp(payload: str, address: Optional[str] = None) -> Dict[str, Any]
     return _run_bridge({"action": "modify_ip", "payload": payload, "address": addr})
 
 
-def control_device(conn: PlcommproConnInfo, door: int, index: int, state: int, time: int = 0) -> Dict[str, Any]:
+def control_device(
+    conn: PlcommproConnInfo,
+    door: int,
+    index: int,
+    state: int,
+    time: int = 0,
+    *,
+    process_timeout_s: Optional[int] = None,
+    dll_path: Optional[str] = None,
+) -> Dict[str, Any]:
     """Control door relay via plcommpro.ControlDevice (op=1).
 
     Legacy semantics:
@@ -1007,6 +1253,8 @@ def control_device(conn: PlcommproConnInfo, door: int, index: int, state: int, t
     return _run_bridge(
         {
             "action": "control_device",
+            **({"process_timeout_s": int(process_timeout_s)} if process_timeout_s is not None else {}),
+            **({"dll_path": str(dll_path)} if dll_path else {}),
             "comminfo": {
                 "comm_type": conn.comm_type,
                 "protocol": conn.protocol,
@@ -1023,11 +1271,19 @@ def control_device(conn: PlcommproConnInfo, door: int, index: int, state: int, t
     )
 
 
-def cancel_alarm(conn: PlcommproConnInfo, door: int = 0) -> Dict[str, Any]:
+def cancel_alarm(
+    conn: PlcommproConnInfo,
+    door: int = 0,
+    *,
+    process_timeout_s: Optional[int] = None,
+    dll_path: Optional[str] = None,
+) -> Dict[str, Any]:
     """Cancel alarm via plcommpro.ControlDevice (op=2)."""
     return _run_bridge(
         {
             "action": "cancel_alarm",
+            **({"process_timeout_s": int(process_timeout_s)} if process_timeout_s is not None else {}),
+            **({"dll_path": str(dll_path)} if dll_path else {}),
             "comminfo": {
                 "comm_type": conn.comm_type,
                 "protocol": conn.protocol,
@@ -1058,11 +1314,20 @@ def reboot_device(conn: PlcommproConnInfo) -> Dict[str, Any]:
     )
 
 
-def control_normal_open(conn: PlcommproConnInfo, door: int, state: int) -> Dict[str, Any]:
+def control_normal_open(
+    conn: PlcommproConnInfo,
+    door: int,
+    state: int,
+    *,
+    process_timeout_s: Optional[int] = None,
+    dll_path: Optional[str] = None,
+) -> Dict[str, Any]:
     """Toggle door normal-open via plcommpro.ControlDevice (op=4)."""
     return _run_bridge(
         {
             "action": "control_normal_open",
+            **({"process_timeout_s": int(process_timeout_s)} if process_timeout_s is not None else {}),
+            **({"dll_path": str(dll_path)} if dll_path else {}),
             "comminfo": {
                 "comm_type": conn.comm_type,
                 "protocol": conn.protocol,

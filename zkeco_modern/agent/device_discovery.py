@@ -1,15 +1,14 @@
 """Device discovery and network scanning for ZK access control devices.
 
 This module provides network scanning and device identification capabilities
-using the ZK access protocol (TCP/IP port 4370 by default).
+using the ZK access protocol. Older controllers usually answer on 4370, while
+newer families can expose the same protocol on ports such as 14370.
 """
 
 import socket
-import struct
 import logging
-import threading
 import ipaddress
-from typing import List, Dict, Optional, Tuple
+from typing import Iterable, List, Dict, Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 LOG = logging.getLogger("device_discovery")
@@ -19,13 +18,14 @@ class ZKProtocol:
     """ZK Device Protocol Handler.
     
     Implements basic ZK access protocol communication for device discovery
-    and identification via TCP/IP (port 4370 default).
+    and identification via TCP/IP across common controller ports.
     """
     
     # ZK Protocol constants
     HEADER = 0xF0  # Protocol header byte
     CMD_DEVINFO = 0xA0  # Get device info command
-    PORT = 4370  # Default ZK device port
+    PORT = 4370  # Legacy default ZK device port
+    PORT_CANDIDATES = (4370, 14370, 4371, 4372)
     TIMEOUT = 2.0  # Socket timeout
     
     @staticmethod
@@ -44,51 +44,63 @@ class ZKProtocol:
         return frame + bytes([checksum])
     
     @staticmethod
-    def connect_and_identify(ip: str, port: int = PORT, timeout: float = TIMEOUT) -> Optional[Dict]:
+    def connect_and_identify(ip: str, port: int = PORT, timeout: float = TIMEOUT, candidate_ports: Iterable[int] | None = None) -> Optional[Dict]:
         """Connect to device and retrieve identification info.
         
         Args:
             ip: Device IP address
-            port: Device port (default 4370)
+            port: Preferred device port
             timeout: Connection timeout in seconds
             
         Returns:
             Dict with device info (sn, name, version, etc.) or None if failed
         """
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(timeout)
-            sock.connect((ip, port))
-            
-            # Send DEVINFO command to get device details
-            cmd_frame = ZKProtocol._build_command(ZKProtocol.CMD_DEVINFO)
-            sock.send(cmd_frame)
-            
-            # Receive response (simplified - real implementation would parse ZK response format)
-            response = sock.recv(1024)
-            sock.close()
-            
-            if response:
-                # Parse basic response (this is simplified; real ZK protocol is more complex)
-                return {
-                    'ip': ip,
-                    'port': port,
-                    'serial_number': 'ZK' + format(socket.inet_aton(ip)[0], '08x').upper(),  # Placeholder
-                    'device_type': 'access_panel',
-                    'firmware_version': 'v1.0',  # Placeholder
-                    'connectivity': 'tcp'
-                }
-            return None
-            
-        except socket.timeout:
-            LOG.debug(f"Device {ip}:{port} - connection timeout")
-            return None
-        except ConnectionRefusedError:
-            LOG.debug(f"Device {ip}:{port} - connection refused")
-            return None
-        except Exception as e:
-            LOG.debug(f"Device {ip}:{port} - error: {e}")
-            return None
+        ports: list[int] = []
+        for value in [port, *(candidate_ports or ZKProtocol.PORT_CANDIDATES)]:
+            try:
+                p = int(value)
+            except Exception:
+                continue
+            if p <= 0 or p > 65535 or p in ports:
+                continue
+            ports.append(p)
+
+        for try_port in ports:
+            sock = None
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(timeout)
+                sock.connect((ip, try_port))
+
+                # Send DEVINFO command to get device details.
+                cmd_frame = ZKProtocol._build_command(ZKProtocol.CMD_DEVINFO)
+                sock.send(cmd_frame)
+
+                # Receive response (simplified; real ZK protocol parsing can be extended later).
+                response = sock.recv(1024)
+                sock.close()
+
+                if response:
+                    return {
+                        'ip': ip,
+                        'port': try_port,
+                        'serial_number': 'ZK' + format(socket.inet_aton(ip)[0], '08x').upper(),
+                        'device_type': 'access_panel',
+                        'firmware_version': 'v1.0',
+                        'connectivity': 'tcp',
+                    }
+            except socket.timeout:
+                LOG.debug(f"Device {ip}:{try_port} - connection timeout")
+            except ConnectionRefusedError:
+                LOG.debug(f"Device {ip}:{try_port} - connection refused")
+            except Exception as e:
+                LOG.debug(f"Device {ip}:{try_port} - error: {e}")
+            finally:
+                try:
+                    sock.close()
+                except Exception:
+                    pass
+        return None
 
 
 class NetworkScanner:

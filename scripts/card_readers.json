@@ -16,5 +16,16 @@
                    "device_id": 22,
                    "door_id": 1,
                    "door_pk": 27
+               },
+    "wiegand":  {
+                    "enabled":  true,
+                    "listen_host":  "0.0.0.0",
+                    "port":  "9002",
+                    "name":  "W26 Hardware Tap",
+                    "format_name":  "Wiegand 26",
+                    "device_id": 22,
+                    "door_id": 1,
+                    "door_pk": 27,
+                    "source":  "w26-hardware-tap"
                }
 }

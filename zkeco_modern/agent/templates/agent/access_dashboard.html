@@ -259,15 +259,16 @@ table tbody td:last-child { border-right: none; }
     <h2>🔧 Recent Commands</h2>
     <table style="width: 100%;">
       <thead>
-        <tr><th>Time</th><th>Command</th><th>Status</th></tr>
+        <tr><th>Time</th><th>Command</th><th>Status</th><th>Truth</th></tr>
       </thead>
       <tbody id="recentCommandsBody">
       {% for c in recent_commands %}
         <tr><td>{{ c.created_at|localtime|date:"H:i" }}</td>
           <td>{{ c.command|truncatewords:5 }}</td>
           <td style="text-align: center; color: #3da5d9;">{{ c.status }}</td>
+          <td style="font-size: 10px; color: #9dc7d8;">a={{ c.accepted|yesno:"yes,no" }} c={{ c.controller_confirmed|yesno:"yes,no" }} p={% if c.physical_changed %}yes{% elif c.physical_changed == False %}no{% else %}n/a{% endif %}</td>
         </tr>
-      {% empty %}<tr><td colspan="3" style="text-align: center; color: #5a7a90; padding: 10px;">No commands</td></tr>
+      {% empty %}<tr><td colspan="4" style="text-align: center; color: #5a7a90; padding: 10px;">No commands</td></tr>
       {% endfor %}
       </tbody>
     </table>
@@ -1103,6 +1104,17 @@ function escapeHtml(str){
   return (str || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'}[c]));
 }
 
+function commandTruthText(c){
+  const accepted = (c && c.accepted === true) ? 'yes' : 'no';
+  const confirmed = (c && c.controller_confirmed === true) ? 'yes' : 'no';
+  const physical = (c && c.physical_changed === true) ? 'yes' : ((c && c.physical_changed === false) ? 'no' : 'n/a');
+  let text = `a=${accepted} c=${confirmed} p=${physical}`;
+  if(c && c.physical_evidence){
+    text += ` (${escapeHtml(String(c.physical_evidence))})`;
+  }
+  return text;
+}
+
 // WebSocket: update dashboard device statuses in real-time
 ;(function(){
   const scheme = (location.protocol === 'https:') ? 'wss' : 'ws';
@@ -1168,14 +1180,14 @@ function renderRecentCommands(items){
   const body = document.getElementById('recentCommandsBody');
   if(!body){ return; }
   if(!items || !items.length){
-    body.innerHTML = '<tr><td colspan="3" style="text-align: center; color: #5a7a90; padding: 10px;">No commands</td></tr>';
+    body.innerHTML = '<tr><td colspan="4" style="text-align: center; color: #5a7a90; padding: 10px;">No commands</td></tr>';
     return;
   }
   const rows = items.map(c=>{
     const t = c.created_at ? new Date(c.created_at).toLocaleTimeString('ro-RO',{hour12:false, hour:'2-digit', minute:'2-digit'}) : '';
     const cmd = escapeHtml(c.command || '');
     const st = escapeHtml(c.status || '');
-    return `<tr><td>${t}</td><td>${cmd}</td><td style="text-align:center;color:#3da5d9;">${st}</td></tr>`;
+    return `<tr><td>${t}</td><td>${cmd}</td><td style="text-align:center;color:#3da5d9;">${st}</td><td style="font-size:10px;color:#9dc7d8;">${commandTruthText(c)}</td></tr>`;
   }).join('');
   body.innerHTML = rows;
 }

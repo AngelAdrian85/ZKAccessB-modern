@@ -1,0 +1,237 @@
+<div class="access-pane" data-tab="wiegand">
+  <style>
+    .wg-grid{display:grid;grid-template-columns:1.2fr 1fr;gap:10px;align-items:start;}
+    .wg-card{border:1px solid rgba(61,106,139,0.75);border-radius:2px;background:#0f2433;padding:8px;}
+    .wg-card h4{margin:0 0 8px 0;color:#9fd2f1;font-size:12px;font-weight:900;}
+    .wg-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    .wg-form-grid .field{min-width:0;}
+    .wg-preview{min-height:140px;max-height:240px;overflow:auto;background:#081622;border:1px solid rgba(61,106,139,0.7);padding:8px;border-radius:2px;color:#d8ecfb;font-family:Consolas, monospace;font-size:11px;white-space:pre-wrap;}
+    .wg-table{width:100%;border-collapse:collapse;font-size:10px;background:#163247;color:#e8f0f8;table-layout:fixed;}
+    .wg-table thead{background:linear-gradient(to bottom,#3da5d9 0%,#2d7ba5 100%);color:#fff;}
+    .wg-table th,.wg-table td{padding:4px 6px;border-bottom:1px solid rgba(61,106,139,0.65);border-right:1px solid rgba(61,106,139,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;}
+    .wg-table th:last-child,.wg-table td:last-child{border-right:none;}
+    .wg-pill{display:inline-flex;align-items:center;padding:1px 6px;border-radius:999px;font-size:10px;font-weight:900;background:rgba(61,165,217,0.2);border:1px solid rgba(61,165,217,0.35);color:#e8f1f8;}
+    .wg-pill.active{background:rgba(45,164,78,0.18);border-color:rgba(45,164,78,0.35);}
+    .wg-pill.system{background:rgba(249,115,22,0.18);border-color:rgba(249,115,22,0.35);}
+    .wg-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+    .wg-note{font-size:11px;color:#b7d6eb;line-height:1.45;}
+    .wg-code{display:block;background:#081622;border:1px solid rgba(61,106,139,0.7);padding:8px;border-radius:2px;color:#d8ecfb;font-family:Consolas, monospace;font-size:11px;white-space:pre-wrap;}
+    .wg-test-layout{display:grid;grid-template-columns:minmax(280px, 320px) minmax(0, 1fr);gap:12px;align-items:start;}
+    .wg-test-sidebar{display:flex;flex-direction:column;gap:10px;min-width:0;}
+    .wg-test-sidebar .field{min-width:0;}
+    .wg-test-sidebar select[data-wiegand-test-door="1"]{min-height:320px;font-size:12px;line-height:1.35;}
+    .wg-test-sidebar .wg-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+    .wg-test-sidebar .wg-actions .btn-small{justify-content:center;padding:6px 8px;font-size:10px;min-height:30px;}
+    .wg-test-status-card{background:#133047;border:1px solid rgba(61,106,139,0.7);border-radius:2px;padding:10px;min-height:96px;display:flex;align-items:flex-start;}
+    .wg-test-status-card .wg-note{font-size:12px;line-height:1.55;}
+    .wg-test-results .table-shell{overflow:auto;max-width:100%;}
+    @media (max-width: 980px){
+      .wg-grid{grid-template-columns:1fr;}
+      .wg-form-grid{grid-template-columns:1fr;}
+      .wg-test-layout{grid-template-columns:1fr;}
+      .wg-test-sidebar .wg-actions{grid-template-columns:1fr;}
+      .wg-test-sidebar select[data-wiegand-test-door="1"]{min-height:220px;}
+    }
+  </style>
+
+  <div class="action-bar">
+    <div class="action-left">
+      <span class="access-badge">Wiegand</span>
+      <span class="hint">Formate cunoscute, decodare manuală și listener brut pentru carduri neînrolate.</span>
+    </div>
+    <div class="action-right">
+      <button class="btn-secondary btn-small" type="button" data-access-ui="reload">🔄 Reîncarcă</button>
+      <button class="btn-secondary btn-small" type="button" data-access-ui="logs" data-access-module="wiegand-format" data-access-title="Formate Wiegand">📋 Loguri</button>
+      <button class="btn-secondary btn-small" type="button" data-wiegand-test-open="1">Testare format</button>
+      {% if can_edit %}
+      <button class="btn-primary btn-small" type="button" data-access-open="1" data-title="Adaugă format Wiegand" data-url="{% url 'crud-wiegand-format-create' %}?modal=1">+ Adaugă format</button>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="wg-grid">
+    <div class="wg-card">
+      <h4>Test manual / trimitere în monitorizare</h4>
+      <form data-wiegand-manual-form="1">
+        <div class="wg-form-grid">
+          <div class="field">
+            <label>Format</label>
+            <select name="wiegand_format_id" data-wiegand-manual-select="1">
+              {% for row in rows %}
+              <option value="{{ row.id }}" data-payload="{{ row.payload_json|escape }}" {% if active_row and active_row.id == row.id %}selected{% endif %}>{{ row.name }} ({{ row.bit_length }}b){% if row.is_active %} - activ{% endif %}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label>Sursă</label>
+            <input type="text" name="source" value="manual-wiegand" />
+          </div>
+        </div>
+
+        <div class="wg-form-grid" style="margin-top:8px;">
+          <div class="field">
+            <label>Ușă din baza de date</label>
+            <select name="door_pk" data-wiegand-door-select="1">
+              <option value="">Fără ușă selectată</option>
+              {% for door in door_rows %}
+              <option value="{{ door.id }}"
+                      data-device-id="{{ door.device_id }}"
+                      data-door-number="{{ door.door_number }}"
+                      data-device-name="{{ door.device_name|escape }}"
+                      data-door-name="{{ door.door_name|escape }}">{{ door.label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label>Context test</label>
+            <input type="text" value="Evenimentul salvat merge în DeviceRealtimeLog și Live Monitor" readonly />
+          </div>
+        </div>
+
+        <div class="wg-form-grid" style="margin-top:8px;">
+          <div class="field">
+            <label>Bits</label>
+            <textarea name="wiegand_bits" rows="4" placeholder="010100101..." style="width:100%;max-width:100%;min-width:0;padding:6px;border:1px solid #3d6a8b;background:#0a1a27;color:#e8f0f8;border-radius:2px;"></textarea>
+          </div>
+          <div class="field">
+            <label>Hex / Int</label>
+            <input type="text" name="wiegand_hex" placeholder="80A12345" style="margin-bottom:6px;" />
+            <input type="text" name="wiegand_int" placeholder="123456789" />
+          </div>
+        </div>
+
+        <div class="wg-actions" style="margin-top:8px;">
+          <button type="button" class="btn-secondary btn-small" data-wiegand-decode="1">Decodează</button>
+          <button type="button" class="btn-primary btn-small" data-wiegand-send="1">Trimite în monitorizare</button>
+          <span class="hint">Trimiterea folosește `card_read_push` fără `remote_open`, doar pentru monitor/enrollment.</span>
+        </div>
+
+        <div class="wg-preview" data-wiegand-preview="1" style="margin-top:8px;">Alege formatul și introdu bits/hex/int.</div>
+      </form>
+    </div>
+
+    <div class="wg-card">
+      <h4>Listener brut</h4>
+      <div class="wg-note">Programul nou acceptă linii `BITS:`, `HEX:`, `INT:` sau JSON și le postează către server folosind formatul selectat sau unul transmis explicit în payload.</div>
+      <div class="wg-code" style="margin-top:8px;">python {{ listener_path }} --server-url {{ listener_server_url }} --listen-port 9105 --format-name "{% if active_row %}{{ active_row.name }}{% else %}Wiegand 26{% endif %}"</div>
+      <div class="wg-note" style="margin-top:8px;">Exemple intrare:</div>
+      <div class="wg-code" style="margin-top:6px;">BITS:00000101000001000111100010010000000
+HEX:80A12345
+{"wiegand_bits":"00000101000001000111100010010000000","wiegand_format":"Wiegand 35"}</div>
+      <div class="wg-note" style="margin-top:8px;">Listenerul completează automat `wiegand_format_config` pentru formatele custom dacă i se trimite JSON complet.</div>
+    </div>
+  </div>
+
+  <div class="table-shell" style="margin-top:10px;">
+    <table class="wg-table">
+      <thead>
+        <tr>
+          <th style="width:60px;">ID</th>
+          <th style="width:210px;">Format</th>
+          <th style="width:70px;">Biți</th>
+          <th style="width:70px;">Mod</th>
+          <th style="width:220px;">Rezumat</th>
+          <th style="width:170px;">Stare</th>
+          <th>Acțiuni</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td><strong>#{{ row.id }}</strong></td>
+          <td title="{{ row.name }}">{{ row.name }}</td>
+          <td>{{ row.bit_length }}</td>
+          <td>Mode {{ row.mode }}</td>
+          <td title="{{ row.summary }}">{{ row.summary }}</td>
+          <td>
+            {% if row.is_active %}<span class="wg-pill active">Activ</span>{% endif %}
+            {% if row.system_defined %}<span class="wg-pill system">Built-in</span>{% endif %}
+            {% if row.default_fmt %}<span class="wg-pill">Auto</span>{% endif %}
+          </td>
+          <td>
+            <div class="wg-actions">
+              <button type="button" class="btn-secondary btn-small" data-wiegand-use="1" data-format-id="{{ row.id }}">Folosește</button>
+              {% if can_edit %}
+              <button type="button" class="btn-secondary btn-small" data-wiegand-activate="1" data-url="{% url 'crud-wiegand-format-activate' row.id %}">Activează</button>
+              <button type="button" class="btn-success btn-small" data-access-open="1" data-title="Editează format Wiegand" data-url="{% url 'crud-wiegand-format-edit' row.id %}?modal=1">Editează</button>
+              {% if not row.system_defined %}
+              <button type="button" class="btn-danger btn-small" data-access-del="1" data-confirm="Ștergi formatul Wiegand?" data-url="{% url 'crud-wiegand-format-delete' row.id %}">Șterge</button>
+              {% endif %}
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="td-center-muted">Nu există formate Wiegand.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="access-pager">
+    <span>{{ page.number }}/{{ page.paginator.num_pages }}</span>
+    {% if page.has_previous %}<a class="btn-secondary btn-small" data-access-page="1" href="{{ request.path }}?embed=1&page={{ page.previous_page_number }}">«</a>{% endif %}
+    {% if page.has_next %}<a class="btn-secondary btn-small" data-access-page="1" href="{{ request.path }}?embed=1&page={{ page.next_page_number }}">»</a>{% endif %}
+  </div>
+
+  <div class="modal-backdrop" data-wiegand-test-modal="1" aria-hidden="true" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.72);align-items:center;justify-content:center;z-index:2400;padding:12px;">
+    <div class="modal" style="width:min(1100px, calc(100vw - 28px));max-height:92vh;background:#1e4a6b;border:2px solid #3da5d9;border-radius:2px;box-shadow:0 20px 50px rgba(0,0,0,0.55);overflow:hidden;display:flex;flex-direction:column;">
+      <div class="modal-header" style="background:#163247;border-bottom:1px solid #3da5d9;padding:4px 6px;display:flex;align-items:center;justify-content:space-between;gap:8px;color:#7db3d9;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.3px;">
+        <div style="width:30px;"></div>
+        <div class="modal-title">Testing Wiegand Card Format</div>
+        <button type="button" class="modal-close" data-wiegand-test-close="1" title="Închide" style="background:#163247;border:1px solid #3d6a8b;color:#9fd2f1;width:22px;height:22px;border-radius:2px;cursor:pointer;font-weight:700;font-size:14px;">✕</button>
+      </div>
+      <div class="modal-body" style="padding:8px;overflow:auto;color:#e8f0f8;">
+        <div class="wg-test-layout">
+          <div class="wg-card wg-test-sidebar">
+            <h4>Select door</h4>
+            <div class="field">
+              <label>Door</label>
+              <select data-wiegand-test-door="1" size="12" style="width:100%;padding:6px;border:1px solid #3d6a8b;background:#0a1a27;color:#e8f0f8;border-radius:2px;">
+                {% for door in door_rows %}
+                <option value="{{ door.id }}"
+                        data-device-id="{{ door.device_id }}"
+                        data-door-number="{{ door.door_number }}"
+                        data-device-name="{{ door.device_name|escape }}"
+                        data-door-name="{{ door.door_name|escape }}">{{ door.label }}</option>
+                {% empty %}
+                <option value="">Nu există uși configurate.</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="wg-actions" style="margin-top:10px;">
+              <button type="button" class="btn-primary btn-small" data-wiegand-test-start="1">Begin testing</button>
+              <button type="button" class="btn-secondary btn-small" data-wiegand-test-stop="1">Stop</button>
+            </div>
+            <div class="wg-test-status-card">
+              <div class="wg-note" data-wiegand-test-status="1">Alege o ușă și pornește testul. Evenimentele brute ajunse prin listener sau formularul manual se vor atașa de ușa selectată și se vor salva în DB.</div>
+            </div>
+          </div>
+
+          <div class="wg-card wg-test-results">
+            <h4>Testing result</h4>
+            <div class="table-shell">
+              <table class="wg-table" data-wiegand-test-table="1">
+                <thead>
+                  <tr>
+                    <th style="width:150px;">Time</th>
+                    <th style="width:160px;">Device</th>
+                    <th style="width:120px;">Event point</th>
+                    <th style="width:160px;">Event Description</th>
+                    <th style="width:120px;">Card Number</th>
+                    <th style="width:180px;">No.(Firstname Lastname)</th>
+                    <th style="width:100px;">Status</th>
+                    <th style="width:120px;">Verify Mode</th>
+                  </tr>
+                </thead>
+                <tbody data-wiegand-test-body="1">
+                  <tr><td colspan="8" class="td-center-muted">Nu există încă evenimente de test.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

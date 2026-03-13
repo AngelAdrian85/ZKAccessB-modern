@@ -23,6 +23,8 @@ urlpatterns = [
         [
             path("iclock/cdata", _iclock_views.iclock_cdata, name="iclock-cdata"),
             path("iclock/cdata/", _iclock_views.iclock_cdata, name="iclock-cdata-slash"),
+            path("iclock/getrawlog", _iclock_views.iclock_getrawlog, name="iclock-getrawlog"),
+            path("iclock/getrawlog/", _iclock_views.iclock_getrawlog, name="iclock-getrawlog-slash"),
             path("iclock/getrequest", _iclock_views.iclock_getrequest, name="iclock-getrequest"),
             path("iclock/getrequest/", _iclock_views.iclock_getrequest, name="iclock-getrequest-slash"),
         ]

@@ -13,6 +13,7 @@ class Command(BaseCommand):
     )
 
     def add_arguments(self, parser):
+        parser.add_argument("--device-id", type=int, default=0, help="Optional Device id for route-aware metadata")
         parser.add_argument("--ip", type=str, required=True, help="Device IP (e.g. 192.168.1.235)")
         parser.add_argument(
             "--ports",
@@ -50,6 +51,11 @@ class Command(BaseCommand):
             default=8,
             help="Bridge process timeout in seconds for connect_only (default 8)",
         )
+        parser.add_argument(
+            "--strict-ports",
+            action="store_true",
+            help="Use exactly the supplied --ports list without route-aware overlay.",
+        )
 
     def _tcp_open(self, ip: str, port: int, timeout_s: float) -> bool:
         sock: socket.socket | None = None
@@ -81,6 +87,7 @@ class Command(BaseCommand):
         timeout_ms = int(options.get("timeout_ms") or 1500)
         tcp_timeout = float(options.get("tcp_timeout") or 0.35)
         process_timeout_s = int(options.get("process_timeout_s") or 8)
+        strict_ports = bool(options.get("strict_ports"))
 
         ports: list[int] = []
         for chunk in ports_raw.split(","):
@@ -104,6 +111,18 @@ class Command(BaseCommand):
         if not protocols:
             protocols = ["TCP", "UDP"]
 
+        from agent.diagnostic_ports import lookup_device, password_candidates, resolve_diagnostic_route
+
+        dev = lookup_device(device_id=int(options.get("device_id") or 0), ip=ip)
+        if not strict_ports:
+            route_ctx = resolve_diagnostic_route(device=dev, configured_port=(ports[0] if ports else None), strict_port=False, extra_ports=tuple(ports))
+            route = dict(route_ctx.get("route") or {})
+            ports = list(route_ctx.get("candidate_ports") or ports)
+            self.stdout.write(
+                "Route resolution: "
+                f"effective_port={route_ctx.get('effective_port')} route_status={route.get('route_status')} candidates={ports}"
+            )
+
         from agent.plcommpro_bridge import (
             PlcommproConnInfo,
             bridge_available,
@@ -116,28 +135,8 @@ class Command(BaseCommand):
             )
             return
 
-        # Build password attempts.
-        pw_first = options.get("password")
-        pw_first = None if pw_first is None else str(pw_first)
-
-        pw_db = ""
-        try:
-            from agent.models import SystemSettings
-
-            ss = SystemSettings.get_solo()
-            pw_db = str(getattr(ss, "default_comm_password", "") or "").strip()
-        except Exception:
-            pw_db = ""
-
-        candidates: list[str] = []
-        if pw_first is not None:
-            candidates.append(str(pw_first))
-        if pw_db and pw_db not in candidates:
-            candidates.append(pw_db)
-        # Common fallbacks
-        for extra in ("", "0"):
-            if extra not in candidates:
-                candidates.append(extra)
+        pw_first = str(options.get("password") or "")
+        candidates = password_candidates(supplied_password=pw_first, device=dev)
 
         self.stdout.write(f"IP={ip}")
         self.stdout.write(f"Ports={ports}")

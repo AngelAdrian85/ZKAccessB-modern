@@ -1,6 +1,7 @@
 import os
 import json
 import threading
+import time
 from types import SimpleNamespace
 from typing import Any, Optional, cast
 from django.http import JsonResponse, HttpRequest, HttpResponse
@@ -12,15 +13,18 @@ from django.db import transaction
 
 from .models import DeviceRealtimeLog, DeviceEventLog, DeviceStatus, Device, DSTime
 from .models import Door, DoorFirstCardRule, DoorMultiCardRule, TimeSegment, Holiday, AccessLevel, Employee
-from .models import CommandLog, EmployeeAccessCache, EmployeeCard
+from .models import CommandLog, EmployeeAccessCache, EmployeeCard, WiegandCardFormat
 try:
     from .models import AuditLog
 except ImportError:
     AuditLog = None
 from .forms import (DoorForm, DoorFirstCardRuleForm, DoorMultiCardRuleForm, TimeSegmentFormWithDays, HolidayForm, AccessLevelForm,
                     EmployeeForm, EmployeeExtendedForm, DeptForm, AreaForm,
-                    AccessLogFilterForm, DeviceExtendedForm, DSTimeForm, WizardDoorDraftForm)
+                    AccessLogFilterForm, DeviceExtendedForm, DSTimeForm, WizardDoorDraftForm, WiegandCardFormatForm)
 from . import forms as _agent_forms
+from .controller_decoders import decode_user_rows
+from .wiegand_decoder import build_wiegand_format_from_mapping, decode_wiegand, list_known_wiegand_formats, normalize_wiegand_bits
+from .uid_correlation import normalize_door_number, remember_sniffed_uid
 IssueCardForm = getattr(_agent_forms, 'IssueCardForm', None)
 try:
     from legacy_models.models import Area as LegacyArea, AccessLog as LegacyAccessLog, Dept
@@ -127,6 +131,154 @@ def _write_json_safe(p, data) -> bool:
         return False
 
 
+def _wiegand_heartbeat_path():
+    try:
+        from pathlib import Path
+
+        return Path.home() / 'zkeco_reader_heartbeat_wiegand.json'
+    except Exception:
+        from pathlib import Path
+
+        return Path('zkeco_reader_heartbeat_wiegand.json')
+
+
+def _wiegand_trace_path():
+    try:
+        from pathlib import Path
+        from django.conf import settings
+
+        base = Path(getattr(settings, 'BASE_DIR', Path.cwd()))
+        return base.parent / 'tmp_wiegand_listener_trace.jsonl'
+    except Exception:
+        from pathlib import Path
+
+        return Path('tmp_wiegand_listener_trace.jsonl')
+
+
+def _read_last_jsonl_event(path_like, event_name: str) -> dict[str, Any]:
+    try:
+        from pathlib import Path
+
+        path = path_like if isinstance(path_like, Path) else Path(str(path_like))
+        if not path.exists():
+            return {}
+        text = path.read_text(encoding='utf-8', errors='ignore')
+        for line in reversed(text.splitlines()):
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                payload = json.loads(line)
+            except Exception:
+                continue
+            if str(payload.get('event') or '').strip() == event_name:
+                return payload if isinstance(payload, dict) else {}
+    except Exception:
+        pass
+    return {}
+
+
+def _derive_capture_health(st: dict[str, Any], cfg: dict[str, Any]) -> dict[str, Any]:
+    wiegand_cfg = (cfg or {}).get('wiegand') or {}
+    wiegand_enabled = bool(st.get('wiegand_enabled', wiegand_cfg.get('enabled', False)))
+    wiegand_listener = str(st.get('wiegand') or 'OPRIT').strip().upper()
+    heartbeat = _read_json_safe(_wiegand_heartbeat_path())
+    last_frame = _read_last_jsonl_event(_wiegand_trace_path(), 'frame_parsed')
+
+    raw_capture_last_frame_ts = last_frame.get('ts')
+    heartbeat_ts = heartbeat.get('ts') if isinstance(heartbeat, dict) else None
+    heartbeat_source = str((heartbeat or {}).get('source') or '').strip().lower()
+    try:
+        if heartbeat_source == 'frame' and heartbeat_ts not in (None, ''):
+            if raw_capture_last_frame_ts in (None, '') or float(heartbeat_ts) > float(raw_capture_last_frame_ts):
+                raw_capture_last_frame_ts = heartbeat_ts
+    except Exception:
+        pass
+
+    raw_capture_last_frame_age_s = None
+    try:
+        if raw_capture_last_frame_ts not in (None, ''):
+            raw_capture_last_frame_age_s = max(0, int(time.time() - float(raw_capture_last_frame_ts)))
+    except Exception:
+        raw_capture_last_frame_age_s = None
+
+    if not wiegand_enabled:
+        raw_capture_state = 'disabled'
+        raw_capture_message = 'W26 dezactivat'
+    elif wiegand_listener != 'ON':
+        raw_capture_state = 'listener_down'
+        raw_capture_message = 'W26 oprit; nu există captură brută'
+    elif raw_capture_last_frame_age_s is None:
+        raw_capture_state = 'absent'
+        raw_capture_message = 'W26 pornit, dar nu a capturat niciun frame brut'
+    elif raw_capture_last_frame_age_s > 120:
+        raw_capture_state = 'absent'
+        raw_capture_message = f'W26 pornit, dar ultimul frame brut are {raw_capture_last_frame_age_s}s'
+    else:
+        raw_capture_state = 'active'
+        raw_capture_message = f'W26 activ; ultimul frame brut are {raw_capture_last_frame_age_s}s'
+
+    zkem_enabled = bool(st.get('zkemkeeper_enabled', False))
+    zkem_state = str(st.get('zkemkeeper') or '').strip().upper()
+    zkem_status = str(st.get('zkemkeeper_status') or '').strip().lower()
+    zkem_message = str(st.get('zkemkeeper_message') or '').strip()
+    if not zkem_enabled:
+        zkem_capture_state = 'disabled'
+    elif zkem_state == 'EROARE' or zkem_status == 'error':
+        zkem_capture_state = 'error'
+    elif zkem_state == 'ON':
+        zkem_capture_state = 'active'
+    elif zkem_state:
+        zkem_capture_state = 'inactive'
+    else:
+        zkem_capture_state = 'unknown'
+
+    warnings: list[str] = []
+    summary_state = 'ok'
+    if raw_capture_state in ('listener_down', 'absent'):
+        warnings.append('raw capture absent')
+        summary_state = 'warn'
+    if zkem_capture_state == 'error':
+        warnings.append('zkemkeeper error')
+        summary_state = 'err'
+
+    if warnings:
+        summary_message = '; '.join(warnings)
+    elif raw_capture_state == 'disabled' and zkem_capture_state == 'disabled':
+        summary_state = 'disabled'
+        summary_message = 'capture disabled'
+    else:
+        summary_message = 'capture active'
+
+    heartbeat_age_s = None
+    try:
+        if heartbeat_ts not in (None, ''):
+            heartbeat_age_s = max(0, int(time.time() - float(heartbeat_ts)))
+    except Exception:
+        heartbeat_age_s = None
+
+    return {
+        'summary_state': summary_state,
+        'summary_message': summary_message,
+        'warnings': warnings,
+        'raw_capture_state': raw_capture_state,
+        'raw_capture_message': raw_capture_message,
+        'raw_capture_last_frame_ts': raw_capture_last_frame_ts,
+        'raw_capture_last_frame_age_s': raw_capture_last_frame_age_s,
+        'wiegand_enabled': wiegand_enabled,
+        'wiegand_listener': wiegand_listener,
+        'wiegand_port': wiegand_cfg.get('port'),
+        'wiegand_source': wiegand_cfg.get('source'),
+        'wiegand_heartbeat_age_s': heartbeat_age_s,
+        'zkemkeeper_state': zkem_capture_state,
+        'zkemkeeper_status': zkem_status,
+        'zkemkeeper_label': zkem_state or 'UNKNOWN',
+        'zkemkeeper_error': zkem_capture_state == 'error',
+        'zkemkeeper_message': zkem_message,
+        'zkemkeeper_target': st.get('zkemkeeper_target'),
+    }
+
+
 def _qs_without_page(request: HttpRequest) -> str:
     try:
         from urllib.parse import urlencode
@@ -212,6 +364,82 @@ def _get_default_comm_password_cached() -> str:
     except Exception:
         pass
     return eff
+
+
+def _resolve_device_route(dev: Optional["Device"] = None, *, configured_port: int | None = None) -> dict[str, Any]:
+    try:
+        from .controller_capabilities import resolve_port_route
+
+        return resolve_port_route(
+            configured_port if configured_port is not None else getattr(dev, 'port', None),
+            device_name=str(getattr(dev, 'name', '') or ''),
+            hardware_version=str(getattr(dev, 'hardware_version', '') or ''),
+            firmware_version=str(getattr(dev, 'firmware_version', '') or ''),
+        )
+    except Exception:
+        port = configured_port if configured_port is not None else getattr(dev, 'port', None)
+        try:
+            port = int(port or 4370)
+        except Exception:
+            port = 4370
+        return {
+            'configured_port': port,
+            'effective_port': port,
+            'firmware_tcp_port': None,
+            'route_status': 'unavailable',
+            'route_summary': '',
+            'port_source': 'configured',
+            'candidate_ports': [port, 4370],
+            'notes': '',
+        }
+
+
+def _default_requested_controller_port(dev: Optional["Device"] = None, *, configured_port: int | None = None) -> int:
+    route = _resolve_device_route(dev, configured_port=configured_port)
+    try:
+        return int(route.get('effective_port') or configured_port or getattr(dev, 'port', 4370) or 4370)
+    except Exception:
+        return 4370
+
+
+def _candidate_controller_ports(dev: Optional["Device"] = None, *, configured_port: int | None = None, extra_ports: list[int] | tuple[int, ...] = ()) -> list[int]:
+    route = _resolve_device_route(dev, configured_port=configured_port)
+    vals: list[int] = []
+    vals.extend(route.get('candidate_ports') or [])
+    vals.extend(extra_ports or [])
+    vals.extend([14370, 4370, 4371, 4372])
+    seen: set[int] = set()
+    out: list[int] = []
+    for value in vals:
+        try:
+            port = int(value)
+        except Exception:
+            continue
+        if port <= 0 or port > 65535 or port in seen:
+            continue
+        seen.add(port)
+        out.append(port)
+    return out
+
+
+def _route_aware_conn(dev: "Device", *, password: str = '', timeout_ms: int = 3000, protocol: str = 'TCP'):
+    from .plcommpro_bridge import PlcommproConnInfo
+
+    route = _resolve_device_route(dev)
+    try:
+        port = int(route.get('effective_port') or getattr(dev, 'port', 4370) or 4370)
+    except Exception:
+        port = 4370
+    return (
+        PlcommproConnInfo(
+            ipaddress=str(getattr(dev, 'ip_address', '') or ''),
+            ip_port=int(port),
+            password=str(password or ''),
+            timeout=int(timeout_ms),
+            protocol=str(protocol or 'TCP').strip().upper() or 'TCP',
+        ),
+        route,
+    )
 
 
 def health(request: HttpRequest):
@@ -658,13 +886,23 @@ def readers_status(request: HttpRequest):
         return JsonResponse({'ok': False, 'error': 'unauth'}, status=403)
     st = _read_json_safe(_tray_status_path())
     cfg = _read_json_safe(_readers_cfg_path())
+    capture_health = st.get('capture_health') if isinstance(st.get('capture_health'), dict) else None
+    if not capture_health:
+        capture_health = _derive_capture_health(st, cfg)
     # surface commcenter/color if present in tray_status.json
     status_extra = {
         'commcenter': st.get('commcenter'),
         'commcenter_driver': st.get('commcenter_driver'),
         'commcenter_backend': st.get('commcenter_backend'),
+        'zkemkeeper': st.get('zkemkeeper'),
+        'zkemkeeper_target': st.get('zkemkeeper_target'),
+        'zkemkeeper_message': st.get('zkemkeeper_message'),
+        'zkemkeeper_last_event': st.get('zkemkeeper_last_event'),
+        'zkemkeeper_event_count': st.get('zkemkeeper_event_count'),
+        'zkemkeeper_dump_file': st.get('zkemkeeper_dump_file'),
         'color': st.get('color'),
         'server': st.get('server'),
+        'capture_health': capture_health,
     }
     return JsonResponse({'ok': True, 'status': st, 'config': cfg, 'extra': status_extra})
 
@@ -910,6 +1148,7 @@ def monitor_rtlog_json(request: HttpRequest):
             'device_id': r.device_id,
             'sn': r.sn or '',
             'raw': r.raw or '',
+            'correlation_payload': getattr(r, 'correlation_payload', {}) or {},
             'created_at': created,
         })
         last_id = r.id
@@ -1125,14 +1364,14 @@ def device_ping(request: HttpRequest):
 def device_port_test(request: HttpRequest):
     """
     Test TCP port connectivity to a device
-    Usage: /agent/devices/port-test/?ip=100.51.101.95&port=4370
-    Returns: {ok: true, open: true/false, ip: "...", port: 4370}
+    Usage: /agent/devices/port-test/?ip=100.51.101.95&port=14370
+    Returns: {ok: true, open: true/false, ip: "...", port: 14370}
     """
     if not request.user.is_authenticated:
         return JsonResponse({'ok': False, 'error': 'unauth'}, status=403)
     
     ip = request.GET.get('ip', '').strip()
-    port_str = request.GET.get('port', '4370').strip()
+    port_str = (request.GET.get('port') or '').strip()
     ports_raw = (request.GET.get('ports') or '').strip()
     quick = (request.GET.get('quick') or '').strip().lower() in ('1', 'true', 'yes', 'y', 'on')
     probe = (request.GET.get('probe') or '').strip().lower() in ('1', 'true', 'yes', 'y', 'on')
@@ -1157,6 +1396,12 @@ def device_port_test(request: HttpRequest):
                 out.append(n)
         return out
 
+    dev_match = None
+    try:
+        dev_match = Device.objects.filter(ip_address=ip).first()
+    except Exception:
+        dev_match = None
+
     # Backward compatible: `port=` works as before; `ports=` enables a sweep.
     ports: list[int]
     if ports_raw:
@@ -1164,20 +1409,22 @@ def device_port_test(request: HttpRequest):
         if not ports:
             return JsonResponse({'ok': False, 'error': 'invalid-ports'}, status=400)
     else:
+        default_port = _default_requested_controller_port(dev_match)
+        port_token = port_str or str(default_port)
         try:
-            port = int(port_str)
+            port = int(port_token)
             if port < 1 or port > 65535:
                 return JsonResponse({'ok': False, 'error': 'invalid-port-range'}, status=400)
         except ValueError:
             return JsonResponse({'ok': False, 'error': 'invalid-port-format'}, status=400)
-        ports = [port]
+        ports = _candidate_controller_ports(dev_match, configured_port=port, extra_ports=[port])
     
     import socket
     import select
 
     # Prefer known ZKTeco SDK/COMM ports when multiple ports are scanned.
     # If a generic web port (80/443) is open, that does NOT mean plcommpro can connect.
-    preferred_ports: list[int] = [14370, 4370, 4371, 4372, 5000, 5001, 6000, 8000, 8080]
+    preferred_ports: list[int] = _candidate_controller_ports(dev_match, configured_port=(ports[0] if ports else None), extra_ports=[14370, 4370, 4371, 4372, 5000, 5001, 6000, 8000, 8080])
 
     def _tcp_connect_code(ip_addr: str, tcp_port: int, timeout_s: float) -> int:
         """Return a stable connect result code (0=open, else OS error code).
@@ -1425,33 +1672,32 @@ def _probe_device_online_plcommpro(dev: "Device") -> tuple[bool, str]:
         ip = (getattr(dev, 'ip_address', '') or '').strip()
         if not ip:
             return (False, 'no-ip')
-        try:
-            port = int(getattr(dev, 'port', None) or 0) or 4370
-        except Exception:
-            port = 4370
-
         comm_password = (getattr(dev, 'comm_password', '') or '').strip()
         if not comm_password:
             comm_password = _get_default_comm_password_cached()
 
         from agent.plcommpro_bridge import PlcommproConnInfo, connect_only
 
-        conn = PlcommproConnInfo(
-            ipaddress=str(ip),
-            ip_port=int(port),
-            password=str(comm_password or ''),
-            timeout=2500,
-            protocol='TCP',
-        )
-        rr = connect_only(conn, process_timeout_s=5)
-        if isinstance(rr, dict) and bool(rr.get('ok')):
-            return (True, 'ok')
+        last_rr: dict[str, Any] | None = None
+        for port in _candidate_controller_ports(dev, configured_port=getattr(dev, 'port', None)):
+            conn = PlcommproConnInfo(
+                ipaddress=str(ip),
+                ip_port=int(port),
+                password=str(comm_password or ''),
+                timeout=2500,
+                protocol='TCP',
+            )
+            rr = connect_only(conn, process_timeout_s=5)
+            if isinstance(rr, dict) and bool(rr.get('ok')):
+                return (True, f'ok:{port}')
+            if isinstance(rr, dict):
+                last_rr = rr
 
         # Compact reason for logs/UI
-        if isinstance(rr, dict):
-            rres = rr.get('result')
-            rle = rr.get('last_error')
-            data = str(rr.get('data') or '')
+        if isinstance(last_rr, dict):
+            rres = last_rr.get('result')
+            rle = last_rr.get('last_error')
+            data = str(last_rr.get('data') or '')
             data = data.replace('\r', ' ').replace('\n', ' ').strip()
             if len(data) > 80:
                 data = data[:80] + '…'
@@ -1654,7 +1900,7 @@ def device_admin_test(request: HttpRequest):
     the SDK pull port is blocked; administration requires a successful plcommpro Connect.
 
     Usage:
-      /agent/devices/admin-test/?ip=192.168.1.220&port=4370&password=0
+            /agent/devices/admin-test/?ip=192.168.1.220&port=14370&password=0
     """
     if not request.user.is_authenticated:
         return JsonResponse({'ok': False, 'error': 'unauth'}, status=403)
@@ -1665,6 +1911,7 @@ def device_admin_test(request: HttpRequest):
     protocol_req = ''
     items = ''
     port = 4370
+    port_raw = ''
 
     if request.method == 'POST':
         try:
@@ -1674,10 +1921,7 @@ def device_admin_test(request: HttpRequest):
         except Exception:
             payload = {}
         ip = str(payload.get('ip') or '').strip()
-        try:
-            port = int(str(payload.get('port') or '4370').strip() or '4370')
-        except Exception:
-            port = 4370
+        port_raw = str(payload.get('port') or '').strip()
         password = str(payload.get('password') or '').strip()
         items = str(
             payload.get('items')
@@ -1689,10 +1933,7 @@ def device_admin_test(request: HttpRequest):
         if not ip:
             return JsonResponse({'ok': False, 'error': 'missing-ip'}, status=400)
 
-        try:
-            port = int((request.GET.get('port') or '4370').strip() or '4370')
-        except Exception:
-            port = 4370
+        port_raw = str(request.GET.get('port') or '').strip()
 
         password = str(request.GET.get('password') or '').strip()
 
@@ -1706,14 +1947,27 @@ def device_admin_test(request: HttpRequest):
     if protocol_req not in {'TCP', 'UDP', 'AUTO'}:
         protocol_req = 'AUTO'
 
+    dev_match = None
+
     # If password not provided, try DB-stored password (in-system devices).
     if not password:
         try:
-            dev = Device.objects.filter(ip_address=ip).first()
-            if dev and (dev.comm_password or '').strip():
-                password = str(dev.comm_password or '').strip()
+            dev_match = Device.objects.filter(ip_address=ip).first()
+            if dev_match and (dev_match.comm_password or '').strip():
+                password = str(dev_match.comm_password or '').strip()
         except Exception:
             pass
+    elif dev_match is None:
+        try:
+            dev_match = Device.objects.filter(ip_address=ip).first()
+        except Exception:
+            dev_match = None
+
+    default_port = _default_requested_controller_port(dev_match)
+    try:
+        port = int(port_raw or str(default_port))
+    except Exception:
+        port = default_port
 
     # Final fallback: a configured default comm password (does not persist to DB).
     if not password:
@@ -1724,39 +1978,43 @@ def device_admin_test(request: HttpRequest):
 
         attempts: list[dict] = []
         protocols = ['TCP', 'UDP'] if protocol_req == 'AUTO' else [protocol_req]
+        candidate_ports = _candidate_controller_ports(dev_match, configured_port=port, extra_ports=[port])
         for proto in protocols:
-            conn = PlcommproConnInfo(
-                ipaddress=ip,
-                ip_port=int(port or 4370),
-                password=password,
-                timeout=3000,
-                protocol=proto,
-            )
-            resp = get_device_options(conn, items)
-            attempts.append(
-                {
-                    'protocol': proto,
-                    'ok': bool(resp.get('ok')),
-                    'result': resp.get('result'),
-                    'last_error': resp.get('last_error'),
-                    'dll_path_used': resp.get('dll_path_used'),
-                }
-            )
-            if resp.get('ok'):
-                return JsonResponse(
+            for try_port in candidate_ports:
+                conn = PlcommproConnInfo(
+                    ipaddress=ip,
+                    ip_port=int(try_port),
+                    password=password,
+                    timeout=3000,
+                    protocol=proto,
+                )
+                resp = get_device_options(conn, items)
+                attempts.append(
                     {
-                        'ok': True,
-                        'ip': ip,
-                        'port': port,
                         'protocol': proto,
-                        'items': items,
-                        'data': resp.get('data') or '',
+                        'port': int(try_port),
+                        'ok': bool(resp.get('ok')),
                         'result': resp.get('result'),
                         'last_error': resp.get('last_error'),
                         'dll_path_used': resp.get('dll_path_used'),
-                        'attempts': attempts,
                     }
                 )
+                if resp.get('ok'):
+                    return JsonResponse(
+                        {
+                            'ok': True,
+                            'ip': ip,
+                            'port': int(try_port),
+                            'requested_port': int(port or 4370),
+                            'protocol': proto,
+                            'items': items,
+                            'data': resp.get('data') or '',
+                            'result': resp.get('result'),
+                            'last_error': resp.get('last_error'),
+                            'dll_path_used': resp.get('dll_path_used'),
+                            'attempts': attempts,
+                        }
+                    )
 
         # No protocol worked
         return JsonResponse(
@@ -1782,7 +2040,7 @@ def device_admin_test(request: HttpRequest):
 
 def device_configure_adms(request: HttpRequest, device_id: int):
     """GET: show ADMS push configuration form for a device.
-    POST action=set:   push ServerAddr/ServerPort/CLOUDSERVICEFLAG via SetDeviceParam.
+    POST action=set:   push ServerAddr/ServerPort/CLOUDSERVICEFLAG/PushFunOn via SetDeviceParam.
     POST action=clear: clear ADMS params (disable push).
     GET  ?action=read: return current ADMS params as JSON.
 
@@ -1799,18 +2057,18 @@ def device_configure_adms(request: HttpRequest, device_id: int):
 
     # ── helpers ──────────────────────────────────────────────────────────────
     def _conn():
-        from .plcommpro_bridge import PlcommproConnInfo
-        return PlcommproConnInfo(
-            ipaddress=str(dev.ip_address or ''),
-            ip_port=int(dev.port or 4370),
+        conn, _route = _route_aware_conn(
+            dev,
             password=str(dev.comm_password or ''),
-            timeout=4000,
+            timeout_ms=4000,
+            protocol='TCP',
         )
+        return conn
 
     def _read_adms_params():
         try:
             from .plcommpro_bridge import get_device_options
-            resp = get_device_options(_conn(), 'ServerAddr,ServerPort,CLOUDSERVICEFLAG,ADMSServerIP')
+            resp = get_device_options(_conn(), 'ServerAddr,ServerPort,CLOUDSERVICEFLAG,ADMSServerIP,PushFunOn')
             if not resp.get('ok'):
                 return None, resp.get('last_error') or 'read-failed'
             raw = resp.get('data') or ''
@@ -1865,19 +2123,20 @@ def device_configure_adms(request: HttpRequest, device_id: int):
     if request.method == 'POST':
         if action == 'set':
             server_addr = (request.POST.get('server_addr') or '').strip()
-            server_port = (request.POST.get('server_port') or '8000').strip()
+            server_port = (request.POST.get('server_port') or str(_default_adms_port(request))).strip()
             if not server_addr:
                 return JsonResponse({'ok': False, 'error': 'server_addr-required'}, status=400)
             try:
                 server_port_int = int(server_port)
             except ValueError:
-                server_port_int = 8000
+                server_port_int = _default_adms_port(request)
 
             web_url = f'http://{server_addr}:{server_port_int}'
             items = (
                 f'ServerAddr={server_addr}'
                 f',ServerPort={server_port_int}'
                 f',CLOUDSERVICEFLAG=1'
+                f',PushFunOn=1'
                 f',ADMSServerIP={server_addr}'
                 f',WebServerURL={web_url}'
             )
@@ -1937,7 +2196,7 @@ def device_configure_adms(request: HttpRequest, device_id: int):
             })
 
         if action == 'clear':
-            items = 'ServerAddr=,ServerPort=,CLOUDSERVICEFLAG=0,ADMSServerIP=,WebServerURL=,TransFlag=0,Realtime=0,RTLog=0'
+            items = 'ServerAddr=,ServerPort=,CLOUDSERVICEFLAG=0,PushFunOn=0,ADMSServerIP=,WebServerURL=,TransFlag=0,Realtime=0,RTLog=0'
 
             # Try direct bridge first.
             bridge_ok = False
@@ -1977,84 +2236,17 @@ def device_configure_adms(request: HttpRequest, device_id: int):
 
     # Detect server IP visible from the device's subnet.
     # Use multiple methods and prefer non-loopback LAN addresses.
-    import socket as _socket
-    _lan_ips: list = []
-    try:
-        # Method 1: routing-based (SOCK_DGRAM doesn't send packets, just uses routing table)
-        _s = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
-        _s.connect((str(dev.ip_address or '192.168.1.1'), 4370))
-        _lan_ips.append(_s.getsockname()[0])
-        _s.close()
-    except Exception:
-        pass
-    try:
-        # Method 2: enumerate interfaces via hostname resolution
-        for _info in _socket.getaddrinfo(_socket.gethostname(), None, _socket.AF_INET):
-            _ip = _info[4][0]
-            if _ip not in _lan_ips:
-                _lan_ips.append(_ip)
-    except Exception:
-        pass
-    # Prefer first non-loopback IP; fall back to loopback only if nothing else found
-    suggested_ip = next((_ip for _ip in _lan_ips if not _ip.startswith('127.')), _lan_ips[0] if _lan_ips else '')
+    suggested_ip = _suggested_adms_server_ip(dev)
 
     # Port: use the actual port from the incoming HTTP request — always correct,
     # works with runserver, Daphne, or any other server regardless of INI state.
-    suggested_port = str(request.META.get('SERVER_PORT', '8000'))
+    suggested_port = str(_default_adms_port(request))
 
     # ── Auto-apply: queue SET_OPTION command via CommCenter immediately on GET ──
     # This means just opening the ⚡ ADMS modal configures the device automatically.
-    auto_queued = False
-    auto_error = ''
-    if suggested_ip and not suggested_ip.startswith('127.'):
-        _web_url = f'http://{suggested_ip}:{suggested_port}'
-        _items = (
-            f'ServerAddr={suggested_ip}'
-            f',ServerPort={suggested_port}'
-            f',CLOUDSERVICEFLAG=1'
-            f',ADMSServerIP={suggested_ip}'
-            f',WebServerURL={_web_url}'
-            f',TransFlag=1,Realtime=1,RTLog=1,TransInterval=1'
-        )
-        # Try direct bridge first (works when CommCenter is stopped)
-        _bridge_ok = False
-        try:
-            from .plcommpro_bridge import set_device_options as _sdo
-            _resp = _sdo(_conn(), _items)
-            _bridge_ok = bool(_resp.get('ok'))
-        except Exception:
-            pass
-
-        if _bridge_ok:
-            auto_queued = True
-            _audit_log(
-                request, module='device', action='adms_configure_auto',
-                entity_id=dev.id, entity_name=dev.name or '',
-                details=f'AUTO ServerAddr={suggested_ip} ServerPort={suggested_port} (direct)',
-            )
-        else:
-            # Fallback: queue via CommandLog for CommCenter to process
-            try:
-                from .models import CommandLog
-                # Remove any older pending ADMS SET_OPTION commands for this device to avoid duplicates
-                CommandLog.objects.filter(
-                    device=dev,
-                    status='PENDING',
-                    command__startswith='SET_OPTION:ServerAddr=',
-                ).delete()
-                CommandLog.objects.create(
-                    device=dev,
-                    command=f'SET_OPTION:{_items}',
-                    status='PENDING',
-                )
-                auto_queued = True
-                _audit_log(
-                    request, module='device', action='adms_configure_auto',
-                    entity_id=dev.id, entity_name=dev.name or '',
-                    details=f'AUTO QUEUED ServerAddr={suggested_ip} ServerPort={suggested_port}',
-                )
-            except Exception as _e:
-                auto_error = str(_e)
+    auto_cfg = _auto_configure_device_adms(request, dev, source='device_configure_adms_modal')
+    auto_queued = bool(auto_cfg.get('ok'))
+    auto_error = str(auto_cfg.get('error') or '')
 
     ctx = {
         'device': dev,
@@ -2065,6 +2257,203 @@ def device_configure_adms(request: HttpRequest, device_id: int):
         'auto_error': auto_error,
     }
     return render(request, 'agent/device_adms_form_inner.html', ctx)
+
+
+def _default_adms_port(request: Optional[HttpRequest] = None) -> int:
+    """Resolve the dedicated ADMS push port.
+
+    Priority: tray/agent env -> tray config -> current HTTP server port -> 8091 fallback.
+    """
+    try:
+        p = int(str(os.getenv('ZKACCESS_ADMS_PORT', '') or '').strip())
+        if 1 <= p <= 65535:
+            return p
+    except Exception:
+        pass
+    try:
+        import configparser
+        from pathlib import Path
+
+        config_path = Path.home() / 'zkeco_tray_config.ini'
+        if config_path.exists():
+            config = configparser.ConfigParser(strict=False)
+            config.read(config_path, encoding='utf-8-sig')
+            p = int(str(config.get('tray', 'adms_port', fallback='') or '').strip())
+            if 1 <= p <= 65535:
+                return p
+    except Exception:
+        pass
+    try:
+        if request is not None:
+            p = int(str(request.META.get('SERVER_PORT', '') or '').strip())
+            if 1 <= p <= 65535:
+                return p
+    except Exception:
+        pass
+    return 8091
+
+
+def _suggested_adms_server_ip(dev: Optional[Device] = None) -> str:
+    import socket as _socket
+
+    lan_ips: list[str] = []
+    target_ip = str(getattr(dev, 'ip_address', '') or '192.168.1.1').strip() or '192.168.1.1'
+    try:
+        route = _resolve_device_route(dev)
+        target_port = int(route.get('effective_port') or getattr(dev, 'port', 4370) or 4370)
+    except Exception:
+        target_port = 4370
+    try:
+        sock = _socket.socket(_socket.AF_INET, _socket.SOCK_DGRAM)
+        try:
+            sock.connect((target_ip, int(target_port)))
+            lan_ip = str(sock.getsockname()[0] or '').strip()
+            if lan_ip and lan_ip not in lan_ips:
+                lan_ips.append(lan_ip)
+        finally:
+            sock.close()
+    except Exception:
+        pass
+    try:
+        for info in _socket.getaddrinfo(_socket.gethostname(), None, _socket.AF_INET):
+            ip_addr = str(info[4][0] or '').strip()
+            if ip_addr and ip_addr not in lan_ips:
+                lan_ips.append(ip_addr)
+    except Exception:
+        pass
+    for ip_addr in lan_ips:
+        if not ip_addr.startswith('127.'):
+            return ip_addr
+    return lan_ips[0] if lan_ips else ''
+
+
+def _build_adms_option_items(server_addr: str, server_port: int) -> str:
+    web_url = f'http://{server_addr}:{int(server_port)}'
+    return (
+        f'ServerAddr={server_addr}'
+        f',ServerPort={int(server_port)}'
+        f',CLOUDSERVICEFLAG=1'
+        f',PushFunOn=1'
+        f',ADMSServerIP={server_addr}'
+        f',WebServerURL={web_url}'
+        f',TransFlag=1,Realtime=1,RTLog=1,TransInterval=1'
+    )
+
+
+def _queue_adms_getrequest_command(dev: Device, items: str) -> None:
+    payload = f'SET OPTION {items}'.strip()
+    if not payload:
+        return
+    CommandLog.objects.create(
+        device=dev,
+        command=f'ADMS_RAW:{payload}\n',
+        status='PENDING',
+    )
+
+
+def _auto_configure_device_adms(
+    request: Optional[HttpRequest],
+    dev: Optional[Device],
+    *,
+    source: str,
+    try_direct: bool = True,
+) -> dict[str, Any]:
+    if dev is None:
+        return {'ok': False, 'skipped': 'missing-device'}
+    try:
+        if not dev.is_controller():
+            return {'ok': False, 'skipped': 'not-controller'}
+    except Exception:
+        return {'ok': False, 'skipped': 'not-controller'}
+
+    device_ip = str(getattr(dev, 'ip_address', '') or '').strip()
+    if not device_ip:
+        return {'ok': False, 'skipped': 'missing-device-ip'}
+
+    server_addr = _suggested_adms_server_ip(dev)
+    if not server_addr or server_addr.startswith('127.'):
+        return {'ok': False, 'skipped': 'missing-server-ip'}
+
+    server_port = _default_adms_port(request)
+    items = _build_adms_option_items(server_addr, server_port)
+    bridge_ok = False
+    bridge_resp: dict[str, Any] = {}
+
+    if try_direct:
+        try:
+            from .plcommpro_bridge import set_device_options
+
+            conn, _route = _route_aware_conn(
+                dev,
+                password=str(dev.comm_password or ''),
+                timeout_ms=4000,
+                protocol='TCP',
+            )
+            bridge_resp = set_device_options(conn, items) or {}
+            bridge_ok = bool(bridge_resp.get('ok'))
+        except Exception as exc:
+            bridge_resp = {'error': str(exc)}
+
+    if bridge_ok:
+        if request is not None:
+            _audit_log(
+                request,
+                module='device',
+                action='adms_configure_auto',
+                entity_id=dev.id,
+                entity_name=dev.name or '',
+                details=f'{source} ServerAddr={server_addr} ServerPort={server_port} (direct)',
+            )
+        return {
+            'ok': True,
+            'mode': 'direct',
+            'server_addr': server_addr,
+            'server_port': server_port,
+            'items': items,
+        }
+
+    try:
+        CommandLog.objects.filter(
+            device=dev,
+            status='PENDING',
+            command__startswith='SET_OPTION:ServerAddr=',
+        ).delete()
+        CommandLog.objects.create(
+            device=dev,
+            command=f'SET_OPTION:{items}',
+            status='PENDING',
+        )
+        try:
+            _queue_adms_getrequest_command(dev, items)
+        except Exception:
+            pass
+    except Exception as exc:
+        return {
+            'ok': False,
+            'error': str(exc),
+            'server_addr': server_addr,
+            'server_port': server_port,
+            'items': items,
+        }
+
+    if request is not None:
+        _audit_log(
+            request,
+            module='device',
+            action='adms_configure_auto',
+            entity_id=dev.id,
+            entity_name=dev.name or '',
+            details=f'{source} ServerAddr={server_addr} ServerPort={server_port} (queued)',
+        )
+
+    return {
+        'ok': True,
+        'mode': 'queued',
+        'server_addr': server_addr,
+        'server_port': server_port,
+        'items': items,
+        'bridge_error': bridge_resp.get('error') or bridge_resp.get('last_error'),
+    }
 
 
 def device_discover(request: HttpRequest):
@@ -2696,12 +3085,15 @@ def device_discover_apply(request: HttpRequest):
                     pw = str(comm_password or '').strip()
                 if (not pw) and dev and (dev.comm_password or '').strip():
                     pw = str(dev.comm_password or '').strip()
-                conn = PlcommproConnInfo(
-                    ipaddress=str(ip),
-                    ip_port=int(port or 4370),
-                    password=pw,
-                    timeout=3000,
-                )
+                if dev is not None:
+                    conn, _route = _route_aware_conn(dev, password=pw, timeout_ms=3000)
+                else:
+                    conn = PlcommproConnInfo(
+                        ipaddress=str(ip),
+                        ip_port=int(port or 4370),
+                        password=pw,
+                        timeout=3000,
+                    )
                 items = f"IPAddress={target_ip},GATEIPAddress={gateway},NetMask={subnet_mask}"
                 hw = set_device_options(conn, items)
                 if not hw.get('ok'):
@@ -2786,22 +3178,36 @@ def device_discover_apply(request: HttpRequest):
         if action_norm not in ('add', 'update'):
             return JsonResponse({'ok': False, 'error': f'unknown-action:{action_norm or "(empty)"}'}, status=400)
 
-        # Add/update: create or update existing device by IP/serial
-        dev, created = Device.objects.get_or_create(
-            ip_address=ip,
-            defaults={
-                'name': name,
-                'serial_number': serial or name,
-                'port': port,
-                'device_type': 'access_panel',
-                'comm_mode': 'tcp',
-                'enabled': True,
+        # Add/update: resolve an existing device by explicit id, then serial, then IP.
+        # This prevents duplicate rows when the same controller is rediscovered on a new IP.
+        dev = None
+        created = False
+        if device_id:
+            try:
+                dev = Device.objects.filter(pk=int(str(device_id).strip())).first()
+            except Exception:
+                dev = None
+        if dev is None and serial:
+            dev = Device.objects.filter(serial_number=serial).first()
+        if dev is None:
+            dev = Device.objects.filter(ip_address=ip).first()
+
+        if dev is None:
+            dev = Device.objects.create(
+                name=name,
+                serial_number=serial or name,
+                ip_address=ip,
+                port=port,
+                device_type='access_panel',
+                comm_mode='tcp',
+                enabled=True,
                 **({'hardware_version': hw_value} if (hw_present and hw_value) else {}),
                 **({'comm_password': comm_password} if comm_password_present else {}),
                 **({'clear_on_add': clear_on_add_flag} if clear_on_add_present else {}),
-            }
-        )
-        if not created:
+            )
+            created = True
+        else:
+            dev.ip_address = ip
             dev.name = name or dev.name
             if serial:
                 dev.serial_number = serial
@@ -2813,7 +3219,7 @@ def device_discover_apply(request: HttpRequest):
                 dev.comm_password = comm_password
             if clear_on_add_present:
                 dev.clear_on_add = clear_on_add_flag
-            update_fields = ['name','serial_number','port','enabled']
+            update_fields = ['ip_address','name','serial_number','port','enabled']
             if hw_present and hw_value:
                 update_fields.append('hardware_version')
             if comm_password_present:
@@ -2884,6 +3290,8 @@ def device_discover_apply(request: HttpRequest):
         except Exception:
             prov = None
 
+        auto_adms = _auto_configure_device_adms(request, dev, source=f'device_discover_apply:{action_norm}')
+
         _audit_log(
             request,
             module='device',
@@ -2924,6 +3332,13 @@ def device_discover_apply(request: HttpRequest):
         if prov is not None:
             resp['door_capacity'] = getattr(prov, 'capacity', None)
             resp['doors_created'] = getattr(prov, 'created', None)
+        if auto_adms.get('ok'):
+            resp['adms_auto_configured'] = True
+            resp['adms_server_addr'] = auto_adms.get('server_addr')
+            resp['adms_server_port'] = auto_adms.get('server_port')
+            resp['adms_mode'] = auto_adms.get('mode')
+        elif auto_adms.get('error'):
+            resp['adms_auto_error'] = auto_adms.get('error')
         return JsonResponse(resp)
     except Exception as e:
         return JsonResponse({'ok': False, 'error': str(e)}, status=400)
@@ -3012,6 +3427,7 @@ def device_create(request: HttpRequest):
                     DeviceStatus.objects.create(device=obj, online=True, door_state='CLOSED')
             except Exception:
                 pass
+            _auto_configure_device_adms(request, obj, source='device_create')
             _audit_log(
                 request,
                 module='device',
@@ -3189,6 +3605,7 @@ def device_edit(request: HttpRequest, pk: int):
                     DeviceStatus.objects.create(device=saved, online=True, door_state='CLOSED')
             except Exception:
                 pass
+            _auto_configure_device_adms(request, saved, source='device_edit')
             try:
                 after = {
                     'name': saved.name,
@@ -3379,7 +3796,15 @@ def access_dashboard(request: HttpRequest):
     pending_commands = CommandLog.objects.filter(status='PENDING').count()
     cache_entries = EmployeeAccessCache.objects.count()
     recent_events = list(DeviceEventLog.objects.order_by('-created_at')[:5].values('created_at','code'))
-    recent_commands = list(CommandLog.objects.order_by('-created_at')[:5].values('created_at','command','status'))
+    recent_commands = []
+    for log in CommandLog.objects.order_by('-created_at')[:5]:
+        item = {
+            'created_at': log.created_at,
+            'command': log.command,
+            'status': log.status,
+        }
+        item.update(_command_state_payload(log))
+        recent_commands.append(item)
     # Live device/door status panel context
     # For the dashboard page-render we use persisted values from the DB.
     # - Device.last_contact: liveness/heartbeat (updated during successful communication)
@@ -5119,6 +5544,8 @@ def menu_reports(request: HttpRequest):
         from .models import DeviceRealtimeLog as _RT, DeviceEventLog as _EV, Door as _Door, Device as _Device, Employee as _Employee
         from .event_codes import describe as _describe_code
         from .event_codes import describe_verify_mode as _describe_verify
+        from .event_codes import normalized_access_action as _normalized_event_action
+        from .event_codes import normalized_status_text as _normalized_event_status
         from django.utils.dateparse import parse_datetime, parse_date
         from django.db.models import Q
         import json as _json
@@ -5419,10 +5846,6 @@ def menu_reports(request: HttpRequest):
                 qs = qs.filter(**{f"{raw_field}__icontains": f",{door_q},"})
             if person_q:
                 qs = qs.filter(**{f"{raw_field}__icontains": f",{person_q},"})
-            if status_q in ('accepted', 'acceptat'):
-                qs = qs.filter(**{f"{raw_field}__icontains": ',200,'})
-            elif status_q in ('denied', 'respins'):
-                qs = qs.filter(**{f"{raw_field}__icontains": ',201,'})
             if verify_q:
                 qs = qs.filter(**{f"{raw_field}__icontains": verify_q})
 
@@ -5541,20 +5964,9 @@ def menu_reports(request: HttpRequest):
                 door_name = getattr(door_obj, 'name', '') if door_obj else (door_no or '')
 
                 verify_label = _describe_verify(str(verify_mode))
-                base_desc = _describe_code(str(code)) or (f"Code {code}" if code else '')
-                # Legacy-friendly naming for accepted opens
-                desc = base_desc
-                if str(code) == '200':
-                    if verify_label == 'Only Fingerprint':
-                        desc = 'Normal Fingerprint Open'
-                    else:
-                        desc = 'Normal Punch Open'
-                elif str(code) == '201':
-                    desc = 'Access Denied' if (emp_by_card.get(str(card)) or emp_by_pin.get(str(pin))) else 'Unregistered Card'
-                elif str(code) in ('100', '101'):
-                    desc = base_desc
-
-                status_text = 'ACCEPTAT' if str(code) == '200' else ('RESPINS' if str(code) == '201' else desc)
+                desc = _describe_code(str(code)) or (f"Code {code}" if code else '')
+                status_text = _normalized_event_status(str(code), desc)
+                access_action = _normalized_event_action(str(code), desc)
                 employee_name = emp_by_card.get(str(card), '') or emp_by_pin.get(str(pin), '') or ''
                 employee_pin = pin
                 dept_name = ''
@@ -5583,11 +5995,16 @@ def menu_reports(request: HttpRequest):
                     'department_name': dept_name,
                     'status_text': status_text,
                     'status_hint': str(ip_addr or '').strip(),
-                    'access_action': 'scan' if str(status_text).strip().upper() in ('ACCEPTAT', 'RESPINS') else 'event',
+                    'access_action': access_action,
                     'verify_mode': verify_label,
                     'operator': '',
                     'remarks': '',
                 })
+
+            if status_q in ('accepted', 'acceptat'):
+                device_items = [item for item in device_items if str(item.get('status_text') or '').strip().upper() == 'ACCEPTAT']
+            elif status_q in ('denied', 'respins'):
+                device_items = [item for item in device_items if str(item.get('status_text') or '').strip().upper() == 'RESPINS']
 
         # Merge + sort
         merged = []
@@ -5666,6 +6083,7 @@ def menu_reports(request: HttpRequest):
                 import json as _json
                 from .event_codes import describe as _describe_code
                 from .event_codes import describe_verify_mode as _describe_verify
+                from .event_codes import normalized_status_text as _normalized_event_status
                 from .models import DeviceRealtimeLog as _RT, DeviceEventLog as _EV, Door as _Door, Device as _Device, Employee as _Employee
 
                 # A) Audit-derived rows (bounded)
@@ -5913,12 +6331,7 @@ def menu_reports(request: HttpRequest):
                         door_name = getattr(door_obj, 'name', '') if door_obj else (door_no or '')
 
                         verify_label = _describe_verify(str(verify_mode))
-                        base_desc = _describe_code(str(code)) or (f"Code {code}" if code else '')
-                        desc = base_desc
-                        if str(code) == '200':
-                            desc = 'Normal Fingerprint Open' if verify_label == 'Only Fingerprint' else 'Normal Punch Open'
-                        elif str(code) == '201':
-                            desc = 'Access Denied' if (emp_by_card.get(str(card)) or emp_by_pin.get(str(pin))) else 'Unregistered Card'
+                        desc = _describe_code(str(code)) or (f"Code {code}" if code else '')
 
                         employee_name = emp_by_card.get(str(card), '') or emp_by_pin.get(str(pin), '') or ''
                         dept_name = ''
@@ -5944,7 +6357,7 @@ def menu_reports(request: HttpRequest):
                             'employee_pin': pin,
                             'employee_name': employee_name,
                             'department_name': dept_name,
-                            'status_text': 'ACCEPTAT' if str(code) == '200' else ('RESPINS' if str(code) == '201' else ''),
+                            'status_text': _normalized_event_status(str(code), desc),
                             'status_hint': '',
                             'verify_mode': verify_label,
                             'operator': '',
@@ -6172,6 +6585,156 @@ def _paginate(queryset, request, per_page=25):
     paginator = Paginator(queryset, per_page)
     page_number = request.GET.get('page') or 1
     return paginator.get_page(page_number)
+
+
+def _ensure_wiegand_formats_seeded() -> None:
+    for preset in list_known_wiegand_formats(include_details=True):
+        name = str(preset.get('name') or '').strip()
+        if not name:
+            continue
+        defaults = {
+            'default_fmt': bool(preset.get('default')),
+            'system_defined': True,
+            'wiegand_count': int(preset.get('bit_length') or 0),
+            'wiegand_mode': int(preset.get('wiegand_mode') or 1),
+            'first_p': int(preset.get('first_p') or 0),
+            'second_p': int(preset.get('second_p') or 0),
+            'even_parity_start': int(preset.get('even_parity_start') or 0),
+            'even_parity_count': int(preset.get('even_parity_count') or 0),
+            'odd_parity_start': int(preset.get('odd_parity_start') or 0),
+            'odd_parity_count': int(preset.get('odd_parity_count') or 0),
+            'cid_start': int(preset.get('cid_start') or 0),
+            'cid_count': int(preset.get('cid_count') or 0),
+            'facility_code_start': int(preset.get('facility_code_start') or 0),
+            'facility_code_count': int(preset.get('facility_code_count') or 0),
+            'site_code_start': int(preset.get('site_code_start') or 0),
+            'site_code_count': int(preset.get('site_code_count') or 0),
+            'manufactory_code_start': int(preset.get('manufactory_code_start') or 0),
+            'manufactory_code_count': int(preset.get('manufactory_code_count') or 0),
+            'before_fmt': str(preset.get('before_fmt') or ''),
+            'after_fmt': str(preset.get('after_fmt') or ''),
+        }
+        try:
+            obj, created = WiegandCardFormat.objects.get_or_create(
+                wiegand_name=name,
+                defaults=defaults,
+            )
+            if created:
+                continue
+            changed = False
+            for key, value in defaults.items():
+                if key in ('default_fmt', 'before_fmt', 'after_fmt'):
+                    current = getattr(obj, key)
+                    if current != value:
+                        setattr(obj, key, value)
+                        changed = True
+                elif key == 'system_defined':
+                    if not bool(getattr(obj, key)):
+                        setattr(obj, key, True)
+                        changed = True
+                elif not bool(getattr(obj, 'system_defined', False)):
+                    # Keep user-customized formats intact when they reuse a built-in name.
+                    continue
+                elif getattr(obj, key) != value:
+                    setattr(obj, key, value)
+                    changed = True
+            if changed:
+                obj.save()
+        except Exception:
+            continue
+    try:
+        if not WiegandCardFormat.objects.filter(is_active=True).exists():
+            preferred = (
+                WiegandCardFormat.objects.filter(default_fmt=True)
+                .order_by('-system_defined', 'wiegand_count', 'wiegand_name')
+                .first()
+            ) or WiegandCardFormat.objects.order_by('-default_fmt', 'wiegand_count', 'wiegand_name').first()
+            if preferred is not None:
+                WiegandCardFormat.objects.exclude(pk=preferred.pk).update(is_active=False)
+                if not bool(getattr(preferred, 'is_active', False)):
+                    preferred.is_active = True
+                    preferred.save(update_fields=['is_active'])
+    except Exception:
+        pass
+
+
+def _default_wiegand_form_initial() -> dict[str, Any]:
+    _ensure_wiegand_formats_seeded()
+    initial: dict[str, Any] = {'wiegand_mode': 1}
+    source = (
+        WiegandCardFormat.objects.filter(is_active=True).first()
+        or WiegandCardFormat.objects.filter(default_fmt=True).order_by('-system_defined', 'wiegand_count', 'wiegand_name').first()
+        or WiegandCardFormat.objects.order_by('-default_fmt', 'wiegand_count', 'wiegand_name').first()
+    )
+    if source is None:
+        return initial
+    for field_name in (
+        'wiegand_name',
+        'default_fmt',
+        'is_active',
+        'wiegand_count',
+        'wiegand_mode',
+        'first_p',
+        'second_p',
+        'even_parity_start',
+        'even_parity_count',
+        'odd_parity_start',
+        'odd_parity_count',
+        'cid_start',
+        'cid_count',
+        'facility_code_start',
+        'facility_code_count',
+        'site_code_start',
+        'site_code_count',
+        'manufactory_code_start',
+        'manufactory_code_count',
+        'before_fmt',
+        'after_fmt',
+    ):
+        try:
+            initial[field_name] = getattr(source, field_name)
+        except Exception:
+            continue
+    initial['known_preset'] = str(getattr(source, 'wiegand_name', '') or '')
+    return initial
+
+
+def _wiegand_format_payload(obj: WiegandCardFormat) -> dict[str, Any]:
+    payload = obj.decoder_payload()
+    def _payload_int(key: str) -> int:
+        try:
+            return int(str(payload.get(key) or '0').strip() or '0')
+        except Exception:
+            return 0
+    spans = []
+    cid_start = _payload_int('cid_start')
+    cid_count = _payload_int('cid_count')
+    facility_start = _payload_int('facility_code_start')
+    facility_count = _payload_int('facility_code_count')
+    site_start = _payload_int('site_code_start')
+    site_count = _payload_int('site_code_count')
+    manufactory_start = _payload_int('manufactory_code_start')
+    manufactory_count = _payload_int('manufactory_code_count')
+    if cid_count > 0:
+        spans.append(f"CID {cid_start}-{cid_start + cid_count - 1}")
+    if facility_count > 0:
+        spans.append(f"FC {facility_start}-{facility_start + facility_count - 1}")
+    if site_count > 0:
+        spans.append(f"SC {site_start}-{site_start + site_count - 1}")
+    if manufactory_count > 0:
+        spans.append(f"MC {manufactory_start}-{manufactory_start + manufactory_count - 1}")
+    return {
+        'id': int(obj.id),
+        'name': obj.wiegand_name,
+        'bit_length': int(obj.wiegand_count or 0),
+        'mode': int(obj.wiegand_mode or 1),
+        'default_fmt': bool(obj.default_fmt),
+        'is_active': bool(obj.is_active),
+        'system_defined': bool(obj.system_defined),
+        'payload': payload,
+        'payload_json': json.dumps(payload, ensure_ascii=True),
+        'summary': ', '.join(spans) if spans else 'No bit windows',
+    }
 
 
 def _ensure_controller_doors_for_devices(devices):
@@ -6417,6 +6980,8 @@ def device_edit_access(request: HttpRequest, pk: int):
                 ensure_controller_doors(saved)
             except Exception:
                 pass
+
+            _auto_configure_device_adms(request, saved, source='device_edit_access')
 
             # Note: do NOT auto-seed "Implicit" access levels. Levels are user-defined.
             _audit_log(
@@ -6839,6 +7404,8 @@ def device_create_access(request: HttpRequest):
                     DeviceStatus.objects.create(device=saved, online=True, door_state='CLOSED')
             except Exception:
                 pass
+
+            _auto_configure_device_adms(request, saved, source='device_create_access')
 
             # Wizard draft flow: apply draft door config onto provisioned doors, then clear draft.
             if wizard and wizard_token:
@@ -8014,6 +8581,174 @@ def device_operation_access(request: HttpRequest, pk: int, op: str):
             out.append(f"{n}{(' ' + nm) if nm else ''}".strip())
         return ', '.join(out)
 
+    def _default_test_user_payload() -> dict[str, str]:
+        return {
+            'pin': '990022',
+            'cardno': '220990022',
+            'vicecard': '220990023',
+            'group': '1',
+            'name': 'COPILOT TEST 22',
+            'timezone_id': '1',
+        }
+
+    def _clean_test_value(value: object, default: str = '') -> str:
+        text = str(value or '').strip()
+        return text or default
+
+    def _load_controller_user_debug(dev_obj: Device, *, pin_filter: str = '') -> dict[str, object]:
+        from .drivers.plcommpro_bridge_driver import PlcommproBridgeDriver
+        from .plcommpro_bridge import bridge_available
+
+        info: dict[str, object] = {
+            'count': None,
+            'count_error': '',
+            'fields': '',
+            'raw_result': None,
+            'raw_error': '',
+            'raw_rows': [],
+            'raw_preview': '',
+            'header_only': False,
+            'attempts': [],
+            'auth_rows': [],
+            'auth_error': '',
+        }
+        if not getattr(dev_obj, 'ip_address', ''):
+            info['raw_error'] = 'Device fără IP salvat.'
+            return info
+        if not bridge_available():
+            info['raw_error'] = 'Bridge plcommpro indisponibil.'
+            return info
+
+        driver = PlcommproBridgeDriver(dev_obj)
+        driver.timeout_ms = 4000
+        filter_expr = ''
+        if pin_filter:
+            filter_expr = f"Pin={pin_filter}"
+
+        try:
+            count_resp = driver.Get_Data_Count('user')
+            if int(count_resp.get('result', -1)) >= 0:
+                info['count'] = int(count_resp.get('result', 0))
+            else:
+                info['count_error'] = str(count_resp.get('error') or 'count_failed')
+        except Exception as exc:
+            info['count_error'] = str(exc)
+
+        field_attempts = [
+            'UID,CardNo,Pin,Password,Group,StartTime,EndTime,Name,SuperAuthorize,Disable,ViceCard',
+            'Pin,CardNo,ViceCard,Group,Name,StartTime,EndTime,SuperAuthorize,Disable',
+            'Pin,CardNo,ViceCard,Group,Name',
+            '*',
+        ]
+        for fields in field_attempts:
+            try:
+                resp = driver.query_data('user', fields=fields, filter=filter_expr, option='')
+                raw_result = int(resp.get('result', -1))
+                raw_data = str(resp.get('data') or '')
+                info['attempts'].append({
+                    'fields': fields,
+                    'result': raw_result,
+                    'error': str(resp.get('error') or ''),
+                    'preview': raw_data[:220],
+                })
+                if raw_result < 0:
+                    continue
+                parsed_rows = decode_user_rows(raw_data)
+                if not parsed_rows:
+                    parsed_rows = _parse_plcommpro_rows(
+                        raw_data,
+                        ['UID', 'CardNo', 'Pin', 'Password', 'Group', 'StartTime', 'EndTime', 'Name', 'SuperAuthorize', 'Disable', 'ViceCard'],
+                    )
+                info['fields'] = fields
+                info['raw_result'] = raw_result
+                info['raw_rows'] = parsed_rows
+                info['raw_preview'] = raw_data[:8000]
+                info['header_only'] = bool(raw_data.strip()) and not bool(parsed_rows)
+                break
+            except Exception as exc:
+                info['attempts'].append({
+                    'fields': fields,
+                    'result': -1,
+                    'error': str(exc),
+                    'preview': '',
+                })
+        else:
+            if not info['raw_error']:
+                last_attempts = info.get('attempts')
+                if isinstance(last_attempts, list) and last_attempts:
+                    last_attempt = last_attempts[-1]
+                    if isinstance(last_attempt, dict):
+                        info['raw_error'] = str(last_attempt.get('error') or 'user_query_failed')
+
+        try:
+            auth_resp = driver.query_data(
+                'userauthorize',
+                fields='Pin,AuthorizeTimezoneId,AuthorizeDoorId',
+                filter=filter_expr,
+                option='',
+            )
+            if int(auth_resp.get('result', -1)) >= 0:
+                info['auth_rows'] = _parse_plcommpro_rows(
+                    str(auth_resp.get('data') or ''),
+                    ['Pin', 'AuthorizeTimezoneId', 'AuthorizeDoorId'],
+                )
+            else:
+                info['auth_error'] = str(auth_resp.get('error') or 'userauthorize_query_failed')
+        except Exception as exc:
+            info['auth_error'] = str(exc)
+
+        return info
+
+    def _build_test_user_payloads(dev_obj: Device, form_data: dict[str, str]) -> tuple[str, str, str]:
+        test_pin = _clean_test_value(form_data.get('pin'))
+        test_card = _clean_test_value(form_data.get('cardno'))
+        test_vice = _clean_test_value(form_data.get('vicecard'))
+        test_group = _clean_test_value(form_data.get('group'), '1')
+        test_name = _clean_test_value(form_data.get('name'), 'COPILOT TEST 22')
+        timezone_id = _clean_test_value(form_data.get('timezone_id'), '1')
+        if not test_pin:
+            raise ValueError('PIN test obligatoriu.')
+        if not test_card:
+            raise ValueError('CardNo test obligatoriu.')
+
+        user_parts = [
+            f'Pin={test_pin}',
+            f'CardNo={test_card}',
+        ]
+        if test_vice:
+            user_parts.append(f'ViceCard={test_vice}')
+        user_parts.extend([
+            f'Name={test_name}',
+            'Password=',
+            f'Group={test_group}',
+            'StartTime=2000-01-01 00:00:00',
+            'EndTime=2099-12-31 23:59:59',
+            'SuperAuthorize=0',
+        ])
+
+        door_numbers: list[int] = []
+        try:
+            for door in Door.objects.filter(device_id=int(dev_obj.id)).exclude(door_number__isnull=True):
+                door_no = int(getattr(door, 'door_number') or 0)
+                if door_no > 0:
+                    door_numbers.append(door_no)
+        except Exception:
+            door_numbers = []
+        door_mask = 0
+        for door_no in sorted(set(door_numbers)):
+            if 0 < door_no <= 32:
+                door_mask |= (1 << (door_no - 1))
+        if door_mask <= 0:
+            door_mask = 1
+
+        user_payload = '\t'.join(user_parts)
+        auth_payload = '\t'.join([
+            f'Pin={test_pin}',
+            f'AuthorizeTimezoneId={timezone_id}',
+            f'AuthorizeDoorId={door_mask}',
+        ])
+        return user_payload, auth_payload, str(door_mask)
+
     def _enqueue_tracked(device_id: int, cmd: str) -> tuple[bool, int | None, str]:
         """Create CommandLog and enqueue with LOGID prefix so CommCenter updates status."""
         # De-dupe heavy sync commands to avoid generating high traffic / DoS.
@@ -8105,6 +8840,11 @@ def device_operation_access(request: HttpRequest, pk: int, op: str):
             return ('', '')
 
     ctx_error = None
+    ctx_notice = None
+    keep_modal_open = False
+    force_show_device = False
+    controller_test_user = _default_test_user_payload()
+    controller_test_pin = controller_test_user['pin']
     if request.method == 'POST':
         error = None
         message = None
@@ -8139,12 +8879,7 @@ def device_operation_access(request: HttpRequest, pk: int, op: str):
                         from .plcommpro_bridge import PlcommproConnInfo, get_device_options
 
                         eff_pw = (str(dev.comm_password or '').strip() or _get_default_comm_password_cached())
-                        conn = PlcommproConnInfo(
-                            ipaddress=str(dev.ip_address),
-                            ip_port=int(dev.port or 4370),
-                            password=eff_pw,
-                            timeout=3000,
-                        )
+                        conn, _route = _route_aware_conn(dev, password=eff_pw, timeout_ms=3000)
                         resp = get_device_options(conn, 'NetMask,GATEIPAddress')
                         if resp.get('ok') and resp.get('data'):
                             kv = {}
@@ -8169,12 +8904,7 @@ def device_operation_access(request: HttpRequest, pk: int, op: str):
                     from .plcommpro_bridge import PlcommproConnInfo, set_device_options
 
                     eff_pw = (str(dev.comm_password or '').strip() or _get_default_comm_password_cached())
-                    conn = PlcommproConnInfo(
-                        ipaddress=str(dev.ip_address),
-                        ip_port=int(dev.port or 4370),
-                        password=eff_pw,
-                        timeout=3000,
-                    )
+                    conn, _route = _route_aware_conn(dev, password=eff_pw, timeout_ms=3000)
                     items = f"IPAddress={ip_address},GATEIPAddress={gateway},NetMask={subnet_mask}"
                     resp = set_device_options(conn, items)
                     if not resp.get('ok'):
@@ -8297,13 +9027,7 @@ def device_operation_access(request: HttpRequest, pk: int, op: str):
 
                     if dev.ip_address and bridge_available():
                         eff_pw = (str(dev.comm_password or '').strip() or _get_default_comm_password_cached())
-                        conn = PlcommproConnInfo(
-                            ipaddress=str(dev.ip_address),
-                            ip_port=int(dev.port or 4370),
-                            password=eff_pw,
-                            timeout=3000,
-                            protocol='TCP',
-                        )
+                        conn, _route = _route_aware_conn(dev, password=eff_pw, timeout_ms=3000, protocol='TCP')
                         # Most ZK panels accept SetDeviceOptions with DateTime.
                         # Format: "YYYY-MM-DD HH:MM:SS"
                         now_local = _safe_now_local_str()
@@ -8398,6 +9122,63 @@ def device_operation_access(request: HttpRequest, pk: int, op: str):
                     action_title = 'SINCRONIZARE PERSONAL'
                     action_message = 'Comanda de sincronizare (server → centrală) a fost pusă în coadă.'
                     close_delay_ms = 900
+                elif do in ('push-test-user', 'delete-test-user'):
+                    from .drivers.plcommpro_bridge_driver import PlcommproBridgeDriver
+                    from .plcommpro_bridge import bridge_available
+
+                    keep_modal_open = True
+                    force_show_device = True
+                    controller_test_user = {
+                        'pin': _clean_test_value(request.POST.get('test_pin'), controller_test_user['pin']),
+                        'cardno': _clean_test_value(request.POST.get('test_cardno'), controller_test_user['cardno']),
+                        'vicecard': _clean_test_value(request.POST.get('test_vicecard'), controller_test_user['vicecard']),
+                        'group': _clean_test_value(request.POST.get('test_group'), controller_test_user['group']),
+                        'name': _clean_test_value(request.POST.get('test_name'), controller_test_user['name']),
+                        'timezone_id': _clean_test_value(request.POST.get('test_timezone_id'), controller_test_user['timezone_id']),
+                    }
+                    controller_test_pin = controller_test_user['pin']
+
+                    if not bool(dev.ip_address):
+                        raise RuntimeError('Device fără IP salvat.')
+                    if not bridge_available():
+                        raise RuntimeError('Bridge plcommpro indisponibil.')
+
+                    driver = PlcommproBridgeDriver(dev)
+                    driver.timeout_ms = 4000
+                    delete_filter = f"Pin={controller_test_pin}"
+                    try:
+                        driver.delete_data('userauthorize', filter=delete_filter)
+                    except Exception:
+                        pass
+                    try:
+                        driver.delete_data('user', filter=delete_filter)
+                    except Exception:
+                        pass
+
+                    if do == 'delete-test-user':
+                        message = f"User test șters din controller: PIN={controller_test_pin}"
+                    else:
+                        user_payload, auth_payload, door_mask = _build_test_user_payloads(dev, controller_test_user)
+                        user_resp = driver.update_data('user', user_payload, '')
+                        if int(user_resp.get('result', -1)) < 0:
+                            raise RuntimeError(str(user_resp.get('error') or 'user_write_failed'))
+                        auth_resp = driver.update_data('userauthorize', auth_payload, '')
+                        if int(auth_resp.get('result', -1)) < 0:
+                            raise RuntimeError(str(auth_resp.get('error') or 'userauthorize_write_failed'))
+                        message = (
+                            f"User test împins în controller: PIN={controller_test_user['pin']} CardNo={controller_test_user['cardno']} "
+                            f"ViceCard={controller_test_user['vicecard'] or '-'} DoorsMask={door_mask}"
+                        )
+
+                    _audit_log(
+                        request,
+                        module='device',
+                        action='controller_user_test',
+                        entity_id=int(dev.id),
+                        entity_name=getattr(dev, 'name', '') or '',
+                        details=f"do={do} pin={controller_test_pin} card={controller_test_user.get('cardno') or ''}",
+                    )
+                    ctx_notice = message
                 else:
                     # Non-destructive default: keep the modal open flow; user can use
                     # "Citește din centrală" (GET) to view data.
@@ -8445,7 +9226,7 @@ def device_operation_access(request: HttpRequest, pk: int, op: str):
                     'command_preview': (meta.get('command') or ''),
                 })
 
-        if not error:
+        if not error and not keep_modal_open:
             return render(request, 'agent/device_operation_saved_inner.html', {
                 'message': message or 'OK',
                 'action_state': action_state,
@@ -8463,11 +9244,10 @@ def device_operation_access(request: HttpRequest, pk: int, op: str):
         try:
             from .plcommpro_bridge import PlcommproConnInfo, get_device_options
 
-            conn = PlcommproConnInfo(
-                ipaddress=str(dev.ip_address),
-                ip_port=int(dev.port or 4370),
+            conn, _route = _route_aware_conn(
+                dev,
                 password=(str(dev.comm_password or '').strip() or _get_default_comm_password_cached()),
-                timeout=3000,
+                timeout_ms=3000,
             )
             resp = get_device_options(conn, 'NetMask,GATEIPAddress')
             if resp.get('ok') and resp.get('data'):
@@ -8486,11 +9266,13 @@ def device_operation_access(request: HttpRequest, pk: int, op: str):
         'op': op,
         'title': meta.get('title') or 'Operation',
         'error': ctx_error,
+        'notice': ctx_notice,
         'gateway': gateway_prefill,
         'subnet_mask': subnet_prefill,
         'new_ip_address': '',
         'new_port': '',
         'command_preview': (meta.get('command') or ''),
+        'controller_test_user': controller_test_user,
     }
 
     # Make these modals "real" (data-rich) without leaving the page.
@@ -8516,6 +9298,17 @@ def device_operation_access(request: HttpRequest, pk: int, op: str):
         ctx['device_personnel_preview_error'] = ''
         ctx['device_personnel_preview_raw'] = ''
         ctx['device_user_rows'] = None
+        ctx['device_user_raw_rows'] = []
+        ctx['device_user_raw_preview'] = ''
+        ctx['device_user_raw_fields'] = ''
+        ctx['device_user_raw_result'] = None
+        ctx['device_user_raw_error'] = ''
+        ctx['device_user_raw_count'] = None
+        ctx['device_user_raw_count_error'] = ''
+        ctx['device_user_raw_header_only'] = False
+        ctx['device_user_raw_attempts'] = []
+        ctx['device_test_user_rows'] = []
+        ctx['device_test_userauthorize_rows'] = []
         ctx['device_userauthorize_rows'] = None
         ctx['device_userauthorize_error'] = ''
         ctx['device_access_rows'] = None
@@ -8524,18 +9317,12 @@ def device_operation_access(request: HttpRequest, pk: int, op: str):
             try:
                 from .plcommpro_bridge import PlcommproConnInfo, data_count, query_data, bridge_available
 
-                show_device = (request.GET.get('device') or '').strip() in ('1', 'true', 'yes', 'on')
+                show_device = (request.GET.get('device') or '').strip() in ('1', 'true', 'yes', 'on') or force_show_device
                 ctx['show_device_data'] = bool(show_device)
 
                 if dev.ip_address and bridge_available():
                     eff_pw = (str(dev.comm_password or '').strip() or _get_default_comm_password_cached())
-                    conn = PlcommproConnInfo(
-                        ipaddress=str(dev.ip_address),
-                        ip_port=int(dev.port or 4370),
-                        password=eff_pw,
-                        timeout=3000,
-                        protocol='TCP',
-                    )
+                    conn, _route = _route_aware_conn(dev, password=eff_pw, timeout_ms=3000, protocol='TCP')
                     # Table names vary by device/SDK; we try the common ones.
                     counts = {}
                     for table in ('user', 'userinfo', 'templatev10', 'template', 'fptemplate', 'holiday', 'timezone', 'acc_timezone'):
@@ -8636,6 +9423,21 @@ def device_operation_access(request: HttpRequest, pk: int, op: str):
                                     'doors': door_list,
                                 })
                             ctx['device_access_rows'] = access_rows
+
+                            debug_info = _load_controller_user_debug(dev)
+                            ctx['device_user_raw_rows'] = debug_info.get('raw_rows') or []
+                            ctx['device_user_raw_preview'] = debug_info.get('raw_preview') or ''
+                            ctx['device_user_raw_fields'] = debug_info.get('fields') or ''
+                            ctx['device_user_raw_result'] = debug_info.get('raw_result')
+                            ctx['device_user_raw_error'] = debug_info.get('raw_error') or ''
+                            ctx['device_user_raw_count'] = debug_info.get('count')
+                            ctx['device_user_raw_count_error'] = debug_info.get('count_error') or ''
+                            ctx['device_user_raw_header_only'] = bool(debug_info.get('header_only'))
+                            ctx['device_user_raw_attempts'] = debug_info.get('attempts') or []
+                            if keep_modal_open and controller_test_pin:
+                                filtered_debug = _load_controller_user_debug(dev, pin_filter=controller_test_pin)
+                                ctx['device_test_user_rows'] = filtered_debug.get('raw_rows') or []
+                                ctx['device_test_userauthorize_rows'] = filtered_debug.get('auth_rows') or []
                         except Exception as ex:
                             ctx['device_userauthorize_error'] = str(ex)
             except Exception as ex:
@@ -9013,6 +9815,199 @@ def holiday_delete(request: HttpRequest, pk: int):
             )
         return JsonResponse({'ok': True})
     except Exception as e: return JsonResponse({'ok': False,'error':str(e)}, status=400)
+
+
+def wiegand_formats_list(request: HttpRequest):
+    if not request.user.is_authenticated:
+        from django.contrib.auth.views import redirect_to_login
+        return redirect_to_login(request.get_full_path())
+    is_embed = (request.GET.get('embed') == '1')
+    if not is_embed:
+        from django.shortcuts import redirect
+        return redirect('/agent/menu/access/?tab=wiegand')
+
+    _ensure_wiegand_formats_seeded()
+    qs = WiegandCardFormat.objects.order_by('-is_active', 'wiegand_count', 'wiegand_name')
+    page = _paginate(qs, request)
+    rows = [_wiegand_format_payload(obj) for obj in page.object_list]
+    active_row = next((row for row in rows if row['is_active']), rows[0] if rows else None)
+    door_rows = []
+    try:
+        doors_qs = (
+            Door.objects
+            .select_related('device')
+            .filter(device__isnull=False)
+            .order_by('device__name', 'door_number', 'name', 'id')[:250]
+        )
+        for door in doors_qs:
+            device = getattr(door, 'device', None)
+            device_name = str(getattr(device, 'name', '') or getattr(device, 'ip_address', '') or '').strip()
+            door_rows.append(
+                {
+                    'id': int(door.id),
+                    'device_id': int(getattr(door, 'device_id', 0) or 0),
+                    'door_number': int(getattr(door, 'door_number', 0) or 0),
+                    'door_name': str(getattr(door, 'name', '') or '').strip(),
+                    'device_name': device_name,
+                    'reader_name': str(getattr(door, 'reader_in_name', '') or '').strip(),
+                    'label': f"{device_name} / Door {int(getattr(door, 'door_number', 0) or 0)} / {str(getattr(door, 'name', '') or '').strip() or '-'}",
+                }
+            )
+    except Exception:
+        door_rows = []
+    return render(
+        request,
+        'agent/access_wiegand_embed.html',
+        {
+            'page': page,
+            'rows': rows,
+            'door_rows': door_rows,
+            'active_row': active_row,
+            'can_edit': bool(getattr(request.user, 'is_staff', False)),
+            'listener_path': 'scripts\\wiegand_listener.py',
+            'listener_server_url': request.build_absolute_uri('/').rstrip('/'),
+        },
+    )
+
+
+def wiegand_format_create(request: HttpRequest):
+    if not request.user.is_authenticated or not request.user.is_staff:
+        from django.contrib.auth.views import redirect_to_login
+        return redirect_to_login(request.get_full_path())
+    _ensure_wiegand_formats_seeded()
+    is_modal = (request.GET.get('modal') == '1') or (request.headers.get('x-requested-with') == 'XMLHttpRequest')
+    if request.method == 'POST':
+        form = WiegandCardFormatForm(request.POST)
+        if form.is_valid():
+            obj = form.save()
+            if bool(form.cleaned_data.get('is_active')):
+                WiegandCardFormat.objects.exclude(pk=obj.pk).update(is_active=False)
+            _audit_log(
+                request,
+                module='wiegand-format',
+                action='create',
+                entity_id=int(obj.id),
+                entity_name=obj.wiegand_name or '',
+                details=f"bits={obj.wiegand_count}; mode={obj.wiegand_mode}",
+            )
+            tpl = 'agent/wiegand_format_saved_inner.html' if is_modal else 'agent/wiegand_format_saved_inner.html'
+            return render(request, tpl, {'obj': obj, 'created': True})
+    else:
+        form = WiegandCardFormatForm(initial=_default_wiegand_form_initial())
+    return render(
+        request,
+        'agent/wiegand_format_form_inner.html',
+        {'form': form, 'obj': None, 'preset_rows_json': json.dumps(list_known_wiegand_formats(include_details=True), ensure_ascii=True)},
+    )
+
+
+def wiegand_format_edit(request: HttpRequest, pk: int):
+    if not request.user.is_authenticated or not request.user.is_staff:
+        from django.contrib.auth.views import redirect_to_login
+        return redirect_to_login(request.get_full_path())
+    _ensure_wiegand_formats_seeded()
+    is_modal = (request.GET.get('modal') == '1') or (request.headers.get('x-requested-with') == 'XMLHttpRequest')
+    obj = WiegandCardFormat.objects.get(pk=pk)
+    if request.method == 'POST':
+        form = WiegandCardFormatForm(request.POST, instance=obj)
+        if form.is_valid():
+            obj = form.save()
+            if bool(form.cleaned_data.get('is_active')):
+                WiegandCardFormat.objects.exclude(pk=obj.pk).update(is_active=False)
+            _audit_log(
+                request,
+                module='wiegand-format',
+                action='update',
+                entity_id=int(obj.id),
+                entity_name=obj.wiegand_name or '',
+                details=f"bits={obj.wiegand_count}; mode={obj.wiegand_mode}",
+            )
+            tpl = 'agent/wiegand_format_saved_inner.html' if is_modal else 'agent/wiegand_format_saved_inner.html'
+            return render(request, tpl, {'obj': obj, 'created': False})
+    else:
+        form = WiegandCardFormatForm(instance=obj)
+    return render(
+        request,
+        'agent/wiegand_format_form_inner.html',
+        {'form': form, 'obj': obj, 'preset_rows_json': json.dumps(list_known_wiegand_formats(include_details=True), ensure_ascii=True)},
+    )
+
+
+def wiegand_format_delete(request: HttpRequest, pk: int):
+    if not request.user.is_authenticated or not request.user.is_staff or request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    obj = WiegandCardFormat.objects.filter(pk=pk).first()
+    if obj is None:
+        return JsonResponse({'ok': False, 'error': 'not-found'}, status=404)
+    if bool(obj.system_defined):
+        return JsonResponse({'ok': False, 'error': 'built-in-format-cannot-be-deleted'}, status=400)
+    try:
+        obj_name = obj.wiegand_name or ''
+        obj.delete()
+        _audit_log(
+            request,
+            module='wiegand-format',
+            action='delete',
+            entity_id=int(pk),
+            entity_name=obj_name,
+        )
+        return JsonResponse({'ok': True})
+    except Exception as exc:
+        return JsonResponse({'ok': False, 'error': str(exc)}, status=400)
+
+
+def wiegand_format_activate(request: HttpRequest, pk: int):
+    if not request.user.is_authenticated or not request.user.is_staff or request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    obj = WiegandCardFormat.objects.filter(pk=pk).first()
+    if obj is None:
+        return JsonResponse({'ok': False, 'error': 'not-found'}, status=404)
+    WiegandCardFormat.objects.exclude(pk=obj.pk).update(is_active=False)
+    obj.is_active = True
+    obj.save(update_fields=['is_active', 'updated_at'])
+    _audit_log(
+        request,
+        module='wiegand-format',
+        action='activate',
+        entity_id=int(obj.id),
+        entity_name=obj.wiegand_name or '',
+    )
+    return JsonResponse({'ok': True, 'id': int(obj.id), 'name': obj.wiegand_name, 'payload': obj.decoder_payload()})
+
+
+@csrf_exempt
+def api_wiegand_decode(request: HttpRequest):
+    if request.method != 'POST':
+        return JsonResponse({'ok': False, 'error': 'method-not-allowed'}, status=405)
+    if not request.user.is_authenticated:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    try:
+        payload = json.loads(request.body.decode('utf-8'))
+    except Exception:
+        payload = request.POST.dict()
+
+    format_config = payload.get('wiegand_format_config')
+    format_id_raw = str(payload.get('wiegand_format_id') or '').strip()
+    format_name = str(payload.get('wiegand_format') or '').strip() or None
+    if not format_config and format_id_raw:
+        obj = WiegandCardFormat.objects.filter(pk=int(format_id_raw)).first()
+        if obj is not None:
+            format_config = obj.decoder_payload()
+            format_name = obj.wiegand_name
+
+    try:
+        decoded = decode_wiegand(
+            bits=payload.get('wiegand_bits'),
+            hex_value=payload.get('wiegand_hex'),
+            int_value=payload.get('wiegand_int'),
+            format_name=format_name,
+            bit_length=payload.get('wiegand_bit_length'),
+            format_data=format_config,
+        )
+    except Exception as exc:
+        return JsonResponse({'ok': False, 'error': str(exc)}, status=400)
+
+    return JsonResponse({'ok': True, 'decoded': decoded})
 
 def access_levels_list(request: HttpRequest):
     if not request.user.is_authenticated:
@@ -10175,6 +11170,43 @@ def _normalize_reader_card_code(value: str) -> str:
         except Exception:
             return ""
 
+
+def _extract_zkemkeeper_card(payload: Any) -> tuple[str, dict[str, Any] | None]:
+    if not isinstance(payload, dict):
+        return '', None
+
+    candidates: list[dict[str, str]] = []
+
+    def _add_candidate(label: str, raw_value: Any) -> None:
+        raw_text = str(raw_value or '').strip()
+        if not raw_text:
+            return
+        normalized = _normalize_reader_card_code(raw_text)
+        if not normalized or normalized in {'0', '000000', '0000000', '00000000'}:
+            return
+        if any(item.get('normalized') == normalized for item in candidates):
+            return
+        candidates.append({'label': label, 'raw': raw_text, 'normalized': normalized})
+
+    _add_candidate('payload.card_number', payload.get('card_number'))
+    _add_candidate('payload.card_number_raw', payload.get('card_number_raw'))
+    _add_candidate('payload.zkemkeeper_hid_card', payload.get('zkemkeeper_hid_card'))
+
+    props = payload.get('zkemkeeper_properties')
+    if isinstance(props, dict):
+        for key in ('CardNumber', 'card_number', 'cardno', 'CardNo', 'HIDNumber', 'HIDNum', 'dwHIDNum', 'dwHIDNumber', 'EventCardNum', 'EventCardNumber'):
+            _add_candidate(f'zkemkeeper_properties.{key}', props.get(key))
+
+    source_args = payload.get('zkemkeeper_source_args')
+    event_name = str(payload.get('zkemkeeper_event') or '').strip()
+    if event_name == 'OnHIDNum' and isinstance(source_args, list):
+        for index, value in enumerate(source_args):
+            _add_candidate(f'zkemkeeper_source_args[{index}]', value)
+
+    if not candidates:
+        return '', None
+    return candidates[0]['normalized'], {'selected': candidates[0], 'candidates': candidates}
+
 @csrf_exempt
 def card_read_push(request: HttpRequest):
     # Hardware or external services POST here the latest read card
@@ -10185,15 +11217,102 @@ def card_read_push(request: HttpRequest):
         payload = json.loads(request.body.decode('utf-8'))
         card_number_raw = (payload.get('card_number') or '').strip()
         source = (payload.get('source') or 'unknown').strip()
+        decoded_wiegand = None
+        zkemkeeper_meta = None
+
+        # Optional raw Wiegand support for unknown cards that are not yet enrolled.
+        # An external helper can POST the raw bitstream/hex/integer plus the panel
+        # format name, and the server will publish the decoded CardNo into the
+        # existing live-monitor/enrollment pipeline.
+        try:
+            has_wiegand_input = any(
+                str(payload.get(key) or '').strip()
+                for key in ('wiegand_bits', 'wiegand_hex', 'wiegand_int')
+            )
+            if has_wiegand_input:
+                format_config = payload.get('wiegand_format_config')
+                format_name = (payload.get('wiegand_format') or '').strip() or None
+                format_id_raw = str(payload.get('wiegand_format_id') or '').strip()
+                raw_bit_length = None
+                try:
+                    raw_bit_length = len(
+                        normalize_wiegand_bits(
+                            bits=payload.get('wiegand_bits'),
+                            hex_value=payload.get('wiegand_hex'),
+                            int_value=payload.get('wiegand_int'),
+                            bit_length=payload.get('wiegand_bit_length'),
+                        )
+                    )
+                except Exception:
+                    raw_bit_length = None
+                if format_config in ('', {}, []):
+                    format_config = None
+                if format_config is None and format_id_raw:
+                    fmt_obj = WiegandCardFormat.objects.filter(pk=int(format_id_raw)).first()
+                    if fmt_obj is not None:
+                        format_config = fmt_obj.decoder_payload()
+                        format_name = fmt_obj.wiegand_name
+                if format_config is None and not format_name:
+                    fmt_qs = WiegandCardFormat.objects.filter(is_active=True)
+                    if raw_bit_length:
+                        fmt_qs = fmt_qs.filter(wiegand_count=int(raw_bit_length))
+                    fmt_obj = fmt_qs.order_by('-system_defined', 'wiegand_name').first()
+                    if fmt_obj is None:
+                        fmt_qs = WiegandCardFormat.objects.filter(default_fmt=True)
+                        if raw_bit_length:
+                            fmt_qs = fmt_qs.filter(wiegand_count=int(raw_bit_length))
+                        fmt_obj = fmt_qs.order_by('-system_defined', 'wiegand_name').first()
+                    if fmt_obj is not None:
+                        format_config = fmt_obj.decoder_payload()
+                        format_name = fmt_obj.wiegand_name
+                decoded_wiegand = decode_wiegand(
+                    bits=payload.get('wiegand_bits'),
+                    hex_value=payload.get('wiegand_hex'),
+                    int_value=payload.get('wiegand_int'),
+                    format_name=format_name,
+                    bit_length=payload.get('wiegand_bit_length'),
+                    format_data=format_config,
+                )
+                if not card_number_raw:
+                    card_number_raw = str(decoded_wiegand.get('card_number') or '').strip()
+                if decoded_wiegand.get('format_name'):
+                    fmt_name = str(decoded_wiegand.get('format_name') or '').strip()
+                    source = source or 'wiegand'
+                    if fmt_name and fmt_name.lower() not in source.lower():
+                        source = f"{source}:{fmt_name}"
+        except Exception as exc:
+            return JsonResponse({'ok': False, 'error': f'wiegand_decode_failed: {exc}'}, status=400)
+
+        try:
+            if not card_number_raw and ('zkemkeeper_event' in payload or 'zkemkeeper_properties' in payload or 'zkemkeeper_source_args' in payload):
+                card_number_raw, zkemkeeper_meta = _extract_zkemkeeper_card(payload)
+        except Exception:
+            zkemkeeper_meta = None
+
         card_number = _normalize_reader_card_code(card_number_raw)
         if not card_number:
             return JsonResponse({'ok': False, 'error': 'card_number required'}, status=400)
+
+        # Reuse the active Wiegand test-door context when a listener posts raw
+        # data without explicit device/door identifiers.
+        try:
+            if not any(payload.get(key) for key in ('door_pk', 'device_id', 'door_id')):
+                test_ctx = cache.get('agent:wiegand_test_context') or {}
+                if test_ctx:
+                    payload = dict(payload)
+                    payload['door_pk'] = test_ctx.get('door_pk')
+                    payload['device_id'] = test_ctx.get('device_id')
+                    payload['door_id'] = test_ctx.get('door_number')
+        except Exception:
+            pass
 
         # Best-effort: resolve door/device context for nicer monitor rendering.
         resolved_device_id = 0
         resolved_door_pk = 0
         resolved_sn = ''
         door_number = ''
+        resolved_device_name = ''
+        resolved_door_name = ''
         try:
             from .models import Door, Device
 
@@ -10219,9 +11338,16 @@ def card_read_push(request: HttpRequest):
                 resolved_door_pk = int(getattr(door_obj, 'id', 0) or 0)
                 resolved_device_id = int(getattr(door_obj, 'device_id', 0) or 0)
                 door_number = str(getattr(door_obj, 'door_number', '') or '')
+                resolved_door_name = str(getattr(door_obj, 'name', '') or '')
                 dev = getattr(door_obj, 'device', None)
                 if dev is not None:
                     resolved_sn = str(getattr(dev, 'serial_number', '') or '')
+                    resolved_device_name = str(
+                        getattr(dev, 'name', None)
+                        or getattr(dev, 'device_name', None)
+                        or getattr(dev, 'alias', None)
+                        or ''
+                    )
             else:
                 if device_id:
                     try:
@@ -10233,6 +11359,12 @@ def card_read_push(request: HttpRequest):
                         dev = Device.objects.filter(pk=int(resolved_device_id)).first()
                         if dev is not None:
                             resolved_sn = str(getattr(dev, 'serial_number', '') or '')
+                            resolved_device_name = str(
+                                getattr(dev, 'name', None)
+                                or getattr(dev, 'device_name', None)
+                                or getattr(dev, 'alias', None)
+                                or ''
+                            )
                     except Exception:
                         resolved_sn = resolved_sn
                 # Try to keep door_number even if we can't resolve a Door row.
@@ -10258,14 +11390,70 @@ def card_read_push(request: HttpRequest):
             pass
 
         # Persist into the same stream used by controller RTLOG so polling fallback works.
+        rtlog_row = None
+        correlation_buffer_entry = None
+        effective_door_number = normalize_door_number(door_number or payload.get('door_id'))
+        try:
+            correlation_buffer_entry = remember_sniffed_uid(
+                device_id=int(resolved_device_id or 0),
+                door_number=effective_door_number,
+                card_number=card_number,
+                source=source,
+                payload={
+                    'source': source,
+                    'wiegand_format': str((decoded_wiegand or {}).get('format_name') or payload.get('wiegand_format') or ''),
+                    'door_pk': int(resolved_door_pk or 0),
+                    'door_number': effective_door_number,
+                },
+            )
+        except Exception:
+            correlation_buffer_entry = None
         try:
             from django.utils import timezone
             ts = timezone.localtime().strftime('%Y-%m-%d %H:%M:%S')
-            dn = door_number if door_number else '0'
+            dn = effective_door_number if effective_door_number else '0'
             raw_line = f"{ts},0,{card_number},{dn},0,CITITOR EXTERN,{source}"
-            DeviceRealtimeLog.objects.create(device_id=int(resolved_device_id or 0), sn=str(resolved_sn or ''), raw=raw_line)
+            rtlog_row = DeviceRealtimeLog.objects.create(
+                device_id=int(resolved_device_id or 0),
+                sn=str(resolved_sn or ''),
+                raw=raw_line,
+                correlation_payload={
+                    'reader_capture': True,
+                    'reader_source': source,
+                    'buffered_for_correlation': bool(correlation_buffer_entry),
+                    'door_number': dn,
+                },
+            )
         except Exception:
             raw_line = None
+            rtlog_row = None
+
+        try:
+            if 'zkemkeeper_event' in payload or 'zkemkeeper_properties' in payload or 'zkemkeeper_source_args' in payload:
+                DeviceEventLog.objects.create(
+                    device_id=int(resolved_device_id or 0),
+                    sn=str(resolved_sn or ''),
+                    timestamp_str=str(payload.get('event_timestamp') or ''),
+                    code=str(payload.get('zkemkeeper_event') or source or ''),
+                    raw_line=json.dumps(
+                        {
+                            'card_number': card_number,
+                            'card_number_raw': card_number_raw,
+                            'source': source,
+                            'device_id': int(resolved_device_id or 0),
+                            'door_number': door_number,
+                            'zkemkeeper_event': payload.get('zkemkeeper_event'),
+                            'zkemkeeper_properties': payload.get('zkemkeeper_properties'),
+                            'zkemkeeper_source_args': payload.get('zkemkeeper_source_args'),
+                            'zkemkeeper_hid_card': payload.get('zkemkeeper_hid_card'),
+                            'zkemkeeper_card_meta': zkemkeeper_meta,
+                            'controller_pin': payload.get('controller_pin'),
+                        },
+                        ensure_ascii=False,
+                    ),
+                )
+        except Exception:
+            pass
 
         # Cache for simple UI workflows that poll last-card-read.
         cache.set(
@@ -10275,7 +11463,12 @@ def card_read_push(request: HttpRequest):
                 'card_number_raw': card_number_raw,
                 'source': source,
                 'device_id': int(resolved_device_id or 0),
-                'door_number': door_number,
+                'device_name': resolved_device_name,
+                'door_pk': int(resolved_door_pk or 0),
+                'door_number': effective_door_number,
+                'door_name': resolved_door_name,
+                'wiegand': decoded_wiegand,
+                'zkemkeeper': zkemkeeper_meta,
             },
             timeout=60,
         )
@@ -10288,6 +11481,11 @@ def card_read_push(request: HttpRequest):
             if raw_line:
                 layer = get_channel_layer()
                 if layer:
+                    created_at_iso = ''
+                    try:
+                        created_at_iso = rtlog_row.created_at.isoformat() if getattr(rtlog_row, 'created_at', None) else ''
+                    except Exception:
+                        created_at_iso = ''
                     async_to_sync(layer.group_send)(
                         'monitor',
                         {
@@ -10296,6 +11494,19 @@ def card_read_push(request: HttpRequest):
                                 'type': 'rtlog.batch',
                                 'device_id': int(resolved_device_id or 0),
                                 'lines': [raw_line],
+                                'entries': [{
+                                    'id': int(getattr(rtlog_row, 'id', 0) or 0),
+                                    'device_id': int(resolved_device_id or 0),
+                                    'raw': raw_line,
+                                    'time': created_at_iso,
+                                    'card_no': card_number,
+                                    'door_number': dn,
+                                    'verify_mode': 'CITITOR EXTERN',
+                                    'event_description': 'Scanare card cititor extern',
+                                    'reader_source': source,
+                                    'correlation_payload': dict(getattr(rtlog_row, 'correlation_payload', {}) or {}),
+                                    'monitor_origin': 'card_read_push',
+                                }],
                             },
                         },
                     )
@@ -10350,7 +11561,27 @@ def card_read_push(request: HttpRequest):
                     eval_data = None
         except Exception:
             eval_data = None
-        return JsonResponse({'ok': True, 'access_eval': eval_data})
+        try:
+            cached_read = cache.get('agent:last_card_read') or {}
+            if cached_read:
+                cached_read = dict(cached_read)
+                cached_read['access_eval'] = eval_data
+                cache.set('agent:last_card_read', cached_read, timeout=60)
+        except Exception:
+            pass
+        return JsonResponse({
+            'ok': True,
+            'card_number': card_number,
+            'source': source,
+            'device_id': int(resolved_device_id or 0),
+            'device_name': resolved_device_name,
+            'door_number': door_number,
+            'door_pk': int(resolved_door_pk or 0),
+            'door_name': resolved_door_name,
+            'access_eval': eval_data,
+            'wiegand': decoded_wiegand,
+            'zkemkeeper': zkemkeeper_meta,
+        })
     except Exception as e:
         return JsonResponse({'ok': False, 'error': str(e)}, status=400)
 
@@ -10371,7 +11602,12 @@ def card_read_wait(request: HttpRequest):
                 'card_number_raw': data.get('card_number_raw'),
                 'source': data.get('source'),
                 'device_id': data.get('device_id'),
+                'device_name': data.get('device_name'),
+                'door_pk': data.get('door_pk'),
                 'door_number': data.get('door_number'),
+                'door_name': data.get('door_name'),
+                'access_eval': data.get('access_eval'),
+                'wiegand': data.get('wiegand'),
             })
 
         # Controller-only fallback: read latest DeviceRealtimeLog lines coming
@@ -10461,6 +11697,49 @@ def listener_error(request: HttpRequest):
         return JsonResponse({'ok': True})
     except Exception as e:
         return JsonResponse({'ok': False, 'error': str(e)}, status=400)
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def api_wiegand_test_context(request: HttpRequest):
+    """Store or clear the temporary Wiegand test door used by the ACCESS modal."""
+    if not request.user.is_authenticated or not request.user.is_staff:
+        return JsonResponse({'ok': False, 'error': 'unauthorized'}, status=403)
+    import json
+    try:
+        payload = json.loads(request.body.decode('utf-8')) if request.body else {}
+    except Exception:
+        return JsonResponse({'ok': False, 'error': 'invalid-json'}, status=400)
+
+    active = str(payload.get('active') if 'active' in payload else '1').strip().lower() not in ('0', 'false', 'no', 'off')
+    if not active:
+        cache.delete('agent:wiegand_test_context')
+        return JsonResponse({'ok': True, 'active': False})
+
+    door_pk_raw = str(payload.get('door_pk') or '').strip()
+    if not door_pk_raw.isdigit():
+        return JsonResponse({'ok': False, 'error': 'door_pk required'}, status=400)
+
+    from .models import Door
+
+    door = Door.objects.select_related('device').filter(pk=int(door_pk_raw)).first()
+    if door is None:
+        return JsonResponse({'ok': False, 'error': 'door-not-found'}, status=404)
+
+    dev = getattr(door, 'device', None)
+    context = {
+        'door_pk': int(getattr(door, 'id', 0) or 0),
+        'door_number': str(getattr(door, 'door_number', '') or ''),
+        'door_name': str(getattr(door, 'name', '') or ''),
+        'device_id': int(getattr(door, 'device_id', 0) or 0),
+        'device_name': str(
+            getattr(dev, 'name', None)
+            or getattr(dev, 'device_name', None)
+            or getattr(dev, 'alias', None)
+            or ''
+        ),
+    }
+    cache.set('agent:wiegand_test_context', context, timeout=600)
+    return JsonResponse({'ok': True, 'active': True, 'context': context})
 
 @csrf_exempt
 def backup_run(request: HttpRequest):
@@ -10871,13 +12150,24 @@ def access_evaluate_and_open(request: HttpRequest):
             'ok': allowed,
             'employee': getattr(emp,'id', None),
             'employee_name': employee_name,
+            'employee_pin': employee_pin,
+            'department_name': department_name,
             'card_number': matched_card,
             'door': getattr(door,'id', None),
+            'door_name': getattr(door, 'name', '') if door else '',
+            'device_name': (
+                getattr(getattr(door, 'device', None), 'name', None)
+                or getattr(getattr(door, 'device', None), 'device_name', None)
+                or getattr(getattr(door, 'device', None), 'alias', None)
+                or ''
+            ) if door else '',
             'allowed_doors': allowed_doors,
             'door_access_count': len(allowed_doors),
             'source': source,
             'reasons': reasons,
             'status_text': status_text,
+            'verify_mode': verify_mode_label,
+            'event_description': legacy_desc,
             'open_all': open_all,
         })
     except Exception as e:
@@ -11959,37 +13249,28 @@ def _enqueue(device_id: int, cmd: str, door: Door | None = None) -> bool:
         except Exception:
             pass
         return False
+    # CRITICAL: Do not start or drive CommCenter from the web process.
+    # Door commands must be consumed by the tray/CommCenter process via DB queue,
+    # otherwise we can get duplicate centers, driver contention, and intermittent
+    # command execution/RTLOG ingestion.
     try:
         import agent.modern_comm_center as mcc
         center = getattr(mcc, 'ACTIVE_CENTER', None)
-        if center is None:
-            try:
-                center = getattr(mcc, 'build_and_run_stub')(poll_interval=0.25, driver='auto')
-                mcc.ACTIVE_CENTER = center
-            except Exception:
-                center = None
-        # If CommCenter is running in this same process, enqueue via in-memory queue
-        # and prefix with LOGID so CommCenter can update this CommandLog row.
+        # If (and only if) this process already owns an active center, we can
+        # also push to its in-memory queue as a fast-path hint.
         if center is not None:
             try:
                 center.enqueue_command(device_id, f"LOGID:{int(log.id)} {cmd}"[:240])
-                try:
-                    center._process_one_command()
-                except Exception:
-                    pass
-                try:
-                    log.status = 'RUNNING'
-                    log.result = 'queued'
-                    log.save(update_fields=['status', 'result'])
-                except Exception:
-                    pass
+                log.status = 'RUNNING'
+                log.result = 'queued'
+                log.save(update_fields=['status', 'result'])
                 _broadcast_command(log)
             except Exception:
-                # Fallback to DB-only queue (external CommCenter may consume it)
+                # DB queue remains the source of truth.
                 pass
-        return True
     except Exception:
-        return True
+        pass
+    return True
 
 def _persist_and_broadcast_status(device_id: int, door_state: str, online: bool = True):
     try:
@@ -12205,8 +13486,8 @@ def _door_command_for_action(door_obj, action: str) -> str:
 
 
 # Best-effort server-side auto-close scheduling.
-# Purpose: if a door is configured with lock_open_duration, ensure we always
-# transition back to CLOSED and emit a close command/event path for Monitor.
+# Disabled by default because it can generate synthetic close activity that does
+# not reflect physical controller/relay state.
 _AUTO_CLOSE_TIMERS = {}
 
 
@@ -12255,7 +13536,7 @@ def _schedule_door_auto_close(device_id: int, door_pk: int, cmd_door_arg: str, s
             except Exception:
                 pass
 
-            # Enqueue an explicit close so CommCenter can publish `door.close`.
+            # Optional safety close command (opt-in behavior).
             try:
                 _enqueue(int(device_id), f"DOOR_CLOSE:{cmd_door_arg}", door=door_obj)
             except Exception:
@@ -12263,13 +13544,6 @@ def _schedule_door_auto_close(device_id: int, door_pk: int, cmd_door_arg: str, s
 
             try:
                 _persist_and_broadcast_status(int(device_id), "CLOSED")
-            except Exception:
-                pass
-
-            # Ensure the monitor shows a real-time close line even if the controller
-            # doesn't emit an explicit close event.
-            try:
-                _broadcast_door_event(int(device_id), door_obj, 'door.close', verify_mode=f'AUTO({int(seconds)}s)')
             except Exception:
                 pass
 
@@ -12308,27 +13582,22 @@ def door_open(request: HttpRequest, device_id: int, door_id: str):
     ok = _enqueue(device_id, f"{open_cmd}:{cmd_door_arg}", door=door_obj)
     if not ok:
         return JsonResponse({"ok": False, "error": "device_unavailable"}, status=409)
-    # Update door.is_open state in database
+    # Do not mark door OPEN optimistically on enqueue.
+    # Real door state must come from controller RTLOG/sensor feedback.
     try:
         if door_obj is not None:
-            door_obj.is_open = True
-            door_obj.save(update_fields=['is_open', 'last_state_change'])
             _set_lock_state(door_obj.id, None)
     except Exception:
         pass
-    _persist_and_broadcast_status(device_id, door_state)
 
-    # Broadcast a door.open line for real-time monitor log.
-    try:
-        _broadcast_door_event(int(device_id), door_obj, event_type, verify_mode='API')
-    except Exception:
-        pass
+    # Do not broadcast synthetic door.open monitor rows from API ack path.
+    # Monitor rows must come from device RTLOG/realtime hardware events.
 
-    # Auto-close (server-side): after lock_open_duration seconds, mark CLOSED and
-    # enqueue a DOOR_CLOSE to drive a real-time close event in Monitor.
+    # Auto-close is opt-in only to avoid synthetic close flows by default.
     try:
         secs = int(getattr(door_obj, 'lock_open_duration', 0) or 0)
-        if open_cmd == 'DOOR_OPEN' and secs > 0 and door_obj is not None:
+        auto_close_enabled = str(os.getenv('ZKACCESS_ENABLE_SERVER_AUTOCLOSE', '0')).strip().lower() in ('1', 'true', 'yes', 'on')
+        if auto_close_enabled and open_cmd == 'DOOR_OPEN' and secs > 0 and door_obj is not None:
             _schedule_door_auto_close(int(device_id), int(getattr(door_obj, 'id', 0) or 0), str(cmd_door_arg), secs)
     except Exception:
         pass
@@ -12382,21 +13651,16 @@ def door_close(request: HttpRequest, device_id: int, door_id: str):
     ok = _enqueue(device_id, f"{close_cmd}:{cmd_door_arg}", door=door_obj)
     if not ok:
         return JsonResponse({"ok": False, "error": "device_unavailable"}, status=409)
-    # Update door.is_open state in database
+    # Do not mark door CLOSED optimistically on enqueue.
+    # Real door state must come from controller RTLOG/sensor feedback.
     try:
         if door_obj is not None:
-            door_obj.is_open = False
-            door_obj.save(update_fields=['is_open', 'last_state_change'])
             _set_lock_state(door_obj.id, None)
     except Exception:
         pass
-    _persist_and_broadcast_status(device_id, door_state)
 
-    # Broadcast a door.close line for real-time monitor log.
-    try:
-        _broadcast_door_event(int(device_id), door_obj, event_type, verify_mode='API')
-    except Exception:
-        pass
+    # Do not broadcast synthetic door.close monitor rows from API ack path.
+    # Monitor rows must come from device RTLOG/realtime hardware events.
     try:
         import json as _json
         from .event_codes import describe_door_event_type as _door_desc
@@ -12991,6 +14255,7 @@ def _broadcast_command(log: CommandLog):
         layer = get_channel_layer()
         if not layer:
             return
+        state = _command_state_payload(log)
         payload = {
             'type': 'command.log',
             'id': log.id,
@@ -12999,7 +14264,8 @@ def _broadcast_command(log: CommandLog):
             'command': log.command,
             'status': log.status,
             'result': log.result,
-            'executed_at': log.executed_at and log.executed_at.isoformat()
+            'executed_at': log.executed_at and log.executed_at.isoformat(),
+            **state,
         }
         asyncio.get_event_loop().create_task(layer.group_send('monitor', {
             'type': 'monitor_event',
@@ -13007,6 +14273,32 @@ def _broadcast_command(log: CommandLog):
         }))
     except Exception:
         pass
+
+
+def _command_state_payload(log: CommandLog) -> dict[str, object]:
+    command_txt = str(getattr(log, 'command', '') or '').strip().upper()
+    status_txt = str(getattr(log, 'status', '') or '').strip().upper()
+    result_txt = str(getattr(log, 'result', '') or '').strip()
+    result_upper = result_txt.upper()
+
+    accepted = status_txt in ('PENDING', 'RUNNING', 'OK')
+    controller_confirmed = status_txt == 'OK'
+    physical_changed = None
+    physical_evidence = ''
+
+    if command_txt.startswith(('DOOR_OPEN', 'DOOR_CLOSE')):
+        physical_changed = False
+        if any(token in result_upper for token in ('PHYSICAL', 'SENSOR', 'RTLOG', 'EVENT', 'CONFIRMED')):
+            physical_changed = True
+            physical_evidence = 'controller-feedback'
+        elif status_txt == 'OK':
+            physical_evidence = 'awaiting-physical-proof'
+    return {
+        'accepted': bool(accepted),
+        'controller_confirmed': bool(controller_confirmed),
+        'physical_changed': physical_changed,
+        'physical_evidence': physical_evidence,
+    }
 
 # ----- Employee CRUD Views -----
 def employees_list(request: HttpRequest):
@@ -13198,7 +14490,7 @@ def command_recent(request: HttpRequest):
     logs = CommandLog.objects.order_by('-created_at')[:limit]
     items = []
     for l in logs:
-        items.append({
+        item = {
             'id': l.id,
             'command': (l.command or '')[:240],
             'status': l.status,
@@ -13207,7 +14499,9 @@ def command_recent(request: HttpRequest):
             'door_id': l.door_id,
             'created_at': l.created_at.isoformat(),
             'executed_at': l.executed_at and l.executed_at.isoformat(),
-        })
+        }
+        item.update(_command_state_payload(l))
+        items.append(item)
     return JsonResponse({'ok': True,'items': items,'commands': items})
 
 
@@ -13505,6 +14799,7 @@ def command_status(request: HttpRequest, command_id: int):
         'created_at': l.created_at.isoformat() if l.created_at else None,
         'executed_at': l.executed_at.isoformat() if l.executed_at else None,
     }
+    item.update(_command_state_payload(l))
     return JsonResponse({'ok': True, 'item': item, **item})
 
 
@@ -13551,7 +14846,7 @@ def commands_full_list(request: HttpRequest):
             )
         except Exception:
             device_name = ''
-        rows.append({
+        row = {
             'id': l.id,
             'device_id': l.device_id,
             'device': device_name,
@@ -13562,7 +14857,9 @@ def commands_full_list(request: HttpRequest):
             'result': l.result,
             'created_at': l.created_at.isoformat(),
             'executed_at': l.executed_at and l.executed_at.isoformat(),
-        })
+        }
+        row.update(_command_state_payload(l))
+        rows.append(row)
     return JsonResponse({'ok': True, 'items': rows})
 
 
@@ -14837,6 +16134,19 @@ def comm_center_status(request: HttpRequest):
             'event_logs': center.total_event_logs,
             'last_cycle': last,
         })
+    try:
+        latest_rtlog = DeviceRealtimeLog.objects.only('id', 'device_id', 'created_at', 'raw').order_by('-id').first()
+        if latest_rtlog:
+            data['latest_rtlog'] = {
+                'id': latest_rtlog.id,
+                'device_id': latest_rtlog.device_id,
+                'created_at': latest_rtlog.created_at.isoformat() if latest_rtlog.created_at else None,
+                'raw_preview': (latest_rtlog.raw or '')[:120],
+            }
+        else:
+            data['latest_rtlog'] = None
+    except Exception:
+        data['latest_rtlog'] = None
     return JsonResponse({'ok': True, 'center': data})
 
 def comm_center_start(request: HttpRequest):
