@@ -426,6 +426,41 @@ class ZKTechSocketDriver:
             except Exception as e:
                 LOG.warning("get_options socket-native error: %s", e)
         return self._bridge_passthrough("get_options", request_items)
+
+    def get_panel_user_card_map(self) -> Dict[str, str]:
+        """Return a PIN -> CardNo mapping downloaded from the panel's user table."""
+        mapping: Dict[str, str] = {}
+        if not self._is_connected():
+            return mapping
+        try:
+            with self._lock:
+                query_payload = b"user\x00Pin,CardNo\x00\x00\x00"
+                cmd_packet = self._build_command(self.CMD_QUERYLOG, query_payload, expect_reply=1)
+                self.socket.send(cmd_packet)
+
+                data = self._recv_all(65536)
+                if not data:
+                    return mapping
+
+                payload_bytes = self._extract_payload(data)
+                text = payload_bytes.decode("utf-8", errors="ignore").replace("\x00", "")
+                for line in text.replace("\r\n", "\n").split("\n"):
+                    line = line.strip()
+                    if not line:
+                        continue
+                    pin_val = ""
+                    card_val = ""
+                    for part in line.split(","):
+                        part = part.strip()
+                        if part.upper().startswith("PIN="):
+                            pin_val = part[4:].strip()
+                        elif part.upper().startswith("CARDNO="):
+                            card_val = part[7:].strip()
+                    if pin_val and card_val and card_val not in ("0", "00000000"):
+                        mapping[pin_val] = card_val
+        except Exception as e:
+            LOG.debug("get_panel_user_card_map error: %s", e)
+        return mapping
     
     def set_options(self, items: str) -> Dict[str, Any]:
         """Set device options via CMD_SETOPTIONS (e.g. ServerAddr, ServerPort, CLOUDSERVICEFLAG)."""

@@ -2423,6 +2423,14 @@ class ModernCommCenter(object):
                     # Cardno is at index 7 when 9+ parts (with index field) or index 6 for 8 parts.
                     card_idx = 7 if len(parts) >= 9 else 6
                     card_b = str(parts[card_idx]).strip() if len(parts) > card_idx else ''
+                    # When Cardno is empty, fall back to parts[6] if it looks like a card:
+                    # non-purely-numeric (e.g. hex "04EEFF11") or long decimal (>= 7 digits).
+                    if (not card_b) and len(parts) > 6:
+                        cand = str(parts[6] or '').strip()
+                        if cand:
+                            is_numeric = cand.isdigit()
+                            if (not is_numeric) or (is_numeric and len(cand) >= 7):
+                                card_b = cand
                     # Deduplicate Format B by a stable per-event fingerprint.
                     # IMPORTANT: many firmwares only provide second-resolution time;
                     # repeated scans within the same second may still be unique via the 'Index' field.
