@@ -77,3 +77,47 @@ def test_decode_transaction_rows_handles_key_value_payload():
             "source_format": "key-value",
         }
     ]
+
+
+def test_decode_transaction_rows_handles_card_alias_in_header_payload():
+    raw = (
+        "Card,Pin,Verified,DoorID,EventType,InOutState,Time_second,Index\r\n"
+        "123456,93,4,1,27,0,840045753,77"
+    )
+
+    rows = decode_transaction_rows(raw)
+
+    assert rows == [
+        {
+            "cardno": "123456",
+            "pin": "93",
+            "verified": "4",
+            "door_id": "1",
+            "event_type": "27",
+            "in_out_state": "0",
+            "time_second": "840045753",
+            "index": "77",
+            "source_format": "header-driven",
+        }
+    ]
+
+
+def test_decode_transaction_rows_handles_card_alias_in_key_value_payload():
+    raw = "Card=123456\tPin=93\tVerified=4\tDoorID=1\tEventType=27\tInOutState=0\tTime_second=840045753\tIndex=77"
+
+    rows = decode_transaction_rows(raw)
+
+    assert rows == [
+        {
+            "cardno": "123456",
+            "pin": "93",
+            "verified": "4",
+            "door_id": "1",
+            "event_type": "27",
+            "in_out_state": "0",
+            "time_second": "840045753",
+            "index": "77",
+            "sitecode": "",
+            "source_format": "key-value",
+        }
+    ]

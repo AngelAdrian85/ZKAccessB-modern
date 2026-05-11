@@ -101,6 +101,7 @@ swipe_capture_controller22.txt
 tmp_w26_tap_capture.log
 tmp_w26_tap_capture.err.log
 tmp_wiegand_listener_trace.jsonl
+captures/wireshark/
 
 # Never commit corrupted venv artifacts
 .venv_corrupt/

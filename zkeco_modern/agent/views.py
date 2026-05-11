@@ -2131,19 +2131,9 @@ def device_configure_adms(request: HttpRequest, device_id: int):
             except ValueError:
                 server_port_int = _default_adms_port(request)
 
-            web_url = f'http://{server_addr}:{server_port_int}'
-            items = (
-                f'ServerAddr={server_addr}'
-                f',ServerPort={server_port_int}'
-                f',CLOUDSERVICEFLAG=1'
-                f',PushFunOn=1'
-                f',ADMSServerIP={server_addr}'
-                f',WebServerURL={web_url}'
-            )
+            from .push_protocol import build_adms_option_items
 
-            # Also enable common realtime flags (some firmwares require these for /iclock/cdata uploads).
-            # Safe if ignored.
-            items_with_flags = items + ',TransFlag=1,Realtime=1,RTLog=1,TransInterval=1'
+            items_with_flags = build_adms_option_items(server_addr, server_port_int)
 
             # Try direct bridge first.  This works when CommCenter is NOT running.
             bridge_ok = False
@@ -2196,7 +2186,7 @@ def device_configure_adms(request: HttpRequest, device_id: int):
             })
 
         if action == 'clear':
-            items = 'ServerAddr=,ServerPort=,CLOUDSERVICEFLAG=0,PushFunOn=0,ADMSServerIP=,WebServerURL=,TransFlag=0,Realtime=0,RTLog=0'
+            items = 'ServerAddr=,ServerPort=,CLOUDSERVICEFLAG=0,PushFunOn=0,ADMSServerIP=,WebServerURL=,TransFlag=0,Realtime=0,RTLog=0,Encrypt=0,PushProtVer=,TransTables=,TimeoutSec=0,RequestDelay=0,ErrorDelay=0'
 
             # Try direct bridge first.
             bridge_ok = False
@@ -2240,7 +2230,13 @@ def device_configure_adms(request: HttpRequest, device_id: int):
 
     # Port: use the actual port from the incoming HTTP request — always correct,
     # works with runserver, Daphne, or any other server regardless of INI state.
-    suggested_port = str(_default_adms_port(request))
+    try:
+        from .push_protocol import get_push_protocol_config
+
+        _push_cfg = get_push_protocol_config()
+        suggested_port = str(int(_push_cfg.public_port or _default_adms_port(request)))
+    except Exception:
+        suggested_port = str(_default_adms_port(request))
 
     # ── Auto-apply: queue SET_OPTION command via CommCenter immediately on GET ──
     # This means just opening the ⚡ ADMS modal configures the device automatically.
@@ -2328,16 +2324,23 @@ def _suggested_adms_server_ip(dev: Optional[Device] = None) -> str:
 
 
 def _build_adms_option_items(server_addr: str, server_port: int) -> str:
-    web_url = f'http://{server_addr}:{int(server_port)}'
-    return (
-        f'ServerAddr={server_addr}'
-        f',ServerPort={int(server_port)}'
-        f',CLOUDSERVICEFLAG=1'
-        f',PushFunOn=1'
-        f',ADMSServerIP={server_addr}'
-        f',WebServerURL={web_url}'
-        f',TransFlag=1,Realtime=1,RTLog=1,TransInterval=1'
-    )
+    from .push_protocol import build_adms_option_items as _build_items
+
+    return _build_items(server_addr, server_port)
+
+
+def _push_reboot_after_config_enabled() -> bool:
+    from .push_protocol import reboot_after_config_enabled
+
+    return reboot_after_config_enabled()
+
+
+def _ensure_adms_reboot_command(dev: Device) -> None:
+    if not _push_reboot_after_config_enabled():
+        return
+    pending_exists = CommandLog.objects.filter(device=dev, status='PENDING', command='REBOOT').exists()
+    if not pending_exists:
+        CommandLog.objects.create(device=dev, command='REBOOT', status='PENDING')
 
 
 def _queue_adms_getrequest_command(dev: Device, items: str) -> None:
@@ -2395,6 +2398,19 @@ def _auto_configure_device_adms(
             bridge_resp = {'error': str(exc)}
 
     if bridge_ok:
+        if _push_reboot_after_config_enabled():
+            try:
+                from .plcommpro_bridge import reboot_device
+
+                conn, _route = _route_aware_conn(
+                    dev,
+                    password=str(dev.comm_password or ''),
+                    timeout_ms=4000,
+                    protocol='TCP',
+                )
+                reboot_device(conn)
+            except Exception:
+                pass
         if request is not None:
             _audit_log(
                 request,
@@ -2423,6 +2439,7 @@ def _auto_configure_device_adms(
             command=f'SET_OPTION:{items}',
             status='PENDING',
         )
+        _ensure_adms_reboot_command(dev)
         try:
             _queue_adms_getrequest_command(dev, items)
         except Exception:
@@ -11207,6 +11224,48 @@ def _extract_zkemkeeper_card(payload: Any) -> tuple[str, dict[str, Any] | None]:
         return '', None
     return candidates[0]['normalized'], {'selected': candidates[0], 'candidates': candidates}
 
+
+def _infer_reader_target_context(payload: dict[str, Any]) -> dict[str, Any]:
+    inferred = {
+        'device_id': 0,
+        'door_pk': 0,
+        'door_number': '',
+    }
+    try:
+        from .models import Device, Door
+
+        cached = cache.get('agent:last_reader_target_context') or {}
+        cached_device_id = int(cached.get('device_id') or 0)
+        cached_door_pk = int(cached.get('door_pk') or 0)
+        cached_door_number = normalize_door_number(cached.get('door_number') or '')
+        if cached_device_id > 0:
+            dev = Device.objects.filter(pk=cached_device_id, enabled=True).first()
+            if dev is not None:
+                inferred['device_id'] = cached_device_id
+                inferred['door_pk'] = cached_door_pk
+                inferred['door_number'] = cached_door_number
+                return inferred
+
+        physical = [dev for dev in Device.objects.filter(enabled=True).order_by('id') if dev.is_physical_controller()]
+        if len(physical) != 1:
+            return inferred
+
+        controller = physical[0]
+        inferred['device_id'] = int(getattr(controller, 'id', 0) or 0)
+
+        doors = list(
+            Door.objects.filter(device_id=int(controller.id))
+            .exclude(door_number__isnull=True)
+            .exclude(door_number=0)
+            .order_by('id')[:2]
+        )
+        if len(doors) == 1:
+            inferred['door_pk'] = int(getattr(doors[0], 'id', 0) or 0)
+            inferred['door_number'] = normalize_door_number(getattr(doors[0], 'door_number', '') or '')
+        return inferred
+    except Exception:
+        return inferred
+
 @csrf_exempt
 def card_read_push(request: HttpRequest):
     # Hardware or external services POST here the latest read card
@@ -11303,6 +11362,15 @@ def card_read_push(request: HttpRequest):
                     payload['door_pk'] = test_ctx.get('door_pk')
                     payload['device_id'] = test_ctx.get('device_id')
                     payload['door_id'] = test_ctx.get('door_number')
+                else:
+                    inferred_ctx = _infer_reader_target_context(payload if isinstance(payload, dict) else {})
+                    if inferred_ctx.get('device_id'):
+                        payload = dict(payload)
+                        payload['device_id'] = inferred_ctx.get('device_id')
+                        if inferred_ctx.get('door_pk'):
+                            payload['door_pk'] = inferred_ctx.get('door_pk')
+                        if inferred_ctx.get('door_number'):
+                            payload['door_id'] = inferred_ctx.get('door_number')
         except Exception:
             pass
 
@@ -11472,6 +11540,20 @@ def card_read_push(request: HttpRequest):
             },
             timeout=60,
         )
+        try:
+            if int(resolved_device_id or 0) > 0:
+                cache.set(
+                    'agent:last_reader_target_context',
+                    {
+                        'device_id': int(resolved_device_id or 0),
+                        'door_pk': int(resolved_door_pk or 0),
+                        'door_number': effective_door_number,
+                        'reader_source': source,
+                    },
+                    timeout=3600,
+                )
+        except Exception:
+            pass
 
         # Instant: broadcast to Live Monitor WebSocket group.
         try:

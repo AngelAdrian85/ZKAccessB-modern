@@ -8,6 +8,8 @@ _HEADER_ALIASES = {
     "uid": "uid",
     "pin": "pin",
     "cardno": "cardno",
+    "card": "cardno",
+    "transactioncardno": "cardno",
     "vicecard": "vicecard",
     "group": "group",
     "password": "password",
@@ -196,7 +198,7 @@ def decode_transaction_rows(raw: str) -> list[dict[str, str]]:
         if "=" in line:
             kv = {normalize_header_token(k): v for k, v in parse_option_pairs(line).items()}
             item = {
-                "cardno": kv.get("cardno", ""),
+                "cardno": kv.get("cardno", kv.get("transactioncardno", kv.get("card", ""))),
                 "pin": kv.get("pin", ""),
                 "verified": kv.get("verified", ""),
                 "door_id": kv.get("doorid", kv.get("door", "")),

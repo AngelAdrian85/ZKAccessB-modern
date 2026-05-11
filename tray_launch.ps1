@@ -1,8 +1,10 @@
 Param(
   [int]$Port = 0,
   [int]$AdmsPort = 0,
+  [int]$HttpsPort = 0,
   [string]$Settings = 'zkeco_config.settings',
   [string]$Venv = '.venv',
+  [string]$CaddyPath = '',
   [string]$WebUser = '',
   [string]$WebPassword = '',
   [switch]$SaveWebCreds,
@@ -10,8 +12,54 @@ Param(
   [switch]$SelfTest,
   [switch]$SelfTestFull,
   [switch]$NoCommCenter,
+  [switch]$EnableHttpsProxy,
   [switch]$WSGI
 )
+# --- Wireshark/tshark capture auto-start (interface 4: Ethernet) ---
+try {
+  $tsharkPath = "C:\Program Files\Wireshark\tshark.exe"
+  $wsPcap = Join-Path $PWD "ws_capture_auto.pcapng"
+  $tsharkIface = 4  # Ethernet (fixat manual)
+  Set-Content -Path (Join-Path $PWD 'tshark_iface_index.txt') -Value $tsharkIface -Encoding UTF8
+  if (Test-Path $tsharkPath) {
+    Write-Host "[TRAY] Starting tshark capture pe interfața $tsharkIface (Ethernet) (background)"
+    $tsharkArgs = @('-i', $tsharkIface, '-w', $wsPcap, '-l', 'tcp port 14370')
+    $tsharkProc = Start-Process -FilePath $tsharkPath -ArgumentList $tsharkArgs -WindowStyle Hidden -RedirectStandardOutput 'tshark_stdout.log' -RedirectStandardError 'tshark_stderr.log' -PassThru
+    if ($tsharkProc) {
+      $global:TrayChildPids += $tsharkProc.Id
+      Write-Host "[TRAY] tshark started (PID $($tsharkProc.Id)), writing to $wsPcap"
+    } else {
+      Write-Warning "[TRAY] Failed to start tshark."
+    }
+  } else {
+    Write-Warning "[TRAY] tshark.exe not found la $tsharkPath. Wireshark capture not started."
+  }
+} catch {
+  Write-Warning "[TRAY] Exception starting tshark: $_"
+}
+
+# --- Wireshark/tshark capture auto-start (interface 4: Ethernet) ---
+try {
+  $tsharkPath = "C:\Program Files\Wireshark\tshark.exe"
+  $wsPcap = Join-Path $PWD "ws_capture_auto.pcapng"
+  $tsharkIface = 4  # Ethernet (detected automat)
+  Set-Content -Path (Join-Path $PWD 'tshark_iface_index.txt') -Value $tsharkIface -Encoding UTF8
+  if (Test-Path $tsharkPath) {
+    Write-Host "[TRAY] Starting tshark capture on interface $tsharkIface (Ethernet) (background)"
+    $tsharkArgs = @('-i', $tsharkIface, '-w', $wsPcap, '-l', 'tcp port 14370')
+    $tsharkProc = Start-Process -FilePath $tsharkPath -ArgumentList $tsharkArgs -WindowStyle Hidden -RedirectStandardOutput 'tshark_stdout.log' -RedirectStandardError 'tshark_stderr.log' -PassThru
+    if ($tsharkProc) {
+      $global:TrayChildPids += $tsharkProc.Id
+      Write-Host "[TRAY] tshark started (PID $($tsharkProc.Id)), writing to $wsPcap"
+    } else {
+      Write-Warning "[TRAY] Failed to start tshark."
+    }
+  } else {
+    Write-Warning "[TRAY] tshark.exe not found at $tsharkPath. Wireshark capture not started."
+  }
+} catch {
+  Write-Warning "[TRAY] Exception starting tshark: $_"
+}
 
 # Force Django settings module for this session.
 # Legacy installations may have DJANGO_SETTINGS_MODULE=mysite.settings in the system env.
@@ -115,15 +163,38 @@ if($AdmsPort -eq 0){
   else { $AdmsPort = 8091; Write-Host "[TRAY] No saved ADMS port found, using default 8091" }
 }
 
+if($HttpsPort -eq 0){
+  $iniHttpsPort = 0
+  try {
+    if($configFile -and (Test-Path $configFile)){
+      $iniHttpsPortRaw = Get-IniValue -Lines (Get-Content $configFile -ErrorAction SilentlyContinue) -Section 'tray' -Key 'https_port'
+      if($iniHttpsPortRaw){ $iniHttpsPort = [int]$iniHttpsPortRaw }
+    }
+  } catch {}
+  if($iniHttpsPort -gt 0){ $HttpsPort = $iniHttpsPort; Write-Host "[TRAY] Using HTTPS proxy port $HttpsPort from saved config" }
+  else {
+    try {
+      $envHttpsPort = [int]([string]($env:ZKACCESS_PUSH_PUBLIC_PORT) -replace '\s+', '')
+      if($envHttpsPort -gt 0){ $HttpsPort = $envHttpsPort }
+    } catch {}
+  }
+  if($HttpsPort -eq 0){
+    $HttpsPort = 8443
+    Write-Host "[TRAY] No saved HTTPS proxy port found, using default 8443"
+  }
+}
+
 function Get-ConfiguredListenerPorts {
   param(
     [int]$ServerPort,
-    [int]$AdmsPort
+    [int]$AdmsPort,
+    [int]$HttpsPort
   )
 
   $ports = @()
   if($ServerPort -gt 0){ $ports += [int]$ServerPort }
   if($AdmsPort -gt 0){ $ports += [int]$AdmsPort }
+  if($HttpsPort -gt 0){ $ports += [int]$HttpsPort }
 
   try {
     $readerCfgPath = Join-Path $PWD 'scripts\card_readers.json'
@@ -203,7 +274,7 @@ try {
       if($null -ne $raw){ $cfgPort = [int]$raw }
     } catch {}
   }
-  $portsToKill = @(Get-ConfiguredListenerPorts -ServerPort $Port -AdmsPort $AdmsPort)
+  $portsToKill = @(Get-ConfiguredListenerPorts -ServerPort $Port -AdmsPort $AdmsPort -HttpsPort $HttpsPort)
   if($null -ne $cfgPort -and ($cfgPort -ne $Port)){ $portsToKill += $cfgPort }
   foreach($p in ($portsToKill | Sort-Object -Unique)){
     Write-Host "[TRAY] Scanning port $p"
@@ -342,11 +413,11 @@ try {
 
 # Extra cleanup: kill any leftover card reader scripts started outside this session
 try {
-  Write-Host "[TRAY] Cleaning up leftover card reader listeners"
-  $targets = @('card_reader_acp.py','card_reader_elatec.py','wiegand_listener.py','zkemkeeper_event_bridge.ps1','zkemkeeper_event_bridge.vbs')
+  Write-Host "[TRAY] Cleaning up leftover card reader listeners, c3_microservice, HTTPS proxy și tshark/wireshark"
+  $targets = @('card_reader_acp.py','card_reader_elatec.py','wiegand_listener.py','zkemkeeper_event_bridge.ps1','zkemkeeper_event_bridge.vbs','c3_microservice/main.py','caddy.exe','start_https_proxy.ps1','tshark.exe','wireshark.exe')
   foreach($name in $targets){
     try {
-      Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*$name*" } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue } catch {} }
+      Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like "*$name*" -or $_.Name -like $name } | ForEach-Object { try { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue; Write-Host "[TRAY] Killed leftover process for $name (PID $($_.ProcessId))" } catch {} }
     } catch {}
   }
 } catch {}
@@ -380,8 +451,8 @@ try {
       } catch {}
     }
   }
-  foreach($pid in ($toKill | Sort-Object -Unique)){
-    try { Stop-Process -Id [int]$pid -Force -ErrorAction SilentlyContinue; Write-Host "[TRAY] Killed PID $pid" } catch {}
+  foreach($procId in ($toKill | Sort-Object -Unique)){
+    try { Stop-Process -Id [int]$procId -Force -ErrorAction SilentlyContinue; Write-Host "[TRAY] Killed PID $procId" } catch {}
   }
 } catch {}
 
@@ -1245,7 +1316,8 @@ if (Test-Path $manage) {
 try {
   foreach($rule in @(
     @{ Name = "ZKAccessB UI Port $Port"; LocalPort = $Port },
-    @{ Name = "ZKAccessB ADMS Port $AdmsPort"; LocalPort = $AdmsPort }
+    @{ Name = "ZKAccessB ADMS Port $AdmsPort"; LocalPort = $AdmsPort },
+    @{ Name = "ZKAccessB HTTPS Proxy Port $HttpsPort"; LocalPort = $HttpsPort }
   )){
     $existing = $null
     try { $existing = Get-NetFirewallRule -DisplayName $rule.Name -ErrorAction SilentlyContinue } catch { $existing = $null }
@@ -1279,6 +1351,19 @@ Write-Host "[TRAY] Starting tray agent"
 try {
   # Keep ADMS auto-config in sync with the dedicated push port.
   $env:ZKACCESS_ADMS_PORT = [string]$AdmsPort
+  $httpsRequested = $false
+  try {
+    if($EnableHttpsProxy){ $httpsRequested = $true }
+    elseif(([string]$env:ZKACCESS_PUSH_PUBLIC_SCHEME).ToLowerInvariant() -eq 'https'){ $httpsRequested = $true }
+    elseif([string]$env:ZKACCESS_PUSH_HTTPS_ENABLED -match '^(1|true|yes|on)$'){ $httpsRequested = $true }
+  } catch {}
+  if($httpsRequested){
+    $env:ZKACCESS_PUSH_PUBLIC_SCHEME = 'https'
+    $env:ZKACCESS_PUSH_PUBLIC_PORT = [string]$HttpsPort
+    $env:ZKACCESS_PUSH_HTTPS_ENABLED = '1'
+    $env:ZKACCESS_TRUST_PROXY_SSL = '1'
+    Write-Host "[TRAY] HTTPS proxy mode enabled on port $HttpsPort"
+  }
 } catch {}
 
 try {
@@ -1337,7 +1422,7 @@ try {
   if($Detach){
     $argList += '--headless'
     $trayProc = Start-Process -FilePath $py -ArgumentList $argList -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
-    Write-Host "[TRAY] tray_agent launched (detached)"
+    Write-Host "[TRAY] tray_agent launched (detached pid=$($trayProc.Id))"
     Write-Host "[TRAY] Logs: $stdout ; $stderr"
     try {
       $healthDeadline = (Get-Date).AddSeconds(15)
@@ -1377,6 +1462,29 @@ try {
 } catch {
   Write-Warning "[TRAY] Failed to launch tray_agent detached: $_"
   throw
+}
+
+try {
+  $httpsRequested = $false
+  try {
+    if($EnableHttpsProxy){ $httpsRequested = $true }
+    elseif(([string]$env:ZKACCESS_PUSH_PUBLIC_SCHEME).ToLowerInvariant() -eq 'https'){ $httpsRequested = $true }
+  } catch {}
+  if($httpsRequested){
+    $httpsScript = Join-Path $PWD 'scripts\start_https_proxy.ps1'
+    if(Test-Path $httpsScript){
+      $httpsArgs = @('-NoProfile','-ExecutionPolicy','Bypass','-File', $httpsScript, '-UiPort', "$Port", '-AdmsPort', "$AdmsPort", '-HttpsPort', "$HttpsPort")
+      if(-not [string]::IsNullOrWhiteSpace([string]$CaddyPath)){
+        $httpsArgs += @('-CaddyPath', [string]$CaddyPath)
+      }
+      Start-Process -FilePath 'powershell.exe' -ArgumentList $httpsArgs -WindowStyle Hidden | Out-Null
+      Write-Host "[TRAY] HTTPS reverse proxy launch requested (port=$HttpsPort)"
+    } else {
+      Write-Warning "[TRAY] HTTPS proxy helper not found at $httpsScript"
+    }
+  }
+} catch {
+  Write-Warning "[TRAY] Failed to start HTTPS reverse proxy helper: $_"
 }
 
 # Optional: start x64 zkemkeeper bridge for real-time controller events.
@@ -1540,4 +1648,71 @@ try {
   }
   Write-Warning "[TRAY] Failed to launch zkemkeeper bridge: $_"
 }
+
+  # --- C3 Microservice Integration ---
+  try {
+    $c3MicroPath = Join-Path $PWD 'c3_microservice/main.py'
+    $c3MicroMaxRetries = 2
+    $c3MicroRetry = 0
+    $c3MicroHealthy = $false
+    if (Test-Path $c3MicroPath) {
+      while (-not $c3MicroHealthy -and $c3MicroRetry -le $c3MicroMaxRetries) {
+        $c3MicroStdout = Join-Path $PWD 'c3_microservice_stdout.log'
+        $c3MicroStderr = Join-Path $PWD 'c3_microservice_stderr.log'
+        $launchCmd = Join-Path $PWD 'start_c3_microservice.bat'
+        Write-Host "[TRAY] Launching c3_microservice via batch wrapper (attempt $($c3MicroRetry+1)): $launchCmd"
+        try {
+          $c3MicroProc = Start-Process -FilePath 'cmd.exe' -ArgumentList @('/c', $launchCmd) -WindowStyle Hidden -PassThru
+        } catch {
+          Write-Warning "[TRAY] Failed to Start-Process cmd.exe for microservice: $_"
+          $c3MicroProc = $null
+        }
+        Start-Sleep -Seconds 2
+        if ($c3MicroProc) {
+          $global:TrayChildPids += $c3MicroProc.Id
+          Update-TrayStatusFields @{
+            c3_microservice = 'PORNESTE'
+            c3_microservice_pid = $c3MicroProc.Id
+            c3_microservice_stdout = $c3MicroStdout
+            c3_microservice_stderr = $c3MicroStderr
+            c3_microservice_last_launch = (Get-Date).ToString('s')
+            c3_microservice_launch_cmd = $launchCmd
+          }
+          Write-Host "[TRAY] c3_microservice started (PID $($c3MicroProc.Id)), waiting for port 14370..."
+          # Health check: wait up to 10s for TCP port 14370
+          $healthDeadline = (Get-Date).AddSeconds(10)
+          do {
+            Start-Sleep -Milliseconds 800
+            $c3MicroHealthy = Test-TcpPort -HostName '127.0.0.1' -Port 14370 -TimeoutMs 400
+          } until ($c3MicroHealthy -or ((Get-Date) -ge $healthDeadline))
+          if ($c3MicroHealthy) {
+            Write-Host "[TRAY] c3_microservice health check OK (port 14370 bound)"
+            Update-TrayStatusFields @{ c3_microservice = 'PORNIT' }
+            break
+          } else {
+            Write-Warning "[TRAY] c3_microservice did not bind to port 14370 after 10s (attempt $($c3MicroRetry+1))"
+            Update-TrayStatusFields @{ c3_microservice = 'EROARE' }
+            try { Stop-Process -Id $c3MicroProc.Id -Force -ErrorAction SilentlyContinue } catch {}
+            $c3MicroRetry++
+          }
+        } else {
+          Write-Warning "[TRAY] Failed to start c3_microservice/main.py (attempt $($c3MicroRetry+1))"
+          Update-TrayStatusFields @{ c3_microservice = 'EROARE' }
+          $c3MicroRetry++
+        }
+      }
+      if (-not $c3MicroHealthy) {
+        Write-Error "[TRAY] c3_microservice failed to start after $($c3MicroMaxRetries+1) attempts. Check logs."
+        Update-TrayStatusFields @{ c3_microservice = 'EROARE' }
+      } else {
+        Write-Host "[TRAY] Logs: $c3MicroStdout ; $c3MicroStderr"
+      }
+    } else {
+      Write-Host "[TRAY] c3_microservice/main.py not found; skipping microservice launch."
+      Update-TrayStatusFields @{ c3_microservice = 'OPRIT' }
+    }
+  } catch {
+    Write-Warning "[TRAY] Exception launching c3_microservice: $_"
+    Update-TrayStatusFields @{ c3_microservice = 'EROARE' }
+  }
  

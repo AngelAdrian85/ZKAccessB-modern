@@ -1,12 +1,12 @@
 ﻿{
-    "server_pid":  10020,
+    "server_pid":  22392,
     "server_running":  true,
-    "backup_exit_code":  0,
-    "backup_latest":  "db_backup_20251120_145350.sql",
-    "restore_exit_code":  0,
-    "backup_log_excerpt":  "[tray-notify] Header debug: mysqldump=C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\mysql\\bin\\mysqldump.exe bytes=b\u0027MZ\u0027 | [tray-notify] Mysqldump cmd: C:\\Users\\AngelAdrian\\Desktop\\Acces\\ZKAccessB\\mysql\\bin\\mysqldump.exe -uroot --databases zkeco_db --skip-lock-tables | [tray-notify] Backup success: db_backup_20251120_145350.sql | ",
-    "restore_log":  "{\"restore\":\"ok\",\"file\":\"db_backup_20251120_145350.sql\"} ",
-    "monitor_page":  "ok",
+    "backup_exit_code":  2,
+    "backup_latest":  "db_backup_manual_20260305_103714.sql",
+    "restore_exit_code":  2,
+    "backup_log_excerpt":  "",
+    "restore_log":  "",
+    "monitor_page":  "missing",
     "ws_port_status":  "port-open",
-    "timestamp":  "2025-11-20T14:53:53"
+    "timestamp":  "2026-03-05T12:43:15"
 }

@@ -218,6 +218,61 @@ Or use the helper batch script:
 **Cause**: ASGI router imported legacy shim `agent.routing` instead of fully-qualified module.
 
 **Fix**: Confirm `zkeco_modern/zkeco_config/asgi.py` imports:
+
+## PUSH Security / HTTPS
+
+Pentru controllerele noi care folosesc Security PUSH, backend-ul răspunde acum atât pe fluxul clasic iClock, cât și cu câmpurile suplimentare observate în manuale și în SDK-ul ZKTeco.
+
+### Endpoint-uri relevante
+
+- `/iclock/registry`
+- `/iclock/cdata`
+- `/iclock/getrequest`
+- `/iclock/querydata`
+- `/iclock/service/control`
+- `/iclock/file`
+
+### Variabile recomandate pentru rulare live prin Caddy
+
+```powershell
+$env:ZKACCESS_PUSH_PUBLIC_SCHEME = "https"
+$env:ZKACCESS_PUSH_PUBLIC_HOST = "<ip-sau-dns-public>"
+$env:ZKACCESS_PUSH_PUBLIC_PORT = "8443"
+$env:ZKACCESS_PUSH_HTTPS_ENABLED = "1"
+$env:ZKACCESS_TRUST_PROXY_SSL = "1"
+
+$env:ZKACCESS_PUSH_PROTOCOL_VERSION = "2.2.14"
+$env:ZKACCESS_PUSH_SERVER_VERSION = "2.2.14"
+$env:ZKACCESS_PUSH_DELAY = "30"
+$env:ZKACCESS_PUSH_TRANS_TIMES = "00:00;24:00"
+```
+
+### Lansare recomandată
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tray_launch.ps1 -EnableHttpsProxy -HttpsPort 8443
+```
+
+Helper-ul HTTPS încearcă acum automat să descarce `caddy.exe` în `tools\caddy\` dacă nu există deja local.
+
+Sursa implicită folosită acum este asset-ul oficial GitHub pentru Windows `amd64`, rezolvat dinamic din ultimul release; dacă rezolvarea eșuează, helper-ul cade pe fallback-ul versionat verificat:
+
+```text
+https://github.com/caddyserver/caddy/releases/download/v2.11.2/caddy_2.11.2_windows_amd64.zip
+```
+
+Poți suprascrie sursa astfel:
+
+```powershell
+$env:ZKACCESS_CADDY_DOWNLOAD_URL = "https://caddyserver.com/api/download?os=windows&arch=amd64"
+```
+
+### Compatibilitate nou adăugată
+
+- `registry=ok` cu `RegistryCode`, `SessionID`, `ServerVer`, `PushProtVer`, `TimeoutSec`
+- `GET OPTION FROM` cu `ATTLOGStamp`, `OPERLOGStamp`, `ATTPHOTOStamp`, `ERRORLOGStamp`
+- câmpuri clasice `Delay`, `TransTimes`, `TimeZone`, `PushOptionsFlag`, `PushOptions`
+- endpoint-uri auxiliare pentru `querydata`, `service/control` și `file`
 ```python
 from zkeco_modern.agent.routing import websocket_urlpatterns as agent_ws
 ```

@@ -1,0 +1,19 @@
+﻿{
+  admin off
+  auto_https disable_redirects
+  local_certs
+}
+
+https://127.0.0.1:8443, https://localhost:8443, https://100.51.101.238:8443, https://192.168.1.179:8443 {
+  tls internal
+  bind 0.0.0.0
+
+  @iclock path /iclock/*
+  handle @iclock {
+    reverse_proxy 127.0.0.1:8091
+  }
+
+  handle {
+    reverse_proxy 127.0.0.1:8000
+  }
+}

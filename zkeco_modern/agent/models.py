@@ -644,6 +644,39 @@ class CommandLog(models.Model):
         return f"Cmd {self.command} {self.status}"[:80]
 
 
+class DevicePushSession(models.Model):
+    device = models.ForeignKey(Device, null=True, blank=True, on_delete=models.SET_NULL)
+    serial_number = models.CharField(max_length=64, blank=True, default="")
+    remote_ip = models.GenericIPAddressField(null=True, blank=True)
+    session_id = models.CharField(max_length=64, unique=True)
+    registry_code = models.CharField(max_length=64, blank=True, default="")
+    protocol_version_seen = models.CharField(max_length=32, blank=True, default="")
+    supports_encrypt = models.BooleanField(default=False)
+    supports_https = models.BooleanField(default=False)
+    requested_tables = models.CharField(max_length=255, blank=True, default="")
+    last_registry_at = models.DateTimeField(null=True, blank=True)
+    last_poll_at = models.DateTimeField(null=True, blank=True)
+    last_cdata_at = models.DateTimeField(null=True, blank=True)
+    last_querydata_at = models.DateTimeField(null=True, blank=True)
+    last_control_at = models.DateTimeField(null=True, blank=True)
+    last_file_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    session_meta = models.JSONField(blank=True, default=dict)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["device", "updated_at"], name="agent_devic_device__82c8a7_idx"),
+            models.Index(fields=["serial_number", "updated_at"], name="agent_devic_serial__9e1b24_idx"),
+            models.Index(fields=["remote_ip", "updated_at"], name="agent_devic_remote__2ddae6_idx"),
+            models.Index(fields=["expires_at"], name="agent_devic_expires_27dca8_idx"),
+        ]
+
+    def __str__(self):  # pragma: no cover
+        return f"PushSession {self.serial_number or self.device_id or self.remote_ip}"[:80]
+
+
 class SystemSettings(models.Model):
     """Singleton-like system configuration (legacy 'System Options')."""
 

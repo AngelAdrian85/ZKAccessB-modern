@@ -23,10 +23,18 @@ urlpatterns = [
         [
             path("iclock/cdata", _iclock_views.iclock_cdata, name="iclock-cdata"),
             path("iclock/cdata/", _iclock_views.iclock_cdata, name="iclock-cdata-slash"),
+            path("iclock/registry", _iclock_views.iclock_registry, name="iclock-registry"),
+            path("iclock/registry/", _iclock_views.iclock_registry, name="iclock-registry-slash"),
             path("iclock/getrawlog", _iclock_views.iclock_getrawlog, name="iclock-getrawlog"),
             path("iclock/getrawlog/", _iclock_views.iclock_getrawlog, name="iclock-getrawlog-slash"),
             path("iclock/getrequest", _iclock_views.iclock_getrequest, name="iclock-getrequest"),
             path("iclock/getrequest/", _iclock_views.iclock_getrequest, name="iclock-getrequest-slash"),
+            path("iclock/service/control", _iclock_views.iclock_service_control, name="iclock-service-control"),
+            path("iclock/service/control/", _iclock_views.iclock_service_control, name="iclock-service-control-slash"),
+            path("iclock/querydata", _iclock_views.iclock_querydata, name="iclock-querydata"),
+            path("iclock/querydata/", _iclock_views.iclock_querydata, name="iclock-querydata-slash"),
+            path("iclock/file", _iclock_views.iclock_file, name="iclock-file"),
+            path("iclock/file/", _iclock_views.iclock_file, name="iclock-file-slash"),
         ]
         if _iclock_views
         else []

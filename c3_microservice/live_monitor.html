@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>C3 Live Monitor</title>
+</head>
+<body>
+<h1>Live Swipe Monitor</h1>
+<ul id="events"></ul>
+<script>
+let ws = new WebSocket("ws://localhost:8765/");
+ws.onmessage = function(e) {
+    let data = JSON.parse(e.data);
+    let li = document.createElement("li");
+    li.textContent = `Card: ${data.card_no || "UNKNOWN"}, Event: ${data.event_code}, Door: ${data.door_number}, Time: ${data.timestamp}`;
+    document.getElementById("events").prepend(li);
+}
+</script>
+</body>
+</html>

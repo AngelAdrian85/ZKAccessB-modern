@@ -5,7 +5,8 @@ import pytest
 from django.core.cache import cache
 from django.test import RequestFactory
 
-from agent.models import DeviceEventLog, DeviceRealtimeLog, WiegandCardFormat
+from agent.models import Device, DeviceEventLog, DeviceRealtimeLog, Door, WiegandCardFormat
+from agent.uid_correlation import resolve_controller_uid
 from agent.views import card_read_push, card_read_wait
 from agent.wiegand_decoder import decode_wiegand, list_known_wiegand_formats
 
@@ -199,4 +200,52 @@ def test_card_read_push_monitor_payload_includes_rtlog_row_id_and_source():
     assert entry["reader_source"] == "acp"
     assert (entry.get("correlation_payload") or {}).get("reader_capture") is True
     assert entry["monitor_origin"] == "card_read_push"
+
+
+@pytest.mark.django_db
+def test_card_read_push_infers_unique_physical_controller_context():
+    cache.delete("agent:last_card_read")
+    cache.delete("agent:last_reader_target_context")
+
+    Device.objects.create(
+        name="Centrala VIRTUALA de TEST1",
+        serial_number="SN-TEST-CTRL",
+        device_type="access_panel",
+        ip_address="192.168.1.100",
+        port=4370,
+        enabled=True,
+    )
+    ctrl = Device.objects.create(
+        name="C3-100Pro (192.168.1.235)",
+        serial_number="UNP7251400247",
+        device_type="access_panel",
+        ip_address="192.168.1.235",
+        port=14370,
+        enabled=True,
+    )
+    door = Door.objects.create(name="Usa ZEKO test", device=ctrl, door_number=1)
+
+    factory = RequestFactory()
+    req = factory.post(
+        "/agent/api/cards/read/push/",
+        data=json.dumps({"card_number": "555444", "source": "acp"}),
+        content_type="application/json",
+    )
+
+    resp = card_read_push(req)
+    body = json.loads(resp.content.decode("utf-8"))
+
+    assert body["ok"] is True
+    assert body["device_id"] == ctrl.id
+    assert body["door_number"] == "1"
+    assert body["door_pk"] == door.id
+
+    row = DeviceRealtimeLog.objects.order_by("-id").first()
+    assert row is not None
+    assert row.device_id == ctrl.id
+    assert ",555444,1,0,CITITOR EXTERN,acp" in str(row.raw or "")
+
+    matched = resolve_controller_uid(device_id=ctrl.id, door_number="1")
+    assert matched is not None
+    assert matched.get("sniffed_card_number") == "555444"
 

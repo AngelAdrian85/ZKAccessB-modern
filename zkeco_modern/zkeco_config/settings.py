@@ -5,6 +5,7 @@ Django settings for zkeco_config project.
 import sys
 from pathlib import Path
 import os
+import socket
 
 # Remove legacy or external project paths that can inject incompatible .pyc files
 # (e.g. old vendor 'python-support' folders or Python2 site-packages). This helps
@@ -37,7 +38,41 @@ SECRET_KEY = "django-insecure-your-secret-key-here"
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS: list[str] = ["127.0.0.1", "localhost", "testserver"]
+def _compute_allowed_hosts() -> list[str]:
+    hosts = {"127.0.0.1", "localhost", "testserver"}
+
+    extra_hosts = str(os.environ.get("ZKACCESS_ALLOWED_HOSTS") or "").strip()
+    if extra_hosts:
+        for part in extra_hosts.split(","):
+            item = part.strip()
+            if item:
+                hosts.add(item)
+
+    # In local Windows deployments the controller often reaches Django by the
+    # workstation's LAN IP, not by localhost. Accept the machine name/IPs so
+    # /iclock/cdata is not rejected with DisallowedHost.
+    try:
+        hosts.add(socket.gethostname())
+    except Exception:
+        pass
+    try:
+        hosts.add(socket.getfqdn())
+    except Exception:
+        pass
+    try:
+        for name in {socket.gethostname(), socket.getfqdn()}:
+            if not name:
+                continue
+            for family, _socktype, _proto, _canonname, sockaddr in socket.getaddrinfo(name, None):
+                if family == socket.AF_INET and sockaddr and sockaddr[0]:
+                    hosts.add(sockaddr[0])
+    except Exception:
+        pass
+
+    return sorted(item for item in hosts if item)
+
+
+ALLOWED_HOSTS: list[str] = _compute_allowed_hosts()
 
 # Application definition
 INSTALLED_APPS = [
@@ -256,3 +291,59 @@ if DEBUG and os.environ.get("DEBUG_TOOLBAR") == "1":
 # use a non-empty password. We keep this configurable and use it as a fallback only
 # when the operator/device does not provide a password.
 ZKACCESS_DEFAULT_COMM_PASSWORD = (os.environ.get("ZKACCESS_DEFAULT_COMM_PASSWORD") or "").strip()
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        parsed = int(str(os.environ.get(name, default)).strip())
+    except Exception:
+        return int(default)
+    return parsed
+
+
+def _env_bool(name: str, default: bool = False) -> bool:
+    raw = str(os.environ.get(name, "") or "").strip().lower()
+    if not raw:
+        return bool(default)
+    return raw in {"1", "true", "yes", "on"}
+
+
+ZKACCESS_PUSH_PROTOCOL_VERSION = (os.environ.get("ZKACCESS_PUSH_PROTOCOL_VERSION") or "2.0").strip() or "2.0"
+ZKACCESS_PUSH_TIMEOUT_SEC = _env_int("ZKACCESS_PUSH_TIMEOUT_SEC", 300)
+ZKACCESS_PUSH_SERVER_NAME = (os.environ.get("ZKACCESS_PUSH_SERVER_NAME") or "ZKAccessB Modern").strip() or "ZKAccessB Modern"
+ZKACCESS_PUSH_SERVER_VERSION = (os.environ.get("ZKACCESS_PUSH_SERVER_VERSION") or "2026.04").strip() or "2026.04"
+ZKACCESS_PUSH_ENCRYPT = (os.environ.get("ZKACCESS_PUSH_ENCRYPT") or "0").strip() or "0"
+ZKACCESS_PUSH_TRANS_TABLES = (os.environ.get("ZKACCESS_PUSH_TRANS_TABLES") or "transaction,ATTLOG").strip()
+ZKACCESS_PUSH_TRANS_TIMES = (os.environ.get("ZKACCESS_PUSH_TRANS_TIMES") or "00:00;24:00").strip() or "00:00;24:00"
+ZKACCESS_PUSH_REQUEST_DELAY = _env_int("ZKACCESS_PUSH_REQUEST_DELAY", 3)
+ZKACCESS_PUSH_ERROR_DELAY = _env_int("ZKACCESS_PUSH_ERROR_DELAY", 15)
+ZKACCESS_PUSH_DELAY = _env_int("ZKACCESS_PUSH_DELAY", 30)
+ZKACCESS_PUSH_TRANS_INTERVAL = _env_int("ZKACCESS_PUSH_TRANS_INTERVAL", 1)
+ZKACCESS_PUSH_TRANS_FLAG = _env_int("ZKACCESS_PUSH_TRANS_FLAG", 1)
+ZKACCESS_PUSH_OPTION_TRANS_FLAG = (
+    os.environ.get("ZKACCESS_PUSH_OPTION_TRANS_FLAG")
+    or "AttLog    OpLog   AttPhoto    EnrollUser  ChgUser EnrollFP    ChgFP   Userpic"
+).strip() or "AttLog    OpLog   AttPhoto    EnrollUser  ChgUser EnrollFP    ChgFP   Userpic"
+ZKACCESS_PUSH_REALTIME = _env_int("ZKACCESS_PUSH_REALTIME", 1)
+ZKACCESS_PUSH_RTLOG = _env_int("ZKACCESS_PUSH_RTLOG", 1)
+ZKACCESS_PUSH_TIMEZONE = _env_int("ZKACCESS_PUSH_TIMEZONE", 2)
+ZKACCESS_PUSH_OPTIONS_FLAG = _env_int("ZKACCESS_PUSH_OPTIONS_FLAG", 1)
+ZKACCESS_PUSH_OPTIONS = (
+    os.environ.get("ZKACCESS_PUSH_OPTIONS")
+    or "UserCount,TransactionCount,FingerFunOn,FPVersion,FPCount,FaceFunOn,FaceVersion,FaceCount,FvFunOn,FvVersion,FvCount,PvFunOn,PvVersion,PvCount,BioPhotoFun,BioDataFun,PhotoFunOn,~LockFunOn,CardProtFormat,~Platform,MultiBioPhotoSupport,MultiBioDataSupport,MultiBioVersion,MaskDetectionFunOn"
+).strip()
+ZKACCESS_PUSH_ATTLOG_STAMP = _env_int("ZKACCESS_PUSH_ATTLOG_STAMP", 0)
+ZKACCESS_PUSH_OPERLOG_STAMP = _env_int("ZKACCESS_PUSH_OPERLOG_STAMP", 0)
+ZKACCESS_PUSH_ATTPHOTO_STAMP = _env_int("ZKACCESS_PUSH_ATTPHOTO_STAMP", 0)
+ZKACCESS_PUSH_ERRORLOG_STAMP = _env_int("ZKACCESS_PUSH_ERRORLOG_STAMP", 0)
+ZKACCESS_PUSH_PUBLIC_SCHEME = (os.environ.get("ZKACCESS_PUSH_PUBLIC_SCHEME") or "http").strip().lower() or "http"
+ZKACCESS_PUSH_PUBLIC_HOST = (os.environ.get("ZKACCESS_PUSH_PUBLIC_HOST") or "").strip()
+ZKACCESS_PUSH_PUBLIC_PORT = _env_int("ZKACCESS_PUSH_PUBLIC_PORT", 0)
+ZKACCESS_PUSH_REBOOT_AFTER_CONFIG = _env_bool("ZKACCESS_PUSH_REBOOT_AFTER_CONFIG", False)
+ZKACCESS_PUSH_HTTPS_ENABLED = _env_bool("ZKACCESS_PUSH_HTTPS_ENABLED", False)
+ZKACCESS_TRUST_PROXY_SSL = _env_bool("ZKACCESS_TRUST_PROXY_SSL", True)
+
+USE_X_FORWARDED_HOST = True
+USE_X_FORWARDED_PORT = True
+if ZKACCESS_TRUST_PROXY_SSL:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

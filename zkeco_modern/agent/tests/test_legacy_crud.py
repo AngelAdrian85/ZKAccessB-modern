@@ -136,6 +136,8 @@ def test_device_discover_apply_auto_queues_adms_with_dedicated_port(client, monk
     dev = Device.objects.get(pk=payload['id'])
     cmd = CommandLog.objects.filter(device=dev, command__startswith='SET_OPTION:ServerAddr=').latest('id')
     assert 'ServerPort=8091' in cmd.command
+    assert 'WebServerIP=' in cmd.command
+    assert 'WebServerPort=8091' in cmd.command
     assert 'PushFunOn=1' in cmd.command
     assert 'ServerPort=15437' not in cmd.command
 
@@ -172,8 +174,44 @@ def test_device_create_auto_queues_adms_with_dedicated_port(client, monkeypatch)
     dev = Device.objects.get(pk=payload['id'])
     cmd = CommandLog.objects.filter(device=dev, command__startswith='SET_OPTION:ServerAddr=').latest('id')
     assert 'ServerPort=8091' in cmd.command
+    assert 'WebServerIP=' in cmd.command
+    assert 'WebServerPort=8091' in cmd.command
     assert 'PushFunOn=1' in cmd.command
     assert 'ServerPort=15437' not in cmd.command
+
+
+@pytest.mark.django_db
+def test_device_create_auto_queues_adms_reboot_when_enabled(client, monkeypatch):
+    from agent.models import CommandLog, Device
+
+    monkeypatch.setenv('ZKACCESS_ADMS_PORT', '8091')
+    monkeypatch.setenv('ZKACCESS_PUSH_REBOOT_AFTER_CONFIG', '1')
+    u = User.objects.create_user('staffadms3', 'adms3@b.c', 'pass'); u.is_staff = True; u.save()
+    client.login(username='staffadms3', password='pass')
+
+    resp = client.post(
+        reverse('crud-device-create'),
+        {
+            'name': 'Panel Create ADMS Reboot',
+            'serial_number': 'SN-AUTO-ADMS-3',
+            'device_type': 'access_panel',
+            'comm_mode': 'tcp',
+            'ip_address': '192.168.1.242',
+            'port': '14370',
+            'area_name': 'Zona1',
+            'enabled': 'on',
+            'auto_sync_time': 'on',
+        },
+        HTTP_X_REQUESTED_WITH='XMLHttpRequest',
+        SERVER_PORT='15437',
+    )
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload['ok'] is True
+
+    dev = Device.objects.get(pk=payload['id'])
+    assert CommandLog.objects.filter(device=dev, command='REBOOT', status='PENDING').exists()
 
 @pytest.mark.django_db
 def test_model_diff(client):

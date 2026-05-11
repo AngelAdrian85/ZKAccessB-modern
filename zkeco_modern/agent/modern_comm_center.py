@@ -48,6 +48,7 @@ from .event_codes import describe_door_event_type
 from .controller_decoders import decode_user_rows
 from .rtlog_entries import build_rtlog_entry, sanitize_card_value
 from .uid_correlation import inject_card_number_into_rtlog, resolve_controller_uid
+from .push_protocol import build_adms_option_items, reboot_after_config_enabled
 
 try:  # Redis optional
     import redis  # type: ignore
@@ -690,12 +691,7 @@ class ModernCommCenter(object):
 
         # Many firmwares will accept ServerAddr/ServerPort but still not start pushing
         # transactions unless realtime flags are enabled.
-        items = (
-            f"ServerAddr={server_addr},ServerPort={int(port_int)},"
-            f"CLOUDSERVICEFLAG=1,PushFunOn=1,ADMSServerIP={server_addr},"
-            f"WebServerURL=http://{server_addr}:{int(port_int)},"
-            f"TransFlag=1,Realtime=1,RTLog=1,TransInterval=1"
-        )
+        items = build_adms_option_items(server_addr, port_int)
         now_ts = time.time()
         try:
             if session.last_adms_items == items and (now_ts - float(session.last_adms_autoconfig_ts or 0.0)) < 600.0:
@@ -720,6 +716,11 @@ class ModernCommCenter(object):
             session.last_adms_items = items
             session.last_adms_autoconfig_ts = now_ts
             LOG.info('ADMS autoconfig device=%s addr=%s port=%s ok', session.sn, server_addr, port_int)
+            if reboot_after_config_enabled():
+                try:
+                    session.driver.controldevice(0, 3, 0)
+                except Exception:
+                    LOG.debug('ADMS autoconfig reboot failed device=%s', session.sn, exc_info=True)
             try:
                 AuditLog = apps.get_model('agent', 'AuditLog')
                 AuditLog.objects.create(

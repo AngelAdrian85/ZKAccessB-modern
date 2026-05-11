@@ -1,0 +1,14 @@
+PCAP: C:\Users\AngelAdrian\Desktop\Acces\ZKAccessB\ws_capture_auto.pcapng
+Controller IP: 192.168.1.235
+Packets matched: 1
+Packets with payload: 1
+
+Top TCP streams:
+  stream=0 packets=1 payload_packets=1 ports=[14370, 63342] filter=tcp.stream eq 0
+    192.168.1.235 -> 192.168.1.179
+
+Payload samples:
+  frame=1 stream=0 192.168.1.235:14370 -> 192.168.1.179:63342 len=9 u32[0]=29950378 u32[4]=3641963264 u32[8]=None hex=aa01c90100f313d955
+
+Candidate payloads for CardNo/Event/Door comparison:
+  frame=1 stream=0 len=9 bytes u32[0]=29950378 u8[4]=0 u8[5]=243 u8[6]=19 u8[7]=217 hex0-15=aa01c90100f313d955

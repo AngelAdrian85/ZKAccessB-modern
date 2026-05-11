@@ -1,6 +1,6 @@
 import pytest
 
-from agent.models import AuditLog, CommandLog, Device
+from agent.models import AuditLog, CommandLog, Device, DevicePushSession
 
 
 @pytest.mark.django_db
@@ -45,3 +45,6 @@ def test_iclock_getrequest_returns_ok_when_no_commands(client):
     r = client.get(f"/iclock/getrequest/?SN={dev.serial_number}", REMOTE_ADDR=str(dev.ip_address))
     assert r.status_code == 200
     assert (r.content or b"").decode("utf-8", "replace") == "OK\n"
+
+    session = DevicePushSession.objects.get(serial_number=dev.serial_number)
+    assert session.last_poll_at is not None

@@ -3,20 +3,172 @@ from __future__ import annotations
 import json
 import logging
 import os
+import uuid
 from typing import Dict, Iterable, List, Optional, Tuple
 
 import datetime as _dt
 from pathlib import Path
 
+from django.conf import settings
 from django.http import HttpRequest, HttpResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
+from .push_protocol import build_option_response, build_registry_response, get_push_protocol_config, push_https_enabled
 from .rtlog_entries import build_rtlog_entry
 
 
 LOG = logging.getLogger(__name__)
+
+
+def _split_csvish(*values: object) -> List[str]:
+    items: List[str] = []
+    for value in values:
+        raw = str(value or "").strip()
+        if not raw:
+            continue
+        normalized = raw.replace("\n", ",").replace(";", ",")
+        for part in normalized.split(","):
+            item = str(part or "").strip()
+            if item and item not in items:
+                items.append(item)
+    return items
+
+
+def _merge_csvish(existing: str, *values: object) -> str:
+    items = _split_csvish(existing, *values)
+    return ",".join(items)
+
+
+def _response_requires_options(params: Dict[str, str]) -> bool:
+    for key in ("options", "option", "getoptions"):
+        value = str(params.get(key) or "").strip().lower()
+        if value in {"all", "1", "true", "yes", "on"}:
+            return True
+    return False
+
+
+def _truthy(value: object) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _new_push_token() -> str:
+    return uuid.uuid4().hex
+
+
+def _load_or_create_push_session(
+    *,
+    device_id: int,
+    resolved_sn: str,
+    remote_ip: str,
+    endpoint: str,
+    params: Dict[str, str],
+    body_text: str,
+    request: Optional[HttpRequest] = None,
+    force_renew: bool = False,
+):
+    try:
+        from agent.models import Device, DevicePushSession
+    except Exception:
+        return None
+
+    config = get_push_protocol_config()
+    now = timezone.now()
+    device = Device.objects.filter(id=int(device_id)).first() if int(device_id or 0) else None
+    session = None
+
+    if device is not None:
+        session = DevicePushSession.objects.filter(device=device).order_by("-updated_at").first()
+    if session is None and resolved_sn:
+        session = DevicePushSession.objects.filter(serial_number=str(resolved_sn)).order_by("-updated_at").first()
+    if session is None and remote_ip:
+        session = DevicePushSession.objects.filter(remote_ip=str(remote_ip)).order_by("-updated_at").first()
+
+    expired = bool(session and session.expires_at and session.expires_at <= now)
+    if session is None:
+        session = DevicePushSession(
+            device=device,
+            serial_number=str(resolved_sn or ""),
+            remote_ip=(str(remote_ip or "") or None),
+            session_id=_new_push_token(),
+            registry_code=_new_push_token()[:16].upper(),
+        )
+    elif force_renew or expired or not str(session.session_id or "").strip():
+        session.session_id = _new_push_token()
+        session.registry_code = _new_push_token()[:16].upper()
+
+    protocol_seen = str(params.get("pushprotver") or session.protocol_version_seen or config.protocol_version).strip()
+    supports_https = bool(push_https_enabled())
+    try:
+        if request is not None:
+            supports_https = supports_https or bool(request.is_secure())
+    except Exception:
+        pass
+    supports_encrypt = _truthy(params.get("encrypt")) or _truthy(config.encrypt)
+
+    requested_tables = _merge_csvish(session.requested_tables, params.get("table"), params.get("tables"), params.get("transtables"))
+    meta = dict(getattr(session, "session_meta", {}) or {})
+    endpoint_counts = dict(meta.get("endpoint_counts", {}) or {})
+    endpoint_counts[endpoint] = int(endpoint_counts.get(endpoint, 0) or 0) + 1
+    meta.update(
+        {
+            "last_endpoint": endpoint,
+            "last_params": dict(params or {}),
+            "body_preview": [ln for ln in str(body_text or "").replace("\r", "").split("\n") if ln][:3],
+            "endpoint_counts": endpoint_counts,
+        }
+    )
+
+    session.device = device
+    session.serial_number = str(resolved_sn or session.serial_number or "")
+    session.remote_ip = (str(remote_ip or "") or None)
+    session.protocol_version_seen = protocol_seen
+    session.supports_encrypt = bool(supports_encrypt)
+    session.supports_https = bool(supports_https)
+    session.requested_tables = requested_tables
+    session.expires_at = now + _dt.timedelta(seconds=max(int(config.timeout_sec), 30))
+    session.session_meta = meta
+
+    if endpoint == "registry":
+        session.last_registry_at = now
+    elif endpoint == "getrequest":
+        session.last_poll_at = now
+    elif endpoint in {"cdata", "getrawlog"}:
+        session.last_cdata_at = now
+    elif endpoint == "querydata":
+        session.last_querydata_at = now
+    elif endpoint == "service/control":
+        session.last_control_at = now
+    elif endpoint == "file":
+        session.last_file_at = now
+
+    session.save()
+    return session
+
+
+def _build_endpoint_response(
+    *,
+    endpoint: str,
+    session,
+    sn: str,
+    params: Dict[str, str],
+    command_body: str = "",
+) -> str:
+    options_requested = _response_requires_options(params)
+    session_id = str(getattr(session, "session_id", "") or "")
+    registry_code = str(getattr(session, "registry_code", "") or "")
+
+    if endpoint == "registry":
+        return build_registry_response(session_id=session_id, registry_code=registry_code)
+
+    if endpoint in {"getrequest", "querydata", "service/control"} and str(command_body or "").strip().upper() != "OK":
+        return command_body
+
+    if options_requested:
+        return build_option_response(sn=sn, session_id=session_id, registry_code=registry_code)
+
+    return "OK\n"
 
 
 def _iclock_capture_file_path() -> Optional[Path]:
@@ -659,7 +811,24 @@ def iclock_getrequest(request: HttpRequest) -> HttpResponse:
     remote_ip = str(request.META.get("REMOTE_ADDR") or "").strip()
     device_id, resolved_sn = _resolve_device(sn=sn, remote_ip=remote_ip)
 
-    body = _serve_pending_commands(device_id=int(device_id), remote_ip=remote_ip, sn=str(resolved_sn or sn or ""))
+    session = _load_or_create_push_session(
+        device_id=int(device_id),
+        resolved_sn=str(resolved_sn or sn or ""),
+        remote_ip=remote_ip,
+        endpoint="getrequest",
+        params=params,
+        body_text="",
+        request=request,
+    )
+
+    command_body = _serve_pending_commands(device_id=int(device_id), remote_ip=remote_ip, sn=str(resolved_sn or sn or ""))
+    body = _build_endpoint_response(
+        endpoint="getrequest",
+        session=session,
+        sn=str(resolved_sn or sn or ""),
+        params=params,
+        command_body=command_body,
+    )
 
     # Make real device touches visible immediately in server logs during live diagnostics.
     try:
@@ -699,6 +868,86 @@ def iclock_getrequest(request: HttpRequest) -> HttpResponse:
 
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
+def iclock_registry(request: HttpRequest) -> HttpResponse:
+    params = _extract_params(request)
+    sn = _extract_device_sn(params)
+    remote_ip = str(request.META.get("REMOTE_ADDR") or "").strip()
+    device_id, resolved_sn = _resolve_device(sn=sn, remote_ip=remote_ip)
+
+    body_text = _extract_body_text(request)
+    body_text = (body_text or "").replace("\r\n", "\n").replace("\r", "\n")
+    raw_lines = [ln for ln in body_text.split("\n") if (ln or "").strip()]
+    session = _load_or_create_push_session(
+        device_id=int(device_id),
+        resolved_sn=str(resolved_sn or sn or ""),
+        remote_ip=remote_ip,
+        endpoint="registry",
+        params=params,
+        body_text=body_text,
+        request=request,
+        force_renew=True,
+    )
+
+    try:
+        LOG.warning(
+            "ICLOCK_TOUCH registry remote_ip=%s sn=%s resolved_sn=%s device_id=%s raw=%s preview=%s",
+            remote_ip,
+            sn,
+            resolved_sn,
+            int(device_id),
+            len(raw_lines),
+            raw_lines[:3],
+        )
+    except Exception:
+        pass
+
+    try:
+        _audit_event(
+            action="registry",
+            device_id=int(device_id),
+            entity_name=f"device_id={device_id} sn={resolved_sn or sn or ''}".strip(),
+            details_obj={
+                "remote_ip": remote_ip,
+                "endpoint": "registry",
+                "sn": sn,
+                "resolved_sn": resolved_sn,
+                "device_id": int(device_id),
+                "raw_count": len(raw_lines),
+                "line_preview": raw_lines[:3],
+            },
+            remote_ip=remote_ip,
+        )
+    except Exception:
+        pass
+
+    try:
+        _append_iclock_capture(
+            remote_ip=remote_ip,
+            sn=sn,
+            resolved_sn=resolved_sn,
+            device_id=int(device_id),
+            table=(params.get("table") or "registry").strip(),
+            params=params,
+            raw_lines=raw_lines,
+            normalized_lines=[],
+            endpoint="registry",
+        )
+    except Exception:
+        pass
+
+    return HttpResponse(
+        _build_endpoint_response(
+            endpoint="registry",
+            session=session,
+            sn=str(resolved_sn or sn or ""),
+            params=params,
+        ),
+        content_type="text/plain; charset=utf-8",
+    )
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
 def _handle_iclock_ingest(request: HttpRequest, *, endpoint: str = "cdata") -> HttpResponse:
     params = _extract_params(request)
     sn = _extract_device_sn(params)
@@ -707,6 +956,16 @@ def _handle_iclock_ingest(request: HttpRequest, *, endpoint: str = "cdata") -> H
 
     body_text = _extract_body_text(request)
     body_text = (body_text or "").replace("\r\n", "\n").replace("\r", "\n")
+
+    session = _load_or_create_push_session(
+        device_id=int(device_id),
+        resolved_sn=str(resolved_sn or sn or ""),
+        remote_ip=remote_ip,
+        endpoint=endpoint,
+        params=params,
+        body_text=body_text,
+        request=request,
+    )
 
     raw_lines = [ln for ln in body_text.split("\n") if (ln or "").strip()]
     lines = _normalize_cdata_payload(raw_lines)
@@ -750,8 +1009,21 @@ def _handle_iclock_ingest(request: HttpRequest, *, endpoint: str = "cdata") -> H
         from agent.models import DeviceRealtimeLog
 
         if lines:
+            correlation_payload = {
+                "endpoint": endpoint,
+                "table": table,
+                "remote_ip": remote_ip,
+                "session_id": str(getattr(session, "session_id", "") or ""),
+                "registry_code": str(getattr(session, "registry_code", "") or ""),
+                "protocol_version": str(getattr(session, "protocol_version_seen", "") or ""),
+            }
             objs = [
-                DeviceRealtimeLog(device_id=int(device_id), sn=str(resolved_sn or ""), raw=str(ln))
+                DeviceRealtimeLog(
+                    device_id=int(device_id),
+                    sn=str(resolved_sn or ""),
+                    raw=str(ln),
+                    correlation_payload=correlation_payload,
+                )
                 for ln in lines
             ]
             DeviceRealtimeLog.objects.bulk_create(objs)
@@ -810,7 +1082,15 @@ def _handle_iclock_ingest(request: HttpRequest, *, endpoint: str = "cdata") -> H
     # Best-effort: broadcast to monitor group so UI updates in real time.
     _broadcast_rtlog_batch(int(device_id), lines)
 
-    return HttpResponse("OK\n", content_type="text/plain; charset=utf-8")
+    return HttpResponse(
+        _build_endpoint_response(
+            endpoint=endpoint,
+            session=session,
+            sn=str(resolved_sn or sn or ""),
+            params=params,
+        ),
+        content_type="text/plain; charset=utf-8",
+    )
 
 
 @csrf_exempt
@@ -823,3 +1103,107 @@ def iclock_cdata(request: HttpRequest) -> HttpResponse:
 @require_http_methods(["GET", "POST"])
 def iclock_getrawlog(request: HttpRequest) -> HttpResponse:
     return _handle_iclock_ingest(request, endpoint="getrawlog")
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def _handle_iclock_aux(request: HttpRequest, *, endpoint: str) -> HttpResponse:
+    params = _extract_params(request)
+    sn = _extract_device_sn(params)
+    remote_ip = str(request.META.get("REMOTE_ADDR") or "").strip()
+    device_id, resolved_sn = _resolve_device(sn=sn, remote_ip=remote_ip)
+    body_text = _extract_body_text(request)
+    body_text = (body_text or "").replace("\r\n", "\n").replace("\r", "\n")
+    raw_lines = [ln for ln in body_text.split("\n") if (ln or "").strip()]
+
+    session = _load_or_create_push_session(
+        device_id=int(device_id),
+        resolved_sn=str(resolved_sn or sn or ""),
+        remote_ip=remote_ip,
+        endpoint=endpoint,
+        params=params,
+        body_text=body_text,
+        request=request,
+    )
+
+    try:
+        LOG.warning(
+            "ICLOCK_TOUCH %s remote_ip=%s sn=%s resolved_sn=%s device_id=%s raw=%s preview=%s",
+            endpoint,
+            remote_ip,
+            sn,
+            resolved_sn,
+            int(device_id),
+            len(raw_lines),
+            raw_lines[:3],
+        )
+    except Exception:
+        pass
+
+    try:
+        _audit_event(
+            action=endpoint.replace("/", ".")[:32],
+            device_id=int(device_id),
+            entity_name=f"device_id={device_id} sn={resolved_sn or sn or ''}".strip(),
+            details_obj={
+                "remote_ip": remote_ip,
+                "endpoint": endpoint,
+                "sn": sn,
+                "resolved_sn": resolved_sn,
+                "device_id": int(device_id),
+                "raw_count": len(raw_lines),
+                "line_preview": raw_lines[:3],
+                "session_id": str(getattr(session, "session_id", "") or ""),
+            },
+            remote_ip=remote_ip,
+        )
+    except Exception:
+        pass
+
+    try:
+        _append_iclock_capture(
+            remote_ip=remote_ip,
+            sn=sn,
+            resolved_sn=resolved_sn,
+            device_id=int(device_id),
+            table=(params.get("table") or endpoint).strip(),
+            params=params,
+            raw_lines=raw_lines,
+            normalized_lines=[],
+            endpoint=endpoint,
+        )
+    except Exception:
+        pass
+
+    command_body = "OK\n"
+    if endpoint in {"querydata", "service/control"}:
+        command_body = _serve_pending_commands(device_id=int(device_id), remote_ip=remote_ip, sn=str(resolved_sn or sn or ""))
+
+    return HttpResponse(
+        _build_endpoint_response(
+            endpoint=endpoint,
+            session=session,
+            sn=str(resolved_sn or sn or ""),
+            params=params,
+            command_body=command_body,
+        ),
+        content_type="text/plain; charset=utf-8",
+    )
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def iclock_service_control(request: HttpRequest) -> HttpResponse:
+    return _handle_iclock_aux(request, endpoint="service/control")
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def iclock_querydata(request: HttpRequest) -> HttpResponse:
+    return _handle_iclock_aux(request, endpoint="querydata")
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def iclock_file(request: HttpRequest) -> HttpResponse:
+    return _handle_iclock_aux(request, endpoint="file")
